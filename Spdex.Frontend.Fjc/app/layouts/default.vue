@@ -1,0 +1,98 @@
+<script setup lang="ts">
+const navItems = [
+  { label: 'Home', to: '/' },
+]
+</script>
+
+<template>
+  <div class="app-layout">
+    <header class="app-header">
+      <div class="header-inner">
+        <NuxtLink to="/" class="logo">
+          Spdex
+        </NuxtLink>
+        <nav class="main-nav">
+          <NuxtLink
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            class="nav-link"
+          >
+            {{ item.label }}
+          </NuxtLink>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <slot />
+    </main>
+
+    <footer class="app-footer">
+      <p>&copy; {{ new Date().getFullYear() }} Spdex - Sports Data Exchange</p>
+    </footer>
+  </div>
+</template>
+
+<style scoped>
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background-color: #1a1a2e;
+  color: #fff;
+  padding: 0 1rem;
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #00d4aa;
+  text-decoration: none;
+}
+
+.main-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.nav-link {
+  color: #ccc;
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: color 0.2s;
+}
+
+.nav-link:hover,
+.nav-link.router-link-active {
+  color: #00d4aa;
+}
+
+.app-main {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.app-footer {
+  background-color: #f5f5f5;
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+</style>
