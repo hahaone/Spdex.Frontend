@@ -34,14 +34,15 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/spdex-frontend:latest
             ghcr.io/${{ github.repository_owner }}/spdex-frontend:${{ github.sha }}
 
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd ~/spdex
-            docker compose pull frontend
-            docker compose up -d frontend
-            docker image prune -f
+      # TODO: 配置好 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY 后取消注释
+      # - name: Deploy to server via SSH
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_SSH_KEY }}
+      #     script: |
+      #       cd ~/spdex
+      #       docker compose pull frontend
+      #       docker compose up -d frontend
+      #       docker image prune -f
