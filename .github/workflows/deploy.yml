@@ -57,8 +57,13 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: ACR_USERNAME,ACR_PASSWORD
           script: |
-            cd ~/spdex
+            echo "$ACR_PASSWORD" | docker login crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com -u "$ACR_USERNAME" --password-stdin
+            cd /home/spdex/core
             docker compose pull frontend
             docker compose up -d frontend
             docker image prune -f
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
