@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const navItems = [
-  { label: 'Home', to: '/' },
+  { label: '首页', to: '/' },
 ]
 </script>
 
@@ -9,7 +9,7 @@ const navItems = [
     <header class="app-header">
       <div class="header-inner">
         <NuxtLink to="/" class="logo">
-          Spdex
+          SPdex 竞彩工作室
         </NuxtLink>
         <nav class="main-nav">
           <NuxtLink
@@ -29,7 +29,7 @@ const navItems = [
     </main>
 
     <footer class="app-footer">
-      <p>&copy; {{ new Date().getFullYear() }} Spdex - Sports Data Exchange</p>
+      <p>&copy; {{ new Date().getFullYear() }} SPdex 竞彩工作室</p>
     </footer>
   </div>
 </template>
@@ -48,7 +48,7 @@ const navItems = [
 }
 
 .header-inner {
-  max-width: 1200px;
+  max-width: 1440px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -59,7 +59,7 @@ const navItems = [
 .logo {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #00d4aa;
+  color: #fff;
   text-decoration: none;
 }
 
@@ -69,7 +69,7 @@ const navItems = [
 }
 
 .nav-link {
-  color: #ccc;
+  color: #fff;
   text-decoration: none;
   font-size: 0.95rem;
   transition: color 0.2s;
@@ -77,12 +77,13 @@ const navItems = [
 
 .nav-link:hover,
 .nav-link.router-link-active {
-  color: #00d4aa;
+  color: #fff;
+  opacity: 0.85;
 }
 
 .app-main {
   flex: 1;
-  max-width: 1200px;
+  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
   padding: 2rem 1rem;

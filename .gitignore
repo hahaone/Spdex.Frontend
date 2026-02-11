@@ -55,6 +55,8 @@ Desktop.ini
 *.swp
 *~
 .fleet/
+old/
+demo/
 
 # =========================
 # Logs

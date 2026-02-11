@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
     '@nuxt/devtools',
+    '@nuxtjs/tailwindcss',
   ],
 
   // Runtime config: values can be overridden by environment variables
@@ -19,10 +20,12 @@ export default defineNuxtConfig({
     },
   },
 
-  // Dev server proxy — forward /api requests to .NET backend
+  // Proxy /api requests to .NET backend
+  // In Docker: API_INTERNAL_URL=http://webapi:5000
+  // In development: defaults to http://localhost:5000
   routeRules: {
     '/api/**': {
-      proxy: { to: 'http://localhost:5000/api/**' },
+      proxy: { to: `${process.env.API_INTERNAL_URL || 'http://localhost:5000'}/api/**` },
     },
   },
 
@@ -45,7 +48,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Spdex - Sports Data Exchange',
+      title: 'SPdex\u7ade\u5f69\u5de5\u4f5c\u5ba4\u7248',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
