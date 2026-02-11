@@ -4,11 +4,11 @@ WORKDIR /app
 
 # Copy package files first for layer caching
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
-# Copy everything and build
+# Copy everything, then prepare and build
 COPY . .
-RUN npm run build
+RUN npx nuxt prepare && npm run build
 
 # ── Stage 2: Runtime ──
 FROM node:22-alpine AS runtime
