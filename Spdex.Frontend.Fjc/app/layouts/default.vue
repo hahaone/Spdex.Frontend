@@ -2,6 +2,12 @@
 const navItems = [
   { label: '首页', to: '/' },
 ]
+
+const config = useRuntimeConfig()
+const buildSha = computed(() => {
+  const sha = config.public.buildSha as string
+  return sha && sha.length > 7 ? sha.slice(0, 7) : sha
+})
 </script>
 
 <template>
@@ -29,7 +35,7 @@ const navItems = [
     </main>
 
     <footer class="app-footer">
-      <p>&copy; {{ new Date().getFullYear() }} SPdex 竞彩工作室</p>
+      <p>&copy; {{ new Date().getFullYear() }} SPdex 竞彩工作室 <span v-if="buildSha && buildSha !== 'dev'" class="build-tag">build: {{ buildSha }}</span></p>
     </footer>
   </div>
 </template>
@@ -95,5 +101,12 @@ const navItems = [
   padding: 1rem;
   font-size: 0.85rem;
   color: #666;
+}
+
+.build-tag {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #999;
+  margin-left: 0.5rem;
 }
 </style>

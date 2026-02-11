@@ -35,6 +35,9 @@ jobs:
         with:
           context: ./Spdex.Frontend.Fjc
           push: true
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
           tags: |
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:latest
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}

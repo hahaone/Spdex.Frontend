@@ -17,6 +17,8 @@ export default defineNuxtConfig({
     // Public keys (exposed to client via NUXT_PUBLIC_*)
     public: {
       apiBase: 'http://localhost:5000', // Spdex.WebApi default address
+      buildSha: process.env.BUILD_SHA || 'dev',
+      buildTime: process.env.BUILD_TIME || '',
     },
   },
 
