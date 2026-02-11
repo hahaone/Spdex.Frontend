@@ -4,11 +4,19 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: '部署到服务器'
+        type: boolean
+        default: true
 
 jobs:
-  build-and-deploy:
-    # push 时需要 commit message 含 [build]；手动触发时直接运行
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]')
+  build:
+    # push 时需要 commit message 含 [build] 或 [deploy]；手动触发时直接运行
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[build]') ||
+      contains(github.event.head_commit.message, '[deploy]')
     runs-on: ubuntu-latest
 
     steps:
@@ -31,15 +39,23 @@ jobs:
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:latest
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}
 
-      # TODO: 配置好 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY 后取消注释
-      # - name: Deploy to server via SSH
-      #   uses: appleboy/ssh-action@v1
-      #   with:
-      #     host: ${{ secrets.DEPLOY_HOST }}
-      #     username: ${{ secrets.DEPLOY_USER }}
-      #     key: ${{ secrets.DEPLOY_SSH_KEY }}
-      #     script: |
-      #       cd ~/spdex
-      #       docker compose pull frontend
-      #       docker compose up -d frontend
-      #       docker image prune -f
+  deploy:
+    needs: build
+    # push 含 [deploy] 时自动部署；手动触发时根据 deploy 参数决定
+    if: >-
+      contains(github.event.head_commit.message, '[deploy]') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ~/spdex
+            docker compose pull frontend
+            docker compose up -d frontend
+            docker image prune -f
