@@ -10,20 +10,17 @@ jobs:
     # push 时需要 commit message 含 [build]；手动触发时直接运行
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
+      - name: Login to Aliyun ACR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: registry.cn-qingdao.aliyuncs.com
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -31,8 +28,8 @@ jobs:
           context: ./Spdex.Frontend.Fjc
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/spdex-frontend:latest
-            ghcr.io/${{ github.repository_owner }}/spdex-frontend:${{ github.sha }}
+            registry.cn-qingdao.aliyuncs.com/spdex/spdex.frontend:latest
+            registry.cn-qingdao.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}
 
       # TODO: 配置好 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY 后取消注释
       # - name: Deploy to server via SSH
