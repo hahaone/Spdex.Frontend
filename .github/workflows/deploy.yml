@@ -18,7 +18,7 @@ jobs:
       - name: Login to Aliyun ACR
         uses: docker/login-action@v3
         with:
-          registry: registry.cn-qingdao.aliyuncs.com
+          registry: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
@@ -28,8 +28,8 @@ jobs:
           context: ./Spdex.Frontend.Fjc
           push: true
           tags: |
-            registry.cn-qingdao.aliyuncs.com/spdex/spdex.frontend:latest
-            registry.cn-qingdao.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:latest
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}
 
       # TODO: 配置好 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY 后取消注释
       # - name: Deploy to server via SSH
