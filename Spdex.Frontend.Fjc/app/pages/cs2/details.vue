@@ -517,7 +517,7 @@ function isBigHighlighted(big: CsBigItem): boolean {
 @import '~/assets/css/detail-shared.css';
 
 /* cs2 (Correct Score) 页面特有样式 */
-.cs2-page { padding: 10px; font-family: Arial, sans-serif; font-size: 14px; }
+.cs2-page { padding: 10px; font-family: Arial, sans-serif; font-size: 14px; background: #fff; }
 .match-header h5 { padding: 10px; font-size: 1.2em; }
 .match-header h5 span { font-weight: normal; color: #666; margin-left: 10px; }
 
