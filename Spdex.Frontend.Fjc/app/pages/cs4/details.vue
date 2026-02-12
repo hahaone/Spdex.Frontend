@@ -394,7 +394,7 @@ function formatPer(val: number): string {
 }
 .goal-line-label {
   color: #666;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 .goal-line-btn {
   padding: 4px 14px;
@@ -402,7 +402,7 @@ function formatPer(val: number): string {
   border-radius: 6px;
   background: #fff;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   font-weight: 500;
   transition: all 0.15s ease;
 }

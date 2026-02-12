@@ -508,6 +508,6 @@ function toggleSection(key: string) {
 @import '~/assets/css/detail-shared.css';
 
 /* cs (Goal Line) 页面特有样式 */
-.odds-info { color: #337ab7; font-weight: normal; font-size: 11px; }
-.view-subtitle { color: #666; font-size: 11px; margin-bottom: 6px; }
+.odds-info { color: #337ab7; font-weight: normal; font-size: 13px; }
+.view-subtitle { color: #666; font-size: 13px; margin-bottom: 6px; }
 </style>

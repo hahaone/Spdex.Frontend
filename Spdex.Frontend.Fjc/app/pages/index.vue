@@ -416,7 +416,7 @@ const detailLinks = [
 }
 
 .filter-group label {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #666;
   white-space: nowrap;
 }
@@ -426,7 +426,7 @@ const detailLinks = [
   padding: 0.4rem 0.6rem;
   border: 1px solid #d1d5db;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   background: #fff;
 }
 
@@ -445,7 +445,7 @@ const detailLinks = [
   padding: 0.4rem 0.6rem;
   border: 1px solid #d1d5db;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   background: #fff;
 }
 
@@ -476,7 +476,7 @@ const detailLinks = [
   border: 1px solid #d1d5db;
   border-radius: 4px;
   background: #fff;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: #475569;
   cursor: pointer;
   margin-left: 2px;
@@ -490,7 +490,7 @@ const detailLinks = [
 }
 
 .date-display {
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   color: #64748b;
   margin-left: 0.5rem;
   white-space: nowrap;
@@ -510,7 +510,7 @@ const detailLinks = [
   border: 1px solid #d1d5db;
   border-radius: 4px;
   background: #fff;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: #475569;
   cursor: pointer;
   transition: all 0.15s;
@@ -567,7 +567,7 @@ const detailLinks = [
 }
 
 .loading-overlay span {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #64748b;
 }
 
@@ -585,7 +585,7 @@ const detailLinks = [
 }
 
 .badge {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
   font-weight: 500;
@@ -612,7 +612,7 @@ const detailLinks = [
 .match-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .match-table thead {
@@ -653,7 +653,7 @@ const detailLinks = [
   padding: 0.15rem 0.5rem;
   background: #f1f5f9;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #475569;
   white-space: nowrap;
 }
@@ -665,7 +665,7 @@ const detailLinks = [
 .team-vs {
   color: #94a3b8;
   margin: 0 0.35rem;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
 }
 
 .team-away {
@@ -678,7 +678,7 @@ const detailLinks = [
 }
 
 .half {
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   color: #94a3b8;
   margin-left: 0.25rem;
 }
@@ -713,7 +713,7 @@ const detailLinks = [
   display: inline-block;
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
 }
 
@@ -762,12 +762,12 @@ const detailLinks = [
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 18px;
-  padding: 0 3px;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
   border-radius: 3px;
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   text-decoration: none;
   opacity: 0.8;
@@ -794,7 +794,7 @@ const detailLinks = [
   border: 1px solid #d1d5db;
   border-radius: 4px;
   background: #fff;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   cursor: pointer;
   color: #374151;
   transition: all 0.15s;
@@ -850,7 +850,7 @@ const detailLinks = [
 
 .popover-title {
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #1e293b;
 }
 
@@ -870,7 +870,7 @@ const detailLinks = [
 
 .popover-match {
   padding: 0.5rem 0.85rem;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: #475569;
   background: #f1f5f9;
   border-bottom: 1px solid #e2e8f0;
@@ -891,7 +891,7 @@ const detailLinks = [
 
 .popover-detail td {
   padding: 0.4rem 0.85rem;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 
 .popover-detail .label {

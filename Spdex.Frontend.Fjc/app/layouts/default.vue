@@ -99,13 +99,13 @@ const buildSha = computed(() => {
   background-color: #f5f5f5;
   text-align: center;
   padding: 1rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #666;
 }
 
 .build-tag {
   font-family: monospace;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: #999;
   margin-left: 0.5rem;
 }

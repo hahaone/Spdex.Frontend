@@ -665,30 +665,30 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 </template>
 
 <style scoped>
-.asian-page { max-width: 1440px; margin: 0 auto; padding: 16px; font-size: 0.85rem; background: #fff; }
+.asian-page { max-width: 1440px; margin: 0 auto; padding: 16px; font-size: 0.9rem; background: #fff; }
 
 /* ── 页头 ── */
 .match-header { margin-bottom: 12px; }
-.back-link { color: #2563eb; text-decoration: none; font-size: 0.85rem; }
+.back-link { color: #2563eb; text-decoration: none; font-size: 0.9rem; }
 .back-link:hover { text-decoration: underline; }
-.match-title { margin: 6px 0 2px; font-size: 1.1rem; }
+.match-title { margin: 6px 0 2px; font-size: 1.15rem; }
 .team-home { color: #c00; font-weight: 600; }
 .team-vs { margin: 0 8px; color: #666; font-weight: 400; }
 .team-away { color: #00c; font-weight: 600; }
-.match-meta { color: #666; font-size: 0.82rem; }
+.match-meta { color: #666; font-size: 0.88rem; }
 .best-price-home { color: #c00; }
 .best-price-away { color: #00c; }
 
 /* B1: Odds0 */
-.odds0-bar { margin-top: 4px; padding: 5px 10px; background: #fefce8; border: 1px solid #fef08a; border-radius: 4px; font-size: 0.82rem; color: #713f12; font-weight: 500; }
+.odds0-bar { margin-top: 4px; padding: 5px 10px; background: #fefce8; border: 1px solid #fef08a; border-radius: 4px; font-size: 0.88rem; color: #713f12; font-weight: 500; }
 
 /* ── 排序栏 ── */
 .sort-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.sort-label { color: #666; font-size: 0.82rem; }
-.sort-btn { padding: 3px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.82rem; }
+.sort-label { color: #666; font-size: 0.88rem; }
+.sort-btn { padding: 3px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.88rem; }
 .sort-btn:hover { background: #f0f0f0; }
 .sort-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
-.refresh-btn { margin-left: auto; padding: 3px 14px; border: 1px solid #10b981; border-radius: 4px; background: #fff; color: #10b981; font-size: 0.82rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; }
+.refresh-btn { margin-left: auto; padding: 3px 14px; border: 1px solid #10b981; border-radius: 4px; background: #fff; color: #10b981; font-size: 0.88rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; }
 .refresh-btn:hover:not(:disabled) { background: #10b981; color: #fff; }
 .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .refresh-btn .spin { display: inline-block; animation: spin 0.8s linear infinite; }
@@ -696,41 +696,41 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 
 /* ── Tab 栏 ── */
 .tab-bar { display: inline-flex; gap: 0; margin-bottom: 10px; background: #f1f3f5; border-radius: 8px; padding: 3px; overflow-x: auto; }
-.tab-btn { padding: 5px 16px; border: none; background: transparent; cursor: pointer; font-size: 0.8rem; color: #666; border-radius: 6px; white-space: nowrap; transition: all 0.15s ease; font-weight: 500; }
+.tab-btn { padding: 5px 16px; border: none; background: transparent; cursor: pointer; font-size: 0.88rem; color: #666; border-radius: 6px; white-space: nowrap; transition: all 0.15s ease; font-weight: 500; }
 .tab-btn:hover { color: #333; background: rgba(0, 0, 0, 0.04); }
 .tab-btn.active { color: #fff; background: #3b82f6; font-weight: 600; box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3); }
 
 /* ── ViewSubTitle ── */
-.view-subtitle { margin-bottom: 8px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; font-size: 0.82rem; color: #166534; }
+.view-subtitle { margin-bottom: 8px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; font-size: 0.88rem; color: #166534; }
 
 /* ── Home / Away 分区头 ── */
-.side-header { display: flex; align-items: baseline; gap: 16px; padding: 8px 10px; margin-top: 12px; border-radius: 4px 4px 0 0; font-size: 0.85rem; flex-wrap: wrap; }
+.side-header { display: flex; align-items: baseline; gap: 16px; padding: 8px 10px; margin-top: 12px; border-radius: 4px 4px 0 0; font-size: 0.9rem; flex-wrap: wrap; }
 .side-home { background: #fef2f2; border-left: 4px solid #c00; }
 .side-away { background: #eff6ff; border-left: 4px solid #00c; }
 .side-label { font-weight: 700; }
 .side-home .side-label { color: #c00; }
 .side-away .side-label { color: #00c; }
-.side-total { color: #555; font-size: 0.82rem; }
+.side-total { color: #555; font-size: 0.88rem; }
 .side-total b { color: #222; font-weight: 600; }
 
 /* ── 主表 ── */
 .table-wrapper { overflow-x: auto; }
-.hc-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: #fff; }
-.hc-table th { background: #f5f5f5; padding: 5px 6px; text-align: center; font-weight: 600; border-bottom: 2px solid #d1d5db; white-space: nowrap; font-size: 0.78rem; }
+.hc-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; background: #fff; }
+.hc-table th { background: #f5f5f5; padding: 5px 6px; text-align: center; font-weight: 600; border-bottom: 2px solid #d1d5db; white-space: nowrap; font-size: 0.85rem; }
 .hc-table td { padding: 4px 6px; text-align: center; border-bottom: 1px solid #e5e7eb; font-variant-numeric: tabular-nums; }
 .hc-table tbody .data-row:hover { background: #f5f8ff; }
 .col-hc { width: 90px; } .col-price { width: 70px; } .col-dense { width: 60px; } .col-dp { width: 55px; }
 .col-maxbet { width: 75px; } .col-mbp { width: 70px; } .col-attr { width: 55px; } .col-tm { width: 60px; }
 .col-tb { width: 75px; } .col-mh { width: 70px; } .col-th { width: 70px; } .col-mt { width: 60px; } .col-rank { width: 45px; }
-.col-hc-val { cursor: pointer; user-select: none; font-weight: 600; font-size: 0.82rem; text-align: left !important; padding-left: 10px !important; }
+.col-hc-val { cursor: pointer; user-select: none; font-weight: 600; font-size: 0.88rem; text-align: left !important; padding-left: 10px !important; }
 .col-hc-val:hover { text-decoration: underline; }
-.col-attr-val { font-size: 0.75rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
+.col-attr-val { font-size: 0.82rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Band 分区头行 ── */
-.band-header td { background: #f1f3f5; font-weight: 600; font-size: 0.78rem; color: #555; text-align: left !important; padding: 4px 10px !important; border-bottom: 1px solid #d1d5db; }
+.band-header td { background: #f1f3f5; font-weight: 600; font-size: 0.85rem; color: #555; text-align: left !important; padding: 4px 10px !important; border-bottom: 1px solid #d1d5db; }
 
 /* ── 小计行 ── */
-.subtotal-row td { background: #fafbfc; border-bottom: 2px solid #d1d5db; font-weight: 600; font-size: 0.78rem; }
+.subtotal-row td { background: #fafbfc; border-bottom: 2px solid #d1d5db; font-weight: 600; font-size: 0.85rem; }
 .subtotal-label { text-align: right !important; color: #555; padding-right: 10px !important; }
 .subtotal-val { color: #333; }
 
@@ -755,7 +755,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .row-expanded td { border-bottom: 2px solid #2563eb !important; }
 
 /* ── PMark 标签 ── */
-.pmark-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 0.72rem; font-weight: 600; }
+.pmark-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 0.82rem; font-weight: 600; }
 .pmark-ps { background: #fef3c7; color: #92400e; }
 .pmark-pp { background: #fde68a; color: #78350f; }
 .pmark-p { background: #fee2e2; color: #991b1b; }
@@ -773,43 +773,43 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .expand-content { padding: 8px 16px; animation: slideDown 0.2s ease; }
 @keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 600px; } }
 .detail-panel { max-width: 420px; }
-.panel-title { font-weight: 600; font-size: 0.82rem; color: #444; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px solid #e5e7eb; }
-.detail-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.78rem; }
-.detail-table th { background: #eef0f2; padding: 3px 10px; text-align: center; font-weight: 600; font-size: 0.75rem; border-bottom: 1px solid #d1d5db; }
+.panel-title { font-weight: 600; font-size: 0.88rem; color: #444; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px solid #e5e7eb; }
+.detail-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; }
+.detail-table th { background: #eef0f2; padding: 3px 10px; text-align: center; font-weight: 600; font-size: 0.82rem; border-bottom: 1px solid #d1d5db; }
 .detail-table td { padding: 2px 10px; text-align: right; border-bottom: 1px solid #eee; font-variant-numeric: tabular-nums; }
 .detail-table td:first-child { text-align: center; font-weight: 500; }
 .bg-back { background: #A6D8FF !important; }
 .bg-lay { background: #FAC9D1 !important; }
 .text-traded-2x { color: #e67e22; font-weight: 700; }
 .text-traded-3x { color: #8e44ad; font-weight: 700; }
-.panel-empty { text-align: center; color: #999; padding: 12px 0; font-size: 0.78rem; }
+.panel-empty { text-align: center; color: #999; padding: 12px 0; font-size: 0.85rem; }
 
 /* B9: 占比行 */
-.ratio-bar { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; padding: 6px 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.82rem; color: #0c4a6e; }
+.ratio-bar { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; padding: 6px 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.88rem; color: #0c4a6e; }
 .ratio-bar b { color: #0369a1; font-weight: 600; }
 .ratio-sep { color: #93c5fd; }
 
 /* ── 统计量栏 ── */
 .stats-bar { margin-top: 8px; padding: 6px 10px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 4px; }
 .stats-row { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
-.stats-chip { font-size: 0.78rem; color: #555; white-space: nowrap; }
+.stats-chip { font-size: 0.85rem; color: #555; white-space: nowrap; }
 .stats-chip b { color: #222; font-weight: 600; margin-left: 1px; font-variant-numeric: tabular-nums; }
 
 /* ── B3/B4/B5: 大注/Hold 表 ── */
 .big-section { margin-top: 16px; }
-.big-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: #fff; }
-.big-table th { background: #f5f5f5; padding: 5px 8px; text-align: center; font-weight: 600; border-bottom: 2px solid #d1d5db; white-space: nowrap; font-size: 0.78rem; }
+.big-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; background: #fff; }
+.big-table th { background: #f5f5f5; padding: 5px 8px; text-align: center; font-weight: 600; border-bottom: 2px solid #d1d5db; white-space: nowrap; font-size: 0.85rem; }
 .big-table td { padding: 4px 8px; text-align: center; border-bottom: 1px solid #e5e7eb; font-variant-numeric: tabular-nums; }
 .big-table .data-row:hover { background: #f5f8ff; }
 .big-row { cursor: pointer; }
-.big-table.compact { font-size: 0.78rem; }
+.big-table.compact { font-size: 0.85rem; }
 .big-table.compact td { padding: 3px 6px; }
 
 /* ── 净赔付表 ── */
 .net-payout-section { margin-top: 16px; }
-.section-title { font-size: 0.88rem; font-weight: 600; color: #333; margin: 0 0 6px; }
+.section-title { font-size: 0.95rem; font-weight: 600; color: #333; margin: 0 0 6px; }
 .section-title-sub { margin-top: 12px; }
-.net-table { width: 100%; max-width: 600px; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 4px; }
+.net-table { width: 100%; max-width: 600px; border-collapse: collapse; font-size: 0.88rem; margin-bottom: 4px; }
 .net-table th { background: #eef0f2; padding: 4px 10px; text-align: center; font-weight: 600; border-bottom: 1px solid #d1d5db; }
 .net-table td { padding: 4px 10px; text-align: center; border-bottom: 1px solid #eee; font-variant-numeric: tabular-nums; }
 .net-title { text-align: left !important; font-weight: 500; }
@@ -817,7 +817,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 
 /* ── 成交汇总表 ── */
 .volume-summary { margin-top: 16px; padding: 8px; background: #f8fafc; border-radius: 4px; border: 1px solid #e5e7eb; }
-.summary-table { width: 100%; max-width: 500px; border-collapse: collapse; font-size: 0.82rem; }
+.summary-table { width: 100%; max-width: 500px; border-collapse: collapse; font-size: 0.88rem; }
 .summary-table th { background: #eef0f2; padding: 4px 10px; text-align: center; font-weight: 600; border-bottom: 1px solid #d1d5db; }
 .summary-table td { padding: 4px 10px; text-align: center; border-bottom: 1px solid #eee; font-variant-numeric: tabular-nums; }
 

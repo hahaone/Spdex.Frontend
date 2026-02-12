@@ -9,7 +9,7 @@
   max-width: 1440px;
   margin: 0 auto;
   padding: 16px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   background: #fff;
 }
 
@@ -20,21 +20,21 @@
 .back-link {
   color: #2563eb;
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 .back-link:hover {
   text-decoration: underline;
 }
 .match-title {
   margin: 6px 0 2px;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
 }
 .team-home { color: #c00; font-weight: 600; }
 .team-vs   { margin: 0 8px; color: #666; font-weight: 400; }
 .team-away { color: #00c; font-weight: 600; }
 .match-meta {
   color: #666;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 
 /* ── 排序栏 ── */
@@ -46,7 +46,7 @@
 }
 .sort-label {
   color: #666;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 .sort-btn {
   padding: 3px 10px;
@@ -54,7 +54,7 @@
   border-radius: 4px;
   background: #fff;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 .sort-btn:hover { background: #f0f0f0; }
 .sort-btn.active {
@@ -71,7 +71,7 @@
   border-radius: 4px;
   background: #fff;
   color: #10b981;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -102,7 +102,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   color: #666;
   border-radius: 6px;
   white-space: nowrap;
@@ -140,7 +140,7 @@
   border-top: 1px dashed #e5e7eb;
 }
 .info-chip {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: #666;
   white-space: nowrap;
 }
@@ -159,7 +159,7 @@
 .bighold-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   background: #fff;
 }
 .bighold-table th {
@@ -211,8 +211,8 @@
 .col-hot     { width: 60px; }
 .col-pmark   { width: 50px; }
 .col-time    { width: 130px; }
-.col-time-val { font-size: 0.78rem; white-space: nowrap; }
-.col-attr-val { font-size: 0.78rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
+.col-time-val { font-size: 0.85rem; white-space: nowrap; }
+.col-attr-val { font-size: 0.85rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── 高亮 & 颜色 ── */
 .highlight-3sigma { background: #ffff00 !important; font-weight: 700; }
@@ -242,7 +242,7 @@
   display: inline-block;
   padding: 1px 6px;
   border-radius: 3px;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
 }
 .pmark-ps  { background: #fef3c7; color: #92400e; }
@@ -287,7 +287,7 @@
 }
 .panel-title {
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: #444;
   margin-bottom: 4px;
   padding-bottom: 3px;
@@ -299,14 +299,14 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
 }
 .detail-table th {
   background: #eef0f2;
   padding: 3px 10px;
   text-align: center;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   border-bottom: 1px solid #d1d5db;
 }
 .detail-table td {
@@ -335,9 +335,9 @@
 .diff-val { color: #27ae60; font-weight: 600; }
 
 /* 面板状态 */
-.panel-empty   { text-align: center; color: #999; padding: 12px 0; font-size: 0.78rem; }
-.panel-loading { text-align: center; color: #666; padding: 12px 0; font-size: 0.78rem; }
-.panel-error   { text-align: center; color: #c00; padding: 12px 0; font-size: 0.78rem; }
+.panel-empty   { text-align: center; color: #999; padding: 12px 0; font-size: 0.85rem; }
+.panel-loading { text-align: center; color: #666; padding: 12px 0; font-size: 0.85rem; }
+.panel-error   { text-align: center; color: #c00; padding: 12px 0; font-size: 0.85rem; }
 .retry-link    { color: #2563eb; cursor: pointer; text-decoration: underline; }
 .retry-link:hover { color: #1d4ed8; }
 
@@ -369,7 +369,7 @@
 
 /* ── 章节标题 ── */
 .section-title {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #333;
   margin: 0 0 6px;
@@ -397,7 +397,7 @@
   border: 1px solid #e5e7eb;
 }
 .summary-title {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #333;
   margin: 0 0 8px;
@@ -406,7 +406,7 @@
   width: 100%;
   max-width: 500px;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 .summary-table th {
   background: #eef0f2;
@@ -428,7 +428,7 @@
   width: 100%;
   max-width: 600px;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   margin-bottom: 4px;
 }
 .net-table th {
@@ -452,8 +452,8 @@
  * ═══════════════════════════════════════════════════════════════ */
 
 /* ── gridtable 主表 ── */
-.gridtable { border-collapse: collapse; width: 100%; font-size: 12px; }
-.gridtable th, .gridtable td { border: 1px solid #ccc; padding: 2px 4px; text-align: center; white-space: nowrap; }
+.gridtable { border-collapse: collapse; width: 100%; font-size: 14px; }
+.gridtable th, .gridtable td { border: 1px solid #ccc; padding: 3px 5px; text-align: center; white-space: nowrap; }
 .gridtable th { background: #f0f0f0; font-weight: bold; }
 .gridtable tbody tr:hover { background: #f9f9f9; }
 
@@ -475,26 +475,26 @@
 .expand-row td { background: #fafafa; text-align: left; vertical-align: top; }
 .expand-panels { display: flex; gap: 6px; align-items: flex-start; }
 .expand-panel { flex: none; }
-.expand-panel > span { font-weight: bold; font-size: 11px; display: block; margin-bottom: 2px; }
+.expand-panel > span { font-weight: bold; font-size: 13px; display: block; margin-bottom: 2px; }
 
 /* ── 展开明细子表（ex） ── */
-.ex { border-collapse: collapse; margin-top: 4px; font-size: 11px; }
+.ex { border-collapse: collapse; margin-top: 4px; font-size: 13px; }
 .ex th, .ex td { border: 1px solid #ddd; padding: 2px 6px; text-align: right; }
-.extrth th { background: #e8e8e8; font-size: 11px; }
+.extrth th { background: #e8e8e8; font-size: 13px; }
 
 /* ── 折叠按钮 ── */
-.ts_button { padding: 4px 12px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; margin: 8px 0 4px; font-size: 12px; }
+.ts_button { padding: 4px 12px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; margin: 8px 0 4px; font-size: 14px; }
 .match_list { margin-bottom: 12px; }
 
 /* ── gridtable 页面容器（兼容旧页面） ── */
-.grid-detail-page { padding: 10px; font-size: 12px; }
+.grid-detail-page { padding: 10px; font-size: 14px; }
 .grid-detail-page .match-header h5 { margin: 0 0 8px; }
 .grid-detail-page .match-header span { color: #666; font-weight: normal; margin-left: 10px; }
 .grid-detail-page .loading { padding: 20px; text-align: center; }
-.grid-detail-page h4 { margin: 12px 0 4px; font-size: 13px; }
+.grid-detail-page h4 { margin: 12px 0 4px; font-size: 15px; }
 .grid-detail-page .table-scroll { overflow-x: auto; }
 
 /* ── gridtable Tab 栏（传统按钮风格） ── */
 .grid-tab-bar { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
-.grid-tab-bar button { padding: 4px 10px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 12px; }
+.grid-tab-bar button { padding: 4px 10px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 14px; }
 .grid-tab-bar button.active { background: #337ab7; color: #fff; border-color: #337ab7; }
