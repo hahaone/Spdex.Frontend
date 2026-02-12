@@ -4,12 +4,7 @@
  */
 
 import type { PreviousRecordResult } from '~/types/bighold'
-
-interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T | null
-}
+import type { ApiResponse } from '~/types/api'
 
 export function useBigHoldDetail(endpoint: string = '/api/bighold/previous') {
   const config = useRuntimeConfig()
@@ -26,12 +21,14 @@ export function useBigHoldDetail(endpoint: string = '/api/bighold/previous') {
   /**
    * 获取前一条记录。
    * 优先从缓存读取；缓存未命中则发请求。
+   * extraParams 用于传递 handicap 等额外查询参数（GL/Corner/Asian 需要）。
    */
   async function fetchPrevious(
     pcId: number,
     marketId: number,
     selectionId: number,
     refreshTime: string,
+    extraParams?: Record<string, string>,
   ): Promise<PreviousRecordResult | null> {
     // 缓存命中
     if (cache.has(pcId)) {
@@ -48,6 +45,7 @@ export function useBigHoldDetail(endpoint: string = '/api/bighold/previous') {
         marketId: marketId.toString(),
         selectionId: selectionId.toString(),
         refreshTime,
+        ...extraParams,
       })
 
       const resp = await $fetch<ApiResponse<PreviousRecordResult>>(

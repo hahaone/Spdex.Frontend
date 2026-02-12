@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { MatchListResult, ApiResponse } from '~/types/match'
+import type { MatchListResult } from '~/types/match'
+import type { ApiResponse } from '~/types/api'
 import { formatMoney, formatBfAmount, formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
 
 // --- 筛选状态 ---

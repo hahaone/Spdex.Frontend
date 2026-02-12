@@ -1,0 +1,500 @@
+/**
+ * 详情页共享样式。
+ * 所有 cs/cs2/cs3/cs4/cs5/cs7 详情页公用的基础布局、组件样式。
+ * 页面级 <style scoped> 只需定义该页特有的样式（如亚盘 Home/Away 分区）。
+ */
+
+/* ── 页面容器 ── */
+.detail-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 16px;
+  font-size: 0.85rem;
+  background: #fff;
+}
+
+/* ── 页头 ── */
+.match-header {
+  margin-bottom: 12px;
+}
+.back-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.back-link:hover {
+  text-decoration: underline;
+}
+.match-title {
+  margin: 6px 0 2px;
+  font-size: 1.1rem;
+}
+.team-home { color: #c00; font-weight: 600; }
+.team-vs   { margin: 0 8px; color: #666; font-weight: 400; }
+.team-away { color: #00c; font-weight: 600; }
+.match-meta {
+  color: #666;
+  font-size: 0.82rem;
+}
+
+/* ── 排序栏 ── */
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sort-label {
+  color: #666;
+  font-size: 0.82rem;
+}
+.sort-btn {
+  padding: 3px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.sort-btn:hover { background: #f0f0f0; }
+.sort-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+/* ── 刷新按钮 ── */
+.refresh-btn {
+  margin-left: auto;
+  padding: 3px 14px;
+  border: 1px solid #10b981;
+  border-radius: 4px;
+  background: #fff;
+  color: #10b981;
+  font-size: 0.82rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.refresh-btn:hover:not(:disabled) { background: #10b981; color: #fff; }
+.refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.refresh-btn .spin { display: inline-block; animation: detail-spin 0.8s linear infinite; }
+
+@keyframes detail-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Tab 栏（胶囊按钮组） ── */
+.tab-bar {
+  display: inline-flex;
+  gap: 0;
+  margin-bottom: 10px;
+  background: #f1f3f5;
+  border-radius: 8px;
+  padding: 3px;
+  overflow-x: auto;
+}
+.tab-btn {
+  padding: 5px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #666;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  position: relative;
+}
+.tab-btn:hover { color: #333; background: rgba(0, 0, 0, 0.04); }
+.tab-btn.active {
+  color: #fff;
+  background: #3b82f6;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+}
+
+/* ── 信息条（赔率 + 密集指标） ── */
+.info-bar {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+.info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  line-height: 1.6;
+}
+.info-row + .info-row {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px dashed #e5e7eb;
+}
+.info-chip {
+  font-size: 0.78rem;
+  color: #666;
+  white-space: nowrap;
+}
+.info-chip b {
+  color: #222;
+  font-weight: 600;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.info-chip.dense { color: #7c6a2d; }
+.info-chip.dense b { color: #4a3d14; }
+
+/* ── 主表通用 ── */
+.table-wrapper { overflow-x: auto; }
+
+.bighold-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  background: #fff;
+}
+.bighold-table th {
+  background: #f5f5f5;
+  padding: 6px 8px;
+  text-align: center;
+  font-weight: 600;
+  border-bottom: 2px solid #d1d5db;
+  white-space: nowrap;
+}
+.bighold-table td {
+  padding: 5px 8px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+.bighold-table tbody .main-row:hover { background: #f5f8ff; }
+
+.clickable-header { cursor: help; }
+
+/* 主行展开时加强下边框 */
+.row-expanded { border-bottom: 2px solid #2563eb !important; }
+.row-expanded td { border-bottom: 2px solid #2563eb !important; }
+
+/* 可点击的 Selection 和赔率单元格 */
+.sel-cell {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+}
+.sel-cell:hover { text-decoration: underline; }
+.odds-cell {
+  cursor: pointer;
+  user-select: none;
+}
+.odds-cell:hover { text-decoration: underline; }
+
+/* ── 常用列宽 ── */
+.col-idx     { width: 36px; }
+.col-sel     { width: 46px; }
+.col-odds    { width: 60px; }
+.col-dense   { width: 60px; }
+.col-amount  { width: 80px; }
+.col-attr    { width: 50px; }
+.col-hold    { width: 80px; }
+.col-payout  { width: 60px; }
+.col-per     { width: 50px; }
+.col-pertotal { width: 56px; }
+.col-weight  { width: 50px; }
+.col-hot     { width: 60px; }
+.col-pmark   { width: 50px; }
+.col-time    { width: 130px; }
+.col-time-val { font-size: 0.78rem; white-space: nowrap; }
+.col-attr-val { font-size: 0.78rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 高亮 & 颜色 ── */
+.highlight-3sigma { background: #ffff00 !important; font-weight: 700; }
+.highlight-2sigma { background: #FFFFA8 !important; }
+.td-highlight     { background: #ffff00 !important; font-weight: 700; }
+.td-lowlight      { background: #FFFFA8 !important; }
+.text-top2  { color: #8b0000; font-weight: 700; }
+.text-neg   { color: #c00; }
+.text-pos   { color: #059669; }
+.text-red-bold { color: #c00; font-weight: 700; }
+
+/* Selection 颜色 */
+.sel-\4E3B  { color: #c00; } /* 主 */
+.sel-\5E73  { color: #666; } /* 平 */
+.sel-\5BA2  { color: #00c; } /* 客 */
+.sel-over   { color: #c00; }
+.sel-under  { color: #00c; }
+
+/* LastPrice 大额挂单标红 */
+.sel-large-order {
+  color: #c00 !important;
+  background: #fee2e2 !important;
+}
+
+/* ── PMark 标签 ── */
+.pmark-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.pmark-ps  { background: #fef3c7; color: #92400e; }
+.pmark-pp  { background: #fde68a; color: #78350f; }
+.pmark-p   { background: #fee2e2; color: #991b1b; }
+.pmark-p0  { background: #fce7f3; color: #9d174d; }
+.pmark-p1  { background: #ede9fe; color: #5b21b6; }
+.pmark-p2  { background: #dbeafe; color: #1e40af; }
+.pmark-p3  { background: #ccfbf1; color: #0f766e; }
+.pmark-p6  { background: #d1fae5; color: #065f46; }
+.pmark-p12 { background: #f3f4f6; color: #6b7280; }
+.pmark-p24 { background: #e5e7eb; color: #4b5563; }
+.pmark-p48 { background: #d1d5db; color: #374151; }
+
+/* ── 展开行 ── */
+.expand-row > td {
+  padding: 0 !important;
+  border-bottom: 1px solid #d1d5db;
+  background: #fff;
+}
+.expand-row-odds > td { background: #fafcff; }
+.expand-content {
+  padding: 10px 16px;
+  animation: detail-slideDown 0.2s ease;
+}
+
+@keyframes detail-slideDown {
+  from { opacity: 0; max-height: 0; }
+  to   { opacity: 1; max-height: 600px; }
+}
+
+/* 三栏并排 */
+.detail-panels {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.detail-panel {
+  flex: 1;
+  min-width: 200px;
+  max-width: 380px;
+}
+.panel-title {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #444;
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* 明细子表 */
+.detail-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.78rem;
+}
+.detail-table th {
+  background: #eef0f2;
+  padding: 3px 10px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  border-bottom: 1px solid #d1d5db;
+}
+.detail-table td {
+  padding: 2px 14px 2px 8px;
+  text-align: right;
+  border-bottom: 1px solid #eee;
+  font-variant-numeric: tabular-nums;
+}
+.detail-table td:first-child {
+  text-align: center;
+  font-weight: 500;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+/* Back 蓝底 / Lay 粉底 */
+.bg-back { background: #A6D8FF !important; }
+.bg-lay  { background: #FAC9D1 !important; }
+
+/* 成交量高亮 */
+.text-traded-2x { color: #e67e22; font-weight: 700; }
+.text-traded-3x { color: #8e44ad; font-weight: 700; }
+
+/* 差额表 */
+.diff-table td { text-align: center; }
+.diff-val { color: #27ae60; font-weight: 600; }
+
+/* 面板状态 */
+.panel-empty   { text-align: center; color: #999; padding: 12px 0; font-size: 0.78rem; }
+.panel-loading { text-align: center; color: #666; padding: 12px 0; font-size: 0.78rem; }
+.panel-error   { text-align: center; color: #c00; padding: 12px 0; font-size: 0.78rem; }
+.retry-link    { color: #2563eb; cursor: pointer; text-decoration: underline; }
+.retry-link:hover { color: #1d4ed8; }
+
+/* 加载旋转动画 */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: detail-spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* ── 统计行 ── */
+.stat-row td {
+  padding: 4px 8px;
+  background: #fafbfc;
+  border-bottom: 1px solid #e5e7eb;
+}
+.stat-label {
+  text-align: right !important;
+  font-weight: 600;
+  color: #555;
+}
+.stat-highlight td { font-weight: 700; }
+
+/* ── 章节标题 ── */
+.section-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 6px;
+}
+.section-title-sub { margin-top: 12px; }
+
+/* ── 无数据 / 加载 / 错误 ── */
+.no-data {
+  text-align: center;
+  color: #999;
+  padding: 24px !important;
+}
+.loading, .error-msg {
+  text-align: center;
+  padding: 48px 0;
+  color: #666;
+}
+
+/* ── 成交汇总表 ── */
+.volume-summary {
+  margin-top: 16px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+.summary-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 8px;
+}
+.summary-table {
+  width: 100%;
+  max-width: 500px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.summary-table th {
+  background: #eef0f2;
+  padding: 4px 10px;
+  text-align: center;
+  font-weight: 600;
+  border-bottom: 1px solid #d1d5db;
+}
+.summary-table td {
+  padding: 4px 10px;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 净赔付表 ── */
+.net-payout-section { margin-top: 16px; }
+.net-table {
+  width: 100%;
+  max-width: 600px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+.net-table th {
+  background: #eef0f2;
+  padding: 4px 10px;
+  text-align: center;
+  font-weight: 600;
+  border-bottom: 1px solid #d1d5db;
+}
+.net-table td {
+  padding: 4px 10px;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  font-variant-numeric: tabular-nums;
+}
+.net-title { text-align: left !important; font-weight: 500; }
+.net-negative td { background: #fef2f2; }
+
+/* ═══════════════════════════════════════════════════════════════
+ * Legacy gridtable 风格（cs/cs2/cs7 等传统表格详情页使用）
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* ── gridtable 主表 ── */
+.gridtable { border-collapse: collapse; width: 100%; font-size: 12px; }
+.gridtable th, .gridtable td { border: 1px solid #ccc; padding: 2px 4px; text-align: center; white-space: nowrap; }
+.gridtable th { background: #f0f0f0; font-weight: bold; }
+.gridtable tbody tr:hover { background: #f9f9f9; }
+
+/* ── gridtable 专用行样式 ── */
+.subtotal-row td { background: #e8e8e8; font-weight: bold; }
+.stats-row td { background: #f8f8f0; color: #888; }
+.grand-total-row td { background: #dde8ee; font-weight: bold; }
+
+/* ── gridtable 高亮 ── */
+.tdhighlight { background: #ffff00 !important; }
+.tdlowlight { background: #ffffa8 !important; }
+.red1 { background: #8c0000; color: #fff; }
+.red2 { background: #df0000; color: #fff; }
+.red3 { background: #ff5353; color: #fff; }
+.red4 { background: #ff9f9f; color: #fff; }
+.big_alert { border: 2px solid #0000ff; }
+
+/* ── gridtable 展开行 ── */
+.expand-row td { background: #fafafa; text-align: left; vertical-align: top; }
+.expand-panels { display: flex; gap: 6px; align-items: flex-start; }
+.expand-panel { flex: none; }
+.expand-panel > span { font-weight: bold; font-size: 11px; display: block; margin-bottom: 2px; }
+
+/* ── 展开明细子表（ex） ── */
+.ex { border-collapse: collapse; margin-top: 4px; font-size: 11px; }
+.ex th, .ex td { border: 1px solid #ddd; padding: 2px 6px; text-align: right; }
+.extrth th { background: #e8e8e8; font-size: 11px; }
+
+/* ── 折叠按钮 ── */
+.ts_button { padding: 4px 12px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; margin: 8px 0 4px; font-size: 12px; }
+.match_list { margin-bottom: 12px; }
+
+/* ── gridtable 页面容器（兼容旧页面） ── */
+.grid-detail-page { padding: 10px; font-size: 12px; }
+.grid-detail-page .match-header h5 { margin: 0 0 8px; }
+.grid-detail-page .match-header span { color: #666; font-weight: normal; margin-left: 10px; }
+.grid-detail-page .loading { padding: 20px; text-align: center; }
+.grid-detail-page h4 { margin: 12px 0 4px; font-size: 13px; }
+.grid-detail-page .table-scroll { overflow-x: auto; }
+
+/* ── gridtable Tab 栏（传统按钮风格） ── */
+.grid-tab-bar { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.grid-tab-bar button { padding: 4px 10px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 12px; }
+.grid-tab-bar button.active { background: #337ab7; color: #fff; border-color: #337ab7; }

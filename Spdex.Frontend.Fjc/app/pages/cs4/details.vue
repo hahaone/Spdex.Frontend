@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BigHoldItemView, PriceSizeRow } from '~/types/bighold'
 import type { UoTimeWindowData } from '~/types/uobighold'
-import { calcTradedDiff, parseRawData } from '~/utils/parseRawData'
+import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime, formatPercent } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
 
@@ -24,37 +24,38 @@ const matchInfo = computed(() => result.value?.match)
 const windows = computed(() => result.value?.windows ?? [])
 const volumeSummary = computed(() => result.value?.volumeSummary ?? [])
 
+useHead({
+  title: computed(() => matchInfo.value
+    ? `大小 ${matchInfo.value.homeTeam}vs${matchInfo.value.guestTeam}`
+    : '大小'),
+})
+
 // ── Tab 切换 ──
 const activeTab = ref(0)
 const activeWindow = computed<UoTimeWindowData | null>(() => windows.value[activeTab.value] ?? null)
 
-watch(activeTab, () => {
-  expandedPcId.value = null
-  expandedOddsPcId.value = null
-})
+// ── 行展开 & 前一条记录（使用共享 composable） ──
+const {
+  expandedPcId, expandedOddsPcId,
+  loadingPcId, failedPcIds, prevCache,
+  toggleExpand, toggleOddsExpand, retryFetchPrevious,
+  collapseAll, resetAll,
+  getCurrentRows, getPreviousRows, getDiffRows,
+} = useDetailExpand({ previousEndpoint: '/api/uobighold/previous' })
 
-// ── 行展开状态 ──
-const expandedPcId = ref<number | null>(null)
-const expandedOddsPcId = ref<number | null>(null)
-
-// ── 行展开明细数据 ──
-const { fetchPrevious, clearCache, loadingPcId, failedPcIds, cache: prevCache } = useBigHoldDetail('/api/uobighold/previous')
+watch(activeTab, () => collapseAll())
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
   orderParam.value = newOrder
-  expandedPcId.value = null
-  expandedOddsPcId.value = null
-  clearCache()
+  resetAll()
 }
 
 // ── 进球盘切换 ──
 function setMarketType(mt: number) {
   marketTypeParam.value = mt
   activeTab.value = 0
-  expandedPcId.value = null
-  expandedOddsPcId.value = null
-  clearCache()
+  resetAll()
 }
 
 /** 进球盘选项列表 */
@@ -65,65 +66,6 @@ const goalLines = [
   { type: 23, label: '3.5球' },
   { type: 24, label: '4.5球' },
 ]
-
-/** 当前记录解析后的 PriceSizeRow[] 缓存 */
-const currentParsedCache = reactive(new Map<number, PriceSizeRow[]>())
-/** 前一条记录解析后的 PriceSizeRow[] 缓存 */
-const previousParsedCache = reactive(new Map<number, PriceSizeRow[]>())
-
-/** 切换 O/U 层展开/收起 */
-async function toggleExpand(item: BigHoldItemView) {
-  if (expandedPcId.value === item.pcId) {
-    expandedPcId.value = null
-    return
-  }
-  expandedPcId.value = item.pcId
-  expandedOddsPcId.value = null
-
-  if (!currentParsedCache.has(item.pcId)) {
-    currentParsedCache.set(item.pcId, parseRawData(item.rawData))
-  }
-
-  if (!prevCache.has(item.pcId)) {
-    const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
-    if (prev?.rawData) {
-      previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
-    }
-  }
-}
-
-/** 切换赔率层展开/收起（LastPrice），与 O/U 互斥 */
-function toggleOddsExpand(item: BigHoldItemView) {
-  if (expandedOddsPcId.value === item.pcId) {
-    expandedOddsPcId.value = null
-    return
-  }
-  expandedOddsPcId.value = item.pcId
-  expandedPcId.value = null
-}
-
-/** 重试加载前一条记录 */
-async function retryFetchPrevious(item: BigHoldItemView) {
-  const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
-  if (prev?.rawData) {
-    previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
-  }
-}
-
-function getCurrentRows(pcId: number): PriceSizeRow[] {
-  return currentParsedCache.get(pcId) ?? []
-}
-
-function getPreviousRows(pcId: number): PriceSizeRow[] {
-  return previousParsedCache.get(pcId) ?? []
-}
-
-function getDiffRows(pcId: number): PriceSizeRow[] {
-  const current = getCurrentRows(pcId)
-  const previous = getPreviousRows(pcId)
-  if (current.length === 0 || previous.length === 0) return []
-  return calcTradedDiff(current, previous)
-}
 
 function getLastPriceRows(selectionId: number): PriceSizeRow[] {
   if (!activeWindow.value?.lastPrices) return []
@@ -138,16 +80,14 @@ function hasLargeOrder(selectionId: number): boolean {
   return lp?.hasLargeOrderAt500Or1000 ?? false
 }
 
-// ── 格式化 & 样式辅助 → 已移至 ~/utils/formatters.ts 和 ~/utils/styleHelpers.ts ──
-
-/** 百分比格式化（保留旧模板中 formatPer 的调用兼容） */
+/** 百分比格式化 */
 function formatPer(val: number): string {
   return formatPercent(val, 0)
 }
 </script>
 
 <template>
-  <div class="bighold-page">
+  <div class="detail-page">
     <!-- 加载/错误状态 -->
     <div v-if="pending" class="loading">加载中...</div>
     <div v-else-if="error || !result" class="error-msg">
@@ -438,26 +378,14 @@ function formatPer(val: number): string {
   </div>
 </template>
 
+<style>
+@import '~/assets/css/detail-shared.css';
+</style>
+
 <style scoped>
-.bighold-page {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 16px;
-  font-size: 0.85rem;
-  background: #fff;
-}
+/* ── cs4 页面特有样式 ── */
 
-/* ── 页头 ── */
-.match-header { margin-bottom: 12px; }
-.back-link { color: #2563eb; text-decoration: none; font-size: 0.85rem; }
-.back-link:hover { text-decoration: underline; }
-.match-title { margin: 6px 0 2px; font-size: 1.1rem; }
-.team-home { color: #c00; font-weight: 600; }
-.team-vs { margin: 0 8px; color: #666; font-weight: 400; }
-.team-away { color: #00c; font-weight: 600; }
-.match-meta { color: #666; font-size: 0.82rem; }
-
-/* ── 进球盘切换 ── */
+/* 进球盘切换栏 */
 .goal-line-bar {
   display: flex;
   align-items: center;
@@ -486,320 +414,5 @@ function formatPer(val: number): string {
   background: #059669;
   color: #fff;
   border-color: #059669;
-}
-
-/* ── 排序栏 ── */
-.sort-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.sort-label { color: #666; font-size: 0.82rem; }
-.sort-btn {
-  padding: 3px 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 0.82rem;
-}
-.sort-btn:hover { background: #f0f0f0; }
-.sort-btn.active {
-  background: #2563eb;
-  color: #fff;
-  border-color: #2563eb;
-}
-
-/* ── 刷新按钮 ── */
-.refresh-btn {
-  margin-left: auto;
-  padding: 3px 14px;
-  border: 1px solid #10b981;
-  border-radius: 4px;
-  background: #fff;
-  color: #10b981;
-  font-size: 0.82rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-}
-.refresh-btn:hover:not(:disabled) { background: #10b981; color: #fff; }
-.refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.refresh-btn .spin { display: inline-block; animation: spin 0.8s linear infinite; }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* ── Tab 栏 ── */
-.tab-bar {
-  display: inline-flex;
-  gap: 0;
-  margin-bottom: 10px;
-  background: #f1f3f5;
-  border-radius: 8px;
-  padding: 3px;
-  overflow-x: auto;
-}
-.tab-btn {
-  padding: 5px 16px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: #666;
-  border-radius: 6px;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  font-weight: 500;
-}
-.tab-btn:hover { color: #333; background: rgba(0, 0, 0, 0.04); }
-.tab-btn.active {
-  color: #fff;
-  background: #3b82f6;
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
-}
-
-/* ── 信息条 ── */
-.info-bar {
-  margin-bottom: 8px;
-  padding: 6px 8px;
-  background: #f8fafc;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-}
-.info-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
-  line-height: 1.6;
-}
-.info-row + .info-row {
-  margin-top: 2px;
-  padding-top: 4px;
-  border-top: 1px dashed #e5e7eb;
-}
-.info-chip {
-  font-size: 0.78rem;
-  color: #666;
-  white-space: nowrap;
-}
-.info-chip b {
-  color: #222;
-  font-weight: 600;
-  margin-left: 2px;
-  font-variant-numeric: tabular-nums;
-}
-.info-chip.dense { color: #7c6a2d; }
-.info-chip.dense b { color: #4a3d14; }
-
-/* ── 主表 ── */
-.table-wrapper { overflow-x: auto; }
-.bighold-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  background: #fff;
-}
-.bighold-table th {
-  background: #f5f5f5;
-  padding: 6px 8px;
-  text-align: center;
-  font-weight: 600;
-  border-bottom: 2px solid #d1d5db;
-  white-space: nowrap;
-}
-.bighold-table td {
-  padding: 5px 8px;
-  text-align: center;
-  border-bottom: 1px solid #e5e7eb;
-}
-.bighold-table tbody .main-row:hover { background: #f5f8ff; }
-.clickable-header { cursor: help; }
-.row-expanded { border-bottom: 2px solid #2563eb !important; }
-.row-expanded td { border-bottom: 2px solid #2563eb !important; }
-
-.sel-cell {
-  cursor: pointer;
-  user-select: none;
-  font-weight: 600;
-}
-.sel-cell:hover { text-decoration: underline; }
-.odds-cell { cursor: pointer; user-select: none; }
-.odds-cell:hover { text-decoration: underline; }
-
-/* 列宽 */
-.col-sel { width: 46px; }
-.col-odds { width: 60px; }
-.col-dense { width: 60px; }
-.col-amount { width: 80px; }
-.col-attr { width: 50px; }
-.col-hold { width: 80px; }
-.col-payout { width: 60px; }
-.col-per { width: 50px; }
-.col-weight { width: 50px; }
-.col-pmark { width: 50px; }
-.col-time { width: 130px; }
-.col-time-val { font-size: 0.78rem; white-space: nowrap; }
-.col-attr-val { font-size: 0.78rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
-
-/* O/U 颜色 */
-.sel-over { color: #c00; }
-.sel-under { color: #00c; }
-.sel-large-order {
-  color: #c00 !important;
-  background: #fee2e2 !important;
-}
-
-/* Hold 高亮 */
-.highlight-3sigma { background: #ffff00 !important; font-weight: 700; }
-.highlight-2sigma { background: #FFFFA8 !important; }
-.text-top2 { color: #8b0000; font-weight: 700; }
-.text-neg { color: #c00; }
-
-/* PMark */
-.pmark-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.pmark-ps { background: #fef3c7; color: #92400e; }
-.pmark-p { background: #fee2e2; color: #991b1b; }
-.pmark-p0 { background: #fce7f3; color: #9d174d; }
-.pmark-p1 { background: #ede9fe; color: #5b21b6; }
-.pmark-p2 { background: #dbeafe; color: #1e40af; }
-.pmark-p6 { background: #d1fae5; color: #065f46; }
-.pmark-p12 { background: #f3f4f6; color: #6b7280; }
-
-/* ── 展开行 ── */
-.expand-row > td {
-  padding: 0 !important;
-  border-bottom: 1px solid #d1d5db;
-  background: #fff;
-}
-.expand-row-odds > td { background: #fafcff; }
-.expand-content {
-  padding: 10px 16px;
-  animation: slideDown 0.2s ease;
-}
-@keyframes slideDown {
-  from { opacity: 0; max-height: 0; }
-  to { opacity: 1; max-height: 600px; }
-}
-
-.detail-panels { display: flex; gap: 16px; flex-wrap: wrap; }
-.detail-panel { flex: 1; min-width: 200px; max-width: 380px; }
-.panel-title {
-  font-weight: 600;
-  font-size: 0.82rem;
-  color: #444;
-  margin-bottom: 4px;
-  padding-bottom: 3px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.detail-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.78rem;
-}
-.detail-table th {
-  background: #eef0f2;
-  padding: 3px 10px;
-  text-align: center;
-  font-weight: 600;
-  font-size: 0.75rem;
-  border-bottom: 1px solid #d1d5db;
-}
-.detail-table td {
-  padding: 2px 14px 2px 8px;
-  text-align: right;
-  border-bottom: 1px solid #eee;
-  font-variant-numeric: tabular-nums;
-}
-.detail-table td:first-child {
-  text-align: center;
-  font-weight: 500;
-  padding-left: 6px;
-  padding-right: 6px;
-}
-
-.bg-back { background: #A6D8FF !important; }
-.bg-lay { background: #FAC9D1 !important; }
-.text-traded-2x { color: #e67e22; font-weight: 700; }
-.text-traded-3x { color: #8e44ad; font-weight: 700; }
-
-.diff-table td { text-align: center; }
-.diff-val { color: #27ae60; font-weight: 600; }
-
-.panel-empty { text-align: center; color: #999; padding: 12px 0; font-size: 0.78rem; }
-.panel-loading { text-align: center; color: #666; padding: 12px 0; font-size: 0.78rem; }
-.panel-error { text-align: center; color: #c00; padding: 12px 0; font-size: 0.78rem; }
-.retry-link { color: #2563eb; cursor: pointer; text-decoration: underline; }
-.retry-link:hover { color: #1d4ed8; }
-
-.spinner {
-  display: inline-block;
-  width: 14px; height: 14px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-  vertical-align: middle;
-  margin-right: 4px;
-}
-
-/* 统计行 */
-.stat-row td {
-  padding: 4px 8px;
-  background: #fafbfc;
-  border-bottom: 1px solid #e5e7eb;
-}
-.stat-label { text-align: right !important; font-weight: 600; color: #555; }
-.stat-highlight td { font-weight: 700; }
-
-.no-data { text-align: center; color: #999; padding: 24px !important; }
-.loading, .error-msg { text-align: center; padding: 48px 0; color: #666; }
-
-/* ── 成交汇总表 ── */
-.volume-summary {
-  margin-top: 16px;
-  padding: 8px;
-  background: #f8fafc;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-}
-.summary-title {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #333;
-  margin: 0 0 8px;
-}
-.summary-table {
-  width: 100%;
-  max-width: 500px;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-}
-.summary-table th {
-  background: #eef0f2;
-  padding: 4px 10px;
-  text-align: center;
-  font-weight: 600;
-  border-bottom: 1px solid #d1d5db;
-}
-.summary-table td {
-  padding: 4px 10px;
-  text-align: center;
-  border-bottom: 1px solid #eee;
-  font-variant-numeric: tabular-nums;
 }
 </style>

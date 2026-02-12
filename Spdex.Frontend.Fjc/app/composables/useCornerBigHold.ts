@@ -1,19 +1,17 @@
 import type { ApiResponse } from '~/types/api'
-import type { UoBigHoldPageResult } from '~/types/uobighold'
+import type { CornerBigHoldPageResult } from '~/types/cornerbighold'
 
-interface UoBigHoldParams {
+interface CornerBigHoldParams {
   id: number
-  marketType?: number
   order?: number
 }
 
-export function useUoBigHold(params: Ref<UoBigHoldParams>) {
-  const result = useApiFetch<ApiResponse<UoBigHoldPageResult>>('/api/uobighold', {
+export function useCornerBigHold(params: Ref<CornerBigHoldParams>) {
+  const result = useApiFetch<ApiResponse<CornerBigHoldPageResult>>('/api/cornerbighold', {
     params,
     watch: [params],
   })
 
-  /** 手动刷新数据（重新请求 API） */
   const refreshing = ref(false)
   async function manualRefresh() {
     refreshing.value = true

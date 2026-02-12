@@ -70,10 +70,4 @@ export interface MatchListResult {
   pageSize: number
 }
 
-/** 后端统一响应包装 */
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
-  traceId: string
-}
+// ApiResponse<T> 已统一定义在 ~/types/api.ts 中

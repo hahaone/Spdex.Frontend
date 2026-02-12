@@ -23,8 +23,8 @@ export default defineNuxtConfig({
   },
 
   // Proxy /api requests to .NET backend
-  // In Docker: API_INTERNAL_URL=http://webapi:5000
-  // In development: defaults to http://localhost:5000
+  // In Docker: API_INTERNAL_URL=http://webapi:5010
+  // In development: defaults to http://localhost:5010
   routeRules: {
     '/api/**': {
       proxy: { to: `${process.env.API_INTERNAL_URL || 'http://localhost:5000'}/api/**` },

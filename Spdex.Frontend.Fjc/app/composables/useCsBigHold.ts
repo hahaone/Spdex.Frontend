@@ -1,14 +1,13 @@
 import type { ApiResponse } from '~/types/api'
-import type { UoBigHoldPageResult } from '~/types/uobighold'
+import type { CsBigHoldPageResult } from '~/types/csbighold'
 
-interface UoBigHoldParams {
+interface CsBigHoldParams {
   id: number
-  marketType?: number
   order?: number
 }
 
-export function useUoBigHold(params: Ref<UoBigHoldParams>) {
-  const result = useApiFetch<ApiResponse<UoBigHoldPageResult>>('/api/uobighold', {
+export function useCsBigHold(params: Ref<CsBigHoldParams>) {
+  const result = useApiFetch<ApiResponse<CsBigHoldPageResult>>('/api/csbighold', {
     params,
     watch: [params],
   })

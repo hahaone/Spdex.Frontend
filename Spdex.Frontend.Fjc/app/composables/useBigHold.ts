@@ -1,4 +1,4 @@
-import type { ApiResponse } from '~/types/match'
+import type { ApiResponse } from '~/types/api'
 import type { BigHoldPageResult } from '~/types/bighold'
 
 interface BigHoldParams {

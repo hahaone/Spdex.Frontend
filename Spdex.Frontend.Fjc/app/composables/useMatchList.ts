@@ -1,4 +1,5 @@
-import type { ApiResponse, MatchListResult } from '~/types/match'
+import type { ApiResponse } from '~/types/api'
+import type { MatchListResult } from '~/types/match'
 
 interface MatchListParams {
   date?: string | null
