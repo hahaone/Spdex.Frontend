@@ -88,6 +88,11 @@ export interface UoTimeWindowData {
   avgAmount: number
   threshold2SigmaAmount: number
   threshold3SigmaAmount: number
+  // 统计摘要行
+  ukTime: string | null             // UK 时间 (GMT/BST)
+  amountPercent: number | null       // 成交量百分比 = 当前/下一窗口 ×100
+  overAmountPercent: number | null   // 大球成交量百分比
+  underAmountPercent: number | null  // 小球成交量百分比
   // 赔率摘要（2-way）
   odds: UoOddsSummary | null
   // LastPrice 挂牌数据

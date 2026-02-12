@@ -112,6 +112,12 @@ export interface TimeWindowData {
   avgAmount: number
   threshold2SigmaAmount: number
   threshold3SigmaAmount: number
+  // 统计摘要行
+  ukTime: string | null           // UK 时间 (GMT/BST)
+  amountPercent: number | null     // 成交量百分比 = 当前/下一窗口 ×100
+  homeAmountPercent: number | null // 主队成交量百分比
+  drawAmountPercent: number | null // 平局成交量百分比
+  awayAmountPercent: number | null // 客队成交量百分比
   // 赔率摘要
   odds: OddsSummary | null
   // LastPrice 挂牌数据

@@ -121,6 +121,53 @@ function formatPer(val: number): string {
         >{{ gl.label }}</button>
       </div>
 
+      <!-- ★ 所有分时统计摘要行 -->
+      <div v-if="windows.length > 0" class="summary-panel">
+        <div class="summary-title">分时统计摘要</div>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th class="st-label">窗口</th>
+              <th class="st-amount">成交量</th>
+              <th class="st-weight">必指</th>
+              <th class="st-payout">盈亏</th>
+              <th class="st-uk">UK Time</th>
+              <th class="st-pct">占比</th>
+              <th class="st-pct-detail">Over% - Under%</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(w, idx) in windows"
+              :key="'sum-' + idx"
+              class="summary-row"
+              :class="{ 'summary-active': activeTab === idx }"
+              @click="activeTab = idx"
+            >
+              <td class="st-label">{{ w.label }}</td>
+              <td class="st-amount">{{ w.odds ? formatMoney(w.odds.totalAmount) : '-' }}</td>
+              <td class="st-weight">
+                <template v-if="w.odds">{{ w.odds.overWeight.toFixed(0) }} | {{ w.odds.underWeight.toFixed(0) }}</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-payout">
+                <template v-if="w.odds">{{ w.odds.overPayout.toFixed(0) }} | {{ w.odds.underPayout.toFixed(0) }}</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
+              <td class="st-pct">
+                <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-pct-detail">
+                <template v-if="w.overAmountPercent != null || w.underAmountPercent != null">{{ w.overAmountPercent != null ? w.overAmountPercent.toFixed(2) + '%' : '-' }} - {{ w.underAmountPercent != null ? w.underAmountPercent.toFixed(2) + '%' : '-' }}</template>
+                <template v-else>-</template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- 排序 + 刷新 -->
       <div class="sort-bar">
         <span class="sort-label">排序：</span>
@@ -415,4 +462,59 @@ function formatPer(val: number): string {
   color: #fff;
   border-color: #059669;
 }
+
+/* ── 分时统计摘要面板 ── */
+.summary-panel {
+  margin: 12px 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+.summary-panel .summary-title {
+  padding: 6px 14px;
+  background: #b22222;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+.summary-panel .summary-table {
+  width: 100%;
+  max-width: none;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.summary-panel .summary-table th,
+.summary-panel .summary-table td {
+  padding: 6px 28px;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  line-height: 1.7;
+}
+.summary-panel .summary-table th {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ccc;
+  font-weight: 600;
+  font-size: 12px;
+  color: #555;
+}
+.summary-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.summary-row:hover {
+  background: #fef9e7;
+}
+.summary-active {
+  background: #fff3cd !important;
+  font-weight: 600;
+}
+th.st-label, td.st-label { font-weight: 600; padding-left: 16px !important; text-align: left !important; white-space: nowrap; }
+td.st-amount { font-variant-numeric: tabular-nums; text-align: right; }
+td.st-weight, td.st-payout { white-space: nowrap; }
+td.st-uk { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #555; white-space: nowrap; }
+td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
+td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>

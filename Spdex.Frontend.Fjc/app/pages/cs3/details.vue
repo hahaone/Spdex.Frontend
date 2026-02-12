@@ -88,6 +88,53 @@ function hasLargeOrder(selectionId: number): boolean {
         </div>
       </div>
 
+      <!-- ★ 所有分时统计摘要行 -->
+      <div v-if="windows.length > 0" class="summary-panel">
+        <div class="summary-title">分时统计摘要</div>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th class="st-label">窗口</th>
+              <th class="st-amount">成交量</th>
+              <th class="st-weight">必指</th>
+              <th class="st-payout">盈亏</th>
+              <th class="st-uk">UK Time</th>
+              <th class="st-pct">占比</th>
+              <th class="st-pct-detail">H% - D% - A%</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(w, idx) in windows"
+              :key="'sum-' + idx"
+              class="summary-row"
+              :class="{ 'summary-active': activeTab === idx }"
+              @click="activeTab = idx"
+            >
+              <td class="st-label">{{ w.label }}</td>
+              <td class="st-amount">{{ w.odds ? formatMoney(w.odds.totalAmount) : '-' }}</td>
+              <td class="st-weight">
+                <template v-if="w.odds">{{ w.odds.homeWeight.toFixed(0) }} | {{ w.odds.drawWeight.toFixed(0) }} | {{ w.odds.awayWeight.toFixed(0) }}</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-payout">
+                <template v-if="w.odds">{{ w.odds.homePayout.toFixed(0) }} | {{ w.odds.drawPayout.toFixed(0) }} | {{ w.odds.awayPayout.toFixed(0) }}</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
+              <td class="st-pct">
+                <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-pct-detail">
+                <template v-if="w.homeAmountPercent != null || w.drawAmountPercent != null || w.awayAmountPercent != null">{{ w.homeAmountPercent != null ? w.homeAmountPercent.toFixed(2) + '%' : '-' }} - {{ w.drawAmountPercent != null ? w.drawAmountPercent.toFixed(2) + '%' : '-' }} - {{ w.awayAmountPercent != null ? w.awayAmountPercent.toFixed(2) + '%' : '-' }}</template>
+                <template v-else>-</template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- 排序按钮 + 刷新 -->
       <div class="sort-bar">
         <span class="sort-label">排序：</span>
@@ -392,4 +439,57 @@ function hasLargeOrder(selectionId: number): boolean {
 .sel-主 { color: #c00; }
 .sel-平 { color: #666; }
 .sel-客 { color: #00c; }
+
+/* ── 分时统计摘要面板 ── */
+.summary-panel {
+  margin: 12px 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+.summary-title {
+  padding: 6px 14px;
+  background: #b22222;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.summary-table th,
+.summary-table td {
+  padding: 6px 28px;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  line-height: 1.7;
+}
+.summary-table th {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ccc;
+  font-weight: 600;
+  font-size: 12px;
+  color: #555;
+}
+.summary-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.summary-row:hover {
+  background: #fef9e7;
+}
+.summary-active {
+  background: #fff3cd !important;
+  font-weight: 600;
+}
+th.st-label, td.st-label { font-weight: 600; padding-left: 16px !important; text-align: left !important; white-space: nowrap; }
+td.st-amount { font-variant-numeric: tabular-nums; text-align: right; }
+td.st-weight, td.st-payout { white-space: nowrap; }
+td.st-uk { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #555; white-space: nowrap; }
+td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
+td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>
