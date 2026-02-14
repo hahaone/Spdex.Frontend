@@ -6,6 +6,8 @@ import { formatMoney, formatBfAmount, formatDateCN, formatMatchTimeSlash, format
 // --- 筛选状态 ---
 const selectedDate = ref('')
 const selectedLeague = ref('')
+const selectedStatus = ref<'upcoming' | 'started' | 'all'>('upcoming')
+const jcOnly = ref(false)
 const currentPage = ref(1)
 const pageSize = 20
 
@@ -13,6 +15,8 @@ const pageSize = 20
 const queryParams = computed(() => ({
   date: selectedDate.value || undefined,
   league: selectedLeague.value || undefined,
+  status: selectedStatus.value,
+  jc: jcOnly.value ? 1 : undefined,
   page: currentPage.value,
   pageSize,
 }))
@@ -36,8 +40,36 @@ function onLeagueChange(league: string) {
   currentPage.value = 1
 }
 
+/** 判断日期字符串是否为今天 */
+function isToday(dateStr: string): boolean {
+  if (!dateStr) return true
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return dateStr === `${yyyy}-${mm}-${dd}`
+}
+
 function onDateChange(date: string) {
   selectedDate.value = date
+  selectedLeague.value = ''
+  currentPage.value = 1
+  // 浏览历史日期时自动切换到[全部]，回到今天时恢复[未开赛]
+  if (!date || isToday(date)) {
+    selectedStatus.value = 'upcoming'
+  } else {
+    selectedStatus.value = 'all'
+  }
+}
+
+function onStatusChange(status: 'upcoming' | 'started' | 'all') {
+  selectedStatus.value = status
+  selectedLeague.value = ''
+  currentPage.value = 1
+}
+
+function toggleJcOnly() {
+  jcOnly.value = !jcOnly.value
   selectedLeague.value = ''
   currentPage.value = 1
 }
@@ -62,19 +94,44 @@ function goToPage(page: number) {
   }
 }
 
-// 最大单注列表单元格摘要（简短显示在表格中）
+// 让球格式化：统一为 [正负号][2位小数]
+function formatHandicap(val: string | null): string {
+  if (!val) return '-'
+  const num = parseFloat(val)
+  if (isNaN(num)) return val
+  const sign = num >= 0 ? '+' : ''
+  return `${sign}${num.toFixed(2)}`
+}
+
+// 最大单注列表单元格摘要（简短显示在表格中），包含P标记
 function formatMaxBetSummary(item: typeof matches.value[0]): string {
   if (!item.maxBet) return ''
   const amount = formatMoney(item.maxBet)
   const per = item.maxBetPercent.toFixed(0)
   const attr = item.maxBetAttr || '-'
+  const pmark = item.pMark ? `,${item.pMark}` : ''
   const selection = item.maxBetSelection || '-'
-  return `${amount} (${per}%, ${attr}) ${selection}`
+  return `${amount}(${per}%,${attr}${pmark}) ${selection}`
 }
 
 // 最大单注赔率低于2时标红（与旧站 lastPrice < 2 逻辑一致）
 function isMaxBetHighlight(item: typeof matches.value[0]): boolean {
   return item.maxBet > 0 && item.maxBetOdds > 0 && item.maxBetOdds < 2
+}
+
+// 标盘最大单注摘要
+function formatBfMaxBetSummary(item: typeof matches.value[0]): string {
+  if (!item.bfMaxBet) return ''
+  const amount = formatMoney(item.bfMaxBet)
+  const per = item.bfMaxBetPercent.toFixed(0)
+  const attr = item.bfMaxBetAttr || '-'
+  const pmark = item.bfPMark ? `,${item.bfPMark}` : ''
+  const selection = item.bfMaxBetSelection || '-'
+  return `${amount}(${per}%,${attr}${pmark}) ${selection}`
+}
+
+function isBfMaxBetHighlight(item: typeof matches.value[0]): boolean {
+  return item.bfMaxBet > 0 && item.bfMaxBetOdds > 0 && item.bfMaxBetOdds < 2
 }
 
 // --- 最大单注弹窗（定位在点击元素附近） ---
@@ -111,6 +168,36 @@ function closeMaxBetPopover() {
   maxBetPopover.value = { visible: false, item: null, top: 0, left: 0 }
 }
 
+// --- 标盘最大单注弹窗 ---
+const bfMaxBetPopover = ref<{
+  visible: boolean
+  item: typeof matches.value[0] | null
+  top: number
+  left: number
+}>({ visible: false, item: null, top: 0, left: 0 })
+
+function openBfMaxBetPopover(event: MouseEvent, item: typeof matches.value[0]) {
+  if (!item.bfMaxBet) return
+  const el = event.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  let top = rect.bottom + 6
+  let left = rect.left
+  const popoverWidth = 380
+  if (left + popoverWidth > window.innerWidth - 12) {
+    left = window.innerWidth - popoverWidth - 12
+  }
+  if (left < 12) left = 12
+  const popoverHeight = 400
+  if (top + popoverHeight > window.innerHeight - 12) {
+    top = rect.top - popoverHeight - 6
+    if (top < 12) top = 12
+  }
+  bfMaxBetPopover.value = { visible: true, item, top, left }
+}
+
+function closeBfMaxBetPopover() {
+  bfMaxBetPopover.value = { visible: false, item: null, top: 0, left: 0 }
+}
 
 // 分页按钮范围
 const pageRange = computed(() => {
@@ -124,9 +211,9 @@ const pageRange = computed(() => {
 // 明细链接配置
 const detailLinks = [
   { path: 'cs', label: 'GL', title: 'Goal Line', color: '#2563eb' },
-  { path: 'cs2', label: '波', title: '波胆2', color: '#5f9ea0' },
+  { path: 'cs2', label: '胆', title: '波胆', color: '#5f9ea0' },
   { path: 'cs3', label: '标', title: '胜平负', color: '#a0522d' },
-  { path: 'cs4', label: 'UO', title: '大小', color: '#556b2f' },
+  { path: 'cs4', label: 'OU', title: '大小', color: '#556b2f' },
   { path: 'cs5', label: '亚', title: '亚盘', color: '#8a2be2' },
   { path: 'cs7', label: '角', title: '角球', color: '#ff7f50' },
 ]
@@ -157,6 +244,24 @@ const detailLinks = [
           </button>
         </div>
         <span v-if="selectedDate" class="date-display">{{ formatDateCN(selectedDate) }}</span>
+      </div>
+      <div class="filter-group status-group">
+        <button
+          :class="['status-btn', { active: selectedStatus === 'upcoming' }]"
+          @click="onStatusChange('upcoming')"
+        >未开赛</button>
+        <button
+          :class="['status-btn', { active: selectedStatus === 'started' }]"
+          @click="onStatusChange('started')"
+        >已开赛</button>
+        <button
+          :class="['status-btn', { active: selectedStatus === 'all' }]"
+          @click="onStatusChange('all')"
+        >全部</button>
+        <button
+          :class="['status-btn jc-btn', { active: jcOnly }]"
+          @click="toggleJcOnly"
+        >竞彩</button>
       </div>
       <div class="filter-group">
         <label>联赛</label>
@@ -212,16 +317,19 @@ const detailLinks = [
               让球
             </th>
             <th class="col-maxbet">
-              最大单注
+              波胆最大单注
+            </th>
+            <th class="col-bf-maxbet">
+              标盘最大单注
+            </th>
+            <th class="col-bf">
+              标盘总成交
+            </th>
+            <th class="col-asian">
+              亚盘总成交
             </th>
             <th class="col-score">
               比分
-            </th>
-            <th class="col-bf">
-              总成交
-            </th>
-            <th class="col-pmark">
-              P标记
             </th>
             <th class="col-detail">
               明细
@@ -230,7 +338,7 @@ const detailLinks = [
         </thead>
         <tbody>
           <tr v-if="matches.length === 0">
-            <td colspan="9" class="empty">
+            <td colspan="10" class="empty">
               {{ status === 'pending' ? '加载中...' : '暂无赛事数据' }}
             </td>
           </tr>
@@ -247,7 +355,7 @@ const detailLinks = [
               <span class="team-away">{{ item.match.guestTeam }}</span>
             </td>
             <td class="col-let">
-              {{ item.asianAvrLet ?? '-' }}
+              {{ formatHandicap(item.asianAvrLet) }}
             </td>
             <td class="col-maxbet">
               <span
@@ -260,18 +368,26 @@ const detailLinks = [
               </span>
               <span v-else>-</span>
             </td>
-            <td class="col-score">
-              <span class="score">{{ item.match.final || '-' }}</span>
-              <span v-if="item.match.half" class="half">({{ item.match.half }})</span>
+            <td class="col-bf-maxbet">
+              <span
+                v-if="item.bfMaxBet > 0"
+                class="maxbet-cell"
+                :class="{ highlight: isBfMaxBetHighlight(item) }"
+                @click="openBfMaxBetPopover($event, item)"
+              >
+                {{ formatBfMaxBetSummary(item) }}
+              </span>
+              <span v-else>-</span>
             </td>
             <td class="col-bf">
               {{ formatBfAmount(item.bfAmount) }}
             </td>
-            <td class="col-pmark">
-              <span v-if="item.pMark" class="pmark-tag" :class="'pmark-' + item.pMark.toLowerCase()">
-                {{ item.pMark }}
-              </span>
-              <span v-else>-</span>
+            <td class="col-asian">
+              {{ formatBfAmount(item.asianAmount) }}
+            </td>
+            <td class="col-score">
+              <span class="score">{{ item.match.final || '-' }}</span>
+              <span v-if="item.match.half" class="half">({{ item.match.half }})</span>
             </td>
             <td class="col-detail">
               <div class="detail-links">
@@ -358,6 +474,78 @@ const detailLinks = [
               <tr>
                 <td class="label">总成交</td>
                 <td class="value">{{ formatBfAmount(maxBetPopover.item.bfAmount) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 标盘最大单注详情浮层 -->
+    <Teleport to="body">
+      <div v-if="bfMaxBetPopover.visible && bfMaxBetPopover.item" class="popover-overlay" @click.self="closeBfMaxBetPopover">
+        <div
+          class="popover-box"
+          :style="{ top: bfMaxBetPopover.top + 'px', left: bfMaxBetPopover.left + 'px' }"
+        >
+          <div class="popover-header popover-header-bf">
+            <span class="popover-title">标盘最大单注详情</span>
+            <button class="popover-close" @click="closeBfMaxBetPopover">
+              &times;
+            </button>
+          </div>
+          <div class="popover-match">
+            {{ bfMaxBetPopover.item.match.sortName }} &middot;
+            {{ bfMaxBetPopover.item.match.homeTeam }} vs {{ bfMaxBetPopover.item.match.guestTeam }}
+          </div>
+          <table class="popover-detail">
+            <tbody>
+              <tr>
+                <td class="label">交易量</td>
+                <td class="value">{{ formatMoney(bfMaxBetPopover.item.bfMaxBet) }}</td>
+              </tr>
+              <tr>
+                <td class="label">占比</td>
+                <td class="value">{{ bfMaxBetPopover.item.bfMaxBetPercent.toFixed(1) }}%</td>
+              </tr>
+              <tr>
+                <td class="label">交易属性</td>
+                <td class="value">{{ bfMaxBetPopover.item.bfMaxBetAttr || '-' }}</td>
+              </tr>
+              <tr>
+                <td class="label">价位 (赔率)</td>
+                <td class="value" :class="{ 'text-red': bfMaxBetPopover.item.bfMaxBetOdds > 0 && bfMaxBetPopover.item.bfMaxBetOdds < 2 }">
+                  {{ bfMaxBetPopover.item.bfMaxBetOdds }}
+                </td>
+              </tr>
+              <tr>
+                <td class="label">价格变化</td>
+                <td class="value">{{ bfMaxBetPopover.item.bfMaxBetPriceChange }}</td>
+              </tr>
+              <tr>
+                <td class="label">选项</td>
+                <td class="value">{{ bfMaxBetPopover.item.bfMaxBetSelection || '-' }}</td>
+              </tr>
+              <tr>
+                <td class="label">刷新时间</td>
+                <td class="value">{{ bfMaxBetPopover.item.bfMaxBetTime || '-' }}</td>
+              </tr>
+              <tr>
+                <td class="label">比赛时间</td>
+                <td class="value">{{ formatDateTime(bfMaxBetPopover.item.match.matchTime) }}</td>
+              </tr>
+              <tr>
+                <td class="label">P标记</td>
+                <td class="value">
+                  <span v-if="bfMaxBetPopover.item.bfPMark" class="pmark-tag" :class="'pmark-' + bfMaxBetPopover.item.bfPMark.toLowerCase()">
+                    {{ bfMaxBetPopover.item.bfPMark }}
+                  </span>
+                  <span v-else>-</span>
+                </td>
+              </tr>
+              <tr>
+                <td class="label">标盘总成交</td>
+                <td class="value">{{ formatBfAmount(bfMaxBetPopover.item.bfAmount) }}</td>
               </tr>
             </tbody>
           </table>
@@ -494,6 +682,61 @@ const detailLinks = [
   color: #64748b;
   margin-left: 0.5rem;
   white-space: nowrap;
+}
+
+/* --- 赛事状态筛选按钮组 --- */
+.status-group {
+  display: flex;
+  gap: 0;
+}
+
+.status-btn {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 0.85rem;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.status-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.status-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.status-btn:not(:first-child) {
+  border-left: none;
+}
+
+.status-btn:hover:not(.active) {
+  background: #f1f5f9;
+  color: #1e40af;
+}
+
+.status-btn.active {
+  background: #1e40af;
+  color: #fff;
+  border-color: #1e40af;
+}
+
+.status-btn.active + .status-btn {
+  border-left-color: #1e40af;
+}
+
+.status-btn.jc-btn {
+  margin-left: 6px;
+  border-left: 1px solid #d1d5db;
+  border-radius: 4px;
+}
+
+.status-btn.jc-btn.active {
+  background: #b22222;
+  border-color: #b22222;
 }
 
 /* --- 刷新按钮 --- */
@@ -642,10 +885,11 @@ const detailLinks = [
 .col-time { width: 110px; white-space: nowrap; }
 .col-teams { min-width: 200px; }
 .col-let { width: 60px; text-align: center; }
-.col-maxbet { min-width: 240px; }
+.col-maxbet { min-width: 220px; }
+.col-bf-maxbet { min-width: 200px; }
 .col-score { width: 90px; white-space: nowrap; }
 .col-bf { width: 65px; text-align: right; white-space: nowrap; }
-.col-pmark { width: 55px; text-align: center; }
+.col-asian { width: 65px; text-align: right; white-space: nowrap; }
 .col-detail { width: 160px; }
 
 .league-tag {
@@ -708,6 +952,14 @@ const detailLinks = [
   color: #991b1b;
 }
 
+.col-bf-maxbet .highlight {
+  color: #dc2626;
+}
+
+.col-bf-maxbet .highlight:hover {
+  color: #991b1b;
+}
+
 /* --- P标记 --- */
 .pmark-tag {
   display: inline-block;
@@ -719,6 +971,11 @@ const detailLinks = [
 
 .pmark-ps {
   background: #f59e0b;
+  color: #fff;
+}
+
+.pmark-pp {
+  background: #f97316;
   color: #fff;
 }
 
@@ -747,8 +1004,23 @@ const detailLinks = [
   color: #fff;
 }
 
+.pmark-p3 {
+  background: #0d9488;
+  color: #fff;
+}
+
 .pmark-p12 {
   background: #06b6d4;
+  color: #fff;
+}
+
+.pmark-p24 {
+  background: #64748b;
+  color: #fff;
+}
+
+.pmark-p48 {
+  background: #475569;
   color: #fff;
 }
 
@@ -908,5 +1180,10 @@ const detailLinks = [
 .popover-detail .text-red {
   color: #dc2626;
   font-weight: 600;
+}
+
+.popover-header-bf {
+  background: #fef3c7;
+  border-bottom-color: #fcd34d;
 }
 </style>

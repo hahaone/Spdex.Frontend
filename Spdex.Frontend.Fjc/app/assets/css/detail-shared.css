@@ -87,15 +87,30 @@
   to   { transform: rotate(360deg); }
 }
 
-/* ── Tab 栏（胶囊按钮组） ── */
+/* ── Tab 栏（胶囊按钮组 + 排序/刷新合并行） ── */
 .tab-bar {
-  display: inline-flex;
+  display: flex;
+  align-items: center;
   gap: 0;
   margin-bottom: 10px;
   background: #f1f3f5;
   border-radius: 8px;
   padding: 3px;
   overflow-x: auto;
+  flex-wrap: wrap;
+}
+.tab-bar-spacer {
+  flex: 1;
+  min-width: 16px;
+}
+.tab-bar .sort-label {
+  margin-left: 8px;
+}
+.tab-bar .sort-btn {
+  margin-left: 4px;
+}
+.tab-bar .refresh-btn {
+  margin-left: 8px;
 }
 .tab-btn {
   padding: 5px 16px;
@@ -220,6 +235,17 @@
 .td-highlight     { background: #ffff00 !important; font-weight: 700; }
 .td-lowlight      { background: #FFFFA8 !important; }
 .text-top2  { color: #8b0000; font-weight: 700; }
+
+/* 1X2/OU/亚盘 展开差额≥4价位深度时方向高亮（黄底加粗） */
+.sel-depth-highlight {
+  background: #ffff00 !important;
+  font-weight: 700 !important;
+}
+
+/* 挂牌表密集成交高亮：≥3倍紫色，2-3倍红色，<2倍橙色 */
+.text-traded-3x { color: #7c3aed !important; font-weight: 700; background: #f3e8ff; }
+.text-traded-2x { color: #dc2626 !important; font-weight: 700; background: #fef2f2; }
+.text-traded-1x { color: #ea580c !important; font-weight: 600; background: #fff7ed; }
 .text-neg   { color: #c00; }
 .text-pos   { color: #059669; }
 .text-red-bold { color: #c00; font-weight: 700; }

@@ -3,6 +3,7 @@ import type { GlBigHoldPageResult, GlTimeWindowData, GlItemView, GlBigItem, GlPa
 import type { PriceSizeRow } from '~/types/bighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney } from '~/utils/formatters'
+import { tradedClass } from '~/utils/styleHelpers'
 import {
   type AlignedRow,
   getAlignedRows,
@@ -10,7 +11,7 @@ import {
   bigTimeColorStyle,
   bigPerDisplay,
   maxTotalStyle,
-  densePercent,
+
   rankClass,
   ssdClass,
   netStyle,
@@ -35,8 +36,34 @@ useHead({
 
 // ── 时间窗口 ──
 const activeWindowIdx = ref(0)
-const currentWindow = computed<GlTimeWindowData | null>(() => pageData.value?.windows?.[activeWindowIdx.value] ?? null)
+const windows = computed<GlTimeWindowData[]>(() => pageData.value?.windows ?? [])
+const currentWindow = computed<GlTimeWindowData | null>(() => windows.value[activeWindowIdx.value] ?? null)
 watch(activeWindowIdx, () => { expandedRows.value.clear() })
+
+// ── 分时统计摘要辅助 ──
+/** Under 对比前一分时 = 当前 underTotalBet / 下一窗口 underTotalBet */
+function underRatio(idx: number): number | null {
+  if (idx >= windows.value.length - 1) return null
+  const cur = windows.value[idx]?.underTotalBet ?? 0
+  const prev = windows.value[idx + 1]?.underTotalBet ?? 0
+  if (prev < 0.1) return null
+  return cur / (prev + 0.1)
+}
+/** Over 对比前一分时 = 当前 overTotalBet / 下一窗口 overTotalBet */
+function overRatio(idx: number): number | null {
+  if (idx >= windows.value.length - 1) return null
+  const cur = windows.value[idx]?.overTotalBet ?? 0
+  const prev = windows.value[idx + 1]?.overTotalBet ?? 0
+  if (prev < 0.1) return null
+  return cur / (prev + 0.1)
+}
+/** 对比前一分时颜色：>120% 红色加粗, <80% 蓝色加粗, 其它灰色 */
+function ratioColorStyle(ratio: number | null): string {
+  if (ratio == null) return ''
+  if (ratio > 1.2) return 'color:#ff0000;font-weight:bold'
+  if (ratio < 0.8) return 'color:#0000ff;font-weight:bold'
+  return 'color:#666'
+}
 
 // ── 大注 & Hold ──
 const bigList = computed<GlBigItem[]>(() => pageData.value?.bigList ?? [])
@@ -165,6 +192,48 @@ function toggleSection(key: string) {
         </h5>
       </div>
 
+      <!-- ★ 分时统计摘要 -->
+      <div v-if="windows.length > 0" class="summary-panel">
+        <div class="summary-title">分时统计摘要</div>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th class="st-label">窗口</th>
+              <th class="st-weight">必指</th>
+              <th class="st-amount">Under 汇总量</th>
+              <th class="st-ratio">Under 对比前一分时</th>
+              <th class="st-amount">Over 汇总量</th>
+              <th class="st-ratio">Over 对比前一分时</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(w, idx) in windows"
+              :key="'sum-' + idx"
+              class="summary-row"
+              :class="{ 'summary-active': activeWindowIdx === idx }"
+              @click="activeWindowIdx = idx"
+            >
+              <td class="st-label">{{ w.label }}</td>
+              <td class="st-weight">
+                <template v-if="w.odds">{{ w.odds.homeWeight.toFixed(0) }} | {{ w.odds.drawWeight.toFixed(0) }} | {{ w.odds.awayWeight.toFixed(0) }}</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-amount">{{ formatMoney(w.underTotalBet) }}</td>
+              <td class="st-ratio" :style="ratioColorStyle(underRatio(idx))">
+                <template v-if="underRatio(idx) != null">{{ (underRatio(idx)! * 100).toFixed(2) }}%</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-amount">{{ formatMoney(w.overTotalBet) }}</td>
+              <td class="st-ratio" :style="ratioColorStyle(overRatio(idx))">
+                <template v-if="overRatio(idx) != null">{{ (overRatio(idx)! * 100).toFixed(2) }}%</template>
+                <template v-else>-</template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- Tab 栏 -->
       <div class="grid-tab-bar">
         <button v-for="(w, i) in pageData.windows" :key="i" :class="{ active: activeWindowIdx === i }" @click="activeWindowIdx = i">
@@ -206,7 +275,7 @@ function toggleSection(key: string) {
                 <tr :style="activeWindowIdx === 0 ? 'cursor:pointer' : ''" @click="toggleRow(item)">
                   <td :class="{ tdhighlight: isHandicapHighlighted(item) }"><strong>{{ item.displayName }}</strong></td>
                   <td :class="{ tdhighlight: isOddsHighlighted(item) }">{{ item.odds.toFixed(2) }}</td>
-                  <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }} <small v-if="item.denseSize > 0">{{ densePercent(item.denseSize, item.totalBet) }}</small></td>
+                  <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
                   <td :class="ssdClassFor(item.maxBet, currentWindow, 'MaxBet')">{{ formatMoney(item.maxBet) }}</td>
                   <td>{{ item.oddsOnMax > 0 ? item.oddsOnMax.toFixed(2) : '' }}</td>
                   <td>{{ item.maxBetAttr }}</td>
@@ -227,7 +296,7 @@ function toggleSection(key: string) {
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : (r.toLay > 0 ? 'background:#FAC9D1' : '')">{{ r.price.toFixed(2) }}</td>
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : ''">{{ r.toBack > 0 ? `HK$ ${formatMoney(r.toBack)}` : '' }}</td>
                           <td :style="r.toLay > 0 ? 'background:#FAC9D1' : ''">{{ r.toLay > 0 ? `HK$ ${formatMoney(r.toLay)}` : '' }}</td>
-                          <td>{{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}</td>
+                          <td :class="tradedClass(r)">{{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -250,7 +319,7 @@ function toggleSection(key: string) {
                 <tr :style="activeWindowIdx === 0 ? 'cursor:pointer' : ''" @click="toggleRow(item)">
                   <td :class="{ tdhighlight: isHandicapHighlighted(item) }"><strong>{{ item.displayName }}</strong></td>
                   <td :class="{ tdhighlight: isOddsHighlighted(item) }">{{ item.odds.toFixed(2) }}</td>
-                  <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }} <small v-if="item.denseSize > 0">{{ densePercent(item.denseSize, item.totalBet) }}</small></td>
+                  <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
                   <td :class="ssdClassFor(item.maxBet, currentWindow, 'MaxBet')">{{ formatMoney(item.maxBet) }}</td>
                   <td>{{ item.oddsOnMax > 0 ? item.oddsOnMax.toFixed(2) : '' }}</td>
                   <td>{{ item.maxBetAttr }}</td>
@@ -270,7 +339,7 @@ function toggleSection(key: string) {
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : (r.toLay > 0 ? 'background:#FAC9D1' : '')">{{ r.price.toFixed(2) }}</td>
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : ''">{{ r.toBack > 0 ? `HK$ ${formatMoney(r.toBack)}` : '' }}</td>
                           <td :style="r.toLay > 0 ? 'background:#FAC9D1' : ''">{{ r.toLay > 0 ? `HK$ ${formatMoney(r.toLay)}` : '' }}</td>
-                          <td>{{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}</td>
+                          <td :class="tradedClass(r)">{{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -329,7 +398,8 @@ function toggleSection(key: string) {
         </template>
       </template>
 
-      <!-- 大注 TOP10 -->
+      <!-- 以下区块仅在全时 Tab 显示 -->
+      <template v-if="activeWindowIdx === 0">
       <h4>大注 TOP10</h4>
       <table class="gridtable">
         <thead><tr><th>Handicap</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
@@ -500,6 +570,7 @@ function toggleSection(key: string) {
           </tbody>
         </table>
       </template>
+      </template><!-- end activeWindowIdx === 0 -->
     </template>
   </div>
 </template>
@@ -510,4 +581,47 @@ function toggleSection(key: string) {
 /* cs (Goal Line) 页面特有样式 */
 .odds-info { color: #337ab7; font-weight: normal; font-size: 13px; }
 .view-subtitle { color: #666; font-size: 13px; margin-bottom: 6px; }
+
+/* ── 分时统计摘要面板 ── */
+.summary-panel {
+  margin: 12px 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+.summary-title {
+  padding: 6px 14px;
+  background: #b22222;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.summary-table th,
+.summary-table td {
+  padding: 6px 28px;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  line-height: 1.7;
+}
+.summary-table th {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ccc;
+  font-weight: 600;
+  font-size: 12px;
+  color: #555;
+}
+.summary-row { cursor: pointer; transition: background 0.12s; }
+.summary-row:hover { background: #fef9e7; }
+.summary-active { background: #fff3cd !important; font-weight: 600; }
+th.st-label, td.st-label { font-weight: 600; padding-left: 16px !important; text-align: left !important; white-space: nowrap; }
+td.st-amount { font-variant-numeric: tabular-nums; text-align: right; }
+td.st-weight { white-space: nowrap; }
+td.st-ratio { font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>

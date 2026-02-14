@@ -58,6 +58,7 @@ export interface BigHoldItemView {
   marketId: number        // 展开时需传给 previous API
   dense: number           // 密集价位（UO/亚盘 页面使用）
   handicap: number        // 让球值（亚盘页面使用）
+  colorGroup: number      // 时间颜色分组（1-13），0=无分组
 }
 
 /** RawData 解析后的单行价位数据 */

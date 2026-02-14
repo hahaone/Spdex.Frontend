@@ -28,6 +28,28 @@ const holdList = computed(() => result.value?.holdList ?? [])
 const windowBigLists = computed(() => result.value?.windowBigLists ?? [])
 const odds0 = computed(() => result.value?.odds0)
 
+// ── 跨表共振：额外请求标盘数据，提取 RefreshTime 集合 ──
+const bfQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
+const { data: bfData } = useBigHold(bfQueryParams)
+
+/** 标盘所有大注记录的 RefreshTime 集合（精确到秒） */
+const bfTimeSet = computed<Set<string>>(() => {
+  const set = new Set<string>()
+  const bf = bfData.value?.data
+  if (!bf) return set
+  // 所有时间窗口的 items
+  for (const win of bf.windows ?? [])
+    for (const item of win.items)
+      set.add(item.refreshTime.substring(0, 19))
+  return set
+})
+
+/** 判断亚盘记录是否与标盘共振（同一秒有大注） */
+function isResonant(item: AsianBigItem): boolean {
+  if (bfTimeSet.value.size === 0) return false
+  return bfTimeSet.value.has(item.refreshTime.substring(0, 19))
+}
+
 // ── B24: 页面 title ──
 useHead({
   title: computed(() => matchInfo.value
@@ -253,8 +275,17 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
         </div>
       </div>
 
-      <!-- 排序 + 刷新 -->
-      <div class="sort-bar">
+      <!-- Tab 栏 + 排序按钮 + 刷新（合并为一行） -->
+      <div class="tab-bar">
+        <button
+          v-for="(w, idx) in windows"
+          :key="idx"
+          :class="['tab-btn', { active: activeTab === idx }]"
+          @click="activeTab = idx"
+        >{{ w.label }}</button>
+
+        <span class="tab-bar-spacer" />
+
         <span class="sort-label">排序：</span>
         <button :class="['sort-btn', { active: orderParam === 0 }]" @click="setOrder(0)">Hold &darr;</button>
         <button :class="['sort-btn', { active: orderParam === 1 }]" @click="setOrder(1)">时间 &darr;</button>
@@ -263,16 +294,6 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
           <span :class="{ spin: refreshing }">↻</span>
           {{ refreshing ? '刷新中...' : '刷新数据' }}
         </button>
-      </div>
-
-      <!-- Tab 栏 -->
-      <div class="tab-bar">
-        <button
-          v-for="(w, idx) in windows"
-          :key="idx"
-          :class="['tab-btn', { active: activeTab === idx }]"
-          @click="activeTab = idx"
-        >{{ w.label }}</button>
       </div>
 
       <!-- 当前 Tab 内容 -->
@@ -361,13 +382,6 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                       </td>
                     </tr>
                   </template>
-                  <tr v-if="group.rows.length > 0" class="subtotal-row">
-                    <td colspan="8" class="subtotal-label">{{ group.label }} 小计</td>
-                    <td class="subtotal-val">{{ formatMoney(group.subtotal.grandTotalBet) }}</td>
-                    <td class="subtotal-val">{{ formatMoney(group.subtotal.grandMaxHold) }}</td>
-                    <td class="subtotal-val">{{ formatMoney(group.subtotal.grandTotalHold) }}</td>
-                    <td colspan="2"></td>
-                  </tr>
                 </template>
               </tbody>
             </table>
@@ -442,13 +456,6 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                       </td>
                     </tr>
                   </template>
-                  <tr v-if="group.rows.length > 0" class="subtotal-row">
-                    <td colspan="8" class="subtotal-label">{{ group.label }} 小计</td>
-                    <td class="subtotal-val">{{ formatMoney(group.subtotal.grandTotalBet) }}</td>
-                    <td class="subtotal-val">{{ formatMoney(group.subtotal.grandMaxHold) }}</td>
-                    <td class="subtotal-val">{{ formatMoney(group.subtotal.grandTotalHold) }}</td>
-                    <td colspan="2"></td>
-                  </tr>
                 </template>
               </tbody>
             </table>
@@ -491,7 +498,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in activeWindowBigList.items" :key="'wbi-' + item.pcId" class="data-row big-row">
+                <tr v-for="item in activeWindowBigList.items" :key="'wbi-' + item.pcId" :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]">
                   <td class="col-hc-val">{{ item.selection }}</td>
                   <td>{{ item.lastOdds.toFixed(2) }}</td>
                   <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
@@ -522,7 +529,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
             </thead>
             <tbody>
               <template v-for="item in bigList" :key="'bg-' + item.pcId">
-                <tr class="data-row big-row" @click="toggleBigExpand(item.pcId)">
+                <tr :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item.pcId)">
                   <td class="col-hc-val">{{ item.selection }}</td>
                   <td>{{ item.lastOdds.toFixed(2) }}</td>
                   <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
@@ -574,7 +581,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
             </thead>
             <tbody>
               <template v-for="item in holdList" :key="'hl-' + item.pcId">
-                <tr class="data-row big-row" @click="toggleBigExpand(item.pcId + 100000)">
+                <tr :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item.pcId + 100000)">
                   <td class="col-hc-val">{{ item.selection }}</td>
                   <td>{{ item.lastOdds.toFixed(2) }}</td>
                   <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
@@ -823,4 +830,16 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 
 .no-data { text-align: center; color: #999; padding: 24px; }
 .loading, .error-msg { text-align: center; padding: 48px 0; color: #666; }
+
+/* ── 跨表共振高亮（亚盘与标盘同一时间均有大注时整行突出显示） ── */
+.row-resonant {
+  background: #fef9e7 !important;
+  border-left: 4px solid #f59e0b !important;
+}
+.row-resonant:hover {
+  background: #fef3c7 !important;
+}
+.row-resonant td:first-child {
+  padding-left: 8px !important;
+}
 </style>

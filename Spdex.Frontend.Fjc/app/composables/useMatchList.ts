@@ -5,6 +5,7 @@ interface MatchListParams {
   date?: string | null
   league?: string | null
   jc?: number
+  status?: string | null
   page?: number
   pageSize?: number
 }

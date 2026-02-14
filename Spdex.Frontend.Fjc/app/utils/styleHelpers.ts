@@ -31,10 +31,11 @@ export function priceBgClass(row: PriceSizeRow): string {
   return ''
 }
 
-/** 成交量高亮样式 */
+/** 成交量高亮样式: 3=≥3倍紫色, 2=2-3倍红色, 1=<2倍橙色 */
 export function tradedClass(row: PriceSizeRow): string {
   if (row.tradedHighlight >= 3) return 'text-traded-3x'
   if (row.tradedHighlight >= 2) return 'text-traded-2x'
+  if (row.tradedHighlight >= 1) return 'text-traded-1x'
   return ''
 }
 

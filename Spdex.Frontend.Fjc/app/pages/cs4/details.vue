@@ -4,6 +4,7 @@ import type { UoTimeWindowData } from '~/types/uobighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime, formatPercent } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
+import { isBigHighlighted } from '~/utils/detailHelpers'
 
 // ── 路由参数 ──
 const route = useRoute()
@@ -38,12 +39,19 @@ const activeWindow = computed<UoTimeWindowData | null>(() => windows.value[activ
 const {
   expandedPcId, expandedOddsPcId,
   loadingPcId, failedPcIds, prevCache,
-  toggleExpand, toggleOddsExpand, retryFetchPrevious,
+  toggleExpand, toggleOddsExpand, retryFetchPrevious, prefetchAllPrevious,
   collapseAll, resetAll,
   getCurrentRows, getPreviousRows, getDiffRows,
 } = useDetailExpand({ previousEndpoint: '/api/uobighold/previous' })
 
 watch(activeTab, () => collapseAll())
+
+// 数据就绪后自动预取前一条记录，以便深度高亮立即呈现
+watch(activeWindow, (win) => {
+  if (win?.items?.length) {
+    prefetchAllPrevious(win.items)
+  }
+}, { immediate: true })
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
@@ -83,6 +91,14 @@ function hasLargeOrder(selectionId: number): boolean {
 /** 百分比格式化 */
 function formatPer(val: number): string {
   return formatPercent(val, 0)
+}
+
+/** 占比条件颜色：<130%红色, >200%蓝色, 130-200%灰色 */
+function pctColorStyle(val: number | null | undefined): string {
+  if (val == null) return ''
+  if (val < 130) return 'color:#c00;font-weight:bold'
+  if (val > 200) return 'color:#00c;font-weight:bold'
+  return 'color:#888'
 }
 </script>
 
@@ -133,7 +149,7 @@ function formatPer(val: number): string {
               <th class="st-payout">盈亏</th>
               <th class="st-uk">UK Time</th>
               <th class="st-pct">占比</th>
-              <th class="st-pct-detail">Over% - Under%</th>
+              <th class="st-pct-detail">比例</th>
             </tr>
           </thead>
           <tbody>
@@ -155,12 +171,12 @@ function formatPer(val: number): string {
                 <template v-else>-</template>
               </td>
               <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
-              <td class="st-pct">
+              <td class="st-pct" :style="pctColorStyle(w.amountPercent)">
                 <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
                 <template v-else>-</template>
               </td>
               <td class="st-pct-detail">
-                <template v-if="w.overAmountPercent != null || w.underAmountPercent != null">{{ w.overAmountPercent != null ? w.overAmountPercent.toFixed(2) + '%' : '-' }} - {{ w.underAmountPercent != null ? w.underAmountPercent.toFixed(2) + '%' : '-' }}</template>
+                <template v-if="w.overAmountPercent != null || w.underAmountPercent != null">{{ w.overAmountPercent != null ? w.overAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.underAmountPercent != null ? w.underAmountPercent.toFixed(0) + '%' : '-' }}</template>
                 <template v-else>-</template>
               </td>
             </tr>
@@ -168,8 +184,17 @@ function formatPer(val: number): string {
         </table>
       </div>
 
-      <!-- 排序 + 刷新 -->
-      <div class="sort-bar">
+      <!-- Tab 栏 + 排序按钮 + 刷新（合并为一行） -->
+      <div class="tab-bar">
+        <button
+          v-for="(w, idx) in windows"
+          :key="idx"
+          :class="['tab-btn', { active: activeTab === idx }]"
+          @click="activeTab = idx"
+        >{{ w.label }}</button>
+
+        <span class="tab-bar-spacer" />
+
         <span class="sort-label">排序：</span>
         <button :class="['sort-btn', { active: orderParam === 0 }]" @click="setOrder(0)">Hold &darr;</button>
         <button :class="['sort-btn', { active: orderParam === 1 }]" @click="setOrder(1)">时间 &darr;</button>
@@ -178,16 +203,6 @@ function formatPer(val: number): string {
           <span :class="{ spin: refreshing }">↻</span>
           {{ refreshing ? '刷新中...' : '刷新数据' }}
         </button>
-      </div>
-
-      <!-- Tab 栏 -->
-      <div class="tab-bar">
-        <button
-          v-for="(w, idx) in windows"
-          :key="idx"
-          :class="['tab-btn', { active: activeTab === idx }]"
-          @click="activeTab = idx"
-        >{{ w.label }}</button>
       </div>
 
       <!-- 当前 Tab 内容 -->
@@ -205,29 +220,24 @@ function formatPer(val: number): string {
               比例 <b>{{ formatPer(activeWindow.odds.overPer) }} | {{ formatPer(activeWindow.odds.underPer) }}</b>
             </span>
             <span class="info-chip">
-              Weight <b>{{ activeWindow.odds.overWeight.toFixed(0) }}-{{ activeWindow.odds.underWeight.toFixed(0) }}</b>
+              指数 <b>{{ activeWindow.odds.overWeight.toFixed(0) }}-{{ activeWindow.odds.underWeight.toFixed(0) }}</b>
             </span>
             <span class="info-chip">
-              盈亏 <b>{{ activeWindow.odds.overPayout.toFixed(0) }}-{{ activeWindow.odds.underPayout.toFixed(0) }}</b>
+              盈亏
+              <b :class="{ 'text-neg': activeWindow.odds.overPayout < 0 }">{{ activeWindow.odds.overPayout.toFixed(0) }}</b>-<b
+                :class="{ 'text-neg': activeWindow.odds.underPayout < 0 }">{{ activeWindow.odds.underPayout.toFixed(0) }}</b>
+            </span>
+            <span class="info-chip">
+              分项 <b>Over {{ formatMoney(activeWindow.odds.overAmount) }} Under {{ formatMoney(activeWindow.odds.underAmount) }}</b>
             </span>
           </div>
-          <!-- 密集指标 -->
+          <!-- 密集指标（移除盈亏指数和HOLD金额） -->
           <div v-if="activeWindow.csExtra" class="info-row">
             <span class="info-chip dense">密集价位 <b>{{ activeWindow.csExtra.densePrice }}</b></span>
             <span class="info-chip dense">密集比例 <b>{{ activeWindow.csExtra.denseRatio }}</b></span>
             <span class="info-chip dense">Pro <b>{{ activeWindow.csExtra.pro }}，R:{{ activeWindow.csExtra.r.toFixed(3) }}</b></span>
             <span class="info-chip dense">成交量 <b>{{ activeWindow.csExtra.volume }}</b></span>
             <span class="info-chip dense">TOP <b>{{ activeWindow.csExtra.top }}</b></span>
-          </div>
-          <div v-if="activeWindow.csExtra" class="info-row">
-            <span class="info-chip dense">
-              盈亏指数 Over:<b>{{ activeWindow.csExtra.payoutIndexOver.toFixed(3) }}</b>
-              Under:<b>{{ activeWindow.csExtra.payoutIndexUnder.toFixed(3) }}</b>
-            </span>
-            <span class="info-chip dense">
-              HOLD金额 Over:<b>{{ formatMoney(activeWindow.csExtra.holdAmountOver) }}</b>
-              Under:<b>{{ formatMoney(activeWindow.csExtra.holdAmountUnder) }}</b>
-            </span>
           </div>
         </div>
 
@@ -244,16 +254,16 @@ function formatPer(val: number): string {
                 <th class="col-hold">Top Hold</th>
                 <th class="col-payout">Payout</th>
                 <th class="col-per">Per</th>
-                <th class="col-weight">Weight</th>
-                <th class="col-pmark">P Mark</th>
-                <th class="col-time">Update Time</th>
+                <th class="col-weight">指数</th>
+                <th class="col-pmark">P标</th>
+                <th class="col-time">更新时间</th>
               </tr>
             </thead>
             <tbody>
               <template v-for="item in activeWindow.items" :key="item.pcId">
                 <tr :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId }]">
                   <td
-                    :class="['sel-cell', item.selection === '大' ? 'sel-over' : 'sel-under', { 'sel-large-order': hasLargeOrder(item.selectionId) }]"
+                    :class="['sel-cell', item.selection === '大' ? 'sel-over' : 'sel-under', { 'sel-large-order': hasLargeOrder(item.selectionId), 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
                     title="点击展开 Back/Lay/Traded 明细"
                     @click="toggleExpand(item)"
                   >{{ item.selection }}</td>

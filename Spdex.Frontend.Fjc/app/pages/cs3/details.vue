@@ -3,6 +3,7 @@ import type { BigHoldItemView, PriceSizeRow, TimeWindowData } from '~/types/bigh
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
+import { isBigHighlighted, bigTimeColorStyle } from '~/utils/detailHelpers'
 
 // ── 路由参数 ──
 const route = useRoute()
@@ -20,6 +21,33 @@ const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
 const windows = computed(() => result.value?.windows ?? [])
 
+// ── 跨表共振：额外请求亚盘数据，提取 RefreshTime 集合 ──
+const asianQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
+const { data: asianData } = useAsianBigHold(asianQueryParams)
+
+/** 亚盘所有大注/持仓记录的 RefreshTime 集合（精确到秒） */
+const asianTimeSet = computed<Set<string>>(() => {
+  const set = new Set<string>()
+  const asian = asianData.value?.data
+  if (!asian) return set
+  // bigList + holdList（当前窗口 TOP10）
+  for (const item of asian.bigList ?? [])
+    set.add(item.refreshTime.substring(0, 19))
+  for (const item of asian.holdList ?? [])
+    set.add(item.refreshTime.substring(0, 19))
+  // 各时间窗口的 windowBigLists
+  for (const wbl of asian.windowBigLists ?? [])
+    for (const item of wbl.items)
+      set.add(item.refreshTime.substring(0, 19))
+  return set
+})
+
+/** 判断标盘记录是否与亚盘共振（同一秒有大注） */
+function isResonant(item: BigHoldItemView): boolean {
+  if (asianTimeSet.value.size === 0) return false
+  return asianTimeSet.value.has(item.refreshTime.substring(0, 19))
+}
+
 useHead({
   title: computed(() => matchInfo.value
     ? `标盘 ${matchInfo.value.homeTeam}vs${matchInfo.value.guestTeam}`
@@ -34,13 +62,20 @@ const activeWindow = computed<TimeWindowData | null>(() => windows.value[activeT
 const {
   expandedPcId, expandedOddsPcId,
   loadingPcId, failedPcIds, prevCache,
-  toggleExpand, toggleOddsExpand, retryFetchPrevious,
+  toggleExpand, toggleOddsExpand, retryFetchPrevious, prefetchAllPrevious,
   collapseAll, resetAll,
   getCurrentRows, getPreviousRows, getDiffRows,
 } = useDetailExpand()
 
 // 切换 Tab 时收起所有展开行
 watch(activeTab, () => collapseAll())
+
+// 数据就绪后自动预取前一条记录，以便深度高亮立即呈现
+watch(activeWindow, (win) => {
+  if (win?.items?.length) {
+    prefetchAllPrevious(win.items)
+  }
+}, { immediate: true })
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
@@ -61,6 +96,21 @@ function hasLargeOrder(selectionId: number): boolean {
   if (!activeWindow.value?.lastPrices) return false
   const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
   return lp?.hasLargeOrderAt500Or1000 ?? false
+}
+
+/** 占比条件颜色：<130%红色(主队色), >200%蓝色(客队色), 130-200%灰色 */
+function pctColorStyle(val: number | null | undefined): string {
+  if (val == null) return ''
+  if (val < 130) return 'color:#c00;font-weight:bold'
+  if (val > 200) return 'color:#00c;font-weight:bold'
+  return 'color:#888'
+}
+
+/** D%值>500%时红色 */
+function dPctColorStyle(val: number | null | undefined): string {
+  if (val == null) return ''
+  if (val > 500) return 'color:#c00;font-weight:bold'
+  return ''
 }
 </script>
 
@@ -100,7 +150,7 @@ function hasLargeOrder(selectionId: number): boolean {
               <th class="st-payout">盈亏</th>
               <th class="st-uk">UK Time</th>
               <th class="st-pct">占比</th>
-              <th class="st-pct-detail">H% - D% - A%</th>
+              <th class="st-pct-detail">比例</th>
             </tr>
           </thead>
           <tbody>
@@ -122,12 +172,12 @@ function hasLargeOrder(selectionId: number): boolean {
                 <template v-else>-</template>
               </td>
               <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
-              <td class="st-pct">
+              <td class="st-pct" :style="pctColorStyle(w.amountPercent)">
                 <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
                 <template v-else>-</template>
               </td>
               <td class="st-pct-detail">
-                <template v-if="w.homeAmountPercent != null || w.drawAmountPercent != null || w.awayAmountPercent != null">{{ w.homeAmountPercent != null ? w.homeAmountPercent.toFixed(2) + '%' : '-' }} - {{ w.drawAmountPercent != null ? w.drawAmountPercent.toFixed(2) + '%' : '-' }} - {{ w.awayAmountPercent != null ? w.awayAmountPercent.toFixed(2) + '%' : '-' }}</template>
+                <template v-if="w.homeAmountPercent != null || w.drawAmountPercent != null || w.awayAmountPercent != null">{{ w.homeAmountPercent != null ? w.homeAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.drawAmountPercent != null ? w.drawAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.awayAmountPercent != null ? w.awayAmountPercent.toFixed(0) + '%' : '-' }}</template>
                 <template v-else>-</template>
               </td>
             </tr>
@@ -135,8 +185,17 @@ function hasLargeOrder(selectionId: number): boolean {
         </table>
       </div>
 
-      <!-- 排序按钮 + 刷新 -->
-      <div class="sort-bar">
+      <!-- Tab 栏 + 排序按钮 + 刷新（合并为一行） -->
+      <div class="tab-bar">
+        <button
+          v-for="(w, idx) in windows"
+          :key="idx"
+          :class="['tab-btn', { active: activeTab === idx }]"
+          @click="activeTab = idx"
+        >{{ w.label }}</button>
+
+        <span class="tab-bar-spacer" />
+
         <span class="sort-label">排序：</span>
         <button
           :class="['sort-btn', { active: orderParam === 0 }]"
@@ -161,21 +220,11 @@ function hasLargeOrder(selectionId: number): boolean {
         </button>
       </div>
 
-      <!-- Tab 栏 -->
-      <div class="tab-bar">
-        <button
-          v-for="(w, idx) in windows"
-          :key="idx"
-          :class="['tab-btn', { active: activeTab === idx }]"
-          @click="activeTab = idx"
-        >{{ w.label }}</button>
-      </div>
-
       <!-- 当前 Tab 内容 -->
       <div v-if="activeWindow" class="window-content">
         <!-- 赔率摘要 + 密集指标 -->
         <div v-if="activeWindow.odds" class="info-bar">
-          <!-- 第一行：赔率/成交量/权重/盈亏/HOT 横向卡片 -->
+          <!-- 第一行：赔率/成交量/必指/盈亏/冷热/分项 横向卡片 -->
           <div class="info-row">
             <span class="info-chip">
               成交量 <b>{{ formatMoney(activeWindow.odds.totalAmount) }}</b>
@@ -184,27 +233,28 @@ function hasLargeOrder(selectionId: number): boolean {
               赔率 <b>{{ activeWindow.odds.homeOdds }}-{{ activeWindow.odds.drawOdds }}-{{ activeWindow.odds.awayOdds }}</b>
             </span>
             <span class="info-chip">
-              权重 <b>{{ activeWindow.odds.homeWeight.toFixed(0) }}-{{ activeWindow.odds.drawWeight.toFixed(0) }}-{{ activeWindow.odds.awayWeight.toFixed(0) }}</b>
+              必指 <b>{{ activeWindow.odds.homeWeight.toFixed(0) }}-{{ activeWindow.odds.drawWeight.toFixed(0) }}-{{ activeWindow.odds.awayWeight.toFixed(0) }}</b>
             </span>
             <span class="info-chip">
-              盈亏 <b>{{ activeWindow.odds.homePayout.toFixed(0) }}-{{ activeWindow.odds.drawPayout.toFixed(0) }}-{{ activeWindow.odds.awayPayout.toFixed(0) }}</b>
+              盈亏
+              <b :class="{ 'text-neg': activeWindow.odds.homePayout < 0 }">{{ activeWindow.odds.homePayout.toFixed(0) }}</b>-<b
+                :class="{ 'text-neg': activeWindow.odds.drawPayout < 0 }">{{ activeWindow.odds.drawPayout.toFixed(0) }}</b>-<b
+                :class="{ 'text-neg': activeWindow.odds.awayPayout < 0 }">{{ activeWindow.odds.awayPayout.toFixed(0) }}</b>
             </span>
             <span class="info-chip">
-              HOT
+              冷热
               <b :class="{ 'text-neg': activeWindow.odds.homeHotTrend < 0 }">{{ activeWindow.odds.homeHotTrend.toFixed(2) }}</b>-<b
                 :class="{ 'text-neg': activeWindow.odds.drawHotTrend < 0 }">{{ activeWindow.odds.drawHotTrend.toFixed(2) }}</b>-<b
                 :class="{ 'text-neg': activeWindow.odds.awayHotTrend < 0 }">{{ activeWindow.odds.awayHotTrend.toFixed(2) }}</b>
             </span>
             <span class="info-chip">
-              分项 <b>{{ formatMoney(activeWindow.odds.homeAmount) }}-{{ formatMoney(activeWindow.odds.drawAmount) }}-{{ formatMoney(activeWindow.odds.awayAmount) }}</b>
+              分项 <b>主 {{ formatMoney(activeWindow.odds.homeAmount) }}-平{{ formatMoney(activeWindow.odds.drawAmount) }}-客{{ formatMoney(activeWindow.odds.awayAmount) }}</b>
             </span>
           </div>
-          <!-- 第二行：密集指标 -->
+          <!-- 第二行：密集指标（移除密集指数和密集交易量） -->
           <div v-if="activeWindow.csExtra" class="info-row">
             <span class="info-chip dense">密集价位 <b>{{ activeWindow.csExtra.densePrice }}</b></span>
             <span class="info-chip dense">密集比例 <b>{{ activeWindow.csExtra.denseRatio }}</b></span>
-            <span class="info-chip dense">密集指数 <b>{{ activeWindow.csExtra.denseIndex }}</b></span>
-            <span class="info-chip dense">密集交易量 <b>{{ activeWindow.csExtra.denseVolume }}</b></span>
             <span class="info-chip dense">内比 <b>{{ activeWindow.csExtra.innerRatio }}</b></span>
             <span class="info-chip dense">外比 <b>{{ activeWindow.csExtra.outerRatio }}</b></span>
           </div>
@@ -224,8 +274,8 @@ function hasLargeOrder(selectionId: number): boolean {
                 <th class="col-payout">盈亏</th>
                 <th class="col-per">占比</th>
                 <th class="col-pertotal">总占比</th>
-                <th class="col-weight">Weight</th>
-                <th class="col-hot">Hot</th>
+                <th class="col-weight">必指</th>
+                <th class="col-hot">冷热</th>
                 <th class="col-pmark">P标</th>
                 <th class="col-time">更新时间</th>
               </tr>
@@ -234,11 +284,11 @@ function hasLargeOrder(selectionId: number): boolean {
               <template v-for="(item, idx) in activeWindow.items" :key="item.pcId">
                 <!-- 主行 -->
                 <tr
-                  :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId }]"
+                  :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId, 'row-resonant': isResonant(item) }]"
                 >
                   <td>{{ idx + 1 }}</td>
                   <td
-                    :class="['sel-cell', 'sel-' + item.selection, { 'sel-large-order': hasLargeOrder(item.selectionId) }]"
+                    :class="['sel-cell', 'sel-' + item.selection, { 'sel-large-order': hasLargeOrder(item.selectionId), 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
                     title="点击展开 Back/Lay/Traded 明细"
                     @click="toggleExpand(item)"
                   >{{ item.selection }}</td>
@@ -256,7 +306,7 @@ function hasLargeOrder(selectionId: number): boolean {
                   <td>{{ item.weight.toFixed(0) }}</td>
                   <td :class="{ 'text-neg': item.hotTrend < 0 }">{{ item.hotTrend.toFixed(2) }}</td>
                   <td><span :class="['pmark-badge', pmarkClass(item.pMark)]">{{ item.pMark }}</span></td>
-                  <td class="col-time-val">{{ formatDateTime(item.refreshTime) }}</td>
+                  <td class="col-time-val" :style="bigTimeColorStyle(item.colorGroup)">{{ formatDateTime(item.refreshTime) }}</td>
                 </tr>
 
                 <!-- 展开行：Back/Lay/Traded 层（当前 + 前一条 + 差额） -->
@@ -492,4 +542,16 @@ td.st-weight, td.st-payout { white-space: nowrap; }
 td.st-uk { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #555; white-space: nowrap; }
 td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
 td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── 跨表共振高亮（标盘与亚盘同一时间均有大注时整行突出显示） ── */
+.row-resonant {
+  background: #fef9e7 !important;
+  border-left: 4px solid #f59e0b !important;
+}
+.row-resonant:hover {
+  background: #fef3c7 !important;
+}
+.row-resonant td:first-child {
+  padding-left: 8px !important;
+}
 </style>

@@ -68,6 +68,22 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
     }
   }
 
+  /**
+   * 批量预取所有 items 的前一条记录（用于页面加载后自动触发深度高亮）。
+   * 并发请求，已缓存的会被 fetchPrevious 内部跳过。
+   */
+  async function prefetchAllPrevious(items: BigHoldItemView[]) {
+    const tasks = items
+      .filter(item => !prevCache.has(item.pcId))
+      .map(async (item) => {
+        const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
+        if (prev?.rawData) {
+          previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
+        }
+      })
+    await Promise.allSettled(tasks)
+  }
+
   /** 获取当前记录解析数据 */
   function getCurrentRows(pcId: number): PriceSizeRow[] {
     return currentParsedCache.get(pcId) ?? []
@@ -111,6 +127,7 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
     toggleExpand,
     toggleOddsExpand,
     retryFetchPrevious,
+    prefetchAllPrevious,
     collapseAll,
     resetAll,
     clearCache,

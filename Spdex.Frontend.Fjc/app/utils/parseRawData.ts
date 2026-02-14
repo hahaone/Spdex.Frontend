@@ -111,11 +111,12 @@ export function parseRawData(rawDataJson: string | null): PriceSizeRow[] {
             row.tradedHighlight = 3  // ≥3倍 → 紫色
           }
           else if (secondMax > 0 && maxTraded >= secondMax * 2) {
-            row.tradedHighlight = 2  // ≥2倍 → 橙色
+            row.tradedHighlight = 2  // 2-3倍 → 红色
           }
-          else {
-            row.tradedHighlight = 1  // 最大但不满足倍数条件
+          else if (secondMax > 0) {
+            row.tradedHighlight = 1  // <2倍 → 橙色（有多个密集成交）
           }
+          // secondMax === 0 时只有1个密集成交，不高亮（保持 tradedHighlight = 0）
         }
       }
     }

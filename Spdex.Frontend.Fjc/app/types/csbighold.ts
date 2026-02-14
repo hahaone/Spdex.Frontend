@@ -95,6 +95,9 @@ export interface CsTimeWindowData {
 
   // LastPrice 挂牌数据（仅当前窗口）
   lastPrices: LastPriceData[] | null
+
+  // 分时窗口大注 TOP5（-1h 及以后窗口）
+  windowBigList: CsBigItem[] | null
 }
 
 /** 大注 TOP10 项 */

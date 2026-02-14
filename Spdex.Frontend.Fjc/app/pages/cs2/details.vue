@@ -3,6 +3,7 @@ import type { CsBigHoldPageResult, CsItemView, CsTimeWindowData, CsBigItem, CsPa
 import type { PriceSizeRow } from '~/types/bighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney } from '~/utils/formatters'
+import { tradedClass } from '~/utils/styleHelpers'
 import {
   type AlignedRow,
   getAlignedRows as getAlignedRowsHelper,
@@ -275,7 +276,7 @@ function isBigHighlighted(big: CsBigItem): boolean {
                         <td :style="row.toBack > 0 ? 'background:#A6D8FF' : (row.toLay > 0 ? 'background:#FAC9D1' : '')">{{ row.price }}</td>
                         <td :style="row.toBack > 0 ? 'background:#A6D8FF' : ''">{{ row.toBack > 0 ? `HK$ ${formatMoney(row.toBack)}` : '' }}</td>
                         <td :style="row.toLay > 0 ? 'background:#FAC9D1' : ''">{{ row.toLay > 0 ? `HK$ ${formatMoney(row.toLay)}` : '' }}</td>
-                        <td>{{ row.traded > 0 ? `HK$ ${formatMoney(row.traded)}` : '' }}</td>
+                        <td :class="tradedClass(row)">{{ row.traded > 0 ? `HK$ ${formatMoney(row.traded)}` : '' }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -373,10 +374,30 @@ function isBigHighlighted(big: CsBigItem): boolean {
             </tr>
           </tbody>
         </table>
+        <!-- 分时窗口大注 TOP5 -->
+        <template v-if="currentWindow.windowBigList && currentWindow.windowBigList.length > 0">
+          <h4>{{ currentWindow.label }} 大注 TOP5</h4>
+          <table class="gridtable">
+            <thead><tr><th>CS</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
+            <tbody>
+              <tr v-for="b in currentWindow.windowBigList" :key="b.pcId">
+                <td><strong>{{ b.selectionName }}</strong></td>
+                <td>{{ (b.lastOdds ?? 0).toFixed(2) }}</td>
+                <td>{{ formatMoney(b.tradedChange ?? 0) }}</td>
+                <td>{{ b.tradedAttr ?? '' }}</td>
+                <td>{{ (b.payout ?? 0).toFixed(0) }}</td>
+                <td>{{ bigPerDisplay(b.per ?? 0) }}</td>
+                <td>{{ (b.weight ?? 0).toFixed(0) }}</td>
+                <td>{{ b.pMark }}</td>
+                <td><span :style="bigTimeColorStyle(b.colorRank)">{{ new Date(b.refreshTime).toLocaleString('zh-CN') }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
       </template>
 
-      <!-- 大注 TOP10 -->
-      <div class="big-section">
+      <!-- 大注 TOP10（仅全时 Tab） -->
+      <div v-if="activeWindowIdx === 0" class="big-section">
         <h4>大注TOP10</h4>
         <table class="gridtable">
           <thead>
@@ -452,8 +473,8 @@ function isBigHighlighted(big: CsBigItem): boolean {
         </table>
       </div>
 
-      <!-- 最小 Payout -->
-      <div v-if="minPayoutList.length" class="payout-section">
+      <!-- 最小 Payout（仅全时 Tab） -->
+      <div v-if="activeWindowIdx === 0 && minPayoutList.length" class="payout-section">
         <h4>最小 Payout</h4>
         <table class="gridtable">
           <thead>
@@ -480,8 +501,8 @@ function isBigHighlighted(big: CsBigItem): boolean {
         </table>
       </div>
 
-      <!-- 最大 Payout -->
-      <div v-if="maxPayoutList.length" class="payout-section">
+      <!-- 最大 Payout（仅全时 Tab） -->
+      <div v-if="activeWindowIdx === 0 && maxPayoutList.length" class="payout-section">
         <h4>最大 Payout</h4>
         <table class="gridtable">
           <thead>

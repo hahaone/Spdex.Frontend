@@ -44,6 +44,8 @@ export interface MatchListItem {
   match: Match
   asianAvrLet: string | null
   bfAmount: number
+  /** 亚盘总成交额（亚盘所有 Runners 的 Amount 汇总） */
+  asianAmount: number
   pMark: string | null
   /** 最大单笔交易变化量（波胆市场 MAX(TradedChange)） */
   maxBet: number
@@ -59,6 +61,24 @@ export interface MatchListItem {
   maxBetTime: string | null
   /** 最大单注对应的比分项名称（如"1-1"） */
   maxBetSelection: string | null
+
+  // ── 标盘最大单注（1X2 市场） ──
+  /** 标盘最大单笔交易变化量 */
+  bfMaxBet: number
+  /** 标盘最大单注占比 */
+  bfMaxBetPercent: number
+  /** 标盘最大单注交易属性 */
+  bfMaxBetAttr: string | null
+  /** 标盘最大单注价格变化 */
+  bfMaxBetPriceChange: number
+  /** 标盘最大单注赔率 */
+  bfMaxBetOdds: number
+  /** 标盘最大单注时间 */
+  bfMaxBetTime: string | null
+  /** 标盘最大单注选项（主/平/客） */
+  bfMaxBetSelection: string | null
+  /** 标盘最大单注P标记 */
+  bfPMark: string | null
 }
 
 /** GET /api/matches 响应数据 */
