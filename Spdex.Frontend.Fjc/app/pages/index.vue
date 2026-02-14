@@ -3,6 +3,17 @@ import type { MatchListResult } from '~/types/match'
 import type { ApiResponse } from '~/types/api'
 import { formatMoney, formatBfAmount, formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
 
+// --- 关注（置顶）功能 ---
+const {
+  pinnedItems,
+  pinnedEventIds,
+  isPinned,
+  togglePin,
+  refreshPinnedData,
+  purgeExpired,
+  clearAll: clearPinnedMatches,
+} = usePinnedMatches()
+
 // --- 筛选状态 ---
 const selectedDate = ref('')
 const selectedLeague = ref('')
@@ -29,10 +40,50 @@ const isLoading = computed(() => status.value === 'pending' || refreshing.value)
 
 // 解包数据
 const result = computed<MatchListResult | null>(() => response.value?.data ?? null)
-const matches = computed(() => result.value?.items ?? [])
+const apiMatches = computed(() => result.value?.items ?? [])
 const leagues = computed(() => result.value?.leagues ?? [])
 const totalCount = computed(() => result.value?.totalCount ?? 0)
 const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
+
+// 用最新 API 数据刷新已关注赛事的缓存，并清理过期关注
+watch(apiMatches, (items) => {
+  if (items.length > 0) {
+    refreshPinnedData(items)
+    purgeExpired()
+  }
+})
+
+/**
+ * 合并后的显示列表：
+ * 关注的赛事始终置顶（即使不在当前筛选条件的 API 结果中），
+ * 然后是 API 返回的非关注赛事。
+ */
+const matches = computed(() => {
+  const apiItems = apiMatches.value
+  const ids = pinnedEventIds.value
+  if (ids.size === 0) return apiItems
+
+  // 从 API 结果中区分关注和非关注
+  const apiPinned: typeof apiItems = []
+  const apiNormal: typeof apiItems = []
+  const apiIdSet = new Set<number>()
+  for (const item of apiItems) {
+    apiIdSet.add(item.match.eventId)
+    if (ids.has(item.match.eventId)) {
+      apiPinned.push(item)
+    }
+    else {
+      apiNormal.push(item)
+    }
+  }
+
+  // 不在 API 结果中的关注赛事（跨 tab 保留的）
+  const extraPinned = pinnedItems.value.filter(
+    item => !apiIdSet.has(item.match.eventId),
+  )
+
+  return [...apiPinned, ...extraPinned, ...apiNormal]
+})
 
 // --- 事件处理 ---
 function onLeagueChange(league: string) {
@@ -54,6 +105,8 @@ function onDateChange(date: string) {
   selectedDate.value = date
   selectedLeague.value = ''
   currentPage.value = 1
+  // 更换日期时清除所有关注
+  clearPinnedMatches()
   // 浏览历史日期时自动切换到[全部]，回到今天时恢复[未开赛]
   if (!date || isToday(date)) {
     selectedStatus.value = 'upcoming'
@@ -304,6 +357,9 @@ const detailLinks = [
       <table class="match-table">
         <thead>
           <tr>
+            <th class="col-pin">
+              关注
+            </th>
             <th class="col-league">
               联赛
             </th>
@@ -338,11 +394,21 @@ const detailLinks = [
         </thead>
         <tbody>
           <tr v-if="matches.length === 0">
-            <td colspan="10" class="empty">
+            <td colspan="11" class="empty">
               {{ status === 'pending' ? '加载中...' : '暂无赛事数据' }}
             </td>
           </tr>
-          <tr v-for="item in matches" :key="item.match.eventId">
+          <tr v-for="item in matches" :key="item.match.eventId" :class="{ 'row-pinned': isPinned(item.match.eventId) }">
+            <td class="col-pin">
+              <button
+                class="pin-btn"
+                :class="{ active: isPinned(item.match.eventId) }"
+                :title="isPinned(item.match.eventId) ? '取消关注' : '关注赛事'"
+                @click="togglePin(item)"
+              >
+                &#9733;
+              </button>
+            </td>
             <td class="col-league">
               <span class="league-tag">{{ item.match.sortName }}</span>
             </td>
@@ -879,6 +945,37 @@ const detailLinks = [
 
 .match-table tbody tr:hover {
   background: #f8fafc;
+}
+
+/* --- 关注列 --- */
+.col-pin { width: 36px; text-align: center; }
+
+.pin-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #d1d5db;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.pin-btn:hover {
+  color: #facc15;
+  transform: scale(1.2);
+}
+
+.pin-btn.active {
+  color: #f59e0b;
+}
+
+.row-pinned {
+  background: #fffbeb;
+}
+
+.row-pinned:hover {
+  background: #fef3c7 !important;
 }
 
 .col-league { width: 90px; }
