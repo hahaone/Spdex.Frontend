@@ -177,14 +177,11 @@ function rankClass(row: AsianHcRow): string {
   return row.rankHighlight ? 'text-red-bold' : ''
 }
 
-/** B22: MaxHold Rank 4 级红色渐变 */
+/** MaxHold 高亮：与旧版一致，仅使用 sigma-based 黄色高亮（TotalBetViewer 逻辑） */
 function maxHoldRankClass(row: AsianHcRow): string {
-  const classes: string[] = []
-  if (row.maxHoldHighlight === 2) classes.push('td-highlight')
-  else if (row.maxHoldHighlight === 1) classes.push('td-lowlight')
-  if (row.rankMaxHoldLevel > 0 && row.rankMaxHoldLevel <= 4)
-    classes.push('mh-red' + row.rankMaxHoldLevel)
-  return classes.join(' ')
+  if (row.maxHoldHighlight === 2) return 'td-highlight'
+  if (row.maxHoldHighlight === 1) return 'td-lowlight'
+  return ''
 }
 
 /** 有效后路：整行背景不再使用，改为仅高亮 Latest Price 列 */
@@ -267,6 +264,11 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
             &nbsp;
             <b class="best-price-away">Away {{ formatBestPrice(activeWindow.bestPriceAway) }}</b>
           </template>
+        </div>
+        <!-- 提炼表入口链接 -->
+        <div class="filter-links">
+          <span class="filter-links-label">&gt;&gt;</span>
+          <NuxtLink :to="{ path: '/cs5/filter1', query: { id: eventId } }" target="_blank" class="filter-link filter-link-asian">[亚盘提炼表]</NuxtLink>
         </div>
         <!-- B1: Odds0 信息 -->
         <div v-if="odds0" class="odds0-bar">
@@ -830,6 +832,30 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 
 .no-data { text-align: center; color: #999; padding: 24px; }
 .loading, .error-msg { text-align: center; padding: 48px 0; color: #666; }
+
+/* ── 提炼表入口链接 ── */
+.filter-links {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.filter-links-label {
+  color: #999;
+  font-weight: 600;
+}
+.filter-link {
+  text-decoration: none;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+.filter-link:hover {
+  text-decoration: underline;
+}
+.filter-link-asian { color: #7c3aed; }
 
 /* ── 跨表共振高亮（亚盘与标盘同一时间均有大注时整行突出显示） ── */
 .row-resonant {

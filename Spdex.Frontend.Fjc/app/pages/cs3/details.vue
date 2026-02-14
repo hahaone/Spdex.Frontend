@@ -136,6 +136,13 @@ function dPctColorStyle(val: number | null | undefined): string {
           开赛时间：{{ formatMatchTime(matchInfo?.matchTime ?? '') }}
           &nbsp;|&nbsp; MarketId1: {{ matchInfo?.marketId1 }}
         </div>
+        <!-- 提炼表入口链接 -->
+        <div class="filter-links">
+          <span class="filter-links-label">&gt;&gt;</span>
+          <NuxtLink :to="{ path: '/cs3/filter1', query: { id: eventId } }" target="_blank" class="filter-link filter-link-1">[标盘提炼表]</NuxtLink>
+          <NuxtLink :to="{ path: '/cs3/filter2', query: { id: eventId } }" target="_blank" class="filter-link filter-link-2">[指数提炼表]</NuxtLink>
+          <NuxtLink :to="{ path: '/cs3/filter3', query: { id: eventId } }" target="_blank" class="filter-link filter-link-3">[挂牌指数提炼表]</NuxtLink>
+        </div>
       </div>
 
       <!-- ★ 所有分时统计摘要行 -->
@@ -542,6 +549,32 @@ td.st-weight, td.st-payout { white-space: nowrap; }
 td.st-uk { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #555; white-space: nowrap; }
 td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
 td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── 提炼表入口链接 ── */
+.filter-links {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.filter-links-label {
+  color: #999;
+  font-weight: 600;
+}
+.filter-link {
+  text-decoration: none;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+.filter-link:hover {
+  text-decoration: underline;
+}
+.filter-link-1 { color: #b22222; }
+.filter-link-2 { color: #2563eb; }
+.filter-link-3 { color: #059669; }
 
 /* ── 跨表共振高亮（标盘与亚盘同一时间均有大注时整行突出显示） ── */
 .row-resonant {
