@@ -19,10 +19,17 @@ export function useApiFetch<T>(path: string | Ref<string>, opts: Record<string, 
         options.headers = headers
       }
     },
-    onResponseError({ response }: { response: { status: number } }) {
+    onResponseError({ response }: { response: { status: number, _data?: { message?: string } } }) {
       // 401 未授权：token 过期或无效，跳转登录页
       if (response.status === 401) {
+        const msg = response._data?.message ?? ''
         token.value = null
+
+        // 区分被踢出和普通 token 过期
+        if (msg.includes('已在其他')) {
+          alert('您的账号已在其他设备登录，当前会话已失效，请重新登录。')
+        }
+
         navigateTo('/login')
       }
     },
