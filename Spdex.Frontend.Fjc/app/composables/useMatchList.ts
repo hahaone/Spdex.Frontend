@@ -8,6 +8,7 @@ interface MatchListParams {
   status?: string | null
   page?: number
   pageSize?: number
+  sport?: string // 'soccer' | 'basketball'
 }
 
 export function useMatchList(params: Ref<MatchListParams>) {

@@ -14,6 +14,8 @@ export interface AsianMatchInfo {
   marketId3: number
   homeTeamId: number
   guestTeamId: number
+  /** 赛事路径（用于 NBA 反转判断） */
+  matchPath: string
 }
 
 /** 单行亚盘数据（对应后端 AsianHcRow） */

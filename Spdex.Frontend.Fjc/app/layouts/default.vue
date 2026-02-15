@@ -1,7 +1,16 @@
 <script setup lang="ts">
+const route = useRoute()
+
 const navItems = [
-  { label: '首页', to: '/' },
+  { label: '足球', to: '/', icon: '⚽' },
+  { label: '篮球', to: '/bk', icon: '🏀' },
 ]
+
+/** 当前选中的运动：路径以 /bk 开头视为篮球，否则足球 */
+function isActive(to: string): boolean {
+  if (to === '/bk') return route.path.startsWith('/bk')
+  return !route.path.startsWith('/bk')
+}
 
 const config = useRuntimeConfig()
 const buildSha = computed(() => {
@@ -22,9 +31,10 @@ const buildSha = computed(() => {
             v-for="item in navItems"
             :key="item.to"
             :to="item.to"
-            class="nav-link"
+            :class="['nav-pill', { active: isActive(item.to) }]"
           >
-            {{ item.label }}
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ item.label }}</span>
           </NuxtLink>
         </nav>
       </div>
@@ -47,7 +57,6 @@ const buildSha = computed(() => {
   min-height: 100vh;
 }
 
-/* V2.0: 灰白底色 */
 .app-header {
   background-color: #f5f5f5;
   color: #333;
@@ -60,39 +69,67 @@ const buildSha = computed(() => {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 80px;
+  height: 52px;
+  gap: 2rem;
 }
 
-/* V2.0: Logo 图片 */
 .logo {
   display: flex;
   align-items: center;
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .logo-img {
-  height: 56px;
+  height: 36px;
   width: auto;
   object-fit: contain;
 }
 
+/* ── 导航胶囊按钮 ── */
 .main-nav {
   display: flex;
-  gap: 1.5rem;
+  align-items: center;
+  gap: 6px;
+  background: #eaeaea;
+  border-radius: 8px;
+  padding: 3px;
 }
 
-.nav-link {
-  color: #444;
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 16px;
+  border-radius: 6px;
   text-decoration: none;
-  font-size: 0.95rem;
-  font-weight: 600;
-  transition: color 0.2s;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
 }
 
-.nav-link:hover,
-.nav-link.router-link-active {
-  color: #222;
+.nav-pill:hover {
+  color: #333;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.nav-pill.active {
+  color: #333;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
+}
+
+.nav-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.nav-label {
+  line-height: 1;
 }
 
 .app-main {
