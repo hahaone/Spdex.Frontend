@@ -1,548 +1,328 @@
 <script setup lang="ts">
-import type { BigHoldItemView, PriceSizeRow } from '~/types/bighold'
-import type { UoTimeWindowData } from '~/types/uobighold'
-import { parseRawData } from '~/utils/parseRawData'
-import { formatMoney, formatDateTime, formatMatchTime, formatPercent } from '~/utils/formatters'
-import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
-import { isBigHighlighted } from '~/utils/detailHelpers'
+import type { AsianHcRow, AsianTimeWindowData, AsianBigItem } from '~/types/asianbighold'
+import type { PriceSizeRow } from '~/types/bighold'
+import { parseRawData, calcTradedDiff } from '~/utils/parseRawData'
+import { formatMoney, formatMatchTimeFull, formatPercent, formatOdds, formatDense, formatTimeWithSeconds } from '~/utils/formatters'
+import { highlightClass } from '~/utils/styleHelpers'
 
 // ── 路由参数 ──
 const route = useRoute()
 const eventId = computed(() => Number(route.query.id) || 0)
-const orderParam = ref(0)
-const marketTypeParam = ref(Number(route.query.marketType) || 0)
 
-// ── 数据获取 ──
+// ── 数据获取：使用 asianbighold API + market=uo（使用 MarketId2） ──
 const queryParams = computed(() => ({
   id: eventId.value,
-  marketType: marketTypeParam.value,
-  order: orderParam.value,
+  order: 0,
+  market: 'uo',
 }))
-const { data, pending, error, refreshing, manualRefresh } = useUoBigHold(queryParams)
+const { data, pending, error, refreshing, manualRefresh } = useAsianBigHold(queryParams)
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
-const windows = computed(() => result.value?.windows ?? [])
 const volumeSummary = computed(() => result.value?.volumeSummary ?? [])
+const bigList = computed(() => result.value?.bigList ?? [])
+const holdList = computed(() => result.value?.holdList ?? [])
+const odds0 = computed(() => result.value?.odds0)
 
+// ── 页面 title ──
 useHead({
   title: computed(() => matchInfo.value
-    ? `篮球大小 ${matchInfo.value.homeTeam}vs${matchInfo.value.guestTeam}`
-    : '篮球大小'),
+    ? `篮球OU ${matchInfo.value.homeTeam}vs${matchInfo.value.guestTeam}`
+    : '篮球OU'),
 })
 
-// ── Tab 切换 ──
-const activeTab = ref(0)
-const activeWindow = computed<UoTimeWindowData | null>(() => windows.value[activeTab.value] ?? null)
+// ── 当前窗口数据（只用第一个窗口 = "当前"） ──
+const currentWindow = computed<AsianTimeWindowData | null>(() => result.value?.windows?.[0] ?? null)
 
-// ── 行展开 & 前一条记录（使用共享 composable） ──
-const {
-  expandedPcId, expandedOddsPcId,
-  loadingPcId, failedPcIds, prevCache,
-  toggleExpand, toggleOddsExpand, retryFetchPrevious, prefetchAllPrevious,
-  collapseAll, resetAll,
-  getCurrentRows, getPreviousRows, getDiffRows,
-} = useDetailExpand({ previousEndpoint: '/api/uobighold/previous' })
+// ── Over/Under 分组（扁平化所有 groups） ──
+const overRows = computed<AsianHcRow[]>(() => {
+  if (!currentWindow.value) return []
+  return currentWindow.value.awayGroups.flatMap(g => g.rows) // OrderIndex==2 = Over
+})
+const underRows = computed<AsianHcRow[]>(() => {
+  if (!currentWindow.value) return []
+  return currentWindow.value.homeGroups.flatMap(g => g.rows) // OrderIndex==1 = Under
+})
 
-watch(activeTab, () => collapseAll())
+// ── 统计数据 ──
+const allSubtotal = computed(() => currentWindow.value?.allSubtotal)
 
-// 数据就绪后自动预取前一条记录，以便深度高亮立即呈现
-watch(activeWindow, (win) => {
-  if (win?.items?.length) {
-    prefetchAllPrevious(win.items)
-  }
-}, { immediate: true })
+// ── 对应标盘 ──
+const odds0Display = computed(() => {
+  if (!odds0.value) return ''
+  const o = odds0.value
+  return `主: ${o.homeWeight.toFixed(2)} | 平: ${o.drawWeight.toFixed(2)} | 客: ${o.awayWeight.toFixed(2)}`
+})
 
-// ── 排序 ──
-function setOrder(newOrder: number) {
-  orderParam.value = newOrder
-  resetAll()
+// ── 行展开 ──
+const expandedKey = ref<string | null>(null)
+function rowKey(row: AsianHcRow): string { return `${row.selectionId}-${row.handicap}` }
+function toggleExpand(row: AsianHcRow) {
+  const key = rowKey(row)
+  expandedKey.value = expandedKey.value === key ? null : key
 }
 
-// ── 进球盘切换 ──
-function setMarketType(mt: number) {
-  marketTypeParam.value = mt
-  activeTab.value = 0
-  resetAll()
+// ── 大注展开 ──
+const expandedBigPcId = ref<number | null>(null)
+const { fetchPrevious } = useBigHoldDetail('/api/asianbighold/previous')
+const bigCurrentParsedCache = reactive(new Map<number, PriceSizeRow[]>())
+const bigPreviousParsedCache = reactive(new Map<number, PriceSizeRow[]>())
+
+async function toggleBigExpand(item: AsianBigItem, expandKey: number) {
+  if (expandedBigPcId.value === expandKey) { expandedBigPcId.value = null; return }
+  expandedBigPcId.value = expandKey
+  if (!bigCurrentParsedCache.has(expandKey) && item.rawData)
+    bigCurrentParsedCache.set(expandKey, parseRawData(item.rawData))
+  const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime, { handicap: item.handicap.toString() })
+  if (prev?.rawData && !bigPreviousParsedCache.has(expandKey))
+    bigPreviousParsedCache.set(expandKey, parseRawData(prev.rawData))
 }
 
-/** 进球盘选项列表 */
-const goalLines = [
-  { type: 21, label: '0.5球' },
-  { type: 22, label: '1.5球' },
-  { type: 0, label: '2.5球' },
-  { type: 23, label: '3.5球' },
-  { type: 24, label: '4.5球' },
-]
-
-function getLastPriceRows(selectionId: number): PriceSizeRow[] {
-  if (!activeWindow.value?.lastPrices) return []
-  const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
+// ── LastPrice 解析 ──
+function getLastPriceRows(row: AsianHcRow): PriceSizeRow[] {
+  if (!currentWindow.value?.lastPrices) return []
+  const lp = currentWindow.value.lastPrices.find(
+    p => p.selectionId === row.selectionId && Math.abs(p.handicap - row.handicap) < 0.001,
+  )
   if (!lp?.rawData) return []
   return parseRawData(lp.rawData)
 }
 
-function hasLargeOrder(selectionId: number): boolean {
-  if (!activeWindow.value?.lastPrices) return false
-  const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
-  return lp?.hasLargeOrderAt500Or1000 ?? false
+// ── 显示名称（OU 用 Over/Under） ──
+function selectionView(row: AsianHcRow): string {
+  const label = row.orderIndex === 1 ? 'Under' : 'Over'
+  return `${label} ${row.handicap >= 0 ? ' ' : ''}${row.handicap.toFixed(1)}`
 }
 
-/** 百分比格式化 */
-function formatPer(val: number): string {
-  return formatPercent(val, 0)
-}
+// ── 高亮 ──
+function maxBetCls(row: AsianHcRow) { return row.maxBetHighlight >= 2 ? 'hl-bright' : row.maxBetHighlight >= 1 ? 'hl-light' : '' }
+function totalBetCls(row: AsianHcRow) { return row.totalBetHighlight >= 2 ? 'hl-bright' : row.totalBetHighlight >= 1 ? 'hl-light' : '' }
+function maxHoldCls(row: AsianHcRow) { return row.maxHoldHighlight >= 2 ? 'hl-bright' : row.maxHoldHighlight >= 1 ? 'hl-light' : '' }
+function totalHoldCls(row: AsianHcRow) { return row.totalHoldHighlight >= 2 ? 'hl-bright' : row.totalHoldHighlight >= 1 ? 'hl-light' : '' }
 
-/**
- * V2.0: 分时环比高亮规则
- * <130% AND 分时成交量>40K → 红色加粗
- * >500% AND 分时成交量>40K → 蓝色加粗
- * 130%-500% → 灰色
- */
-function pctColorStyle(val: number | null | undefined, totalAmount?: number): string {
-  if (val == null) return ''
-  const hasVolume = (totalAmount ?? 0) > 40000
-  if (val < 130 && hasVolume) return 'color:#c00;font-weight:bold'
-  if (val > 500 && hasVolume) return 'color:#00c;font-weight:bold'
-  return 'color:#888'
-}
-
-/** V2.0: 新增比例列 — Over/Under 在分时成交量中的占比 */
-function windowRatioDisplay(w: typeof windows.value[0]): string {
-  if (!w.odds) return '-'
-  const total = w.odds.totalAmount
-  if (total <= 0) return '-'
-  const op = (w.odds.overAmount / total * 100).toFixed(0)
-  const up = (w.odds.underAmount / total * 100).toFixed(0)
-  return `${op}% | ${up}%`
-}
+// ── 分时段汇总（前4个） ──
+const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
 </script>
 
 <template>
-  <div class="detail-page">
-    <!-- 加载/错误状态 -->
+  <div class="bk-detail-page">
     <div v-if="pending" class="loading">加载中...</div>
-    <div v-else-if="error || !result" class="error-msg">
-      {{ error ? '数据加载失败' : '赛事不存在' }}
-      <NuxtLink to="/bk" class="back-link">&larr; 返回首页</NuxtLink>
-    </div>
-
-    <template v-else>
-      <!-- 页头 -->
-      <div class="match-header">
-        <NuxtLink to="/bk" class="back-link">&larr; 返回列表</NuxtLink>
-        <h2 class="match-title">
-          <span class="team-home">{{ matchInfo?.homeTeam }}</span>
-          <span class="team-vs">vs</span>
-          <span class="team-away">{{ matchInfo?.guestTeam }}</span>
-        </h2>
-        <div class="match-meta">
-          开赛时间：{{ formatMatchTime(matchInfo?.matchTime ?? '') }}
-          &nbsp;|&nbsp; 进球盘 {{ matchInfo?.marketName }} 球
-        </div>
+    <div v-else-if="error" class="error-msg">加载失败：{{ error.message }}</div>
+    <template v-if="result && matchInfo">
+      <div class="page-header">
+        <h5>{{ matchInfo.homeTeam }} vs {{ matchInfo.guestTeam }}
+          <span>比赛时间: [{{ formatMatchTimeFull(matchInfo.matchTime) }}]</span>
+        </h5>
+      </div>
+      <div class="section-title">
+        <h4>当前/临场 数据 对应标盘：{{ odds0Display }}</h4>
+        <button class="refresh-btn" :disabled="refreshing" @click="manualRefresh">
+          <span class="refresh-icon" :class="{ spinning: refreshing }">&#8635;</span> 刷新
+        </button>
       </div>
 
-      <!-- 进球盘切换 -->
-      <div class="goal-line-bar">
-        <span class="goal-line-label">进球盘：</span>
-        <button
-          v-for="gl in goalLines"
-          :key="gl.type"
-          :class="['goal-line-btn', { active: marketTypeParam === gl.type }]"
-          @click="setMarketType(gl.type)"
-        >{{ gl.label }}</button>
-      </div>
-
-      <!-- ★ 所有分时统计摘要行 -->
-      <div v-if="windows.length > 0" class="summary-panel">
-        <div class="summary-title">分时统计摘要</div>
-        <table class="summary-table">
+      <!-- 主表 13 列 -->
+      <div class="table-wrap">
+        <table class="grid-table">
           <thead>
             <tr>
-              <th class="st-label">窗口</th>
-              <th class="st-amount">成交量</th>
-              <th class="st-weight">必指</th>
-              <th class="st-pct-detail">比例</th>
-              <th class="st-payout">盈亏</th>
-              <th class="st-pct">分时环比</th>
-              <th class="st-pct-detail">环比大/小</th>
-              <th class="st-uk">Time</th>
+              <th>Handicap</th><th>Latest Price</th><th>Dense</th><th>Dense%</th>
+              <th>MaxBet</th><th>MaxBet Price</th><th>Attribute</th><th>Time Mark</th>
+              <th>Total bet</th><th>Max hold</th><th>Total hold</th><th>Max/total</th><th>Rank totalbet</th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="(w, idx) in windows"
-              :key="'sum-' + idx"
-              class="summary-row"
-              :class="{ 'summary-active': activeTab === idx }"
-              @click="activeTab = idx"
-            >
-              <td class="st-label">{{ w.label }}</td>
-              <td class="st-amount">{{ w.odds ? formatMoney(w.odds.totalAmount) : '-' }}</td>
-              <td class="st-weight">
-                <template v-if="w.odds">{{ w.odds.overWeight.toFixed(0) }} | {{ w.odds.underWeight.toFixed(0) }}</template>
-                <template v-else>-</template>
-              </td>
-              <td class="st-pct-detail">{{ windowRatioDisplay(w) }}</td>
-              <td class="st-payout">
-                <template v-if="w.odds">{{ w.odds.overPayout.toFixed(0) }} | {{ w.odds.underPayout.toFixed(0) }}</template>
-                <template v-else>-</template>
-              </td>
-              <td class="st-pct" :style="pctColorStyle(w.amountPercent, w.odds?.totalAmount)">
-                <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
-                <template v-else>-</template>
-              </td>
-              <td class="st-pct-detail">
-                <template v-if="w.overAmountPercent != null || w.underAmountPercent != null">{{ w.overAmountPercent != null ? w.overAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.underAmountPercent != null ? w.underAmountPercent.toFixed(0) + '%' : '-' }}</template>
-                <template v-else>-</template>
-              </td>
-              <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
+            <!-- Over (OrderIndex=2) -->
+            <template v-for="row in overRows" :key="rowKey(row)">
+              <tr class="data-row" @click="toggleExpand(row)">
+                <td class="clickable" :class="{ 'row-highlight': row.latestPriceHighlight }"><span :class="{ 'neg-hc': row.isNegativeHandicap }">{{ selectionView(row) }}</span></td>
+                <td>{{ formatOdds(row.odds) }}</td><td>{{ formatDense(row.dense) }}</td><td>{{ formatPercent(row.densePercent) }}</td>
+                <td :class="maxBetCls(row)">{{ formatMoney(row.maxBet) }}</td><td>{{ formatOdds(row.maxBetPrice) }}</td>
+                <td>{{ row.maxBetAttr }}</td><td>{{ row.timeMark }}</td>
+                <td :class="totalBetCls(row)">{{ formatMoney(row.totalBet) }}</td>
+                <td :class="maxHoldCls(row)">{{ formatMoney(row.maxHold) }}</td>
+                <td :class="totalHoldCls(row)">{{ formatMoney(row.totalHold) }}</td>
+                <td :class="{ 'max-total-hl': row.maxTotalHighlight }">{{ formatPercent(row.maxTotal) }}</td>
+                <td :class="{ 'rank-hl': row.rankHighlight }">{{ row.rankTotalBet }}</td>
+              </tr>
+              <tr v-if="expandedKey === rowKey(row)" class="expand-row">
+                <td colspan="13">
+                  <table class="ex-table"><thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
+                    <tbody><tr v-for="(ps, i) in getLastPriceRows(row)" :key="i">
+                      <td :class="{ 'back-bg': ps.toBack > 0, 'lay-bg': ps.toLay > 0 && ps.toBack === 0 }">{{ ps.price }}</td>
+                      <td :class="{ 'back-bg': ps.toBack > 0 }">{{ ps.toBack > 0 ? `HK$ ${formatMoney(ps.toBack)}` : '' }}</td>
+                      <td :class="{ 'lay-bg': ps.toLay > 0 }">{{ ps.toLay > 0 ? `HK$ ${formatMoney(ps.toLay)}` : '' }}</td>
+                      <td><span :class="highlightClass(ps.tradedHighlight)">{{ ps.traded > 0 ? `HK$ ${formatMoney(ps.traded)}` : '' }}</span></td>
+                    </tr></tbody>
+                  </table>
+                </td>
+              </tr>
+            </template>
+            <!-- 分隔行 -->
+            <tr class="separator-row"><td colspan="13">&nbsp;</td></tr>
+            <!-- Under (OrderIndex=1) -->
+            <template v-for="row in underRows" :key="rowKey(row)">
+              <tr class="data-row" @click="toggleExpand(row)">
+                <td class="clickable" :class="{ 'row-highlight': row.latestPriceHighlight }"><span :class="{ 'neg-hc': row.isNegativeHandicap }">{{ selectionView(row) }}</span></td>
+                <td>{{ formatOdds(row.odds) }}</td><td>{{ formatDense(row.dense) }}</td><td>{{ formatPercent(row.densePercent) }}</td>
+                <td :class="maxBetCls(row)">{{ formatMoney(row.maxBet) }}</td><td>{{ formatOdds(row.maxBetPrice) }}</td>
+                <td>{{ row.maxBetAttr }}</td><td>{{ row.timeMark }}</td>
+                <td :class="totalBetCls(row)">{{ formatMoney(row.totalBet) }}</td>
+                <td :class="maxHoldCls(row)">{{ formatMoney(row.maxHold) }}</td>
+                <td :class="totalHoldCls(row)">{{ formatMoney(row.totalHold) }}</td>
+                <td :class="{ 'max-total-hl': row.maxTotalHighlight }">{{ formatPercent(row.maxTotal) }}</td>
+                <td :class="{ 'rank-hl': row.rankHighlight }">{{ row.rankTotalBet }}</td>
+              </tr>
+              <tr v-if="expandedKey === rowKey(row)" class="expand-row">
+                <td colspan="13">
+                  <table class="ex-table"><thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
+                    <tbody><tr v-for="(ps, i) in getLastPriceRows(row)" :key="i">
+                      <td :class="{ 'back-bg': ps.toBack > 0, 'lay-bg': ps.toLay > 0 && ps.toBack === 0 }">{{ ps.price }}</td>
+                      <td :class="{ 'back-bg': ps.toBack > 0 }">{{ ps.toBack > 0 ? `HK$ ${formatMoney(ps.toBack)}` : '' }}</td>
+                      <td :class="{ 'lay-bg': ps.toLay > 0 }">{{ ps.toLay > 0 ? `HK$ ${formatMoney(ps.toLay)}` : '' }}</td>
+                      <td><span :class="highlightClass(ps.tradedHighlight)">{{ ps.traded > 0 ? `HK$ ${formatMoney(ps.traded)}` : '' }}</span></td>
+                    </tr></tbody>
+                  </table>
+                </td>
+              </tr>
+            </template>
+            <!-- 小计 -->
+            <tr v-if="allSubtotal" class="subtotal-row">
+              <td colspan="8"></td>
+              <td>{{ formatMoney(allSubtotal.totalBetSubTotal) }}</td>
+              <td>{{ formatMoney(allSubtotal.maxHoldSubTotal) }}</td>
+              <td>{{ formatMoney(allSubtotal.totalHoldSubTotal) }}</td>
+              <td colspan="2"></td>
+            </tr>
+            <!-- Avg -->
+            <tr v-if="allSubtotal" class="stat-row">
+              <td colspan="3"></td><td>{{ formatMoney(allSubtotal.avr) }}</td><td colspan="4"></td>
+              <td>{{ formatMoney(allSubtotal.totalBetSubTotal) }}</td><td>{{ formatMoney(allSubtotal.maxHoldSubTotal) }}</td><td>{{ formatMoney(allSubtotal.totalHoldSubTotal) }}</td><td colspan="2"></td>
+            </tr>
+            <!-- X2 -->
+            <tr v-if="allSubtotal" class="stat-row">
+              <td colspan="2"></td><td>X2</td><td><strong>{{ formatMoney(allSubtotal.x2) }}</strong></td><td colspan="3"></td><td>X2</td>
+              <td>{{ formatMoney(allSubtotal.totalBetX2) }}</td><td>{{ formatMoney(allSubtotal.maxHoldX2) }}</td><td>{{ formatMoney(allSubtotal.totalHoldX2) }}</td><td colspan="2"></td>
+            </tr>
+            <!-- X3 -->
+            <tr v-if="allSubtotal" class="stat-row">
+              <td colspan="2"></td><td>X3</td><td><strong>{{ formatMoney(allSubtotal.x3) }}</strong></td><td colspan="3"></td><td>X3</td>
+              <td>{{ formatMoney(allSubtotal.totalBetX3) }}</td><td>{{ formatMoney(allSubtotal.maxHoldX3) }}</td><td>{{ formatMoney(allSubtotal.totalHoldX3) }}</td><td colspan="2"></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Tab 栏 + 排序按钮 + 刷新（合并为一行） -->
-      <div class="tab-bar">
-        <button
-          v-for="(w, idx) in windows"
-          :key="idx"
-          :class="['tab-btn', { active: activeTab === idx }]"
-          @click="activeTab = idx"
-        >{{ w.label }}</button>
-
-        <span class="tab-bar-spacer" />
-
-        <span class="sort-label">排序：</span>
-        <button :class="['sort-btn', { active: orderParam === 0 }]" @click="setOrder(0)">Hold &darr;</button>
-        <button :class="['sort-btn', { active: orderParam === 1 }]" @click="setOrder(1)">时间 &darr;</button>
-        <button :class="['sort-btn', { active: orderParam === 2 }]" @click="setOrder(2)">序号 &uarr;</button>
-        <button class="refresh-btn" :disabled="refreshing" @click="manualRefresh">
-          <span :class="{ spin: refreshing }">↻</span>
-          {{ refreshing ? '刷新中...' : '刷新数据' }}
-        </button>
+      <!-- 分时段成交汇总 -->
+      <div v-if="volumeSummary4.length > 0" class="section">
+        <h4>分时段成交汇总</h4>
+        <table class="grid-table small-table">
+          <thead><tr><th>时间节点</th><th>Under</th><th>Over</th></tr></thead>
+          <tbody><tr v-for="v in volumeSummary4" :key="v.timing"><td>{{ v.timing }}</td><td>{{ formatMoney(v.homeAmount) }}</td><td>{{ formatMoney(v.awayAmount) }}</td></tr></tbody>
+        </table>
       </div>
 
-      <!-- 当前 Tab 内容 -->
-      <div v-if="activeWindow" class="window-content">
-        <!-- 赔率摘要 -->
-        <div v-if="activeWindow.odds" class="info-bar">
-          <div class="info-row">
-            <span class="info-chip">
-              成交量 <b>{{ formatMoney(activeWindow.odds.totalAmount) }}</b>
-            </span>
-            <span class="info-chip">
-              赔率 <b>{{ activeWindow.odds.overOdds }}-{{ activeWindow.odds.underOdds }}</b>
-            </span>
-            <span class="info-chip">
-              比例 <b>{{ formatPer(activeWindow.odds.overPer) }} | {{ formatPer(activeWindow.odds.underPer) }}</b>
-            </span>
-            <span class="info-chip">
-              指数 <b>{{ activeWindow.odds.overWeight.toFixed(0) }}-{{ activeWindow.odds.underWeight.toFixed(0) }}</b>
-            </span>
-            <span class="info-chip">
-              盈亏
-              <b :class="{ 'text-neg': activeWindow.odds.overPayout < 0 }">{{ activeWindow.odds.overPayout.toFixed(0) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.underPayout < 0 }">{{ activeWindow.odds.underPayout.toFixed(0) }}</b>
-            </span>
-            <span class="info-chip">
-              分项 <b>Over {{ formatMoney(activeWindow.odds.overAmount) }} Under {{ formatMoney(activeWindow.odds.underAmount) }}</b>
-            </span>
-          </div>
-          <!-- 密集指标（移除盈亏指数和HOLD金额） -->
-          <div v-if="activeWindow.csExtra" class="info-row">
-            <span class="info-chip dense">密集价位 <b>{{ activeWindow.csExtra.densePrice }}</b></span>
-            <span class="info-chip dense">密集比例 <b>{{ activeWindow.csExtra.denseRatio }}</b></span>
-            <span class="info-chip dense">Pro <b>{{ activeWindow.csExtra.pro }}，R:{{ activeWindow.csExtra.r.toFixed(3) }}</b></span>
-            <span class="info-chip dense">成交量 <b>{{ activeWindow.csExtra.volume }}</b></span>
-            <span class="info-chip dense">TOP <b>{{ activeWindow.csExtra.top }}</b></span>
-          </div>
-        </div>
-
-        <!-- BigHold 主表 -->
-        <div class="table-wrapper">
-          <table class="bighold-table">
-            <thead>
-              <tr>
-                <th class="col-sel clickable-header">O/U</th>
-                <th class="col-odds clickable-header">Odds</th>
-                <th class="col-dense">Dense</th>
-                <th class="col-amount">Amount</th>
-                <th class="col-attr">Attr</th>
-                <th class="col-hold">Top Hold</th>
-                <th class="col-payout">Payout</th>
-                <th class="col-per">Per</th>
-                <th class="col-weight">指数</th>
-                <th class="col-pmark">P标</th>
-                <th class="col-time">更新时间</th>
+      <!-- 大注TOP5 -->
+      <div v-if="bigList.length > 0" class="section">
+        <h4>大注TOP5</h4>
+        <table class="grid-table">
+          <thead><tr><th>Handicap</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
+          <tbody>
+            <template v-for="item in bigList.slice(0, 5)" :key="item.pcId">
+              <tr class="data-row" @click="toggleBigExpand(item, item.pcId)">
+                <td class="clickable"><strong>{{ item.selection }}</strong></td>
+                <td>{{ formatOdds(item.lastOdds) }}</td><td>{{ formatMoney(item.tradedChange) }}</td><td>{{ item.tradedAttr }}</td>
+                <td>{{ Math.round(item.payout) }}</td><td>{{ formatPercent(item.per / 100) }}</td><td>{{ Math.round(item.weight) }}</td>
+                <td>{{ item.pMark }}</td><td>{{ formatTimeWithSeconds(item.refreshTime) }}</td>
               </tr>
-            </thead>
-            <tbody>
-              <template v-for="item in activeWindow.items" :key="item.pcId">
-                <tr :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId }]">
-                  <td
-                    :class="['sel-cell', item.selection === '大' ? 'sel-over' : 'sel-under', { 'sel-large-order': hasLargeOrder(item.selectionId), 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
-                    title="点击展开 Back/Lay/Traded 明细"
-                    @click="toggleExpand(item)"
-                  >{{ item.selection }}</td>
-                  <td class="odds-cell" title="点击展开 LastPrice" @click="toggleOddsExpand(item)">{{ item.lastOdds.toFixed(2) }}</td>
-                  <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
-                  <td :class="amountClass(item)">{{ formatMoney(item.tradedChange) }}</td>
-                  <td class="col-attr-val">{{ item.tradedAttr }}</td>
-                  <td :class="holdClass(item)">{{ formatMoney(item.hold) }}</td>
-                  <td>{{ item.payout.toFixed(0) }}</td>
-                  <td>{{ formatPer(item.per / 100) }}</td>
-                  <td>{{ item.weight.toFixed(0) }}</td>
-                  <td><span :class="['pmark-badge', pmarkClass(item.pMark)]">{{ item.pMark }}</span></td>
-                  <td class="col-time-val">{{ formatDateTime(item.refreshTime) }}</td>
-                </tr>
-
-                <!-- 展开行：O/U 层（当前 + 前一条 + 差额） -->
-                <tr v-if="expandedPcId === item.pcId" class="expand-row">
-                  <td colspan="11">
-                    <div class="expand-content">
-                      <div class="detail-panels">
-                        <!-- 当前记录 -->
-                        <div class="detail-panel">
-                          <div class="panel-title">当前记录</div>
-                          <table v-if="getCurrentRows(item.pcId).length > 0" class="detail-table">
-                            <thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
-                            <tbody>
-                              <tr v-for="row in getCurrentRows(item.pcId)" :key="'c-' + row.price">
-                                <td :class="priceBgClass(row)">{{ row.price }}</td>
-                                <td :class="{ 'bg-back': row.toBack > 0 }">{{ row.toBack > 0 ? formatMoney(row.toBack) : '' }}</td>
-                                <td :class="{ 'bg-lay': row.toLay > 0 }">{{ row.toLay > 0 ? formatMoney(row.toLay) : '' }}</td>
-                                <td :class="tradedClass(row)">{{ row.traded > 0 ? formatMoney(row.traded) : '' }}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div v-else class="panel-empty">无明细数据</div>
-                        </div>
-
-                        <!-- 前一条记录 -->
-                        <div class="detail-panel">
-                          <div class="panel-title">前一条记录</div>
-                          <div v-if="loadingPcId === item.pcId" class="panel-loading"><span class="spinner"></span> 加载中...</div>
-                          <div v-else-if="failedPcIds.has(item.pcId)" class="panel-error">
-                            获取失败，<span class="retry-link" @click="retryFetchPrevious(item)">点击重试</span>
-                          </div>
-                          <div v-else-if="prevCache.has(item.pcId) && !prevCache.get(item.pcId)" class="panel-empty">无前一条记录</div>
-                          <table v-else-if="getPreviousRows(item.pcId).length > 0" class="detail-table">
-                            <thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
-                            <tbody>
-                              <tr v-for="row in getPreviousRows(item.pcId)" :key="'p-' + row.price">
-                                <td :class="priceBgClass(row)">{{ row.price }}</td>
-                                <td :class="{ 'bg-back': row.toBack > 0 }">{{ row.toBack > 0 ? formatMoney(row.toBack) : '' }}</td>
-                                <td :class="{ 'bg-lay': row.toLay > 0 }">{{ row.toLay > 0 ? formatMoney(row.toLay) : '' }}</td>
-                                <td :class="tradedClass(row)">{{ row.traded > 0 ? formatMoney(row.traded) : '' }}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div v-else class="panel-empty">等待数据...</div>
-                        </div>
-
-                        <!-- 成交差额 -->
-                        <div class="detail-panel">
-                          <div class="panel-title">成交差额</div>
-                          <table v-if="getDiffRows(item.pcId).length > 0" class="detail-table diff-table">
-                            <thead><tr><th>价位</th><th>差额</th></tr></thead>
-                            <tbody>
-                              <tr v-for="row in getDiffRows(item.pcId)" :key="'d-' + row.price">
-                                <td>{{ row.price }}</td>
-                                <td class="diff-val">+{{ formatMoney(row.traded) }}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div v-else class="panel-empty">
-                            {{ getPreviousRows(item.pcId).length > 0 ? '无变化' : '等待前一条数据...' }}
-                          </div>
-                        </div>
-                      </div>
+              <tr v-if="expandedBigPcId === item.pcId" class="expand-row">
+                <td colspan="9">
+                  <div class="expand-panels">
+                    <div class="expand-panel"><span class="panel-label">当前记录</span>
+                      <table class="ex-table"><thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
+                        <tbody><tr v-for="(ps, i) in bigCurrentParsedCache.get(item.pcId) ?? []" :key="i">
+                          <td :class="{ 'back-bg': ps.toBack > 0, 'lay-bg': ps.toLay > 0 && ps.toBack === 0 }">{{ ps.price }}</td>
+                          <td :class="{ 'back-bg': ps.toBack > 0 }">{{ ps.toBack > 0 ? `HK$ ${formatMoney(ps.toBack)}` : '' }}</td>
+                          <td :class="{ 'lay-bg': ps.toLay > 0 }">{{ ps.toLay > 0 ? `HK$ ${formatMoney(ps.toLay)}` : '' }}</td>
+                          <td>{{ ps.traded > 0 ? `HK$ ${formatMoney(ps.traded)}` : '' }}</td>
+                        </tr></tbody>
+                      </table>
                     </div>
-                  </td>
-                </tr>
-
-                <!-- 展开行：赔率层（LastPrice） -->
-                <tr v-if="expandedOddsPcId === item.pcId" class="expand-row expand-row-odds">
-                  <td colspan="11">
-                    <div class="expand-content">
-                      <div class="detail-panels">
-                        <div class="detail-panel">
-                          <div class="panel-title">LastPrice 挂牌数据 ({{ item.selection }})</div>
-                          <table v-if="getLastPriceRows(item.selectionId).length > 0" class="detail-table">
-                            <thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
-                            <tbody>
-                              <tr v-for="row in getLastPriceRows(item.selectionId)" :key="'lp-' + row.price">
-                                <td :class="priceBgClass(row)">{{ row.price }}</td>
-                                <td :class="{ 'bg-back': row.toBack > 0 }">{{ row.toBack > 0 ? formatMoney(row.toBack) : '' }}</td>
-                                <td :class="{ 'bg-lay': row.toLay > 0 }">{{ row.toLay > 0 ? formatMoney(row.toLay) : '' }}</td>
-                                <td :class="tradedClass(row)">{{ row.traded > 0 ? formatMoney(row.traded) : '' }}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div v-else class="panel-empty">无 LastPrice 数据</div>
-                        </div>
-                      </div>
+                    <div class="expand-panel"><span class="panel-label">前一条记录</span>
+                      <table class="ex-table"><thead><tr><th>价位</th><th>买</th><th>卖</th><th>成交</th></tr></thead>
+                        <tbody><tr v-for="(ps, i) in bigPreviousParsedCache.get(item.pcId) ?? []" :key="i">
+                          <td :class="{ 'back-bg': ps.toBack > 0, 'lay-bg': ps.toLay > 0 && ps.toBack === 0 }">{{ ps.price }}</td>
+                          <td :class="{ 'back-bg': ps.toBack > 0 }">{{ ps.toBack > 0 ? `HK$ ${formatMoney(ps.toBack)}` : '' }}</td>
+                          <td :class="{ 'lay-bg': ps.toLay > 0 }">{{ ps.toLay > 0 ? `HK$ ${formatMoney(ps.toLay)}` : '' }}</td>
+                          <td>{{ ps.traded > 0 ? `HK$ ${formatMoney(ps.traded)}` : '' }}</td>
+                        </tr></tbody>
+                      </table>
                     </div>
-                  </td>
-                </tr>
-              </template>
+                    <div class="expand-panel"><span class="panel-label">成交差额</span>
+                      <table class="ex-table"><thead><tr><th>价位</th><th>成交</th></tr></thead>
+                        <tbody><tr v-for="(ps, i) in calcTradedDiff(bigCurrentParsedCache.get(item.pcId) ?? [], bigPreviousParsedCache.get(item.pcId) ?? [])" :key="i">
+                          <td>{{ ps.price }}</td><td>{{ ps.traded !== 0 ? `HK$ ${formatMoney(ps.traded)}` : '' }}</td>
+                        </tr></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
 
-              <tr v-if="activeWindow.items.length === 0">
-                <td colspan="11" class="no-data">暂无数据</td>
-              </tr>
-            </tbody>
-            <!-- 统计行 -->
-            <tfoot v-if="activeWindow.items.length > 0">
-              <tr class="stat-row">
-                <td colspan="3" class="stat-label">&sigma; (标准差)</td>
-                <td>{{ formatMoney(activeWindow.stdDevAmount) }}</td>
-                <td></td>
-                <td>{{ formatMoney(activeWindow.stdDevHold) }}</td>
-                <td colspan="5"></td>
-              </tr>
-              <tr class="stat-row">
-                <td colspan="3" class="stat-label">&mu; (平均)</td>
-                <td>{{ formatMoney(activeWindow.avgAmount) }}</td>
-                <td></td>
-                <td>{{ formatMoney(activeWindow.avgHold) }}</td>
-                <td colspan="5"></td>
-              </tr>
-              <tr class="stat-row stat-highlight">
-                <td colspan="3" class="stat-label">&mu; + 2&sigma;</td>
-                <td>{{ formatMoney(activeWindow.threshold2SigmaAmount) }}</td>
-                <td></td>
-                <td>{{ formatMoney(activeWindow.threshold2SigmaHold) }}</td>
-                <td colspan="5"></td>
-              </tr>
-              <tr class="stat-row stat-highlight">
-                <td colspan="3" class="stat-label">&mu; + 3&sigma;</td>
-                <td>{{ formatMoney(activeWindow.threshold3SigmaAmount) }}</td>
-                <td></td>
-                <td>{{ formatMoney(activeWindow.threshold3SigmaHold) }}</td>
-                <td colspan="5"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <!-- 多时间节点成交汇总 -->
-        <div v-if="volumeSummary.length > 0" class="volume-summary">
-          <h4 class="summary-title">成交汇总</h4>
-          <table class="summary-table">
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>小球 (Under)</th>
-                <th>大球 (Over)</th>
-                <th>合计</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="vs in volumeSummary" :key="vs.timing">
-                <td>{{ vs.timing }}</td>
-                <td>{{ formatMoney(vs.underAmount) }}</td>
-                <td>{{ formatMoney(vs.overAmount) }}</td>
-                <td>{{ formatMoney(vs.underAmount + vs.overAmount) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <!-- Hold TOP5 -->
+      <div v-if="holdList.length > 0" class="section">
+        <h4>Hold TOP5</h4>
+        <table class="grid-table">
+          <thead><tr><th>Handicap</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Top Hold</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
+          <tbody>
+            <tr v-for="item in holdList.slice(0, 5)" :key="item.pcId">
+              <td>{{ item.selection }}</td><td>{{ formatOdds(item.lastOdds) }}</td><td>{{ formatMoney(item.tradedChange) }}</td><td>{{ item.tradedAttr }}</td>
+              <td>{{ formatMoney(item.hold) }}</td><td>{{ Math.round(item.payout) }}</td><td>{{ formatPercent(item.per / 100) }}</td><td>{{ Math.round(item.weight) }}</td>
+              <td>{{ item.pMark }}</td><td>{{ formatTimeWithSeconds(item.refreshTime) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </template>
   </div>
 </template>
 
-<style>
-@import '~/assets/css/detail-shared.css';
-</style>
-
 <style scoped>
-/* ── bk/uo 页面特有样式 ── */
-
-/* 进球盘切换栏 */
-.goal-line-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.goal-line-label {
-  color: #666;
-  font-size: 0.88rem;
-}
-.goal-line-btn {
-  padding: 4px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 500;
-  transition: all 0.15s ease;
-}
-.goal-line-btn:hover {
-  background: #f0f0f0;
-  border-color: #9ca3af;
-}
-.goal-line-btn.active {
-  background: #059669;
-  color: #fff;
-  border-color: #059669;
-}
-
-/* ── 分时统计摘要面板 ── */
-.summary-panel {
-  margin: 12px 0;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  overflow: hidden;
-  background: #fff;
-}
-.summary-panel .summary-title {
-  padding: 6px 14px;
-  background: #b22222;
-  color: #fff;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.5px;
-  margin: 0;
-}
-.summary-panel .summary-table {
-  width: 100%;
-  max-width: none;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.summary-panel .summary-table th,
-.summary-panel .summary-table td {
-  padding: 6px 28px;
-  text-align: center;
-  border-bottom: 1px solid #eee;
-  line-height: 1.7;
-}
-.summary-panel .summary-table th {
-  background: #f5f5f5;
-  border-bottom: 1px solid #ccc;
-  font-weight: 600;
-  font-size: 12px;
-  color: #555;
-}
-.summary-row {
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.summary-row:hover {
-  background: #fef9e7;
-}
-.summary-active {
-  background: #fff3cd !important;
-  font-weight: 600;
-}
-th.st-label, td.st-label { font-weight: 600; padding-left: 16px !important; text-align: left !important; white-space: nowrap; }
-td.st-amount { font-variant-numeric: tabular-nums; text-align: right; }
-td.st-weight, td.st-payout { white-space: nowrap; }
-td.st-uk { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #555; white-space: nowrap; }
-td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
-td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bk-detail-page { max-width: 100%; padding: 1rem; }
+.page-header h5 { font-size: 1.2em; margin-bottom: 0.5rem; }
+.page-header h5 span { font-weight: normal; color: #666; margin-left: 1rem; }
+.section-title { display: flex; align-items: center; gap: 1rem; padding: 10px; margin-top: 20px; border-top: 2px solid #ccc; }
+.section-title h4 { font-size: 1.4em; color: #ff0000; font-weight: bold; margin: 0; }
+.refresh-btn { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.7rem; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; font-size: 0.88rem; cursor: pointer; }
+.refresh-btn:hover:not(:disabled) { background: #f0fdf4; } .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.refresh-icon { font-size: 1rem; display: inline-block; } .refresh-icon.spinning { animation: spin 0.8s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.section { margin-top: 2rem; }
+.section h4 { padding: 10px; font-size: 1.4em; color: #ff0000; font-weight: bold; border-top: 2px solid #ccc; }
+.table-wrap { overflow-x: auto; }
+.grid-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.grid-table th { padding: 6px 8px; background: #f5f5f5; border: 1px solid #ddd; text-align: left; font-weight: 600; white-space: nowrap; }
+.grid-table td { padding: 4px 8px; border: 1px solid #eee; white-space: nowrap; }
+.grid-table tbody tr:hover { background: #f8f8f8; }
+.small-table { max-width: 400px; }
+.data-row { cursor: pointer; } .clickable { cursor: pointer; } .neg-hc { color: red; }
+.separator-row td { border: none; background: #fff; }
+.hl-light { background: #FFFFA8; } .hl-bright { background: #ffff00; }
+.max-total-hl { color: #ff0000; font-weight: bold; } .rank-hl { color: #ff0000; font-weight: bold; }
+.row-highlight { background: #ffff00; }
+.subtotal-row { border-top: 2px solid #eee; background: #eee; } .subtotal-row td { font-weight: bold; }
+.stat-row { border-top: 2px solid #eee; } .stat-row td { background: #ffffa8; }
+.expand-row td { padding: 8px; background: #fafafa; }
+.expand-panels { display: flex; gap: 1rem; flex-wrap: wrap; }
+.expand-panel { flex: 1; min-width: 200px; } .panel-label { font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 4px; }
+.ex-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.ex-table th { padding: 3px 6px; background: #e8e8e8; border: 1px solid #ddd; }
+.ex-table td { padding: 2px 6px; border: 1px solid #eee; }
+.back-bg { background: #A6D8FF; } .lay-bg { background: #FAC9D1; }
+.loading { text-align: center; padding: 2rem; color: #666; }
+.error-msg { text-align: center; padding: 2rem; color: red; }
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MatchListResult } from '~/types/match'
 import type { ApiResponse } from '~/types/api'
-import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
+import { formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
 
 // --- 关注（置顶）功能 ---
 const {
@@ -147,8 +147,26 @@ const pageRange = computed(() => {
   return pages
 })
 
-// 篮球明细链接：仅大小和亚盘
+// 格式化篮球最大单注（与旧站一致）
+function formatBkMaxBet(item: any): string {
+  if (!item.maxBet || item.maxBet === 0) return ''
+  const amount = Math.round(item.maxBet).toLocaleString()
+  const pct = Math.round(item.maxBetPercent)
+  const attr = item.maxBetAttr || ''
+  const priceChange = item.maxBetPriceChange ?? 0
+  const odds = item.maxBetOdds?.toFixed(1) ?? ''
+  const time = item.maxBetTime || ''
+  const selection = item.maxBetSelection || ''
+  return `${amount} (${pct}%, ${attr}, ${priceChange}); 价位: ${odds}; 时间: ${time}; 比分项: ${selection};`
+}
+
+function isMaxBetLowOdds(item: any): boolean {
+  return item.maxBetOdds > 0 && item.maxBetOdds < 2
+}
+
+// 篮球明细链接：标盘 + OU + 亚盘
 const detailLinks = [
+  { path: 'cs3', label: '标', title: '标盘', color: '#a0522d' },
   { path: 'bk/uo', label: 'OU', title: '大小', color: '#556b2f' },
   { path: 'bk/handicap', label: '亚', title: '亚盘', color: '#8a2be2' },
 ]
@@ -238,14 +256,15 @@ const detailLinks = [
             <th class="col-league">联赛</th>
             <th class="col-time">开赛时间</th>
             <th class="col-teams">对阵</th>
-            <th class="col-asian">亚盘总成交</th>
+            <th class="col-maxbet">最大单注</th>
+            <th class="col-pmark">P标记</th>
             <th class="col-score">比分</th>
             <th class="col-detail">明细</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="matches.length === 0">
-            <td colspan="7" class="empty">
+            <td colspan="8" class="empty">
               {{ status === 'pending' ? '加载中...' : '暂无赛事数据' }}
             </td>
           </tr>
@@ -271,8 +290,11 @@ const detailLinks = [
               <span class="team-vs">vs</span>
               <span class="team-away">{{ item.match.guestTeam }}</span>
             </td>
-            <td class="col-asian">
-              {{ formatBfAmount(item.asianAmount) }}
+            <td class="col-maxbet" :class="{ 'low-odds': isMaxBetLowOdds(item) }">
+              {{ formatBkMaxBet(item) }}
+            </td>
+            <td class="col-pmark">
+              <span v-if="item.pMark" class="pmark-badge">{{ item.pMark }}</span>
             </td>
             <td class="col-score">
               <span class="score">{{ item.match.final || '-' }}</span>
@@ -419,7 +441,7 @@ const detailLinks = [
 .badge.count { background: #dbeafe; color: #1e40af; }
 
 /* --- 表格 --- */
-.match-table { width: 100%; min-width: 800px; border-collapse: collapse; font-size: 0.9rem; }
+.match-table { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 0.9rem; }
 .match-table thead { background: #f8fafc; }
 .match-table th {
   padding: 0.6rem 0.75rem; text-align: left; font-weight: 600; color: #475569;
@@ -441,7 +463,13 @@ const detailLinks = [
 .col-league { width: 90px; }
 .col-time { width: 110px; white-space: nowrap; }
 .col-teams { min-width: 200px; }
-.col-asian { width: 80px; text-align: right; white-space: nowrap; }
+.col-maxbet { min-width: 250px; font-size: 0.82rem; color: #333; white-space: nowrap; }
+.col-maxbet.low-odds { color: #ff0000; }
+.col-pmark { width: 50px; text-align: center; white-space: nowrap; }
+.pmark-badge {
+  display: inline-block; padding: 0.1rem 0.4rem; background: #fef3c7;
+  border-radius: 3px; font-size: 0.8rem; font-weight: 600; color: #92400e;
+}
 .col-score { width: 90px; white-space: nowrap; }
 .col-detail { width: 80px; white-space: nowrap; }
 

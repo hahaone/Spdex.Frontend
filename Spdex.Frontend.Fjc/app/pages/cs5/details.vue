@@ -165,7 +165,7 @@ const bigDiffHighlightSet = computed<Set<number>>(() => {
   // 遍历所有已缓存前一条记录的 pcId
   for (const [pcId] of bigPrevCache) {
     const diffRows = getBigDiffRows(pcId)
-    if (diffRows.length > 4) {
+    if (diffRows.length > 3) {
       set.add(pcId)
     }
   }
@@ -209,7 +209,7 @@ watch(() => result.value, (val) => {
   }
 }, { immediate: true })
 
-/** Handicap 列大注差额高亮（成交差额 > 4 个价位） */
+/** Handicap 列大注差额高亮（成交差额 > 3 个价位） */
 function bigDiffHandicapClass(item: AsianBigItem): string {
   return bigDiffHighlightSet.value.has(item.pcId) ? 'td-highlight' : ''
 }

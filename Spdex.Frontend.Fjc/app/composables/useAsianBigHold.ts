@@ -4,6 +4,7 @@ import type { AsianBigHoldPageResult } from '~/types/asianbighold'
 interface AsianBigHoldParams {
   id: number
   order?: number
+  market?: string
 }
 
 /**
