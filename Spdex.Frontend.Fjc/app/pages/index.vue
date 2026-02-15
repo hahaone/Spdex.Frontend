@@ -59,14 +59,8 @@ watch(apiMatches, (items) => {
  * 然后是 API 返回的非关注赛事。
  */
 const matches = computed(() => {
-  let apiItems = apiMatches.value
-
-  // V2.0: 已开赛按开赛时间倒序（最近开赛的排前面）
-  if (selectedStatus.value === 'started') {
-    apiItems = [...apiItems].sort((a, b) =>
-      new Date(b.match.matchTime).getTime() - new Date(a.match.matchTime).getTime(),
-    )
-  }
+  // 后端已对"已开赛"按 MatchTime DESC 排序并分页，前端无需再排序
+  const apiItems = apiMatches.value
 
   const ids = pinnedEventIds.value
   if (ids.size === 0) return apiItems
@@ -176,9 +170,9 @@ function formatMaxBetSummary(item: typeof matches.value[0]): string {
   return `${amount} (${per}%,${attr}${pmark}) ${selection}`
 }
 
-// 最大单注赔率低于2时标红（与旧站 lastPrice < 2 逻辑一致）
-function isMaxBetHighlight(item: typeof matches.value[0]): boolean {
-  return item.maxBet > 0 && item.maxBetOdds > 0 && item.maxBetOdds < 2
+// V2.0: 波胆最大单注去掉高亮算法
+function isMaxBetHighlight(_item: typeof matches.value[0]): boolean {
+  return false
 }
 
 // 标盘最大单注摘要
