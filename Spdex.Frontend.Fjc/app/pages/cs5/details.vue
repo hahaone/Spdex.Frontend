@@ -807,7 +807,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
             </thead>
             <tbody>
               <template v-for="item in holdList" :key="'hl-' + item.pcId">
-                <tr :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item.pcId + 100000)">
+                <tr :class="['data-row', 'big-row']" @click="toggleBigExpand(item.pcId + 100000)">
                   <td :class="['col-hc-val', bigDiffHandicapClass(item)]">{{ item.selection }}</td>
                   <td>{{ item.lastOdds.toFixed(2) }}</td>
                   <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
