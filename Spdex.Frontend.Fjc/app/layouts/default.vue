@@ -1,5 +1,18 @@
 <script setup lang="ts">
 const route = useRoute()
+const { user, isLoggedIn, isJcOnly, logout } = useAuth()
+
+/** 令牌类型显示文本 */
+const tokenLabel = computed(() => {
+  if (!user.value?.tokenType) return ''
+  return user.value.tokenType === 'jc' ? '竞彩版' : '完整版'
+})
+
+/** 令牌类型 CSS class */
+const tokenClass = computed(() => {
+  if (!user.value?.tokenType) return ''
+  return user.value.tokenType === 'jc' ? 'token-jc' : 'token-full'
+})
 
 const navItems = [
   { label: '足球', to: '/', icon: '⚽' },
@@ -37,6 +50,11 @@ const buildSha = computed(() => {
             <span class="nav-label">{{ item.label }}</span>
           </NuxtLink>
         </nav>
+        <div v-if="isLoggedIn" class="user-area">
+          <span v-if="tokenLabel" :class="['token-badge', tokenClass]">{{ tokenLabel }}</span>
+          <span class="user-name">{{ user?.userName }}</span>
+          <button class="logout-btn" @click="logout">退出</button>
+        </div>
       </div>
     </header>
 
@@ -130,6 +148,58 @@ const buildSha = computed(() => {
 
 .nav-label {
   line-height: 1;
+}
+
+/* ── 用户区域 ── */
+.user-area {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.token-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.token-jc {
+  background: #fff1f0;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+}
+
+.token-full {
+  background: #f6ffed;
+  color: #389e0d;
+  border: 1px solid #b7eb8f;
+}
+
+.user-name {
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+}
+
+.logout-btn {
+  padding: 4px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  border-color: #cf1322;
+  color: #cf1322;
+  background: #fff2f0;
 }
 
 .app-main {

@@ -3,6 +3,9 @@ import type { MatchListResult } from '~/types/match'
 import type { ApiResponse } from '~/types/api'
 import { formatMoney, formatBfAmount, formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
 
+// --- 令牌权限 ---
+const { isJcOnly } = useAuth()
+
 // --- 关注（置顶）功能 ---
 const {
   pinnedItems,
@@ -18,16 +21,21 @@ const {
 const selectedDate = ref('')
 const selectedLeague = ref('')
 const selectedStatus = ref<'upcoming' | 'started' | 'all'>('upcoming')
-const jcOnly = ref(false)
+const jcOnly = ref(isJcOnly.value) // jc 令牌用户默认开启
 const currentPage = ref(1)
 const pageSize = 20
+
+// jc 令牌用户强制竞彩过滤
+if (isJcOnly.value) {
+  jcOnly.value = true
+}
 
 // 构建查询参数（响应式）
 const queryParams = computed(() => ({
   date: selectedDate.value || undefined,
   league: selectedLeague.value || undefined,
   status: selectedStatus.value,
-  jc: jcOnly.value ? 1 : undefined,
+  jc: (jcOnly.value || isJcOnly.value) ? 1 : undefined,
   page: currentPage.value,
   pageSize,
 }))
@@ -124,6 +132,8 @@ function onStatusChange(status: 'upcoming' | 'started' | 'all') {
 }
 
 function toggleJcOnly() {
+  // jc 令牌用户不允许关闭竞彩过滤
+  if (isJcOnly.value) return
   jcOnly.value = !jcOnly.value
   selectedLeague.value = ''
   currentPage.value = 1
@@ -337,7 +347,9 @@ const detailLinks = [
           @click="onStatusChange('all')"
         >全部</button>
         <button
-          :class="['status-btn jc-btn', { active: jcOnly }]"
+          :class="['status-btn jc-btn', { active: jcOnly || isJcOnly, locked: isJcOnly }]"
+          :disabled="isJcOnly"
+          :title="isJcOnly ? '竞彩版令牌，仅可查看竞彩比赛' : '切换竞彩过滤'"
           @click="toggleJcOnly"
         >竞彩</button>
       </div>
@@ -828,6 +840,11 @@ const detailLinks = [
 .status-btn.jc-btn.active {
   background: #b22222;
   border-color: #b22222;
+}
+
+.status-btn.jc-btn.locked {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 /* --- 刷新按钮 --- */
