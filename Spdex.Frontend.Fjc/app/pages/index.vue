@@ -59,7 +59,15 @@ watch(apiMatches, (items) => {
  * 然后是 API 返回的非关注赛事。
  */
 const matches = computed(() => {
-  const apiItems = apiMatches.value
+  let apiItems = apiMatches.value
+
+  // V2.0: 已开赛按开赛时间倒序（最近开赛的排前面）
+  if (selectedStatus.value === 'started') {
+    apiItems = [...apiItems].sort((a, b) =>
+      new Date(b.match.matchTime).getTime() - new Date(a.match.matchTime).getTime(),
+    )
+  }
+
   const ids = pinnedEventIds.value
   if (ids.size === 0) return apiItems
 
@@ -157,6 +165,7 @@ function formatHandicap(val: string | null): string {
 }
 
 // 最大单注列表单元格摘要（简短显示在表格中），包含P标记
+// V2.0: 金额与括号间加空格
 function formatMaxBetSummary(item: typeof matches.value[0]): string {
   if (!item.maxBet) return ''
   const amount = formatMoney(item.maxBet)
@@ -164,7 +173,7 @@ function formatMaxBetSummary(item: typeof matches.value[0]): string {
   const attr = item.maxBetAttr || '-'
   const pmark = item.pMark ? `,${item.pMark}` : ''
   const selection = item.maxBetSelection || '-'
-  return `${amount}(${per}%,${attr}${pmark}) ${selection}`
+  return `${amount} (${per}%,${attr}${pmark}) ${selection}`
 }
 
 // 最大单注赔率低于2时标红（与旧站 lastPrice < 2 逻辑一致）
@@ -173,6 +182,7 @@ function isMaxBetHighlight(item: typeof matches.value[0]): boolean {
 }
 
 // 标盘最大单注摘要
+// V2.0: 金额与括号间加空格
 function formatBfMaxBetSummary(item: typeof matches.value[0]): string {
   if (!item.bfMaxBet) return ''
   const amount = formatMoney(item.bfMaxBet)
@@ -180,11 +190,32 @@ function formatBfMaxBetSummary(item: typeof matches.value[0]): string {
   const attr = item.bfMaxBetAttr || '-'
   const pmark = item.bfPMark ? `,${item.bfPMark}` : ''
   const selection = item.bfMaxBetSelection || '-'
-  return `${amount}(${per}%,${attr}${pmark}) ${selection}`
+  return `${amount} (${per}%,${attr}${pmark}) ${selection}`
 }
 
-function isBfMaxBetHighlight(item: typeof matches.value[0]): boolean {
-  return item.bfMaxBet > 0 && item.bfMaxBetOdds > 0 && item.bfMaxBetOdds < 2
+// V2.0: 波胆最大单注后缀（括号部分+选项名）
+function formatMaxBetSuffix(item: typeof matches.value[0]): string {
+  if (!item.maxBet) return ''
+  const per = item.maxBetPercent.toFixed(0)
+  const attr = item.maxBetAttr || '-'
+  const pmark = item.pMark ? `,${item.pMark}` : ''
+  const selection = item.maxBetSelection || '-'
+  return `(${per}%,${attr}${pmark}) ${selection}`
+}
+
+// V2.0: 标盘最大单注后缀
+function formatBfMaxBetSuffix(item: typeof matches.value[0]): string {
+  if (!item.bfMaxBet) return ''
+  const per = item.bfMaxBetPercent.toFixed(0)
+  const attr = item.bfMaxBetAttr || '-'
+  const pmark = item.bfPMark ? `,${item.bfPMark}` : ''
+  const selection = item.bfMaxBetSelection || '-'
+  return `(${per}%,${attr}${pmark}) ${selection}`
+}
+
+// V2.0: 标盘最大单注去掉高亮算法
+function isBfMaxBetHighlight(_item: typeof matches.value[0]): boolean {
+  return false
 }
 
 // --- 最大单注弹窗（定位在点击元素附近） ---
@@ -430,7 +461,7 @@ const detailLinks = [
                 :class="{ highlight: isMaxBetHighlight(item) }"
                 @click="openMaxBetPopover($event, item)"
               >
-                {{ formatMaxBetSummary(item) }}
+                <b>{{ formatMoney(item.maxBet) }}</b> {{ formatMaxBetSuffix(item) }}
               </span>
               <span v-else>-</span>
             </td>
@@ -441,7 +472,7 @@ const detailLinks = [
                 :class="{ highlight: isBfMaxBetHighlight(item) }"
                 @click="openBfMaxBetPopover($event, item)"
               >
-                {{ formatBfMaxBetSummary(item) }}
+                <b>{{ formatMoney(item.bfMaxBet) }}</b> {{ formatBfMaxBetSuffix(item) }}
               </span>
               <span v-else>-</span>
             </td>
@@ -920,6 +951,7 @@ const detailLinks = [
 
 .match-table {
   width: 100%;
+  min-width: 1280px;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
@@ -987,7 +1019,7 @@ const detailLinks = [
 .col-score { width: 90px; white-space: nowrap; }
 .col-bf { width: 65px; text-align: right; white-space: nowrap; }
 .col-asian { width: 65px; text-align: right; white-space: nowrap; }
-.col-detail { width: 160px; }
+.col-detail { width: 160px; white-space: nowrap; }
 
 .league-tag {
   display: inline-block;
@@ -1125,6 +1157,7 @@ const detailLinks = [
 .detail-links {
   display: flex;
   gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .detail-btn {

@@ -57,11 +57,19 @@ function overRatio(idx: number): number | null {
   if (prev < 0.1) return null
   return cur / (prev + 0.1)
 }
-/** 对比前一分时颜色：>120% 红色加粗, <80% 蓝色加粗, 其它灰色 */
-function ratioColorStyle(ratio: number | null): string {
+/**
+ * V2.0: 分时环比高亮规则
+ * ratio 以 100 为基数（如 130 表示 130%）
+ * <130% AND 对应汇总量>8K → 红色加粗
+ * >500% AND 对应汇总量>8K → 蓝色加粗
+ * 其它灰色
+ */
+function ratioColorStyle(ratio: number | null, totalBet?: number): string {
   if (ratio == null) return ''
-  if (ratio > 1.2) return 'color:#ff0000;font-weight:bold'
-  if (ratio < 0.8) return 'color:#0000ff;font-weight:bold'
+  const pct = ratio * 100  // 转为百分比
+  const hasVolume = (totalBet ?? 0) > 8000
+  if (pct < 130 && hasVolume) return 'color:#c00;font-weight:bold'
+  if (pct > 500 && hasVolume) return 'color:#00c;font-weight:bold'
   return 'color:#666'
 }
 
@@ -201,9 +209,9 @@ function toggleSection(key: string) {
               <th class="st-label">窗口</th>
               <th class="st-weight">必指</th>
               <th class="st-amount">Under 汇总量</th>
-              <th class="st-ratio">Under 对比前一分时</th>
+              <th class="st-ratio">Under 分时环比</th>
               <th class="st-amount">Over 汇总量</th>
-              <th class="st-ratio">Over 对比前一分时</th>
+              <th class="st-ratio">Over 分时环比</th>
             </tr>
           </thead>
           <tbody>
@@ -220,12 +228,12 @@ function toggleSection(key: string) {
                 <template v-else>-</template>
               </td>
               <td class="st-amount">{{ formatMoney(w.underTotalBet) }}</td>
-              <td class="st-ratio" :style="ratioColorStyle(underRatio(idx))">
+              <td class="st-ratio" :style="ratioColorStyle(underRatio(idx), w.underTotalBet)">
                 <template v-if="underRatio(idx) != null">{{ (underRatio(idx)! * 100).toFixed(2) }}%</template>
                 <template v-else>-</template>
               </td>
               <td class="st-amount">{{ formatMoney(w.overTotalBet) }}</td>
-              <td class="st-ratio" :style="ratioColorStyle(overRatio(idx))">
+              <td class="st-ratio" :style="ratioColorStyle(overRatio(idx), w.overTotalBet)">
                 <template v-if="overRatio(idx) != null">{{ (overRatio(idx)! * 100).toFixed(2) }}%</template>
                 <template v-else>-</template>
               </td>
@@ -621,7 +629,9 @@ function toggleSection(key: string) {
 .summary-row:hover { background: #fef9e7; }
 .summary-active { background: #fff3cd !important; font-weight: 600; }
 th.st-label, td.st-label { font-weight: 600; padding-left: 16px !important; text-align: left !important; white-space: nowrap; }
-td.st-amount { font-variant-numeric: tabular-nums; text-align: right; }
+td.st-amount { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+th.st-amount { white-space: nowrap; min-width: 100px; }
 td.st-weight { white-space: nowrap; }
 td.st-ratio { font-variant-numeric: tabular-nums; white-space: nowrap; }
+th.st-ratio { white-space: nowrap; min-width: 120px; }
 </style>

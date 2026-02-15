@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { AsianHcRow, AsianHcGroup, AsianTimeWindowData, AsianBigItem } from '~/types/asianbighold'
-import type { PriceSizeRow } from '~/types/bighold'
-import { parseRawData } from '~/utils/parseRawData'
+import type { PriceSizeRow, PreviousRecordResult } from '~/types/bighold'
+import type { ApiResponse } from '~/types/api'
+import { parseRawData, calcTradedDiff } from '~/utils/parseRawData'
 import { formatMoney, formatMatchTimeFull, formatPercent, formatOdds, formatDense, formatBestPrice, formatNetPayout, formatTimeWithSeconds } from '~/utils/formatters'
 import { highlightClass } from '~/utils/styleHelpers'
 
@@ -79,8 +80,138 @@ function toggleExpand(row: AsianHcRow) {
   expandedKey.value = expandedKey.value === key ? null : key
 }
 
-function toggleBigExpand(pcId: number) {
-  expandedBigPcId.value = expandedBigPcId.value === pcId ? null : pcId
+// ── 大注展开：前一条记录懒加载 + RawData 解析缓存 ──
+const { fetchPrevious: fetchBigPrevious, clearCache: clearBigPrevCache, loadingPcId: bigLoadingPcId, failedPcIds: bigFailedPcIds, cache: bigPrevCache } = useBigHoldDetail('/api/asianbighold/previous')
+
+/** 大注当前记录 RawData 解析缓存 */
+const bigCurrentParsedCache = reactive(new Map<number, PriceSizeRow[]>())
+/** 大注前一条记录 RawData 解析缓存 */
+const bigPreviousParsedCache = reactive(new Map<number, PriceSizeRow[]>())
+
+/** 从展开 key 提取真实 pcId（去除 holdList/windowBigList 偏移） */
+function realPcId(expandKey: number): number {
+  if (expandKey >= 200000) return expandKey - 200000
+  if (expandKey >= 100000) return expandKey - 100000
+  return expandKey
+}
+
+async function toggleBigExpand(expandKey: number) {
+  if (expandedBigPcId.value === expandKey) {
+    expandedBigPcId.value = null
+    return
+  }
+  expandedBigPcId.value = expandKey
+
+  const pcId = realPcId(expandKey)
+  // 查找对应的 AsianBigItem
+  const item = findBigItem(pcId)
+  if (!item) return
+
+  // 解析当前记录 RawData
+  if (!bigCurrentParsedCache.has(pcId)) {
+    bigCurrentParsedCache.set(pcId, item.rawData ? parseRawData(item.rawData) : [])
+  }
+
+  // 懒加载前一条记录
+  if (!bigPrevCache.has(pcId)) {
+    const prev = await fetchBigPrevious(pcId, item.marketId, item.selectionId, item.refreshTime, { handicap: String(item.handicap) })
+    if (prev?.rawData) {
+      bigPreviousParsedCache.set(pcId, parseRawData(prev.rawData))
+    }
+  }
+}
+
+/** 根据真实 pcId 在所有大注列表中查找 AsianBigItem */
+function findBigItem(pcId: number): AsianBigItem | undefined {
+  return bigList.value.find(b => b.pcId === pcId)
+    ?? holdList.value.find(b => b.pcId === pcId)
+    ?? windowBigLists.value.flatMap(wbl => wbl.items).find(b => b.pcId === pcId)
+}
+
+/** 获取大注当前记录解析数据 */
+function getBigCurrentRows(pcId: number): PriceSizeRow[] {
+  return bigCurrentParsedCache.get(pcId) ?? []
+}
+
+/** 获取大注前一条记录解析数据 */
+function getBigPreviousRows(pcId: number): PriceSizeRow[] {
+  return bigPreviousParsedCache.get(pcId) ?? []
+}
+
+/** 获取大注成交差额 */
+function getBigDiffRows(pcId: number): PriceSizeRow[] {
+  const current = getBigCurrentRows(pcId)
+  const previous = getBigPreviousRows(pcId)
+  if (current.length === 0 || previous.length === 0) return []
+  return calcTradedDiff(current, previous)
+}
+
+/** 重试加载前一条记录 */
+async function retryBigFetchPrevious(pcId: number) {
+  const item = findBigItem(pcId)
+  if (!item) return
+  const prev = await fetchBigPrevious(pcId, item.marketId, item.selectionId, item.refreshTime, { handicap: String(item.handicap) })
+  if (prev?.rawData) {
+    bigPreviousParsedCache.set(pcId, parseRawData(prev.rawData))
+  }
+}
+
+/**
+ * 计算成交差额价位 > 4 的大单 pcId 集合（用于 Handicap 高亮）。
+ * 需要先展开行或 prefetch 过前一条记录才能计算。
+ */
+const bigDiffHighlightSet = computed<Set<number>>(() => {
+  const set = new Set<number>()
+  // 遍历所有已缓存前一条记录的 pcId
+  for (const [pcId] of bigPrevCache) {
+    const diffRows = getBigDiffRows(pcId)
+    if (diffRows.length > 4) {
+      set.add(pcId)
+    }
+  }
+  return set
+})
+
+/** 批量预取所有大注的前一条记录（用于计算差额高亮） */
+async function prefetchAllBigPrevious() {
+  const allItems: AsianBigItem[] = [
+    ...bigList.value,
+    ...holdList.value,
+    ...windowBigLists.value.flatMap(wbl => wbl.items),
+  ]
+  // 去重
+  const seen = new Set<number>()
+  const unique = allItems.filter((item) => {
+    if (seen.has(item.pcId)) return false
+    seen.add(item.pcId)
+    return true
+  })
+
+  const tasks = unique
+    .filter(item => !bigPrevCache.has(item.pcId))
+    .map(async (item) => {
+      // 解析当前记录 RawData
+      if (!bigCurrentParsedCache.has(item.pcId)) {
+        bigCurrentParsedCache.set(item.pcId, item.rawData ? parseRawData(item.rawData) : [])
+      }
+      const prev = await fetchBigPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime, { handicap: String(item.handicap) })
+      if (prev?.rawData) {
+        bigPreviousParsedCache.set(item.pcId, parseRawData(prev.rawData))
+      }
+    })
+  await Promise.allSettled(tasks)
+}
+
+// 当数据加载完成后自动预取所有大注的前一条记录
+watch(() => result.value, (val) => {
+  if (val) {
+    nextTick(() => prefetchAllBigPrevious())
+  }
+}, { immediate: true })
+
+/** Handicap 列大注差额高亮（成交差额 > 4 个价位） */
+function bigDiffHandicapClass(item: AsianBigItem): string {
+  return bigDiffHighlightSet.value.has(item.pcId) ? 'td-highlight' : ''
 }
 
 // ── 当前 Tab 对应的 windowBigList（按 hoursOffset 匹配）──
@@ -109,11 +240,6 @@ function getLastPriceRows(row: AsianHcRow): PriceSizeRow[] {
   return parseRawData(lp.rawData)
 }
 
-function getBigRawDataRows(item: AsianBigItem): PriceSizeRow[] {
-  if (!item.rawData) return []
-  return parseRawData(item.rawData)
-}
-
 function hasLargeOrder(row: AsianHcRow): boolean {
   const lp = findLastPrice(row)
   return lp?.hasLargeOrderAt500Or1000 ?? false
@@ -124,6 +250,9 @@ function setOrder(newOrder: number) {
   orderParam.value = newOrder
   expandedKey.value = null
   expandedBigPcId.value = null
+  clearBigPrevCache()
+  bigCurrentParsedCache.clear()
+  bigPreviousParsedCache.clear()
 }
 
 // ── 判断 groups 是否有数据 ──
@@ -341,7 +470,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
               <tbody>
                 <template v-for="group in (activeWindow.homeGroups ?? [])" :key="'hg-' + group.label">
                   <tr v-if="group.rows.length > 0" class="band-header">
-                    <td colspan="13">{{ group.label }}</td>
+                    <td colspan="13">&nbsp;</td>
                   </tr>
                   <template v-for="row in group.rows" :key="'hr-' + rowKey(row)">
                     <tr :class="['data-row', effectiveRouteClass(row), largeOrderClass(row), { 'row-expanded': expandedKey === rowKey(row) }]">
@@ -416,7 +545,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
               </thead>
               <tbody>
                 <template v-for="group in (activeWindow.awayGroups ?? [])" :key="'ag-' + group.label">
-                  <tr v-if="group.rows.length > 0" class="band-header"><td colspan="13">{{ group.label }}</td></tr>
+                  <tr v-if="group.rows.length > 0" class="band-header"><td colspan="13">&nbsp;</td></tr>
                   <template v-for="row in group.rows" :key="'ar-' + rowKey(row)">
                     <tr :class="['data-row', effectiveRouteClass(row), largeOrderClass(row), { 'row-expanded': expandedKey === rowKey(row) }]">
                       <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" @click="toggleExpand(row)">{{ row.displayName }}</td>
@@ -500,18 +629,77 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in activeWindowBigList.items" :key="'wbi-' + item.pcId" :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]">
-                  <td class="col-hc-val">{{ item.selection }}</td>
-                  <td>{{ item.lastOdds.toFixed(2) }}</td>
-                  <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
-                  <td>{{ item.tradedAttr }}</td>
-                  <td>{{ formatMoney(item.hold) }}</td>
-                  <td>{{ item.payout.toFixed(0) }}</td>
-                  <td>{{ (item.per * 100).toFixed(0) }}%</td>
-                  <td>{{ item.weight.toFixed(0) }}</td>
-                  <td><span :class="['pmark-badge', pmarkClass(item.pMark)]">{{ item.pMark }}</span></td>
-                  <td :style="colorGroupStyle(item)">{{ formatTime(item.refreshTime) }}</td>
-                </tr>
+                <template v-for="item in activeWindowBigList.items" :key="'wbi-' + item.pcId">
+                  <tr :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item.pcId + 200000)">
+                    <td :class="['col-hc-val', bigDiffHandicapClass(item)]">{{ item.selection }}</td>
+                    <td>{{ item.lastOdds.toFixed(2) }}</td>
+                    <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
+                    <td>{{ item.tradedAttr }}</td>
+                    <td>{{ formatMoney(item.hold) }}</td>
+                    <td>{{ item.payout.toFixed(0) }}</td>
+                    <td>{{ (item.per * 100).toFixed(0) }}%</td>
+                    <td>{{ item.weight.toFixed(0) }}</td>
+                    <td><span :class="['pmark-badge', pmarkClass(item.pMark)]">{{ item.pMark }}</span></td>
+                    <td :style="colorGroupStyle(item)">{{ formatTime(item.refreshTime) }}</td>
+                  </tr>
+                  <tr v-if="expandedBigPcId === item.pcId + 200000" class="expand-row">
+                    <td colspan="10">
+                      <div class="expand-content">
+                        <div class="detail-panels">
+                          <!-- 当前记录 -->
+                          <div class="detail-panel">
+                            <div class="panel-title">当前记录</div>
+                            <table v-if="getBigCurrentRows(item.pcId).length > 0" class="detail-table">
+                              <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
+                              <tbody>
+                                <tr v-for="pr in getBigCurrentRows(item.pcId)" :key="'wc-' + pr.price">
+                                  <td :class="priceBgClass(pr)">{{ pr.price }}</td>
+                                  <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
+                                  <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
+                                  <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div v-else class="panel-empty">无明细数据</div>
+                          </div>
+                          <!-- 前一条记录 -->
+                          <div class="detail-panel">
+                            <div class="panel-title">前一条记录</div>
+                            <div v-if="bigLoadingPcId === item.pcId" class="panel-loading"><span class="spinner"></span> 加载中...</div>
+                            <div v-else-if="bigFailedPcIds.has(item.pcId)" class="panel-error">获取失败，<span class="retry-link" @click.stop="retryBigFetchPrevious(item.pcId)">点击重试</span></div>
+                            <div v-else-if="bigPrevCache.has(item.pcId) && !bigPrevCache.get(item.pcId)" class="panel-empty">无前一条记录</div>
+                            <table v-else-if="getBigPreviousRows(item.pcId).length > 0" class="detail-table">
+                              <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
+                              <tbody>
+                                <tr v-for="pr in getBigPreviousRows(item.pcId)" :key="'wp-' + pr.price">
+                                  <td :class="priceBgClass(pr)">{{ pr.price }}</td>
+                                  <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
+                                  <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
+                                  <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div v-else class="panel-empty">等待数据...</div>
+                          </div>
+                          <!-- 成交差额 -->
+                          <div class="detail-panel">
+                            <div class="panel-title">成交差额</div>
+                            <table v-if="getBigDiffRows(item.pcId).length > 0" class="detail-table diff-table">
+                              <thead><tr><th>价位</th><th>差额</th></tr></thead>
+                              <tbody>
+                                <tr v-for="pr in getBigDiffRows(item.pcId)" :key="'wd-' + pr.price">
+                                  <td>{{ pr.price }}</td>
+                                  <td class="diff-val">+{{ formatMoney(pr.traded) }}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div v-else class="panel-empty">{{ getBigPreviousRows(item.pcId).length > 0 ? '无变化' : '等待前一条数据...' }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
@@ -532,7 +720,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
             <tbody>
               <template v-for="item in bigList" :key="'bg-' + item.pcId">
                 <tr :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item.pcId)">
-                  <td class="col-hc-val">{{ item.selection }}</td>
+                  <td :class="['col-hc-val', bigDiffHandicapClass(item)]">{{ item.selection }}</td>
                   <td>{{ item.lastOdds.toFixed(2) }}</td>
                   <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
                   <td>{{ item.tradedAttr }}</td>
@@ -546,20 +734,56 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                 <tr v-if="expandedBigPcId === item.pcId" class="expand-row">
                   <td colspan="10">
                     <div class="expand-content">
-                      <div class="detail-panel">
-                        <div class="panel-title">当前记录 RawData</div>
-                        <table v-if="getBigRawDataRows(item).length > 0" class="detail-table">
-                          <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
-                          <tbody>
-                            <tr v-for="pr in getBigRawDataRows(item)" :key="'bpr-' + pr.price">
-                              <td :class="priceBgClass(pr)">{{ pr.price }}</td>
-                              <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
-                              <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
-                              <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <div v-else class="panel-empty">无 RawData</div>
+                      <div class="detail-panels">
+                        <!-- 当前记录 -->
+                        <div class="detail-panel">
+                          <div class="panel-title">当前记录</div>
+                          <table v-if="getBigCurrentRows(item.pcId).length > 0" class="detail-table">
+                            <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
+                            <tbody>
+                              <tr v-for="pr in getBigCurrentRows(item.pcId)" :key="'bc-' + pr.price">
+                                <td :class="priceBgClass(pr)">{{ pr.price }}</td>
+                                <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
+                                <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
+                                <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="panel-empty">无明细数据</div>
+                        </div>
+                        <!-- 前一条记录 -->
+                        <div class="detail-panel">
+                          <div class="panel-title">前一条记录</div>
+                          <div v-if="bigLoadingPcId === item.pcId" class="panel-loading"><span class="spinner"></span> 加载中...</div>
+                          <div v-else-if="bigFailedPcIds.has(item.pcId)" class="panel-error">获取失败，<span class="retry-link" @click.stop="retryBigFetchPrevious(item.pcId)">点击重试</span></div>
+                          <div v-else-if="bigPrevCache.has(item.pcId) && !bigPrevCache.get(item.pcId)" class="panel-empty">无前一条记录</div>
+                          <table v-else-if="getBigPreviousRows(item.pcId).length > 0" class="detail-table">
+                            <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
+                            <tbody>
+                              <tr v-for="pr in getBigPreviousRows(item.pcId)" :key="'bp-' + pr.price">
+                                <td :class="priceBgClass(pr)">{{ pr.price }}</td>
+                                <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
+                                <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
+                                <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="panel-empty">等待数据...</div>
+                        </div>
+                        <!-- 成交差额 -->
+                        <div class="detail-panel">
+                          <div class="panel-title">成交差额</div>
+                          <table v-if="getBigDiffRows(item.pcId).length > 0" class="detail-table diff-table">
+                            <thead><tr><th>价位</th><th>差额</th></tr></thead>
+                            <tbody>
+                              <tr v-for="pr in getBigDiffRows(item.pcId)" :key="'bd-' + pr.price">
+                                <td>{{ pr.price }}</td>
+                                <td class="diff-val">+{{ formatMoney(pr.traded) }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="panel-empty">{{ getBigPreviousRows(item.pcId).length > 0 ? '无变化' : '等待前一条数据...' }}</div>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -584,7 +808,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
             <tbody>
               <template v-for="item in holdList" :key="'hl-' + item.pcId">
                 <tr :class="['data-row', 'big-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item.pcId + 100000)">
-                  <td class="col-hc-val">{{ item.selection }}</td>
+                  <td :class="['col-hc-val', bigDiffHandicapClass(item)]">{{ item.selection }}</td>
                   <td>{{ item.lastOdds.toFixed(2) }}</td>
                   <td :class="highlightClass(item.amountHighlight)">{{ formatMoney(item.tradedChange) }}</td>
                   <td>{{ item.tradedAttr }}</td>
@@ -598,20 +822,56 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                 <tr v-if="expandedBigPcId === item.pcId + 100000" class="expand-row">
                   <td colspan="10">
                     <div class="expand-content">
-                      <div class="detail-panel">
-                        <div class="panel-title">当前记录 RawData</div>
-                        <table v-if="getBigRawDataRows(item).length > 0" class="detail-table">
-                          <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
-                          <tbody>
-                            <tr v-for="pr in getBigRawDataRows(item)" :key="'hpr-' + pr.price">
-                              <td :class="priceBgClass(pr)">{{ pr.price }}</td>
-                              <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
-                              <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
-                              <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <div v-else class="panel-empty">无 RawData</div>
+                      <div class="detail-panels">
+                        <!-- 当前记录 -->
+                        <div class="detail-panel">
+                          <div class="panel-title">当前记录</div>
+                          <table v-if="getBigCurrentRows(item.pcId).length > 0" class="detail-table">
+                            <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
+                            <tbody>
+                              <tr v-for="pr in getBigCurrentRows(item.pcId)" :key="'hc-' + pr.price">
+                                <td :class="priceBgClass(pr)">{{ pr.price }}</td>
+                                <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
+                                <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
+                                <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="panel-empty">无明细数据</div>
+                        </div>
+                        <!-- 前一条记录 -->
+                        <div class="detail-panel">
+                          <div class="panel-title">前一条记录</div>
+                          <div v-if="bigLoadingPcId === item.pcId" class="panel-loading"><span class="spinner"></span> 加载中...</div>
+                          <div v-else-if="bigFailedPcIds.has(item.pcId)" class="panel-error">获取失败，<span class="retry-link" @click.stop="retryBigFetchPrevious(item.pcId)">点击重试</span></div>
+                          <div v-else-if="bigPrevCache.has(item.pcId) && !bigPrevCache.get(item.pcId)" class="panel-empty">无前一条记录</div>
+                          <table v-else-if="getBigPreviousRows(item.pcId).length > 0" class="detail-table">
+                            <thead><tr><th>价位</th><th>买(Back)</th><th>卖(Lay)</th><th>成交(Traded)</th></tr></thead>
+                            <tbody>
+                              <tr v-for="pr in getBigPreviousRows(item.pcId)" :key="'hp-' + pr.price">
+                                <td :class="priceBgClass(pr)">{{ pr.price }}</td>
+                                <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
+                                <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
+                                <td :class="tradedClass(pr)">{{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="panel-empty">等待数据...</div>
+                        </div>
+                        <!-- 成交差额 -->
+                        <div class="detail-panel">
+                          <div class="panel-title">成交差额</div>
+                          <table v-if="getBigDiffRows(item.pcId).length > 0" class="detail-table diff-table">
+                            <thead><tr><th>价位</th><th>差额</th></tr></thead>
+                            <tbody>
+                              <tr v-for="pr in getBigDiffRows(item.pcId)" :key="'hd-' + pr.price">
+                                <td>{{ pr.price }}</td>
+                                <td class="diff-val">+{{ formatMoney(pr.traded) }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="panel-empty">{{ getBigPreviousRows(item.pcId).length > 0 ? '无变化' : '等待前一条数据...' }}</div>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -713,7 +973,8 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .view-subtitle { margin-bottom: 8px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; font-size: 0.88rem; color: #166534; }
 
 /* ── Home / Away 分区头 ── */
-.side-header { display: flex; align-items: baseline; gap: 16px; padding: 8px 10px; margin-top: 12px; border-radius: 4px 4px 0 0; font-size: 0.9rem; flex-wrap: wrap; }
+/* V2.0: Away区与Home最后一行增加间距 */
+.side-header { display: flex; align-items: baseline; gap: 16px; padding: 8px 10px; margin-top: 24px; border-radius: 4px 4px 0 0; font-size: 0.9rem; flex-wrap: wrap; }
 .side-home { background: #fef2f2; border-left: 4px solid #c00; }
 .side-away { background: #eff6ff; border-left: 4px solid #00c; }
 .side-label { font-weight: 700; }
@@ -736,7 +997,8 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .col-attr-val { font-size: 0.82rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Band 分区头行 ── */
-.band-header td { background: #f1f3f5; font-weight: 600; font-size: 0.85rem; color: #555; text-align: left !important; padding: 4px 10px !important; border-bottom: 1px solid #d1d5db; }
+/* 灰色间隔栏（不显示文字） */
+.band-header td { background: #f1f3f5; font-size: 0; line-height: 0; padding: 3px 0 !important; border-bottom: 1px solid #d1d5db; }
 
 /* ── 小计行 ── */
 .subtotal-row td { background: #fafbfc; border-bottom: 2px solid #d1d5db; font-weight: 600; font-size: 0.85rem; }
@@ -792,6 +1054,14 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .text-traded-2x { color: #e67e22; font-weight: 700; }
 .text-traded-3x { color: #8e44ad; font-weight: 700; }
 .panel-empty { text-align: center; color: #999; padding: 12px 0; font-size: 0.85rem; }
+.panel-loading { text-align: center; color: #666; padding: 12px 0; font-size: 0.85rem; }
+.panel-error { text-align: center; color: #dc2626; padding: 12px 0; font-size: 0.85rem; }
+.retry-link { color: #2563eb; cursor: pointer; text-decoration: underline; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ddd; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 4px; }
+.detail-panels { display: flex; gap: 16px; flex-wrap: wrap; }
+.detail-panels .detail-panel { flex: 1; min-width: 200px; }
+.diff-table td { text-align: center; }
+.diff-val { color: #059669; font-weight: 600; }
 
 /* B9: 占比行 */
 .ratio-bar { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; padding: 6px 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.88rem; color: #0c4a6e; }
@@ -805,7 +1075,8 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .stats-chip b { color: #222; font-weight: 600; margin-left: 1px; font-variant-numeric: tabular-nums; }
 
 /* ── B3/B4/B5: 大注/Hold 表 ── */
-.big-section { margin-top: 16px; }
+/* V2.0: 大注TOP10与上方列表区域增加间距 */
+.big-section { margin-top: 32px; }
 .big-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; background: #fff; }
 .big-table th { background: #f5f5f5; padding: 5px 8px; text-align: center; font-weight: 600; border-bottom: 2px solid #d1d5db; white-space: nowrap; font-size: 0.85rem; }
 .big-table td { padding: 4px 8px; text-align: center; border-bottom: 1px solid #e5e7eb; font-variant-numeric: tabular-nums; }

@@ -109,9 +109,9 @@ export function densePercent(denseSize: number, totalBet: number): string {
   return ((denseSize / (totalBet + 0.0001)) * 100).toFixed(0) + '%'
 }
 
-/** Rank 1-4 映射到 red1-4 样式类 */
+/** V2.0: Rank 1-4 改为红色加粗文字（去掉背景色高亮） */
 export function rankClass(rank: number): string {
-  if (rank >= 1 && rank <= 4) return `red${rank}`
+  if (rank >= 1 && rank <= 4) return 'rank-top4'
   return ''
 }
 

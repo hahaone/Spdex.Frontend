@@ -93,12 +93,28 @@ function formatPer(val: number): string {
   return formatPercent(val, 0)
 }
 
-/** 占比条件颜色：<130%红色, >200%蓝色, 130-200%灰色 */
-function pctColorStyle(val: number | null | undefined): string {
+/**
+ * V2.0: 分时环比高亮规则
+ * <130% AND 分时成交量>40K → 红色加粗
+ * >500% AND 分时成交量>40K → 蓝色加粗
+ * 130%-500% → 灰色
+ */
+function pctColorStyle(val: number | null | undefined, totalAmount?: number): string {
   if (val == null) return ''
-  if (val < 130) return 'color:#c00;font-weight:bold'
-  if (val > 200) return 'color:#00c;font-weight:bold'
+  const hasVolume = (totalAmount ?? 0) > 40000
+  if (val < 130 && hasVolume) return 'color:#c00;font-weight:bold'
+  if (val > 500 && hasVolume) return 'color:#00c;font-weight:bold'
   return 'color:#888'
+}
+
+/** V2.0: 新增比例列 — Over/Under 在分时成交量中的占比 */
+function windowRatioDisplay(w: typeof windows.value[0]): string {
+  if (!w.odds) return '-'
+  const total = w.odds.totalAmount
+  if (total <= 0) return '-'
+  const op = (w.odds.overAmount / total * 100).toFixed(0)
+  const up = (w.odds.underAmount / total * 100).toFixed(0)
+  return `${op}% | ${up}%`
 }
 </script>
 
@@ -146,10 +162,11 @@ function pctColorStyle(val: number | null | undefined): string {
               <th class="st-label">窗口</th>
               <th class="st-amount">成交量</th>
               <th class="st-weight">必指</th>
-              <th class="st-payout">盈亏</th>
-              <th class="st-uk">UK Time</th>
-              <th class="st-pct">占比</th>
               <th class="st-pct-detail">比例</th>
+              <th class="st-payout">盈亏</th>
+              <th class="st-pct">分时环比</th>
+              <th class="st-pct-detail">环比大/小</th>
+              <th class="st-uk">Time</th>
             </tr>
           </thead>
           <tbody>
@@ -166,12 +183,12 @@ function pctColorStyle(val: number | null | undefined): string {
                 <template v-if="w.odds">{{ w.odds.overWeight.toFixed(0) }} | {{ w.odds.underWeight.toFixed(0) }}</template>
                 <template v-else>-</template>
               </td>
+              <td class="st-pct-detail">{{ windowRatioDisplay(w) }}</td>
               <td class="st-payout">
                 <template v-if="w.odds">{{ w.odds.overPayout.toFixed(0) }} | {{ w.odds.underPayout.toFixed(0) }}</template>
                 <template v-else>-</template>
               </td>
-              <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
-              <td class="st-pct" :style="pctColorStyle(w.amountPercent)">
+              <td class="st-pct" :style="pctColorStyle(w.amountPercent, w.odds?.totalAmount)">
                 <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
                 <template v-else>-</template>
               </td>
@@ -179,6 +196,7 @@ function pctColorStyle(val: number | null | undefined): string {
                 <template v-if="w.overAmountPercent != null || w.underAmountPercent != null">{{ w.overAmountPercent != null ? w.overAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.underAmountPercent != null ? w.underAmountPercent.toFixed(0) + '%' : '-' }}</template>
                 <template v-else>-</template>
               </td>
+              <td class="st-uk">{{ w.ukTime ?? '-' }}</td>
             </tr>
           </tbody>
         </table>

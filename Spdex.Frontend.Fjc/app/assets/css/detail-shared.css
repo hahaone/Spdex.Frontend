@@ -495,6 +495,8 @@
 .red2 { background: #df0000; color: #fff; }
 .red3 { background: #ff5353; color: #fff; }
 .red4 { background: #ff9f9f; color: #fff; }
+/* V2.0: Rank top4 红色加粗文字（不用背景色） */
+.rank-top4 { color: #c00 !important; font-weight: 700 !important; }
 .big_alert { border: 2px solid #0000ff; }
 
 /* ── gridtable 展开行 ── */

@@ -15,7 +15,7 @@ const buildSha = computed(() => {
     <header class="app-header">
       <div class="header-inner">
         <NuxtLink to="/" class="logo">
-          SPdex 竞彩工作室
+          <img src="/logo.png" alt="SPdex" class="logo-img">
         </NuxtLink>
         <nav class="main-nav">
           <NuxtLink
@@ -47,10 +47,12 @@ const buildSha = computed(() => {
   min-height: 100vh;
 }
 
+/* V2.0: 灰白底色 */
 .app-header {
-  background-color: #1a1a2e;
-  color: #fff;
+  background-color: #f5f5f5;
+  color: #333;
   padding: 0 1rem;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .header-inner {
@@ -59,14 +61,20 @@ const buildSha = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: 80px;
 }
 
+/* V2.0: Logo 图片 */
 .logo {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #fff;
+  display: flex;
+  align-items: center;
   text-decoration: none;
+}
+
+.logo-img {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
 }
 
 .main-nav {
@@ -75,16 +83,16 @@ const buildSha = computed(() => {
 }
 
 .nav-link {
-  color: #fff;
+  color: #444;
   text-decoration: none;
   font-size: 0.95rem;
+  font-weight: 600;
   transition: color 0.2s;
 }
 
 .nav-link:hover,
 .nav-link.router-link-active {
-  color: #fff;
-  opacity: 0.85;
+  color: #222;
 }
 
 .app-main {
