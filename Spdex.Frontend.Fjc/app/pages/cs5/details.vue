@@ -33,14 +33,15 @@ const odds0 = computed(() => result.value?.odds0)
 const bfQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
 const { data: bfData } = useBigHold(bfQueryParams)
 
-/** 标盘所有大注记录的 RefreshTime 集合（精确到秒） */
+/** 标盘当前分时 TOP20 的 RefreshTime 集合（精确到秒） */
 const bfTimeSet = computed<Set<string>>(() => {
   const set = new Set<string>()
   const bf = bfData.value?.data
   if (!bf) return set
-  // 所有时间窗口的 items
-  for (const win of bf.windows ?? [])
-    for (const item of win.items)
+  // 仅当前窗口（hoursOffset === 0）的 TOP20
+  const current = (bf.windows ?? []).find(w => w.hoursOffset === 0)
+  if (current)
+    for (const item of current.items)
       set.add(item.refreshTime.substring(0, 19))
   return set
 })
