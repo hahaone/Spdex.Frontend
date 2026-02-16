@@ -29,6 +29,7 @@ const expandedOddsPcId = ref<number | null>(null)    // LastPrice 展开
 
 // ── 前一条记录缓存（懒加载） ──
 const config = useRuntimeConfig()
+const token = useCookie('spdex_token')
 const prevCache = reactive(new Map<number, PreviousRecordResult | null>())
 const loadingPcId = ref<number | null>(null)
 const failedPcIds = reactive(new Set<number>())
@@ -52,9 +53,12 @@ async function fetchPrevious(item: Filter2Item): Promise<PreviousRecordResult | 
       refreshTime: item.refreshTime,
     })
 
+    const headers: Record<string, string> = {}
+    if (token.value) headers.Authorization = `Bearer ${token.value}`
+
     const resp = await $fetch<ApiResponse<PreviousRecordResult>>(
       `/api/bighold/previous?${params.toString()}`,
-      { baseURL },
+      { baseURL, headers },
     )
 
     const res = resp.data ?? null

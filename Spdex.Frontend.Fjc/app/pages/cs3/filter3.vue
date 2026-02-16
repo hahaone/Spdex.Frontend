@@ -36,6 +36,7 @@ const expandedPcId = ref<number | null>(null)
 
 // ── 前一条记录缓存 ──
 const config = useRuntimeConfig()
+const token = useCookie('spdex_token')
 const prevCache = reactive(new Map<number, PreviousRecordResult | null>())
 const loadingPrevPcId = ref<number | null>(null)
 const failedPrevPcIds = reactive(new Set<number>())
@@ -65,9 +66,12 @@ async function fetchPrevious(item: Filter3Item): Promise<PreviousRecordResult | 
       refreshTime: item.refreshTime,
     })
 
+    const headers: Record<string, string> = {}
+    if (token.value) headers.Authorization = `Bearer ${token.value}`
+
     const resp = await $fetch<ApiResponse<PreviousRecordResult>>(
       `/api/bighold/previous?${params.toString()}`,
-      { baseURL },
+      { baseURL, headers },
     )
 
     const res = resp.data ?? null
@@ -102,9 +106,12 @@ async function fetchNext(item: Filter3Item): Promise<NextRecordResult | null> {
       refreshTime: item.refreshTime,
     })
 
+    const nextHeaders: Record<string, string> = {}
+    if (token.value) nextHeaders.Authorization = `Bearer ${token.value}`
+
     const resp = await $fetch<ApiResponse<NextRecordResult>>(
-      `/api/bighold/next?${params.toString()}`,
-      { baseURL },
+      `/api/bffilter/next?${params.toString()}`,
+      { baseURL, headers: nextHeaders },
     )
 
     const res = resp.data ?? null

@@ -8,6 +8,7 @@ import type { ApiResponse } from '~/types/api'
 
 export function useBigHoldDetail(endpoint: string = '/api/bighold/previous') {
   const config = useRuntimeConfig()
+  const token = useCookie('spdex_token')
 
   /** 缓存：pcId → PreviousRecordResult（null 表示"无前一条记录"，区别于"未请求"） */
   const cache = reactive(new Map<number, PreviousRecordResult | null>())
@@ -48,9 +49,14 @@ export function useBigHoldDetail(endpoint: string = '/api/bighold/previous') {
         ...extraParams,
       })
 
+      const headers: Record<string, string> = {}
+      if (token.value) {
+        headers.Authorization = `Bearer ${token.value}`
+      }
+
       const resp = await $fetch<ApiResponse<PreviousRecordResult>>(
         `${endpoint}?${params.toString()}`,
-        { baseURL },
+        { baseURL, headers },
       )
 
       const result = resp.data ?? null
