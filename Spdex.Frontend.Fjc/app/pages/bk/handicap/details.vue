@@ -76,7 +76,9 @@ function holdBetRatio(subtotal: { grandTotalBet: number, grandTotalHold: number 
 const odds0Display = computed(() => {
   if (!odds0.value) return ''
   const o = odds0.value
-  return `主: ${o.homeWeight.toFixed(2)} | 平: ${o.drawWeight.toFixed(2)} | 客: ${o.awayWeight.toFixed(2)}`
+  const homeName = matchInfo.value?.homeTeam ?? '主'
+  const awayName = matchInfo.value?.guestTeam ?? '客'
+  return `${homeName}: ${o.homeWeight.toFixed(2)} | 平: ${o.drawWeight.toFixed(2)} | ${awayName}: ${o.awayWeight.toFixed(2)}`
 })
 
 // ── 行展开 ──
@@ -113,10 +115,11 @@ function getLastPriceRows(row: AsianHcRow): PriceSizeRow[] {
   return parseRawData(lp.rawData)
 }
 
-// ── 显示名称（AH 用 Home/Away + handicap） ──
+// ── 显示名称：篮球统一用队名 + handicap，避免和标盘主客对不上 ──
+// orderIndex=1 始终对应 DB HomeTeam，orderIndex=2 对应 DB GuestTeam
 function selectionView(row: AsianHcRow): string {
-  const label = row.orderIndex === 1 ? 'Home' : 'Away'
-  return `${label} ${row.handicap >= 0 ? '+' : ''}${row.handicap.toFixed(1)}`
+  const name = row.orderIndex === 1 ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam
+  return `${name} ${row.handicap >= 0 ? '+' : ''}${row.handicap.toFixed(1)}`
 }
 
 // ── 高亮 ──
@@ -124,6 +127,13 @@ function maxBetCls(row: AsianHcRow) { return row.maxBetHighlight >= 2 ? 'hl-brig
 function totalBetCls(row: AsianHcRow) { return row.totalBetHighlight >= 2 ? 'hl-bright' : row.totalBetHighlight >= 1 ? 'hl-light' : '' }
 function maxHoldCls(row: AsianHcRow) { return row.maxHoldHighlight >= 2 ? 'hl-bright' : row.maxHoldHighlight >= 1 ? 'hl-light' : '' }
 function totalHoldCls(row: AsianHcRow) { return row.totalHoldHighlight >= 2 ? 'hl-bright' : row.totalHoldHighlight >= 1 ? 'hl-light' : '' }
+
+// ── 大注/Hold 列表用队名替换后端的"主"/"客"标签 ──
+function bigSelectionView(item: AsianBigItem): string {
+  const name = item.orderIndex === 1 ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam
+  const hc = item.handicap
+  return `${name} ${hc >= 0 ? '+' : ''}${hc.toFixed(2)}`
+}
 
 // ── 分时段汇总（前4个） ──
 const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
@@ -185,7 +195,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
               </template>
               <!-- Home 小计 -->
               <tr v-if="homeSubtotal" class="subtotal-row subtotal-home">
-                <td colspan="8" class="subtotal-label">Home 小计</td>
+                <td colspan="8" class="subtotal-label">{{ displayHomeTeam }} 小计</td>
                 <td>{{ formatMoney(homeSubtotal.grandTotalBet) }}</td>
                 <td>{{ formatMoney(homeSubtotal.grandMaxHold) }}</td>
                 <td>{{ formatMoney(homeSubtotal.grandTotalHold) }}</td>
@@ -236,7 +246,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
               </template>
               <!-- Away 小计 -->
               <tr v-if="awaySubtotal" class="subtotal-row subtotal-away">
-                <td colspan="8" class="subtotal-label">Away 小计</td>
+                <td colspan="8" class="subtotal-label">{{ displayAwayTeam }} 小计</td>
                 <td>{{ formatMoney(awaySubtotal.grandTotalBet) }}</td>
                 <td>{{ formatMoney(awaySubtotal.grandMaxHold) }}</td>
                 <td>{{ formatMoney(awaySubtotal.grandTotalHold) }}</td>
@@ -272,7 +282,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
       <div v-if="volumeSummary4.length > 0" class="section">
         <h4>分时段成交汇总</h4>
         <table class="grid-table small-table">
-          <thead><tr><th>时间节点</th><th>Home</th><th>Away</th></tr></thead>
+          <thead><tr><th>时间节点</th><th>{{ matchInfo?.homeTeam ?? 'Home' }}</th><th>{{ matchInfo?.guestTeam ?? 'Away' }}</th></tr></thead>
           <tbody><tr v-for="v in volumeSummary4" :key="v.timing"><td>{{ v.timing }}</td><td>{{ formatMoney(v.homeAmount) }}</td><td>{{ formatMoney(v.awayAmount) }}</td></tr></tbody>
         </table>
       </div>
@@ -285,7 +295,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
           <tbody>
             <template v-for="item in bigList.slice(0, 10)" :key="item.pcId">
               <tr class="data-row" @click="toggleBigExpand(item, item.pcId)">
-                <td class="clickable"><strong>{{ item.selection }}</strong></td>
+                <td class="clickable"><strong>{{ bigSelectionView(item) }}</strong></td>
                 <td>{{ formatOdds(item.lastOdds) }}</td><td>{{ formatMoney(item.tradedChange) }}</td><td>{{ item.tradedAttr }}</td>
                 <td>{{ Math.round(item.payout) }}</td><td>{{ formatPercent(item.per / 100) }}</td><td>{{ Math.round(item.weight) }}</td>
                 <td>{{ item.pMark }}</td><td>{{ formatTimeWithSeconds(item.refreshTime) }}</td>
@@ -335,7 +345,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
           <thead><tr><th>Handicap</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Top Hold</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
           <tbody>
             <tr v-for="item in holdList.slice(0, 10)" :key="item.pcId">
-              <td>{{ item.selection }}</td><td>{{ formatOdds(item.lastOdds) }}</td><td>{{ formatMoney(item.tradedChange) }}</td><td>{{ item.tradedAttr }}</td>
+              <td>{{ bigSelectionView(item) }}</td><td>{{ formatOdds(item.lastOdds) }}</td><td>{{ formatMoney(item.tradedChange) }}</td><td>{{ item.tradedAttr }}</td>
               <td>{{ formatMoney(item.hold) }}</td><td>{{ Math.round(item.payout) }}</td><td>{{ formatPercent(item.per / 100) }}</td><td>{{ Math.round(item.weight) }}</td>
               <td>{{ item.pMark }}</td><td>{{ formatTimeWithSeconds(item.refreshTime) }}</td>
             </tr>
