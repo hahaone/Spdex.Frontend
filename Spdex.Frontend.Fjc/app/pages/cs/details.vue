@@ -73,6 +73,29 @@ function ratioColorStyle(ratio: number | null, totalBet?: number): string {
   return 'color:#666'
 }
 
+// ── 跨表共振：额外请求 OU2.5 数据，提取当前窗口 RefreshTime 集合 ──
+const uoQueryParams = computed(() => ({ id: eventId.value, marketType: 0, order: 0 }))
+const { data: uoData } = useUoBigHold(uoQueryParams)
+
+/** OU2.5 当前分时 TOP20 的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
+const uoTimeSet = computed<Set<string>>(() => {
+  const set = new Set<string>()
+  const uo = uoData.value?.data
+  if (!uo) return set
+  // 仅当前窗口（hoursOffset === 0）的 items (TOP20)
+  const current = (uo.windows ?? []).find(w => w.hoursOffset === 0)
+  if (current)
+    for (const item of current.items)
+      set.add(item.refreshTime.substring(0, 19))
+  return set
+})
+
+/** 判断 GL 大注记录是否与 OU2.5 共振（同一秒有大注） */
+function isResonant(big: GlBigItem): boolean {
+  if (uoTimeSet.value.size === 0) return false
+  return uoTimeSet.value.has(big.refreshTime.substring(0, 19))
+}
+
 // ── 大注 & Hold ──
 const bigList = computed<GlBigItem[]>(() => pageData.value?.bigList ?? [])
 const holdList = computed<GlBigItem[]>(() => pageData.value?.holdList ?? [])
@@ -413,7 +436,7 @@ function toggleSection(key: string) {
         <thead><tr><th>Handicap</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
         <tbody>
           <template v-for="big in bigList" :key="big.pcId">
-            <tr style="cursor:pointer" @click="toggleBigRow(big)">
+            <tr :class="{ 'row-resonant': isResonant(big) }" style="cursor:pointer" @click="toggleBigRow(big)">
               <td :class="{ tdhighlight: isBigHighlighted(big) }"><strong>{{ big.selectionName }}</strong></td>
               <td>{{ big.lastOdds.toFixed(2) }}</td>
               <td>{{ formatMoney(big.tradedChange) }}</td>
@@ -634,4 +657,16 @@ th.st-amount { white-space: nowrap; min-width: 100px; }
 td.st-weight { white-space: nowrap; }
 td.st-ratio { font-variant-numeric: tabular-nums; white-space: nowrap; }
 th.st-ratio { white-space: nowrap; min-width: 120px; }
+
+/* ── 跨表共振高亮（GL 与 OU2.5 同一时间均有大注时整行突出显示） ── */
+.row-resonant {
+  background: #fef9e7 !important;
+  border-left: 4px solid #f59e0b !important;
+}
+.row-resonant:hover {
+  background: #fef3c7 !important;
+}
+.row-resonant td:first-child {
+  padding-left: 8px !important;
+}
 </style>

@@ -23,6 +23,29 @@ const bigList = computed(() => result.value?.bigList ?? [])
 const holdList = computed(() => result.value?.holdList ?? [])
 const odds0 = computed(() => result.value?.odds0)
 
+// ── 跨表共振：额外请求标盘数据，提取当前窗口 RefreshTime 集合 ──
+const bfQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
+const { data: bfData } = useBigHold(bfQueryParams)
+
+/** 标盘当前分时 TOP20 的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
+const bfTimeSet = computed<Set<string>>(() => {
+  const set = new Set<string>()
+  const bf = bfData.value?.data
+  if (!bf) return set
+  // 仅当前窗口（hoursOffset === 0）的 TOP20
+  const current = (bf.windows ?? []).find(w => w.hoursOffset === 0)
+  if (current)
+    for (const item of current.items)
+      set.add(item.refreshTime.substring(0, 19))
+  return set
+})
+
+/** 判断亚盘大注记录是否与标盘共振（同一秒有大注） */
+function isResonant(item: AsianBigItem): boolean {
+  if (bfTimeSet.value.size === 0) return false
+  return bfTimeSet.value.has(item.refreshTime.substring(0, 19))
+}
+
 // ── NBA 判断：NBA 或含 " @ " 的赛事，让球盘的 OrderIndex 与 HomeTeamId 是反的 ──
 // DB 中 HomeTeam/GuestTeam 是正确的主客关系，但让球盘的 OrderIndex=1 对应的
 // 实际上是 GuestTeamId 的 selection，所以显示队名时需要翻转。
@@ -82,7 +105,7 @@ function toggleExpand(row: AsianHcRow) {
 
 // ── 大注展开 ──
 const expandedBigPcId = ref<number | null>(null)
-const { fetchPrevious } = useBigHoldDetail('/api/asianbighold/previous')
+const { fetchPrevious, cache: bigPrevCache } = useBigHoldDetail('/api/asianbighold/previous')
 const bigCurrentParsedCache = reactive(new Map<number, PriceSizeRow[]>())
 const bigPreviousParsedCache = reactive(new Map<number, PriceSizeRow[]>())
 
@@ -94,6 +117,66 @@ async function toggleBigExpand(item: AsianBigItem, expandKey: number) {
   const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime, { handicap: item.handicap.toString() })
   if (prev?.rawData && !bigPreviousParsedCache.has(expandKey))
     bigPreviousParsedCache.set(expandKey, parseRawData(prev.rawData))
+}
+
+// ── 深度高亮：4+ 价位差额 → Handicap 列黄色高亮（与足球亚盘 cs5 一致） ──
+/**
+ * 计算成交差额价位 > 3 的大单 pcId 集合（用于 Handicap 高亮）。
+ * 需要先 prefetch 过前一条记录才能计算。
+ */
+const bigDiffHighlightSet = computed<Set<number>>(() => {
+  const set = new Set<number>()
+  for (const [pcId] of bigPrevCache) {
+    const current = bigCurrentParsedCache.get(pcId)
+    const prev = bigPreviousParsedCache.get(pcId)
+    if (!current || !prev) continue
+    const diffRows = calcTradedDiff(current, prev)
+    if (diffRows.length > 3) {
+      set.add(pcId)
+    }
+  }
+  return set
+})
+
+/** 批量预取所有大注的前一条记录（用于计算差额高亮） */
+async function prefetchAllBigPrevious() {
+  const allItems: AsianBigItem[] = [
+    ...bigList.value,
+    ...holdList.value,
+  ]
+  // 去重
+  const seen = new Set<number>()
+  const unique = allItems.filter((item) => {
+    if (seen.has(item.pcId)) return false
+    seen.add(item.pcId)
+    return true
+  })
+
+  const tasks = unique
+    .filter(item => !bigPrevCache.has(item.pcId))
+    .map(async (item) => {
+      // 解析当前记录 RawData
+      if (!bigCurrentParsedCache.has(item.pcId)) {
+        bigCurrentParsedCache.set(item.pcId, item.rawData ? parseRawData(item.rawData) : [])
+      }
+      const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime, { handicap: item.handicap.toString() })
+      if (prev?.rawData) {
+        bigPreviousParsedCache.set(item.pcId, parseRawData(prev.rawData))
+      }
+    })
+  await Promise.allSettled(tasks)
+}
+
+// 当数据加载完成后自动预取所有大注的前一条记录
+watch(() => result.value, (val) => {
+  if (val) {
+    nextTick(() => prefetchAllBigPrevious())
+  }
+}, { immediate: true })
+
+/** Handicap 列大注差额高亮（成交差额 > 3 个价位） */
+function bigDiffHandicapClass(item: AsianBigItem): string {
+  return bigDiffHighlightSet.value.has(item.pcId) ? 'td-highlight' : ''
 }
 
 // ── LastPrice 解析 ──
@@ -290,8 +373,8 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
           <thead><tr><th>Handicap</th><th>Odds</th><th>TradedChange</th><th>Attr</th><th>Payout</th><th>Per</th><th>Weight</th><th>P Mark</th><th>Update Time</th></tr></thead>
           <tbody>
             <template v-for="item in bigList.slice(0, 10)" :key="item.pcId">
-              <tr class="data-row" @click="toggleBigExpand(item, item.pcId)">
-                <td class="clickable"><strong>{{ bigSelectionView(item) }}</strong></td>
+              <tr :class="['data-row', { 'row-resonant': isResonant(item) }]" @click="toggleBigExpand(item, item.pcId)">
+                <td class="clickable" :class="bigDiffHandicapClass(item)"><strong>{{ bigSelectionView(item) }}</strong></td>
                 <td>{{ formatOdds(item.lastOdds) }}</td><td>{{ formatMoney(item.tradedChange) }}</td><td>{{ item.tradedAttr }}</td>
                 <td>{{ Math.round(item.payout) }}</td><td>{{ formatPercent(item.per / 100) }}</td><td>{{ Math.round(item.weight) }}</td>
                 <td>{{ item.pMark }}</td><td>{{ formatTimeWithSeconds(item.refreshTime) }}</td>
@@ -391,6 +474,19 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
 .ex-table th { padding: 3px 6px; background: #e8e8e8; border: 1px solid #ddd; }
 .ex-table td { padding: 2px 6px; border: 1px solid #eee; }
 .back-bg { background: #A6D8FF; } .lay-bg { background: #FAC9D1; }
+.td-highlight { background: #ffff00 !important; font-weight: 700; }
 .loading { text-align: center; padding: 2rem; color: #666; }
 .error-msg { text-align: center; padding: 2rem; color: red; }
+
+/* ── 跨表共振高亮（亚盘与标盘同一时间均有大注时整行突出显示） ── */
+.row-resonant {
+  background: #fef9e7 !important;
+  border-left: 4px solid #f59e0b !important;
+}
+.row-resonant:hover {
+  background: #fef3c7 !important;
+}
+.row-resonant td:first-child {
+  padding-left: 8px !important;
+}
 </style>

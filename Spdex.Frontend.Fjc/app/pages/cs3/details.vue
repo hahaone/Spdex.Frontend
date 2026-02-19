@@ -25,7 +25,7 @@ const windows = computed(() => result.value?.windows ?? [])
 const asianQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
 const { data: asianData } = useAsianBigHold(asianQueryParams)
 
-/** 亚盘大注 TOP10 + P1 分时 TOP5 的 RefreshTime 集合（精确到秒） */
+/** 亚盘当前分时大注的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
 const asianTimeSet = computed<Set<string>>(() => {
   const set = new Set<string>()
   const asian = asianData.value?.data
@@ -33,11 +33,6 @@ const asianTimeSet = computed<Set<string>>(() => {
   // bigList（当前大注 TOP10）
   for (const item of asian.bigList ?? [])
     set.add(item.refreshTime.substring(0, 19))
-  // 仅 P1 分时（-1h）的 TOP5
-  const p1 = (asian.windowBigLists ?? []).find(wbl => wbl.hoursOffset === -1)
-  if (p1)
-    for (const item of p1.items)
-      set.add(item.refreshTime.substring(0, 19))
   return set
 })
 

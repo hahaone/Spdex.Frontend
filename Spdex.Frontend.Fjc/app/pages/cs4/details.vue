@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { BigHoldItemView, PriceSizeRow } from '~/types/bighold'
 import type { UoTimeWindowData } from '~/types/uobighold'
+import type { GlBigItem } from '~/types/glbighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime, formatPercent } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
@@ -24,6 +25,26 @@ const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
 const windows = computed(() => result.value?.windows ?? [])
 const volumeSummary = computed(() => result.value?.volumeSummary ?? [])
+
+// ── 跨表共振：额外请求 Goal Line 数据，提取 bigList RefreshTime 集合 ──
+const glQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
+const { data: glData } = useGlBigHold(glQueryParams)
+
+/** GL 大注 TOP10 的 RefreshTime 集合（精确到秒）——只用[当前]大注 */
+const glTimeSet = computed<Set<string>>(() => {
+  const set = new Set<string>()
+  const gl = glData.value?.data
+  if (!gl) return set
+  for (const item of gl.bigList ?? [])
+    set.add(item.refreshTime.substring(0, 19))
+  return set
+})
+
+/** 判断 OU 大注记录是否与 GL 共振（同一秒有大注） */
+function isResonant(item: BigHoldItemView): boolean {
+  if (glTimeSet.value.size === 0) return false
+  return glTimeSet.value.has(item.refreshTime.substring(0, 19))
+}
 
 useHead({
   title: computed(() => matchInfo.value
@@ -279,7 +300,7 @@ function windowRatioDisplay(w: typeof windows.value[0]): string {
             </thead>
             <tbody>
               <template v-for="item in activeWindow.items" :key="item.pcId">
-                <tr :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId }]">
+                <tr :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId, 'row-resonant': isResonant(item) }]">
                   <td
                     :class="['sel-cell', item.selection === '大' ? 'sel-over' : 'sel-under', { 'sel-large-order': hasLargeOrder(item.selectionId), 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
                     title="点击展开 Back/Lay/Traded 明细"
@@ -545,4 +566,16 @@ td.st-weight, td.st-payout { white-space: nowrap; }
 td.st-uk { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #555; white-space: nowrap; }
 td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
 td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── 跨表共振高亮（OU 与 GL 同一时间均有大注时整行突出显示） ── */
+.row-resonant {
+  background: #fef9e7 !important;
+  border-left: 4px solid #f59e0b !important;
+}
+.row-resonant:hover {
+  background: #fef3c7 !important;
+}
+.row-resonant td:first-child {
+  padding-left: 8px !important;
+}
 </style>
