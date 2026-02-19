@@ -23,47 +23,38 @@ const bigList = computed(() => result.value?.bigList ?? [])
 const holdList = computed(() => result.value?.holdList ?? [])
 const odds0 = computed(() => result.value?.odds0)
 
-// ── NBA 反转逻辑：NBA 或含 " @ " 的赛事，主客互换显示 ──
+// ── NBA 判断：NBA 或含 " @ " 的赛事，让球盘的 OrderIndex 与 HomeTeamId 是反的 ──
+// DB 中 HomeTeam/GuestTeam 是正确的主客关系，但让球盘的 OrderIndex=1 对应的
+// 实际上是 GuestTeamId 的 selection，所以显示队名时需要翻转。
+// 与旧站 csc5bk2.aspx.cs SelectionView 一致：不翻转区域，只翻转队名。
 const isNbaReverse = computed(() => {
   const path = matchInfo.value?.matchPath ?? ''
   return path.includes('NBA') || path.includes(' @ ')
 })
-const displayHomeTeam = computed(() =>
-  isNbaReverse.value ? matchInfo.value?.guestTeam : matchInfo.value?.homeTeam,
-)
-const displayAwayTeam = computed(() =>
-  isNbaReverse.value ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam,
-)
 
-// ── 页面 title ──
+// ── 页面 title（直接用 DB 的主客队名，DB 存的就是对的） ──
 useHead({
   title: computed(() => matchInfo.value
-    ? `篮球亚盘 ${displayHomeTeam.value}vs${displayAwayTeam.value}`
+    ? `篮球亚盘 ${matchInfo.value.homeTeam}vs${matchInfo.value.guestTeam}`
     : '篮球亚盘'),
 })
 
 // ── 当前窗口数据（只用第一个窗口 = "当前"） ──
 const currentWindow = computed<AsianTimeWindowData | null>(() => result.value?.windows?.[0] ?? null)
 
-// ── Home/Away 分组（扁平化所有 groups，NBA 反转时互换） ──
+// ── Home/Away 分组（不翻转区域，与旧站一致） ──
 const homeRows = computed<AsianHcRow[]>(() => {
   if (!currentWindow.value) return []
-  const groups = isNbaReverse.value ? currentWindow.value.awayGroups : currentWindow.value.homeGroups
-  return groups.flatMap(g => g.rows)
+  return currentWindow.value.homeGroups.flatMap(g => g.rows)
 })
 const awayRows = computed<AsianHcRow[]>(() => {
   if (!currentWindow.value) return []
-  const groups = isNbaReverse.value ? currentWindow.value.homeGroups : currentWindow.value.awayGroups
-  return groups.flatMap(g => g.rows)
+  return currentWindow.value.awayGroups.flatMap(g => g.rows)
 })
 
-// ── 小计（NBA 反转时互换） ──
-const homeSubtotal = computed(() =>
-  isNbaReverse.value ? currentWindow.value?.awaySubtotal : currentWindow.value?.homeSubtotal,
-)
-const awaySubtotal = computed(() =>
-  isNbaReverse.value ? currentWindow.value?.homeSubtotal : currentWindow.value?.awaySubtotal,
-)
+// ── 小计（不翻转，与旧站一致） ──
+const homeSubtotal = computed(() => currentWindow.value?.homeSubtotal)
+const awaySubtotal = computed(() => currentWindow.value?.awaySubtotal)
 const allSubtotal = computed(() => currentWindow.value?.allSubtotal)
 
 // ── TotalHold / TotalBet ratio ──
@@ -115,10 +106,12 @@ function getLastPriceRows(row: AsianHcRow): PriceSizeRow[] {
   return parseRawData(lp.rawData)
 }
 
-// ── 显示名称：篮球统一用队名 + handicap，避免和标盘主客对不上 ──
-// orderIndex=1 始终对应 DB HomeTeam，orderIndex=2 对应 DB GuestTeam
+// ── 显示名称：篮球统一用队名 + handicap（与旧站 SelectionView 完全一致） ──
+// 先按 orderIndex 取队名，NBA 时再翻转一次（因为让球盘 OrderIndex 与 TeamId 是反的）
 function selectionView(row: AsianHcRow): string {
-  const name = row.orderIndex === 1 ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam
+  let name = row.orderIndex === 1 ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam
+  if (isNbaReverse.value)
+    name = name === matchInfo.value?.homeTeam ? matchInfo.value?.guestTeam : matchInfo.value?.homeTeam
   return `${name} ${row.handicap >= 0 ? '+' : ''}${row.handicap.toFixed(1)}`
 }
 
@@ -129,8 +122,11 @@ function maxHoldCls(row: AsianHcRow) { return row.maxHoldHighlight >= 2 ? 'hl-br
 function totalHoldCls(row: AsianHcRow) { return row.totalHoldHighlight >= 2 ? 'hl-bright' : row.totalHoldHighlight >= 1 ? 'hl-light' : '' }
 
 // ── 大注/Hold 列表用队名替换后端的"主"/"客"标签 ──
+// 大注/Hold 不在翻转区域内，NBA 时需要翻转队名（与旧站 SelectionView 一致）
 function bigSelectionView(item: AsianBigItem): string {
-  const name = item.orderIndex === 1 ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam
+  let name = item.orderIndex === 1 ? matchInfo.value?.homeTeam : matchInfo.value?.guestTeam
+  if (isNbaReverse.value)
+    name = name === matchInfo.value?.homeTeam ? matchInfo.value?.guestTeam : matchInfo.value?.homeTeam
   const hc = item.handicap
   return `${name} ${hc >= 0 ? '+' : ''}${hc.toFixed(2)}`
 }
@@ -145,7 +141,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
     <div v-else-if="error" class="error-msg">加载失败：{{ error.message }}</div>
     <template v-if="result && matchInfo">
       <div class="page-header">
-        <h5>{{ displayHomeTeam }} vs {{ displayAwayTeam }}
+        <h5>{{ matchInfo?.homeTeam }} vs {{ matchInfo?.guestTeam }}
           <span>比赛时间: [{{ formatMatchTimeFull(matchInfo.matchTime) }}]</span>
         </h5>
       </div>
@@ -195,7 +191,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
               </template>
               <!-- Home 小计 -->
               <tr v-if="homeSubtotal" class="subtotal-row subtotal-home">
-                <td colspan="8" class="subtotal-label">{{ displayHomeTeam }} 小计</td>
+                <td colspan="8" class="subtotal-label">小计</td>
                 <td>{{ formatMoney(homeSubtotal.grandTotalBet) }}</td>
                 <td>{{ formatMoney(homeSubtotal.grandMaxHold) }}</td>
                 <td>{{ formatMoney(homeSubtotal.grandTotalHold) }}</td>
@@ -246,7 +242,7 @@ const volumeSummary4 = computed(() => volumeSummary.value.slice(0, 4))
               </template>
               <!-- Away 小计 -->
               <tr v-if="awaySubtotal" class="subtotal-row subtotal-away">
-                <td colspan="8" class="subtotal-label">{{ displayAwayTeam }} 小计</td>
+                <td colspan="8" class="subtotal-label">小计</td>
                 <td>{{ formatMoney(awaySubtotal.grandTotalBet) }}</td>
                 <td>{{ formatMoney(awaySubtotal.grandMaxHold) }}</td>
                 <td>{{ formatMoney(awaySubtotal.grandTotalHold) }}</td>
