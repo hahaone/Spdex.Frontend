@@ -301,7 +301,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
                 >
                   <td>{{ idx + 1 }}</td>
                   <td
-                    :class="['sel-cell', 'sel-' + item.selection, { 'sel-large-order': hasLargeOrder(item.selectionId), 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
+                    :class="['sel-cell', 'sel-' + item.selection, { 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
                     title="点击展开 Back/Lay/Traded 明细"
                     @click="toggleExpand(item)"
                   >{{ item.selection }}</td>
