@@ -289,6 +289,30 @@ function awayPercent(): string {
   return (at / total * 100).toFixed(1) + '%'
 }
 
+// ── 主客量比（主成交总量 / 客成交总量） ──
+const homeAwayVolumeRatio = computed<number | null>(() => {
+  if (!activeWindow.value) return null
+  const homeTotal = activeWindow.value.homeSubtotal?.grandTotalBet ?? 0
+  const awayTotal = activeWindow.value.awaySubtotal?.grandTotalBet ?? 0
+  if (homeTotal <= 0 || awayTotal <= 0) return null
+  return homeTotal / awayTotal
+})
+
+const homeAwayVolumeRatioText = computed(() => {
+  if (homeAwayVolumeRatio.value == null) return '--'
+  return homeAwayVolumeRatio.value.toFixed(3)
+})
+
+const homeAwayVolumeRatioClass = computed(() => {
+  const ratio = homeAwayVolumeRatio.value
+  if (ratio == null) return ''
+  if (ratio > 2) return 'ratio-red-bold'
+  if (ratio > 1 && ratio < 2) return 'ratio-red'
+  if (ratio < 0.5) return 'ratio-blue-bold'
+  if (ratio < 1 && ratio > 0.5) return 'ratio-blue'
+  return ''
+})
+
 // ── B23: TotalHold / TotalBet ratio ──
 function holdBetRatio(subtotal: { grandTotalBet: number, grandTotalHold: number } | undefined): string {
   if (!subtotal || subtotal.grandTotalBet === 0) return ''
@@ -388,6 +412,10 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
         <div class="match-meta">
           开赛时间：{{ formatMatchTime(matchInfo?.matchTime ?? '') }}
           &nbsp;|&nbsp; 亚盘 (Asian Handicap)
+          <template v-if="activeWindow">
+            &nbsp;|&nbsp; 主客量比：
+            <span :class="['home-away-ratio', homeAwayVolumeRatioClass]">{{ homeAwayVolumeRatioText }}</span>
+          </template>
           <template v-if="activeWindow && activeWindow.bestPriceHome > 0">
             &nbsp;|&nbsp; 合理价：
             <b class="best-price-home">Home {{ formatBestPrice(activeWindow.bestPriceHome) }}</b>
@@ -946,6 +974,11 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 .team-vs { margin: 0 8px; color: #666; font-weight: 400; }
 .team-away { color: #00c; font-weight: 600; }
 .match-meta { color: #666; font-size: 0.88rem; }
+.home-away-ratio { font-variant-numeric: tabular-nums; }
+.home-away-ratio.ratio-red { color: #dc2626; }
+.home-away-ratio.ratio-red-bold { color: #dc2626; font-weight: 700; }
+.home-away-ratio.ratio-blue { color: #1d4ed8; }
+.home-away-ratio.ratio-blue-bold { color: #1d4ed8; font-weight: 700; }
 .best-price-home { color: #c00; }
 .best-price-away { color: #00c; }
 
