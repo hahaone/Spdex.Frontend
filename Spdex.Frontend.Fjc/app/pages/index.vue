@@ -498,7 +498,9 @@ const detailLinks = [
                 <NuxtLink
                   v-for="link in detailLinks"
                   :key="link.path"
-                  :to="`/${link.path}/details?id=${item.match.eventId}`"
+                  :to="link.path === 'poly'
+                    ? `/poly/details?id=${item.match.eventId}&home=${encodeURIComponent(item.match.homeTeam)}&away=${encodeURIComponent(item.match.guestTeam)}&league=${encodeURIComponent(item.match.sortName || item.match.fullName)}`
+                    : `/${link.path}/details?id=${item.match.eventId}`"
                   :title="link.title"
                   class="detail-btn"
                   :style="{ backgroundColor: link.color }"

@@ -118,7 +118,7 @@ export interface PolymarketBookLevel {
 // ─── BSW API 响应包装 ───
 
 export interface BswApiResult<T> {
-  code: number
+  code: string | number
   info: string
   data: T
 }

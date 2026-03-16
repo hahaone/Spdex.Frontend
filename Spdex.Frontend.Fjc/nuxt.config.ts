@@ -42,6 +42,13 @@ export default defineNuxtConfig({
     dirs: ['composables', 'types'],
   },
 
+  // Disable path prefix for components (use filename only, not dir/Filename)
+  components: {
+    dirs: [
+      { path: '~/components', pathPrefix: false },
+    ],
+  },
+
   // Global CSS
   css: ['~/assets/css/global.css'],
 

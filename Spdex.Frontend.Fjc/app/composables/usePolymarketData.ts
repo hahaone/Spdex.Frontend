@@ -5,6 +5,13 @@ import type {
   PolymarketEventBookAggregate,
 } from '~/types/polymarket'
 
+/** BSW API 成功码 */
+const BSW_OK = '00000'
+
+function isBswOk(result: BswApiResult<unknown>): boolean {
+  return String(result.code) === BSW_OK
+}
+
 /**
  * Polymarket 数据 composable。
  * 通过 Spdex.WebApi 代理接口获取 BSW 的 Polymarket 数据。
@@ -18,20 +25,18 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const config = useRuntimeConfig()
   const token = useCookie('spdex_token')
 
   const primaryLink = computed(() => matchLinks.value[0] ?? null)
   const polymarketEventId = computed(() => primaryLink.value?.polymarketEventId ?? null)
 
-  /** 带 auth header 的 $fetch */
+  /** 带 auth header 的 $fetch（走 Nuxt proxy，避免 CORS） */
   function apiFetch<T>(path: string, params: Record<string, unknown> = {}) {
     const headers: Record<string, string> = {}
     if (token.value) {
       headers.Authorization = `Bearer ${token.value}`
     }
     return $fetch<T>(path, {
-      baseURL: config.public.apiBase as string,
       params,
       headers,
     })
@@ -51,7 +56,7 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
         { spdexEventId: eventId, refreshIfEmpty: true },
       )
 
-      if (linkResult.code !== 0 || !linkResult.data?.length) {
+      if (!isBswOk(linkResult) || !linkResult.data?.length) {
         matchLinks.value = []
         trades.value = null
         book.value = null
@@ -77,10 +82,19 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
         ),
       ])
 
-      trades.value = tradesResult.code === 0 ? tradesResult.data : null
-      book.value = bookResult.code === 0 ? bookResult.data : null
+      trades.value = isBswOk(tradesResult) ? tradesResult.data : null
+      book.value = isBswOk(bookResult) ? bookResult.data : null
+
+      // trades/book 失败时提示（但不阻塞）
+      if (!isBswOk(tradesResult)) {
+        error.value = `Trades 加载失败: ${tradesResult.info || `code=${tradesResult.code}`}`
+      }
+      else if (!isBswOk(bookResult)) {
+        error.value = `Book 加载失败: ${bookResult.info || `code=${bookResult.code}`}`
+      }
     }
     catch (e: unknown) {
+      console.error('[usePolymarketData] fetch error:', e)
       error.value = e instanceof Error ? e.message : 'Polymarket 数据加载失败'
     }
     finally {
