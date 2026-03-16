@@ -100,6 +100,10 @@ function hasLargeOrder(selectionId: number): boolean {
 // Poly量 = 截止到该窗口结束时间的累计总量（不是窗口内增量）
 // Poly指数 = 截止到该时间点的累计主/平/客成交量归一化
 // Poly环比 = 当前窗口累计量 / 下一窗口累计量 × 100
+//
+// 关键：market.recentTrades 有条数限制（200-1000），不包含全部历史成交。
+// 因此用 market.totalNotional 作为准确总额锚点，
+// 按 recentTrades 中截止各窗口时间点的累计比例进行缩放。
 
 /** 单个时间窗口的 Poly 统计 */
 interface PolyWindowStats {
@@ -108,6 +112,14 @@ interface PolyWindowStats {
   indexDraw: number          // 平局指数
   indexAway: number          // 客队指数
   pctChange: number | null   // 环比 = 当前窗口累计量 / 下一窗口累计量 × 100
+}
+
+/** 每个市场的聚合信息 */
+interface MarketAggInfo {
+  side: 'home' | 'draw' | 'away'
+  actualTotal: number       // 后端聚合的准确总额（totalNotional）
+  ticks: { offsetH: number; notional: number }[]
+  ticksTotal: number        // recentTrades 中 price*size 求和
 }
 
 const polyWindowStats = computed<PolyWindowStats[]>(() => {
@@ -129,47 +141,42 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
   )
   const marketsToUse = moneylineMarkets.length > 0 ? moneylineMarkets : pt.markets
 
-  // market → 主/平/客 归属
-  const marketSideMap: Map<string, 'home' | 'draw' | 'away'> = new Map()
-  if (marketsToUse.length >= 3) {
-    marketSideMap.set(marketsToUse[0]!.marketId, 'home')
-    marketSideMap.set(marketsToUse[1]!.marketId, 'draw')
-    marketSideMap.set(marketsToUse[2]!.marketId, 'away')
-  }
-  else if (marketsToUse.length === 2) {
-    marketSideMap.set(marketsToUse[0]!.marketId, 'home')
-    marketSideMap.set(marketsToUse[1]!.marketId, 'away')
-  }
-  else if (marketsToUse.length === 1) {
-    marketSideMap.set(marketsToUse[0]!.marketId, 'home')
-  }
-
-  // 收集所有成交 tick
-  interface PolyTick { offsetH: number; notional: number; side: 'home' | 'draw' | 'away' }
-  const ticks: PolyTick[] = []
-  for (const market of marketsToUse) {
-    const mSide = marketSideMap.get(market.marketId) ?? 'home'
-    for (const t of market.recentTrades ?? []) {
+  // 构建每个市场的聚合信息（含准确总额 + 成交时间分布）
+  const marketInfos: MarketAggInfo[] = []
+  for (let mi = 0; mi < marketsToUse.length && mi < 3; mi++) {
+    const m = marketsToUse[mi]!
+    const side: 'home' | 'draw' | 'away' = mi === 0 ? 'home' : mi === 1 ? 'draw' : 'away'
+    const ticks: { offsetH: number; notional: number }[] = []
+    for (const t of m.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
       if (!Number.isFinite(ts)) continue
-      ticks.push({ offsetH: (ts - kickoffMs) / 3_600_000, notional: t.price * t.size, side: mSide })
+      ticks.push({ offsetH: (ts - kickoffMs) / 3_600_000, notional: t.price * t.size })
     }
+    const ticksTotal = ticks.reduce((s, t) => s + t.notional, 0)
+    marketInfos.push({
+      side,
+      actualTotal: m.totalNotional ?? ticksTotal, // 优先用后端准确总额
+      ticks,
+      ticksTotal,
+    })
   }
 
-  // 对每个窗口：计算截止到该窗口结束时间（hoursOffset）的累计量
-  // 窗口列表：当前(0), -15分(-0.25), -30分(-0.5), -1h, -2h, ...
-  // "截止到 hoursOffset" = 所有 offsetH <= hoursOffset 的交易之和
-  // 当前窗口(idx=0, hoursOffset=0): 截止到现在 = 所有交易
+  // 对每个窗口：按各市场 recentTrades 中截止到 cutoff 的比例，缩放到准确总额
   const stats: PolyWindowStats[] = ws.map((w) => {
     const cutoff = w.hoursOffset
     let volHome = 0, volDraw = 0, volAway = 0
-    for (const tick of ticks) {
-      // 截止到 cutoff 时间点的所有交易
-      if (tick.offsetH <= cutoff) {
-        if (tick.side === 'home') volHome += tick.notional
-        else if (tick.side === 'draw') volDraw += tick.notional
-        else volAway += tick.notional
+    for (const mi of marketInfos) {
+      // 计算 recentTrades 中截止到 cutoff 时间点的累计 notional
+      let cumBeforeCutoff = 0
+      for (const tick of mi.ticks) {
+        if (tick.offsetH <= cutoff) cumBeforeCutoff += tick.notional
       }
+      // 按比例缩放到实际总额
+      const ratio = mi.ticksTotal > 0 ? cumBeforeCutoff / mi.ticksTotal : (cutoff >= 0 ? 1 : 0)
+      const scaled = ratio * mi.actualTotal
+      if (mi.side === 'home') volHome += scaled
+      else if (mi.side === 'draw') volDraw += scaled
+      else volAway += scaled
     }
     const total = volHome + volDraw + volAway
     return {
