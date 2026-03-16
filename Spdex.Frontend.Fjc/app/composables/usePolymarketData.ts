@@ -18,8 +18,24 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  const config = useRuntimeConfig()
+  const token = useCookie('spdex_token')
+
   const primaryLink = computed(() => matchLinks.value[0] ?? null)
   const polymarketEventId = computed(() => primaryLink.value?.polymarketEventId ?? null)
+
+  /** 带 auth header 的 $fetch */
+  function apiFetch<T>(path: string, params: Record<string, unknown> = {}) {
+    const headers: Record<string, string> = {}
+    if (token.value) {
+      headers.Authorization = `Bearer ${token.value}`
+    }
+    return $fetch<T>(path, {
+      baseURL: config.public.apiBase as string,
+      params,
+      headers,
+    })
+  }
 
   async function fetchData() {
     const eventId = spdexEventId.value
@@ -30,9 +46,9 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
 
     try {
       // 1. 反查 Polymarket 关联
-      const linkResult = await $fetch<BswApiResult<PolymarketSoccerMatchLink[]>>(
+      const linkResult = await apiFetch<BswApiResult<PolymarketSoccerMatchLink[]>>(
         `/api/polymarket/Get/Soccer/MatchLinksBySpdexEvent`,
-        { params: { spdexEventId: eventId, refreshIfEmpty: true } },
+        { spdexEventId: eventId, refreshIfEmpty: true },
       )
 
       if (linkResult.code !== 0 || !linkResult.data?.length) {
@@ -51,13 +67,13 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
 
       // 2. 并行拉取 trades + book
       const [tradesResult, bookResult] = await Promise.all([
-        $fetch<BswApiResult<PolymarketEventTradesAggregate>>(
+        apiFetch<BswApiResult<PolymarketEventTradesAggregate>>(
           `/api/polymarket/Get/Soccer/Trades`,
-          { params: { eventId: polyEventId, limit: 10000, includeFamily: true } },
+          { eventId: polyEventId, limit: 10000, includeFamily: true },
         ),
-        $fetch<BswApiResult<PolymarketEventBookAggregate>>(
+        apiFetch<BswApiResult<PolymarketEventBookAggregate>>(
           `/api/polymarket/Get/Soccer/Book`,
-          { params: { eventId: polyEventId, levels: 10, includeFamily: true } },
+          { eventId: polyEventId, levels: 10, includeFamily: true },
         ),
       ])
 
