@@ -177,6 +177,17 @@ const chartScale = computed(() => {
 interface VolumeBucket { index: number; x: number; width: number; totalNotional: number; buyNotional: number; sellNotional: number; tradeCount: number }
 const VOLUME_BUCKET_COUNT = 20
 
+function tradeNotional(price: number, size: number): number {
+  const safePrice = clampPrice(price)
+  const safeSize = Number.isFinite(size) && size > 0 ? size : 0
+  return safePrice * safeSize
+}
+
+function marketIndexBase(market: PolymarketMarketTradesAggregate): number {
+  const base = market.marketVolume ?? market.totalNotional ?? 0
+  return Number.isFinite(base) && base > 0 ? base : 0
+}
+
 const volumeBuckets = computed<VolumeBucket[]>(() => {
   const { minTs, maxTs } = graphTimeline.value
   if (!minTs || !maxTs) return []
@@ -225,7 +236,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
     const entry = lineScopedMarkets.value[i]!
     const market = findTradeMarketByKey(entry.key)
     if (!market) continue
-    entries.push({ key: entry.key, label: localizeName(entry.optionLabel), color: graphColors[i % graphColors.length]!, base: market.marketVolume ?? market.totalNotional ?? 0, index: 0 })
+    entries.push({ key: entry.key, label: localizeName(entry.optionLabel), color: graphColors[i % graphColors.length]!, base: marketIndexBase(market), index: 0 })
   }
   const total = entries.reduce((s, e) => s + e.base, 0)
   if (total > 0) for (const e of entries) e.index = (e.base / total) * 100
@@ -238,7 +249,15 @@ const polyIndexTrendData = computed(() => {
   if (activeFamilyKey.value !== 'moneyline') return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
 
   // 收集每个 moneyline market 的全部成交记录
-  interface MarketMeta { key: string; label: string; color: string }
+  interface MarketMeta {
+    key: string
+    label: string
+    color: string
+    aggregateTotal: number
+    seededTotal: number
+    recentTotal: number
+    scale: number
+  }
   const marketsMeta: MarketMeta[] = []
   const allEvents: { ts: number; marketIdx: number; notional: number }[] = []
 
@@ -246,26 +265,65 @@ const polyIndexTrendData = computed(() => {
     const entry = lineScopedMarkets.value[i]!
     const market = findTradeMarketByKey(entry.key)
     if (!market) continue
+
+    const aggregateTotal = marketIndexBase(market)
+    const recentTotal = (market.recentTrades ?? []).reduce((sum, trade) => sum + tradeNotional(trade.price, trade.size), 0)
+    const scale = recentTotal > aggregateTotal && recentTotal > 0 ? aggregateTotal / recentTotal : 1
+    const seededTotal = Math.max(0, aggregateTotal - recentTotal * scale)
+
     const mIdx = marketsMeta.length
-    marketsMeta.push({ key: entry.key, label: localizeName(entry.optionLabel), color: graphColors[i % graphColors.length]! })
+    marketsMeta.push({
+      key: entry.key,
+      label: localizeName(entry.optionLabel),
+      color: graphColors[i % graphColors.length]!,
+      aggregateTotal,
+      seededTotal,
+      recentTotal,
+      scale,
+    })
     for (const t of market.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
       if (!Number.isFinite(ts)) continue
-      allEvents.push({ ts, marketIdx: mIdx, notional: t.price * t.size })
+      allEvents.push({ ts, marketIdx: mIdx, notional: tradeNotional(t.price, t.size) * scale })
     }
   }
 
-  if (marketsMeta.length === 0 || allEvents.length === 0) return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
+  if (marketsMeta.length === 0) return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
+  if (allEvents.length === 0) {
+    const total = marketsMeta.reduce((sum, meta) => sum + meta.aggregateTotal, 0)
+    if (total <= 0) return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
+    const nowTs = Date.now()
+    const series: TrendChartSeries[] = marketsMeta
+      .filter(meta => meta.aggregateTotal > 0)
+      .map(meta => ({
+        key: meta.key,
+        label: meta.label,
+        color: meta.color,
+        dataPoints: [{ ts: nowTs, price: meta.aggregateTotal / total }],
+        lastPct: meta.aggregateTotal / total,
+      }))
+    return {
+      series,
+      timeline: { start: dayjs(nowTs).format('MM-DD HH:mm'), end: dayjs(nowTs).format('MM-DD HH:mm'), minTs: nowTs, maxTs: nowTs },
+    }
+  }
 
   // 按时间排序
   allEvents.sort((a, b) => a.ts - b.ts)
   const minTs = allEvents[0]!.ts
   const maxTs = allEvents[allEvents.length - 1]!.ts
 
-  // 累计每个 market 的 notional，在每个 event 时刻计算指数
-  const cumVol = new Array<number>(marketsMeta.length).fill(0)
+  // 先注入聚合基数，让终点与当前指数一致；recentTrades 只描述最近一段时间的变化分布。
+  const cumVol = marketsMeta.map(meta => meta.seededTotal)
   // 为每个 market 收集数据点 (ts, indexValue 0~1)
   const rawPoints: TrendDataPoint[][] = marketsMeta.map(() => [])
+
+  const initialTotal = cumVol.reduce((sum, value) => sum + value, 0)
+  if (initialTotal > 0) {
+    for (let m = 0; m < marketsMeta.length; m++) {
+      rawPoints[m]!.push({ ts: minTs, price: cumVol[m]! / initialTotal })
+    }
+  }
 
   // 按时间桶采样避免数据量过大
   const SAMPLE_BUCKETS = 80
@@ -412,7 +470,7 @@ const emptyVolumeBuckets: VolumeBucket[] = []
         </div>
         <!-- 指数走势图 -->
         <div v-if="polyIndexSeries.length > 0">
-          <div class="text-[10px] text-gray-400 mb-1">指数走势（基于累计成交量）</div>
+          <div class="text-[10px] text-gray-400 mb-1">指数走势（基于近期成交分布，终点对齐当前指数）</div>
           <div class="flex items-center gap-3 flex-wrap mb-1">
             <div v-for="s in polyIndexSeries" :key="`pidx-legend-${s.key}`" class="inline-flex items-center gap-1 text-[11px] text-gray-500">
               <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: s.color }" />
@@ -422,7 +480,7 @@ const emptyVolumeBuckets: VolumeBucket[] = []
           </div>
           <PolyTrendChart :series="polyIndexSeries" :volume-buckets="emptyVolumeBuckets" :volume-max="0" :time-range="polyIndexTimeline" :chart-scale="polyIndexScale" :height="120" />
         </div>
-        <div class="text-[9px] text-gray-400">基于成交量归一化</div>
+        <div class="text-[9px] text-gray-400">当前值使用市场聚合成交量，曲线使用近期成交分布回放</div>
       </div>
 
       <div v-if="!visibleSeries.length" class="text-sm text-gray-400 text-center py-4 border border-gray-200 rounded-xl bg-gray-50/30">

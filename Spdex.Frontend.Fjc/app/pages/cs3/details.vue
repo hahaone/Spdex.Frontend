@@ -97,102 +97,78 @@ function hasLargeOrder(selectionId: number): boolean {
 }
 
 // ── Poly 分时统计 ──
-// 将 Polymarket moneyline 成交数据按必发时间窗口桶化
+// Poly量 = 截止到该窗口结束时间的累计总量（不是窗口内增量）
+// Poly指数 = 截止到该时间点的累计主/平/客成交量归一化
+// Poly环比 = 当前窗口累计量 / 下一窗口累计量 × 100
 
 /** 单个时间窗口的 Poly 统计 */
 interface PolyWindowStats {
-  volume: number            // 该窗口内 Poly 总成交额 (notional)
-  indexHome: number          // 主队指数（成交量归一化）
+  volume: number            // 截止到该窗口结束时间的累计总量
+  indexHome: number          // 主队指数（累计成交量归一化）
   indexDraw: number          // 平局指数
   indexAway: number          // 客队指数
-  pctChange: number | null   // 环比 = 当前窗口 / 下一窗口 × 100
-}
-
-/**
- * 根据 hoursOffset 返回窗口的时间边界 [fromHours, toHours]。
- * hoursOffset=0 表示"当前"(最近 15 分钟到现在)，
- * hoursOffset=-0.25 表示 -30分 到 -15分，以此类推。
- * 规则：当前窗口=从上一个窗口开始到0(现在)。
- */
-function getWindowBoundaryHours(hoursOffset: number, idx: number, allOffsets: number[]): [number, number] {
-  // 从后端给出的窗口列表推断：各窗口 boundary 为 [当前hoursOffset, 下一个更近的hoursOffset]
-  // 例如: -2h ~ -1h, -1h ~ -0.5h, -0.5h ~ -0.25h, -0.25h ~ 0
-  if (idx === 0) {
-    // 当前窗口：从下一个 offset 到 0
-    const nextOffset = allOffsets.length > 1 ? allOffsets[1]! : -0.25
-    return [nextOffset, 0]
-  }
-  const fromH = idx < allOffsets.length - 1 ? allOffsets[idx + 1]! : hoursOffset * 2
-  return [fromH, hoursOffset]
+  pctChange: number | null   // 环比 = 当前窗口累计量 / 下一窗口累计量 × 100
 }
 
 const polyWindowStats = computed<PolyWindowStats[]>(() => {
   const ws = windows.value
+  const empty: PolyWindowStats = { volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }
   if (ws.length === 0) return []
   const pt = polyTrades.value
-  if (!pt?.markets?.length) return ws.map(() => ({ volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }))
+  if (!pt?.markets?.length) return ws.map(() => ({ ...empty }))
 
   // 获取比赛时间作为基准
   const matchTime = matchInfo.value?.matchTime
   const kickoffMs = matchTime ? new Date(matchTime).getTime() : 0
-  if (!kickoffMs) return ws.map(() => ({ volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }))
+  if (!kickoffMs) return ws.map(() => ({ ...empty }))
 
-  // 收集所有 moneyline 市场的成交（sportsMarketType 含 "moneyline" 或 question 含 "win"）
+  // 收集所有 moneyline 市场的成交
   const moneylineMarkets = pt.markets.filter((m: PolymarketMarketTradesAggregate) =>
     m.sportsMarketType?.toLowerCase().includes('moneyline')
     || m.question?.toLowerCase().includes(' win'),
   )
-  // 如果没有 moneyline 市场，取所有市场
   const marketsToUse = moneylineMarkets.length > 0 ? moneylineMarkets : pt.markets
 
-  // 简单判断 market 归属：第一个=主，第二个=平(如果有)，第三个/最后=客
-  const marketIndexMap: Map<string, 'home' | 'draw' | 'away'> = new Map()
+  // market → 主/平/客 归属
+  const marketSideMap: Map<string, 'home' | 'draw' | 'away'> = new Map()
   if (marketsToUse.length >= 3) {
-    marketIndexMap.set(marketsToUse[0]!.marketId, 'home')
-    marketIndexMap.set(marketsToUse[1]!.marketId, 'draw')
-    marketIndexMap.set(marketsToUse[2]!.marketId, 'away')
+    marketSideMap.set(marketsToUse[0]!.marketId, 'home')
+    marketSideMap.set(marketsToUse[1]!.marketId, 'draw')
+    marketSideMap.set(marketsToUse[2]!.marketId, 'away')
   }
   else if (marketsToUse.length === 2) {
-    marketIndexMap.set(marketsToUse[0]!.marketId, 'home')
-    marketIndexMap.set(marketsToUse[1]!.marketId, 'away')
+    marketSideMap.set(marketsToUse[0]!.marketId, 'home')
+    marketSideMap.set(marketsToUse[1]!.marketId, 'away')
   }
   else if (marketsToUse.length === 1) {
-    marketIndexMap.set(marketsToUse[0]!.marketId, 'home')
+    marketSideMap.set(marketsToUse[0]!.marketId, 'home')
   }
 
-  // 收集所有成交 tick 并标注 market 归属
-  interface PolyTick { tsOffsetHours: number; notional: number; side: 'home' | 'draw' | 'away' }
+  // 收集所有成交 tick
+  interface PolyTick { offsetH: number; notional: number; side: 'home' | 'draw' | 'away' }
   const ticks: PolyTick[] = []
   for (const market of marketsToUse) {
-    const mSide = marketIndexMap.get(market.marketId) ?? 'home'
+    const mSide = marketSideMap.get(market.marketId) ?? 'home'
     for (const t of market.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
       if (!Number.isFinite(ts)) continue
-      const offsetH = (ts - kickoffMs) / 3_600_000 // 小时差（负=赛前）
-      ticks.push({ tsOffsetHours: offsetH, notional: t.price * t.size, side: mSide })
+      ticks.push({ offsetH: (ts - kickoffMs) / 3_600_000, notional: t.price * t.size, side: mSide })
     }
   }
 
-  // 按窗口桶化
-  const offsets = ws.map(w => w.hoursOffset)
-  const stats: PolyWindowStats[] = ws.map((w, idx) => {
-    const [fromH, toH] = getWindowBoundaryHours(w.hoursOffset, idx, offsets)
+  // 对每个窗口：计算截止到该窗口结束时间（hoursOffset）的累计量
+  // 窗口列表：当前(0), -15分(-0.25), -30分(-0.5), -1h, -2h, ...
+  // "截止到 hoursOffset" = 所有 offsetH <= hoursOffset 的交易之和
+  // 当前窗口(idx=0, hoursOffset=0): 截止到现在 = 所有交易
+  const stats: PolyWindowStats[] = ws.map((w) => {
+    const cutoff = w.hoursOffset
     let volHome = 0, volDraw = 0, volAway = 0
     for (const tick of ticks) {
-      if (tick.tsOffsetHours >= fromH && tick.tsOffsetHours < toH) {
+      // 截止到 cutoff 时间点的所有交易
+      if (tick.offsetH <= cutoff) {
         if (tick.side === 'home') volHome += tick.notional
         else if (tick.side === 'draw') volDraw += tick.notional
         else volAway += tick.notional
-      }
-    }
-    // 当前窗口（idx=0）也包含 toH=0 的交易
-    if (idx === 0) {
-      for (const tick of ticks) {
-        if (tick.tsOffsetHours >= toH) { // 当前之后的也算当前
-          if (tick.side === 'home') volHome += tick.notional
-          else if (tick.side === 'draw') volDraw += tick.notional
-          else volAway += tick.notional
-        }
       }
     }
     const total = volHome + volDraw + volAway
@@ -205,7 +181,7 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
     }
   })
 
-  // 计算环比：当前窗口 / 下一窗口 × 100
+  // 环比：当前窗口累计量 / 下一窗口（更早）累计量 × 100
   for (let i = 0; i < stats.length - 1; i++) {
     const next = stats[i + 1]!
     if (next.volume > 0) {
