@@ -304,6 +304,7 @@ const detailLinks = [
   { path: 'cs4', label: 'OU', title: '大小', color: '#556b2f' },
   { path: 'cs5', label: '亚', title: '亚盘', color: '#8a2be2' },
   { path: 'cs7', label: '角', title: '角球', color: '#ff7f50' },
+  { path: 'poly', label: 'Poly', title: 'Polymarket', color: '#6d28d9' },
 ]
 </script>
 
