@@ -19,7 +19,7 @@ const queryParams = computed(() => ({
 const { data, pending, error, refreshing, manualRefresh } = useBigHold(queryParams)
 
 // ── Polymarket 数据 ──
-const { trades: polyTrades, loading: polyLoading } = usePolymarketData(eventId)
+const { trades: polyTrades, primaryLink: polyLink, loading: polyLoading } = usePolymarketData(eventId)
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
@@ -101,9 +101,10 @@ function hasLargeOrder(selectionId: number): boolean {
 // Poly指数 = 截止到该时间点的累计主/平/客成交量归一化
 // Poly环比 = 当前窗口累计量 / 下一窗口累计量 × 100
 //
-// 关键：market.recentTrades 有条数限制（200-1000），不包含全部历史成交。
-// 因此用 market.totalNotional 作为准确总额锚点，
-// 按 recentTrades 中截止各窗口时间点的累计比例进行缩放。
+// 关键修复：
+// 1. 用 marketVolume（成交量）而非 totalNotional（名义成交额）作为准确总额
+// 2. 通过 question 字段 + polyLink 中的队名正确映射 market → 主/平/客
+// 3. recentTrades 有条数限制，用 marketVolume 作为锚点按比例缩放
 
 /** 单个时间窗口的 Poly 统计 */
 interface PolyWindowStats {
@@ -117,9 +118,41 @@ interface PolyWindowStats {
 /** 每个市场的聚合信息 */
 interface MarketAggInfo {
   side: 'home' | 'draw' | 'away'
-  actualTotal: number       // 后端聚合的准确总额（totalNotional）
+  actualTotal: number       // 后端聚合的准确总额（marketVolume 优先）
   ticks: { offsetH: number; notional: number }[]
   ticksTotal: number        // recentTrades 中 price*size 求和
+}
+
+/**
+ * 从 market.question 提取队名（与 useMarketSelection 相同逻辑）
+ * "Will Liverpool win?" → "Liverpool"
+ * 包含 "draw" → 平局
+ */
+function extractTeamFromQuestion(question: string): string | null {
+  const cleaned = question.replace(/\s+/g, ' ').trim()
+  if (/draw/i.test(cleaned)) return '__DRAW__'
+  const match = cleaned.match(/^Will (.+?) (?:win|be winning|be leading|lead|score first|at halftime)/i)
+    ?? cleaned.match(/^Will (.+?)\?/i)
+  return match ? match[1]!.trim() : null
+}
+
+/**
+ * 根据 question 中的队名 + polyLink 中的主/客队名，判断市场归属
+ */
+function detectMarketSide(
+  question: string,
+  homeTeam: string | null,
+  awayTeam: string | null,
+): 'home' | 'draw' | 'away' | null {
+  const team = extractTeamFromQuestion(question)
+  if (!team) return null
+  if (team === '__DRAW__') return 'draw'
+  const t = team.toLowerCase()
+  const h = homeTeam?.trim().toLowerCase() ?? ''
+  const a = awayTeam?.trim().toLowerCase() ?? ''
+  if (h && (t.includes(h) || h.includes(t))) return 'home'
+  if (a && (t.includes(a) || a.includes(t))) return 'away'
+  return null
 }
 
 const polyWindowStats = computed<PolyWindowStats[]>(() => {
@@ -134,18 +167,36 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
   const kickoffMs = matchTime ? new Date(matchTime).getTime() : 0
   if (!kickoffMs) return ws.map(() => ({ ...empty }))
 
-  // 收集所有 moneyline 市场的成交
+  // 收集所有 moneyline 市场
   const moneylineMarkets = pt.markets.filter((m: PolymarketMarketTradesAggregate) =>
     m.sportsMarketType?.toLowerCase().includes('moneyline')
-    || m.question?.toLowerCase().includes(' win'),
+    || m.question?.toLowerCase().includes(' win')
+    || /draw/i.test(m.question ?? ''),
   )
   const marketsToUse = moneylineMarkets.length > 0 ? moneylineMarkets : pt.markets
 
-  // 构建每个市场的聚合信息（含准确总额 + 成交时间分布）
+  // 通过 question + polyLink 队名正确映射 market → 主/平/客
+  const link = polyLink.value
+  const homeTeam = link?.polymarketHomeTeam ?? null
+  const awayTeam = link?.polymarketAwayTeam ?? null
+
+  // 构建每个市场的聚合信息
   const marketInfos: MarketAggInfo[] = []
-  for (let mi = 0; mi < marketsToUse.length && mi < 3; mi++) {
-    const m = marketsToUse[mi]!
-    const side: 'home' | 'draw' | 'away' = mi === 0 ? 'home' : mi === 1 ? 'draw' : 'away'
+  // 记录已分配的 side，处理 fallback
+  const usedSides = new Set<string>()
+
+  for (const m of marketsToUse) {
+    if (marketInfos.length >= 3) break
+    const detected = detectMarketSide(m.question ?? '', homeTeam, awayTeam)
+    if (detected && usedSides.has(detected)) continue // 避免重复
+    const side = detected ?? (
+      !usedSides.has('home') ? 'home'
+        : !usedSides.has('draw') ? 'draw'
+          : !usedSides.has('away') ? 'away'
+            : 'home'
+    )
+    usedSides.add(side)
+
     const ticks: { offsetH: number; notional: number }[] = []
     for (const t of m.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
@@ -155,7 +206,8 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
     const ticksTotal = ticks.reduce((s, t) => s + t.notional, 0)
     marketInfos.push({
       side,
-      actualTotal: m.totalNotional ?? ticksTotal, // 优先用后端准确总额
+      // 优先用 marketVolume（成交量），其次 totalNotional，最后 recentTrades 求和
+      actualTotal: m.marketVolume ?? m.totalNotional ?? ticksTotal,
       ticks,
       ticksTotal,
     })
@@ -166,12 +218,10 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
     const cutoff = w.hoursOffset
     let volHome = 0, volDraw = 0, volAway = 0
     for (const mi of marketInfos) {
-      // 计算 recentTrades 中截止到 cutoff 时间点的累计 notional
       let cumBeforeCutoff = 0
       for (const tick of mi.ticks) {
         if (tick.offsetH <= cutoff) cumBeforeCutoff += tick.notional
       }
-      // 按比例缩放到实际总额
       const ratio = mi.ticksTotal > 0 ? cumBeforeCutoff / mi.ticksTotal : (cutoff >= 0 ? 1 : 0)
       const scaled = ratio * mi.actualTotal
       if (mi.side === 'home') volHome += scaled
