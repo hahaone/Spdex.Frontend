@@ -97,14 +97,17 @@ function hasLargeOrder(selectionId: number): boolean {
 }
 
 // ── Poly 分时统计 ──
-// Poly量 = 截止到该窗口结束时间的累计总量（不是窗口内增量）
+// Poly量 = 截止到该窗口结束时间的累计总量
 // Poly指数 = 截止到该时间点的累计主/平/客成交量归一化
 // Poly环比 = 当前窗口累计量 / 下一窗口累计量 × 100
 //
-// 关键修复：
-// 1. 用 marketVolume（成交量）而非 totalNotional（名义成交额）作为准确总额
-// 2. 通过 question 字段 + polyLink 中的队名正确映射 market → 主/平/客
-// 3. recentTrades 有条数限制，用 marketVolume 作为锚点按比例缩放
+// 数据策略：
+// 1. 用 marketVolume（成交量元数据）作为准确总额，而非 totalNotional（名义成交额）
+// 2. 通过 question 字段 + polyLink 队名正确映射 market → 主/平/客
+// 3. 用 event 级 recentTrades（2000条限制）替代 market 级（200-1000条），
+//    通过 conditionId 映射到各市场，时间覆盖更均匀
+// 4. missingVol 逻辑：recentTrades 之外的旧成交量 = actualTotal - ticksTotal，
+//    这些旧交易发生在 recentTrades 中最早交易之前，补偿到旧窗口
 
 /** 单个时间窗口的 Poly 统计 */
 interface PolyWindowStats {
@@ -118,15 +121,15 @@ interface PolyWindowStats {
 /** 每个市场的聚合信息 */
 interface MarketAggInfo {
   side: 'home' | 'draw' | 'away'
-  actualTotal: number       // 后端聚合的准确总额（marketVolume 优先）
+  actualTotal: number       // marketVolume 元数据（准确总成交量）
   ticks: { offsetH: number; notional: number }[]
   ticksTotal: number        // recentTrades 中 price*size 求和
+  missingVol: number        // actualTotal - ticksTotal（recentTrades 覆盖范围外的旧成交）
+  earliestOffsetH: number   // recentTrades 中最早交易的 offsetH
 }
 
 /**
  * 从 market.question 提取队名（与 useMarketSelection 相同逻辑）
- * "Will Liverpool win?" → "Liverpool"
- * 包含 "draw" → 平局
  */
 function extractTeamFromQuestion(question: string): string | null {
   const cleaned = question.replace(/\s+/g, ' ').trim()
@@ -180,15 +183,15 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
   const homeTeam = link?.polymarketHomeTeam ?? null
   const awayTeam = link?.polymarketAwayTeam ?? null
 
-  // 构建每个市场的聚合信息
-  const marketInfos: MarketAggInfo[] = []
-  // 记录已分配的 side，处理 fallback
+  // 1) 识别最多 3 个 moneyline 市场 → conditionId→side 映射
+  const conditionSideMap = new Map<string, 'home' | 'draw' | 'away'>()
+  const marketMetaMap = new Map<string, { actualTotal: number }>()
   const usedSides = new Set<string>()
 
   for (const m of marketsToUse) {
-    if (marketInfos.length >= 3) break
+    if (conditionSideMap.size >= 3) break
     const detected = detectMarketSide(m.question ?? '', homeTeam, awayTeam)
-    if (detected && usedSides.has(detected)) continue // 避免重复
+    if (detected && usedSides.has(detected)) continue
     const side = detected ?? (
       !usedSides.has('home') ? 'home'
         : !usedSides.has('draw') ? 'draw'
@@ -196,37 +199,87 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
             : 'home'
     )
     usedSides.add(side)
-
-    const ticks: { offsetH: number; notional: number }[] = []
-    for (const t of m.recentTrades ?? []) {
-      const ts = new Date(t.timestampUtc).getTime()
-      if (!Number.isFinite(ts)) continue
-      ticks.push({ offsetH: (ts - kickoffMs) / 3_600_000, notional: t.price * t.size })
-    }
-    const ticksTotal = ticks.reduce((s, t) => s + t.notional, 0)
-    marketInfos.push({
-      side,
-      // 优先用 marketVolume（成交量），其次 totalNotional，最后 recentTrades 求和
-      actualTotal: m.marketVolume ?? m.totalNotional ?? ticksTotal,
-      ticks,
-      ticksTotal,
+    conditionSideMap.set(m.conditionId, side)
+    marketMetaMap.set(side, {
+      actualTotal: m.marketVolume ?? m.totalNotional ?? 0,
     })
   }
 
-  // 对每个窗口：按各市场 recentTrades 中截止到 cutoff 的比例，缩放到准确总额
+  // 2) 使用 event 级 recentTrades（2000条限制），通过 conditionId 分配到各 side
+  //    这比 market 级 recentTrades（200-1000条）时间覆盖更广更均匀
+  const sideTicks: Record<'home' | 'draw' | 'away', { offsetH: number; notional: number }[]> = {
+    home: [], draw: [], away: [],
+  }
+  for (const t of pt.recentTrades ?? []) {
+    const side = conditionSideMap.get(t.conditionId)
+    if (!side) continue
+    const ts = new Date(t.timestampUtc).getTime()
+    if (!Number.isFinite(ts)) continue
+    sideTicks[side].push({ offsetH: (ts - kickoffMs) / 3_600_000, notional: t.price * t.size })
+  }
+
+  // 3) 构建每个 side 的聚合信息
+  const sides: Array<'home' | 'draw' | 'away'> = ['home', 'draw', 'away']
+  const marketInfos: MarketAggInfo[] = sides
+    .filter(s => marketMetaMap.has(s))
+    .map((s) => {
+      const ticks = sideTicks[s]
+      const ticksTotal = ticks.reduce((sum, t) => sum + t.notional, 0)
+      const actualTotal = marketMetaMap.get(s)!.actualTotal
+      const missingVol = Math.max(0, actualTotal - ticksTotal)
+      const earliestOffsetH = ticks.length > 0
+        ? Math.min(...ticks.map(t => t.offsetH))
+        : 0
+      return { side: s, actualTotal, ticks, ticksTotal, missingVol, earliestOffsetH }
+    })
+
+  // 4) 对每个窗口计算累计量
+  //    - cumFromTrades: recentTrades 中 offsetH <= cutoff 的成交之和
+  //    - missingVol: recentTrades 覆盖范围外的旧成交（发生在 earliestOffsetH 之前）
+  //    - 当 cutoff >= earliestOffsetH 时，所有 missingVol 都应包含在内
+  //      （因为那些旧交易一定发生在我们数据范围之前）
   const stats: PolyWindowStats[] = ws.map((w) => {
     const cutoff = w.hoursOffset
     let volHome = 0, volDraw = 0, volAway = 0
     for (const mi of marketInfos) {
-      let cumBeforeCutoff = 0
+      let cumFromTrades = 0
       for (const tick of mi.ticks) {
-        if (tick.offsetH <= cutoff) cumBeforeCutoff += tick.notional
+        if (tick.offsetH <= cutoff) cumFromTrades += tick.notional
       }
-      const ratio = mi.ticksTotal > 0 ? cumBeforeCutoff / mi.ticksTotal : (cutoff >= 0 ? 1 : 0)
-      const scaled = ratio * mi.actualTotal
-      if (mi.side === 'home') volHome += scaled
-      else if (mi.side === 'draw') volDraw += scaled
-      else volAway += scaled
+      // missingVol 是 recentTrades 之前的旧成交
+      // 当 cutoff >= 最早交易时间时，这些旧交易全部包含
+      // 当 cutoff < 最早交易时间时，按比例估算（距离越远占比越小）
+      let estimated: number
+      if (mi.ticks.length === 0) {
+        // 没有任何交易记录，只能用 actualTotal 估算
+        estimated = cutoff >= 0 ? mi.actualTotal : 0
+      }
+      else if (cutoff >= mi.earliestOffsetH) {
+        // cutoff 在数据覆盖范围内，missingVol 全量补上
+        estimated = mi.missingVol + cumFromTrades
+      }
+      else {
+        // cutoff 在数据覆盖范围之外（更早），按最早交易的 offset 线性外推
+        // 已知：在 earliestOffsetH 时刻，累计量 ≈ missingVol
+        // 在更早时刻，累计量应更少。假设 missingVol 均匀分布在
+        // firstTradeAtUtc 到 earliestOffsetH 之间
+        if (mi.missingVol > 0 && mi.earliestOffsetH < 0) {
+          // 用 actualTotal 中 recentTrades 占比推算时间跨度
+          // 简单线性：cutoff 越接近 earliestOffsetH，占 missingVol 越多
+          const totalSpanH = Math.abs(mi.earliestOffsetH) // 最早交易到开赛的小时数
+          const cutoffSpanH = Math.abs(cutoff) // cutoff 到开赛的小时数
+          // 在 cutoffSpanH 处，已发生的旧成交占比
+          const ratio = Math.min(1, totalSpanH > 0 ? cutoffSpanH / totalSpanH : 0)
+          // 反转：cutoff 越早（数值越负），包含的旧成交越少
+          estimated = mi.missingVol * Math.min(1, ratio > 0 ? totalSpanH / cutoffSpanH : 0)
+        }
+        else {
+          estimated = 0
+        }
+      }
+      if (mi.side === 'home') volHome += estimated
+      else if (mi.side === 'draw') volDraw += estimated
+      else volAway += estimated
     }
     const total = volHome + volDraw + volAway
     return {
