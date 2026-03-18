@@ -17,12 +17,15 @@ const tokenClass = computed(() => {
 const navItems = [
   { label: '足球', to: '/', icon: '⚽' },
   { label: '篮球', to: '/bk', icon: '🏀' },
+  { label: '信号', to: '/signals', icon: '📡' },
 ]
 
-/** 当前选中的运动：路径以 /bk 开头视为篮球，否则足球 */
+/** 当前选中的导航项：精确匹配路径前缀 */
 function isActive(to: string): boolean {
   if (to === '/bk') return route.path.startsWith('/bk')
-  return !route.path.startsWith('/bk')
+  if (to === '/signals') return route.path.startsWith('/signals')
+  // 足球（默认）：不是篮球也不是信号
+  return !route.path.startsWith('/bk') && !route.path.startsWith('/signals')
 }
 
 const config = useRuntimeConfig()

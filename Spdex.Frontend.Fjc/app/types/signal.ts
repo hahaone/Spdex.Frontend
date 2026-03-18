@@ -1,0 +1,133 @@
+/**
+ * 信号引擎相关 TypeScript 类型。
+ * 映射后端 SignalsController 返回的 DTO。
+ */
+
+/** 信号状态枚举 */
+export type SignalStatus = 'Triggered' | 'Conditional' | 'Executable' | 'Expired' | 'Executed'
+
+/** 条件评估结果 */
+export interface ConditionResult {
+  type: string
+  description: string
+  passed: boolean
+  actualValue: number
+  expectedThreshold: number
+}
+
+/** 盘口快照 */
+export interface HandicapSnapshot {
+  handicap: number
+  totalBet: number
+  maxBet: number
+  odds: number
+  payout: number
+  rankTotalBet: number
+}
+
+/** 信号触发时的数据快照 */
+export interface SignalSnapshot {
+  triggerWindowLabel: string
+  overTotalBet: number
+  underTotalBet: number
+  overUnderRatio: number
+  periodOverPeriodRatio: number
+  highlightHandicap: number
+  highlightTotalBet: number
+  highlight3Sigma: number
+  overItems: HandicapSnapshot[]
+  underItems: HandicapSnapshot[]
+}
+
+/** 等待条件 */
+export interface SignalWaitCondition {
+  description: string
+  marketDescription: string
+  selection: string
+  handicap: number
+  priceOperator: string
+  priceThreshold: number
+  action: string
+}
+
+/** 实时信号（内存 SignalStore） */
+export interface Signal {
+  signalId: string
+  modelId: string
+  modelName: string
+  eventId: number
+  homeTeam: string
+  guestTeam: string
+  matchTime: string
+  status: SignalStatus
+  triggeredAt: string
+  executableAt: string | null
+  expiredAt: string | null
+  executedAt: string | null
+  executedBy: string | null
+  snapshot: SignalSnapshot | null
+  conditionResults: ConditionResult[]
+  waitCondition: SignalWaitCondition | null
+}
+
+/** 实时信号列表响应 */
+export interface SignalListResult {
+  signals: Signal[]
+  totalCount: number
+  statusCounts: Record<string, number>
+}
+
+/** 模型摘要信息 */
+export interface SignalModelSummary {
+  id: string
+  name: string
+  enabled: boolean
+  marketIdField: string
+  factor: string
+  conditionCount: number
+  hasWaitCondition: boolean
+  activeSignalCount: number
+}
+
+/** 历史信号记录（DB） */
+export interface SignalRecord {
+  id: number
+  signalId: string
+  modelId: string
+  modelName: string
+  eventId: number
+  homeTeam: string | null
+  guestTeam: string | null
+  matchTime: string
+  status: string
+  triggeredAt: string
+  executableAt: string | null
+  expiredAt: string | null
+  executedAt: string | null
+  executedBy: string | null
+  snapshotJson: string | null
+  conditionsJson: string | null
+  waitCondJson: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** 历史信号分页响应 */
+export interface SignalHistoryResult {
+  items: SignalRecord[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+/** 模型统计数据 */
+export interface SignalStats {
+  modelId: string
+  modelName: string
+  totalTriggered: number
+  totalExecuted: number
+  totalExpired: number
+  totalActive: number
+  executionRate: number
+}
