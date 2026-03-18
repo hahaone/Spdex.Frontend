@@ -3,6 +3,7 @@ import type {
   PolymarketSoccerMatchLink,
   PolymarketEventTradesAggregate,
   PolymarketEventBookAggregate,
+  PolymarketTradeWindowStatsResult,
 } from '~/types/polymarket'
 
 /** BSW API 成功码 */
@@ -22,6 +23,7 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
   const matchLinks = ref<PolymarketSoccerMatchLink[]>([])
   const trades = ref<PolymarketEventTradesAggregate | null>(null)
   const book = ref<PolymarketEventBookAggregate | null>(null)
+  const tradeWindowStats = ref<PolymarketTradeWindowStatsResult | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -70,8 +72,8 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
 
       const polyEventId = linkResult.data[0]!.polymarketEventId
 
-      // 2. 并行拉取 trades + book
-      const [tradesResult, bookResult] = await Promise.all([
+      // 2. 并行拉取 trades + book + tradeWindowStats
+      const [tradesResult, bookResult, windowStatsResult] = await Promise.all([
         apiFetch<BswApiResult<PolymarketEventTradesAggregate>>(
           `/api/polymarket/Get/Soccer/Trades`,
           { eventId: polyEventId, limit: 10000, includeFamily: true },
@@ -80,10 +82,16 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
           `/api/polymarket/Get/Soccer/Book`,
           { eventId: polyEventId, levels: 10, includeFamily: true },
         ),
+        apiFetch<BswApiResult<PolymarketTradeWindowStatsResult>>(
+          `/api/polymarket/Get/Soccer/TradeWindowStats`,
+          { polymarketEventId: polyEventId },
+        ).catch(() => null), // 新接口失败不影响原有功能
       ])
 
       trades.value = isBswOk(tradesResult) ? tradesResult.data : null
       book.value = isBswOk(bookResult) ? bookResult.data : null
+      tradeWindowStats.value = windowStatsResult && isBswOk(windowStatsResult)
+        ? windowStatsResult.data : null
 
       // trades/book 失败时提示（但不阻塞）
       if (!isBswOk(tradesResult)) {
@@ -111,6 +119,7 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
     polymarketEventId,
     trades,
     book,
+    tradeWindowStats,
     loading,
     error,
     refresh: fetchData,

@@ -115,6 +115,23 @@ export interface PolymarketBookLevel {
   size: number
 }
 
+// ─── Trade Window Stats (后端预计算分时统计) ───
+
+export interface PolymarketTradeWindowStatsResult {
+  eventId: string
+  windows: PolymarketTradeWindowStats[]
+}
+
+export interface PolymarketTradeWindowStats {
+  label: string
+  hoursOffset: number
+  volume: number
+  indexHome: number
+  indexDraw: number
+  indexAway: number
+  pctChange: number | null
+}
+
 // ─── BSW API 响应包装 ───
 
 export interface BswApiResult<T> {
