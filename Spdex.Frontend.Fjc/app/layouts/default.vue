@@ -14,11 +14,18 @@ const tokenClass = computed(() => {
   return user.value.tokenType === 'jc' ? 'token-jc' : 'token-full'
 })
 
-const navItems = [
-  { label: '足球', to: '/', icon: '⚽' },
-  { label: '篮球', to: '/bk', icon: '🏀' },
-  { label: '信号', to: '/signals', icon: '📡' },
-]
+const { canAccessSignals } = useSignalAccess()
+
+const navItems = computed(() => {
+  const items = [
+    { label: '足球', to: '/', icon: '⚽' },
+    { label: '篮球', to: '/bk', icon: '🏀' },
+  ]
+  if (canAccessSignals.value) {
+    items.push({ label: '信号', to: '/signals', icon: '📡' })
+  }
+  return items
+})
 
 /** 当前选中的导航项：精确匹配路径前缀 */
 function isActive(to: string): boolean {

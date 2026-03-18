@@ -12,6 +12,12 @@ import type {
 } from '~/types/signal'
 import { formatMatchTimeSlash, formatDateTime, formatMoney } from '~/utils/formatters'
 
+// ── 访问控制 ──
+const { canAccessSignals } = useSignalAccess()
+if (!canAccessSignals.value) {
+  navigateTo('/')
+}
+
 // ── 使用指南 ──
 const showGuide = ref(false)
 
