@@ -67,12 +67,7 @@ const {
 
 watch(activeTab, () => collapseAll())
 
-// 数据就绪后自动预取前一条记录，以便深度高亮立即呈现
-watch(activeWindow, (win) => {
-  if (win?.items?.length) {
-    prefetchAllPrevious(win.items)
-  }
-}, { immediate: true })
+// 前一条记录改为展开行时懒加载（toggleExpand 已有逻辑），不再自动预取
 
 // ── 排序 ──
 function setOrder(newOrder: number) {

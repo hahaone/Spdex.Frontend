@@ -17,8 +17,10 @@ const queryParams = computed(() => ({
 }))
 const { data, pending, error, refreshing, manualRefresh } = useBigHold(queryParams)
 
-// ── Polymarket 数据 ──
-const { tradeWindowStats: polyWindowStatsFromApi, loading: polyLoading } = usePolymarketData(eventId)
+// ── Polymarket 数据（延迟加载，点击按钮后才请求） ──
+const polyEnabled = ref(false)
+const polyEventId = computed(() => polyEnabled.value ? eventId.value : 0)
+const { tradeWindowStats: polyWindowStatsFromApi, loading: polyLoading } = usePolymarketData(polyEventId)
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
@@ -67,12 +69,7 @@ const {
 // 切换 Tab 时收起所有展开行
 watch(activeTab, () => collapseAll())
 
-// 数据就绪后自动预取前一条记录，以便深度高亮立即呈现
-watch(activeWindow, (win) => {
-  if (win?.items?.length) {
-    prefetchAllPrevious(win.items)
-  }
-}, { immediate: true })
+// 前一条记录改为展开行时懒加载（toggleExpand 已有逻辑），不再自动预取
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
@@ -212,7 +209,11 @@ function windowRatioDisplay(w: TimeWindowData): string {
 
       <!-- ★ 所有分时统计摘要行 -->
       <div v-if="windows.length > 0" class="summary-panel">
-        <div class="summary-title">分时统计摘要</div>
+        <div class="summary-title">
+          分时统计摘要
+          <button v-if="!polyEnabled" class="poly-load-btn" @click="polyEnabled = true">📊 加载 Poly 数据</button>
+          <span v-else-if="polyLoading" class="poly-loading-hint">Poly 加载中...</span>
+        </div>
         <table class="summary-table">
           <thead>
             <tr>
@@ -586,6 +587,26 @@ function windowRatioDisplay(w: TimeWindowData): string {
   font-weight: 600;
   font-size: 13px;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.poly-load-btn {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 11px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.poly-load-btn:hover { background: #6d28d9; }
+.poly-loading-hint {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
 }
 .summary-table {
   width: 100%;
