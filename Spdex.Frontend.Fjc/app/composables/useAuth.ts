@@ -74,9 +74,28 @@ export function useAuth() {
   /** 是否仅限竞彩 */
   const isJcOnly = computed(() => user.value?.tokenType === 'jc')
 
+  /** visibilitychange 是否已注册 */
+  const visibilityBound = useState('auth_visibility_bound', () => false)
+
+  /**
+   * 检查当前 token 是否即将过期（剩余 < 10 分钟）或已过期。
+   * 返回 'ok' | 'need_refresh' | 'expired'
+   */
+  function tokenStatus(): 'ok' | 'need_refresh' | 'expired' {
+    if (!token.value) return 'expired'
+    const exp = getTokenExp(token.value)
+    if (!exp) return 'expired'
+    const nowSec = Math.floor(Date.now() / 1000)
+    if (nowSec >= exp) return 'expired'
+    if (exp - nowSec < 10 * 60) return 'need_refresh'
+    return 'ok'
+  }
+
   /**
    * 根据当前 JWT 的 exp 安排一个自动刷新定时器。
    * 在距离过期还剩 10 分钟时触发刷新。
+   * 同时注册 visibilitychange 监听：浏览器标签页从后台切回前台时，
+   * 立即检查 token 有效期并按需刷新，避免 setTimeout 被冻结导致掉线。
    */
   function scheduleRefresh() {
     // 仅在客户端执行
@@ -103,6 +122,28 @@ export function useAuth() {
     refreshTimer.value = setTimeout(async () => {
       await refreshToken()
     }, refreshIn)
+
+    // 注册 visibilitychange 监听（只绑定一次）
+    if (!visibilityBound.value) {
+      visibilityBound.value = true
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState !== 'visible') return
+        const status = tokenStatus()
+        if (status === 'expired') {
+          // token 已过期，尝试刷新；失败则不强制踢出，让路由守卫处理
+          const ok = await refreshToken()
+          if (!ok && token.value) {
+            // token 存在但过期且刷新失败 → 清除登录态
+            token.value = null
+            user.value = null
+            navigateTo('/login')
+          }
+        }
+        else if (status === 'need_refresh') {
+          await refreshToken()
+        }
+      })
+    }
   }
 
   /**
@@ -203,9 +244,30 @@ export function useAuth() {
       user.value = null
       return false
     }
-    catch {
-      token.value = null
-      user.value = null
+    catch (err: unknown) {
+      const fetchErr = err as { statusCode?: number }
+      if (fetchErr?.statusCode === 401) {
+        // 401 说明 token 确实无效，尝试刷新
+        const refreshed = await refreshToken()
+        if (refreshed) {
+          // 刷新成功后重新获取用户信息
+          try {
+            const res2 = await $fetch<MeResponse>('/api/auth/me', {
+              baseURL: config.public.apiBase as string,
+              headers: { Authorization: `Bearer ${token.value}` },
+            })
+            if (res2.code === 0 && res2.data) {
+              user.value = res2.data
+              return true
+            }
+          }
+          catch { /* 刷新后仍失败，走下面清除逻辑 */ }
+        }
+        token.value = null
+        user.value = null
+        return false
+      }
+      // 网络错误等非 401 → 不清除 token，保留登录态
       return false
     }
   }

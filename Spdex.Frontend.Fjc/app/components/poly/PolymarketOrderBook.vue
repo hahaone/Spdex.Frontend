@@ -31,6 +31,9 @@ const DISPLAY_LEVELS = 10
 function fmt(price: number | null | undefined): string {
   return formatPolyOdds(price, oddsFormat.value)
 }
+function fmtSize(size: number): string {
+  return Math.round(size).toLocaleString()
+}
 </script>
 
 <template>
@@ -68,7 +71,7 @@ function fmt(price: number | null | undefined): string {
           >
             <div class="absolute inset-0 bg-green-500/10 rounded" :style="{ width: barWidth(level.size) }" />
             <span class="relative tabular-nums font-semibold text-green-600">{{ fmt(level.price) }}</span>
-            <span class="relative tabular-nums text-gray-600">{{ level.size.toFixed(1) }}</span>
+            <span class="relative tabular-nums text-gray-600">{{ fmtSize(level.size) }}</span>
           </div>
           <div v-if="tokenBook.bids.length === 0" class="text-xs text-gray-400 text-center py-2">—</div>
         </div>
@@ -86,7 +89,7 @@ function fmt(price: number | null | undefined): string {
           >
             <div class="absolute inset-0 bg-red-500/10 rounded" :style="{ width: barWidth(level.size) }" />
             <span class="relative tabular-nums font-semibold text-red-600">{{ fmt(level.price) }}</span>
-            <span class="relative tabular-nums text-gray-600">{{ level.size.toFixed(1) }}</span>
+            <span class="relative tabular-nums text-gray-600">{{ fmtSize(level.size) }}</span>
           </div>
           <div v-if="tokenBook.asks.length === 0" class="text-xs text-gray-400 text-center py-2">—</div>
         </div>

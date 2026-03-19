@@ -254,9 +254,7 @@ const polyIndexTrendData = computed(() => {
     label: string
     color: string
     aggregateTotal: number
-    seededTotal: number
     recentTotal: number
-    scale: number
   }
   const marketsMeta: MarketMeta[] = []
   const allEvents: { ts: number; marketIdx: number; notional: number }[] = []
@@ -268,8 +266,6 @@ const polyIndexTrendData = computed(() => {
 
     const aggregateTotal = marketIndexBase(market)
     const recentTotal = (market.recentTrades ?? []).reduce((sum, trade) => sum + tradeNotional(trade.price, trade.size), 0)
-    const scale = recentTotal > aggregateTotal && recentTotal > 0 ? aggregateTotal / recentTotal : 1
-    const seededTotal = Math.max(0, aggregateTotal - recentTotal * scale)
 
     const mIdx = marketsMeta.length
     marketsMeta.push({
@@ -277,14 +273,12 @@ const polyIndexTrendData = computed(() => {
       label: localizeName(entry.optionLabel),
       color: graphColors[i % graphColors.length]!,
       aggregateTotal,
-      seededTotal,
       recentTotal,
-      scale,
     })
     for (const t of market.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
       if (!Number.isFinite(ts)) continue
-      allEvents.push({ ts, marketIdx: mIdx, notional: tradeNotional(t.price, t.size) * scale })
+      allEvents.push({ ts, marketIdx: mIdx, notional: tradeNotional(t.price, t.size) })
     }
   }
 
@@ -313,8 +307,14 @@ const polyIndexTrendData = computed(() => {
   const minTs = allEvents[0]!.ts
   const maxTs = allEvents[allEvents.length - 1]!.ts
 
-  // 先注入聚合基数，让终点与当前指数一致；recentTrades 只描述最近一段时间的变化分布。
-  const cumVol = marketsMeta.map(meta => meta.seededTotal)
+  // 纯近期成交走势：不注入历史基数，避免图表被巨大的累计量压平成水平线。
+  // 用少量种子（近期总量的 5%，按当前指数比例分配）平滑起始段。
+  const totalRecent = marketsMeta.reduce((s, meta) => s + meta.recentTotal, 0)
+  const totalAggregate = marketsMeta.reduce((s, meta) => s + meta.aggregateTotal, 0)
+  const seedAmount = totalRecent * 0.05
+  const cumVol = marketsMeta.map(meta =>
+    totalAggregate > 0 ? (meta.aggregateTotal / totalAggregate) * seedAmount : 0,
+  )
   // 为每个 market 收集数据点 (ts, indexValue 0~1)
   const rawPoints: TrendDataPoint[][] = marketsMeta.map(() => [])
 
@@ -441,6 +441,7 @@ const emptyVolumeBuckets: VolumeBucket[] = []
 
       <div v-if="visibleSeries.length > 0" class="grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-3">
         <div class="rounded-xl border border-gray-200 bg-gray-50/40 p-3">
+          <div class="text-xs font-semibold text-gray-400 mb-1">概率及走势</div>
           <PolyTrendChart :series="visibleSeries" :volume-buckets="volumeBuckets" :volume-max="volumeMaxNotional" :time-range="graphTimeline" :chart-scale="chartScale" :height="160" />
         </div>
         <div class="rounded-xl border border-gray-200 bg-gray-50/35 p-3 flex flex-col gap-2">
@@ -463,7 +464,7 @@ const emptyVolumeBuckets: VolumeBucket[] = []
             <div class="mx-auto w-full max-w-[60px] h-16 flex items-end justify-center">
               <div class="w-full rounded-t" :style="{ height: `${Math.max(entry.index, 2)}%`, backgroundColor: entry.color, opacity: 0.5 }" />
             </div>
-            <div class="text-lg font-bold tabular-nums text-gray-900 mt-1">{{ entry.index.toFixed(1) }}</div>
+            <div class="text-lg font-bold tabular-nums text-gray-900 mt-1">{{ Math.round(entry.index) }}</div>
             <div class="text-[10px] text-gray-400 truncate" :title="entry.label">{{ entry.label }}</div>
             <div class="text-[9px] text-gray-400 tabular-nums">{{ formatCompactCurrency(entry.base) }}</div>
           </div>
@@ -585,6 +586,10 @@ const emptyVolumeBuckets: VolumeBucket[] = []
               <div v-if="hiddenSeriesCount > 0" class="text-[11px] text-gray-400">已显示前 {{ visibleSeries.length }} 个选项，其余 {{ hiddenSeriesCount }} 个已折叠。</div>
             </div>
             <div v-else class="text-sm text-gray-400 text-center py-4">当前市场暂无可绘制的价格曲线</div>
+          </template>
+
+          <template v-else-if="activeViewTab === 'trades'">
+            <PolymarketTradeDetail :trades="activeTradeMarket?.recentTrades ?? []" />
           </template>
 
           <template v-else>

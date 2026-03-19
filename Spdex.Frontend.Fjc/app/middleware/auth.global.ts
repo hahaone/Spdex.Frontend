@@ -21,7 +21,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (!user.value) {
     const ok = await fetchUser()
     if (!ok) {
-      return navigateTo('/login')
+      // fetchUser 返回 false：token 无效(已清除) 或 网络错误(token 保留)
+      // 只有 token 被清除时才跳转登录页；网络错误时保留当前页面
+      if (!token.value) {
+        return navigateTo('/login')
+      }
     }
   }
 

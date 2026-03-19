@@ -67,7 +67,10 @@ const {
 
 watch(activeTab, () => collapseAll())
 
-// 前一条记录改为展开行时懒加载（toggleExpand 已有逻辑），不再自动预取
+// 自动预取当前 Tab 的前一条记录（用于深度高亮）
+watch(activeWindow, (w) => {
+  if (w?.items?.length) prefetchAllPrevious(w.items)
+}, { immediate: true })
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
