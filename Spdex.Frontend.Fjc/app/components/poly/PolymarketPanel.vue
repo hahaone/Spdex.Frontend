@@ -546,6 +546,13 @@ const emptyVolumeBuckets: VolumeBucket[] = []
 
           <template v-else-if="activeViewTab === 'trades'">
             <PolymarketTradeDetail :trades="activeTradeMarket?.recentTrades ?? []" />
+            <div v-if="trades?.eventId" class="mt-2 text-right">
+              <NuxtLink
+                :to="{ path: '/poly/trades', query: { eventId: trades.eventId, spdexEventId: links?.[0]?.spdexEventId, home: cnHome, away: cnAway } }"
+                target="_blank"
+                class="text-xs text-blue-500 hover:underline"
+              >查看全部成交 →</NuxtLink>
+            </div>
           </template>
 
           <template v-else>

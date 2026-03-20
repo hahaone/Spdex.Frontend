@@ -132,6 +132,15 @@ export interface PolymarketTradeWindowStats {
   pctChange: number | null
 }
 
+// ─── Trade Ticks (分页) ───
+
+export interface PolymarketTradeTicksPage {
+  items: PolymarketTradeTick[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
 // ─── BSW API 响应包装 ───
 
 export interface BswApiResult<T> {
