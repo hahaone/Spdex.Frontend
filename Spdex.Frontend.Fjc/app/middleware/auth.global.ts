@@ -22,15 +22,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
     const ok = await fetchUser()
     if (!ok) {
       // fetchUser 返回 false：token 无效(已清除) 或 网络错误(token 保留)
-      // 只有 token 被清除时才跳转登录页；网络错误时保留当前页面
+      // 只有 token 被清除时才跳转登录页；网络错误时不要误判成“未激活”
       if (!token.value) {
         return navigateTo('/login')
       }
+      return
     }
   }
 
-  // 未激活令牌 → 跳转激活页
-  if (!user.value?.tokenType) {
+  // 仅在已拿到用户信息后，才根据 tokenType 判断是否需要激活
+  if (user.value && !user.value.tokenType) {
     return navigateTo('/activate')
   }
 })
