@@ -244,18 +244,11 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
 })
 
 // ─── Poly Index 走势图 ───
-// 基于全时成交数据，计算每个时间点的累计成交量归一化指数
+// 纯用 recentTrades 增量累积，不注入任何 seed / aggregate 基数
 const polyIndexTrendData = computed(() => {
   if (activeFamilyKey.value !== 'moneyline') return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
 
-  // 收集每个 moneyline market 的全部成交记录
-  interface MarketMeta {
-    key: string
-    label: string
-    color: string
-    aggregateTotal: number
-    recentTotal: number
-  }
+  interface MarketMeta { key: string; label: string; color: string }
   const marketsMeta: MarketMeta[] = []
   const allEvents: { ts: number; marketIdx: number; notional: number }[] = []
 
@@ -263,17 +256,11 @@ const polyIndexTrendData = computed(() => {
     const entry = lineScopedMarkets.value[i]!
     const market = findTradeMarketByKey(entry.key)
     if (!market) continue
-
-    const aggregateTotal = marketIndexBase(market)
-    const recentTotal = (market.recentTrades ?? []).reduce((sum, trade) => sum + tradeNotional(trade.price, trade.size), 0)
-
     const mIdx = marketsMeta.length
     marketsMeta.push({
       key: entry.key,
       label: localizeName(entry.optionLabel),
       color: graphColors[i % graphColors.length]!,
-      aggregateTotal,
-      recentTotal,
     })
     for (const t of market.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
@@ -282,24 +269,8 @@ const polyIndexTrendData = computed(() => {
     }
   }
 
-  if (marketsMeta.length === 0) return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
-  if (allEvents.length === 0) {
-    const total = marketsMeta.reduce((sum, meta) => sum + meta.aggregateTotal, 0)
-    if (total <= 0) return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
-    const nowTs = Date.now()
-    const series: TrendChartSeries[] = marketsMeta
-      .filter(meta => meta.aggregateTotal > 0)
-      .map(meta => ({
-        key: meta.key,
-        label: meta.label,
-        color: meta.color,
-        dataPoints: [{ ts: nowTs, price: meta.aggregateTotal / total }],
-        lastPct: meta.aggregateTotal / total,
-      }))
-    return {
-      series,
-      timeline: { start: dayjs(nowTs).format('MM-DD HH:mm'), end: dayjs(nowTs).format('MM-DD HH:mm'), minTs: nowTs, maxTs: nowTs },
-    }
+  if (marketsMeta.length === 0 || allEvents.length === 0) {
+    return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
   }
 
   // 按时间排序
@@ -307,25 +278,11 @@ const polyIndexTrendData = computed(() => {
   const minTs = allEvents[0]!.ts
   const maxTs = allEvents[allEvents.length - 1]!.ts
 
-  // 纯近期成交走势：不注入历史基数，避免图表被巨大的累计量压平成水平线。
-  // 用少量种子（近期总量的 5%，按当前指数比例分配）平滑起始段。
-  const totalRecent = marketsMeta.reduce((s, meta) => s + meta.recentTotal, 0)
-  const totalAggregate = marketsMeta.reduce((s, meta) => s + meta.aggregateTotal, 0)
-  const seedAmount = totalRecent * 0.05
-  const cumVol = marketsMeta.map(meta =>
-    totalAggregate > 0 ? (meta.aggregateTotal / totalAggregate) * seedAmount : 0,
-  )
-  // 为每个 market 收集数据点 (ts, indexValue 0~1)
+  // 纯增量累积，无 seed
+  const cumVol = marketsMeta.map(() => 0)
   const rawPoints: TrendDataPoint[][] = marketsMeta.map(() => [])
 
-  const initialTotal = cumVol.reduce((sum, value) => sum + value, 0)
-  if (initialTotal > 0) {
-    for (let m = 0; m < marketsMeta.length; m++) {
-      rawPoints[m]!.push({ ts: minTs, price: cumVol[m]! / initialTotal })
-    }
-  }
-
-  // 按时间桶采样避免数据量过大
+  // 按时间桶采样
   const SAMPLE_BUCKETS = 80
   const span = maxTs - minTs
   const bucketSize = span > 0 ? span / SAMPLE_BUCKETS : 1
@@ -333,7 +290,6 @@ const polyIndexTrendData = computed(() => {
 
   for (const ev of allEvents) {
     cumVol[ev.marketIdx]! += ev.notional
-    // 到达桶边界时采样
     if (ev.ts >= nextBucketTs || ev === allEvents[allEvents.length - 1]) {
       const totalCum = cumVol.reduce((s, v) => s + v, 0)
       if (totalCum > 0) {
