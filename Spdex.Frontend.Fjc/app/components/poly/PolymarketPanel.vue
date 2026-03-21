@@ -243,98 +243,6 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
   return entries
 })
 
-// ─── Poly Index 走势图 ───
-// 纯用 recentTrades 增量累积，不注入任何 seed / aggregate 基数
-const polyIndexTrendData = computed(() => {
-  if (activeFamilyKey.value !== 'moneyline') return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
-
-  interface MarketMeta { key: string; label: string; color: string }
-  const marketsMeta: MarketMeta[] = []
-  const allEvents: { ts: number; marketIdx: number; notional: number }[] = []
-
-  for (let i = 0; i < lineScopedMarkets.value.length; i++) {
-    const entry = lineScopedMarkets.value[i]!
-    const market = findTradeMarketByKey(entry.key)
-    if (!market) continue
-    const mIdx = marketsMeta.length
-    marketsMeta.push({
-      key: entry.key,
-      label: localizeName(entry.optionLabel),
-      color: graphColors[i % graphColors.length]!,
-    })
-    for (const t of market.recentTrades ?? []) {
-      const ts = new Date(t.timestampUtc).getTime()
-      if (!Number.isFinite(ts)) continue
-      allEvents.push({ ts, marketIdx: mIdx, notional: tradeNotional(t.price, t.size) })
-    }
-  }
-
-  if (marketsMeta.length === 0 || allEvents.length === 0) {
-    return { series: [] as TrendChartSeries[], timeline: { start: '-', end: '-', minTs: 0, maxTs: 0 } }
-  }
-
-  // 按时间排序
-  allEvents.sort((a, b) => a.ts - b.ts)
-  const minTs = allEvents[0]!.ts
-  const maxTs = allEvents[allEvents.length - 1]!.ts
-
-  // 纯增量累积，无 seed
-  const cumVol = marketsMeta.map(() => 0)
-  const rawPoints: TrendDataPoint[][] = marketsMeta.map(() => [])
-
-  // 按时间桶采样
-  const SAMPLE_BUCKETS = 80
-  const span = maxTs - minTs
-  const bucketSize = span > 0 ? span / SAMPLE_BUCKETS : 1
-  let nextBucketTs = minTs + bucketSize
-
-  for (const ev of allEvents) {
-    cumVol[ev.marketIdx]! += ev.notional
-    if (ev.ts >= nextBucketTs || ev === allEvents[allEvents.length - 1]) {
-      const totalCum = cumVol.reduce((s, v) => s + v, 0)
-      if (totalCum > 0) {
-        for (let m = 0; m < marketsMeta.length; m++) {
-          rawPoints[m]!.push({ ts: ev.ts, price: cumVol[m]! / totalCum })
-        }
-      }
-      nextBucketTs = ev.ts + bucketSize
-    }
-  }
-
-  const series: TrendChartSeries[] = marketsMeta.map((meta, m) => {
-    const pts = rawPoints[m]!
-    const lastPct = pts.length > 0 ? pts[pts.length - 1]!.price : null
-    return { key: meta.key, label: meta.label, color: meta.color, dataPoints: pts, lastPct }
-  }).filter(s => s.dataPoints.length > 0)
-
-  return {
-    series,
-    timeline: { start: dayjs(minTs).format('MM-DD HH:mm'), end: dayjs(maxTs).format('MM-DD HH:mm'), minTs, maxTs },
-  }
-})
-
-const polyIndexSeries = computed(() => polyIndexTrendData.value.series)
-const polyIndexTimeline = computed(() => polyIndexTrendData.value.timeline)
-
-const polyIndexScale = computed(() => {
-  const values: number[] = []
-  for (const s of polyIndexSeries.value) {
-    for (const dp of s.dataPoints) values.push(dp.price)
-  }
-  if (values.length === 0) return { min: 0, max: 1, ticks: [1.0, 0.8, 0.6, 0.4, 0.2, 0.0] }
-  let min = Math.min(...values), max = Math.max(...values)
-  if (!Number.isFinite(min) || !Number.isFinite(max)) return { min: 0, max: 1, ticks: [1.0, 0.8, 0.6, 0.4, 0.2, 0.0] }
-  const padding = Math.max((max - min) * 0.1, 0.02)
-  min = Math.max(0, min - padding); max = Math.min(1, max + padding)
-  if (max <= min) { min = 0; max = 1 }
-  const ticks: number[] = []
-  const step = (max - min) / 4
-  for (let i = 0; i < 5; i++) ticks.push(max - step * i)
-  return { min, max, ticks }
-})
-
-// Poly Index 不需要 volume buckets，传空数组
-const emptyVolumeBuckets: VolumeBucket[] = []
 </script>
 
 <template>
@@ -425,19 +333,7 @@ const emptyVolumeBuckets: VolumeBucket[] = []
             <div class="text-[9px] text-gray-400 tabular-nums">{{ formatCompactCurrency(entry.base) }}</div>
           </div>
         </div>
-        <!-- 指数走势图 -->
-        <div v-if="polyIndexSeries.length > 0">
-          <div class="text-[10px] text-gray-400 mb-1">指数走势（基于近期成交分布，终点对齐当前指数）</div>
-          <div class="flex items-center gap-3 flex-wrap mb-1">
-            <div v-for="s in polyIndexSeries" :key="`pidx-legend-${s.key}`" class="inline-flex items-center gap-1 text-[11px] text-gray-500">
-              <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: s.color }" />
-              <span>{{ s.label }}</span>
-              <span class="font-semibold tabular-nums text-gray-900">{{ formatPercent(s.lastPct) }}</span>
-            </div>
-          </div>
-          <PolyTrendChart :series="polyIndexSeries" :volume-buckets="emptyVolumeBuckets" :volume-max="0" :time-range="polyIndexTimeline" :chart-scale="polyIndexScale" :height="120" />
-        </div>
-        <div class="text-[9px] text-gray-400">当前值使用市场聚合成交量，曲线使用近期成交分布回放</div>
+        <div class="text-[9px] text-gray-400">当前值使用市场聚合成交量</div>
       </div>
 
       <div v-if="!visibleSeries.length" class="text-sm text-gray-400 text-center py-4 border border-gray-200 rounded-xl bg-gray-50/30">
