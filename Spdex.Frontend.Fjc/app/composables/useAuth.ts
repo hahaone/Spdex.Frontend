@@ -174,8 +174,15 @@ export function useAuth() {
       navigateTo('/login')
       return false
     }
-    catch {
-      // 401 或网络错误 → 不立即踢出，等下次用户操作时由 useApiFetch 处理
+    catch (err: unknown) {
+      const fetchErr = err as { statusCode?: number }
+      // 401/403 → 权限失效（过期、禁用、会籍变更等），清除登录态
+      if (fetchErr?.statusCode === 401 || fetchErr?.statusCode === 403) {
+        token.value = null
+        user.value = null
+        navigateTo('/login')
+      }
+      // 其他错误（网络故障等）→ 不踢出
       return false
     }
   }
@@ -267,7 +274,13 @@ export function useAuth() {
         user.value = null
         return false
       }
-      // 网络错误等非 401 → 不清除 token，保留登录态
+      if (fetchErr?.statusCode === 403) {
+        // 403 说明会籍过期或权限变更，清除登录态
+        token.value = null
+        user.value = null
+        return false
+      }
+      // 网络错误等其他情况 → 不清除 token，保留登录态
       return false
     }
   }
