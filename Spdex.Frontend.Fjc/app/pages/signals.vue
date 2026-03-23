@@ -190,6 +190,21 @@ function statusLabel(status: string): string {
 }
 
 const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Executed']
+
+/** 百分比格式化 */
+function pct(hit: number, total: number): string {
+  if (total <= 0) return '0%'
+  return `${((hit / total) * 100).toFixed(0)}%`
+}
+
+/** 命中率颜色：>=60% 绿色，>=40% 橙色，<40% 灰色 */
+function hitRateColor(hit: number, total: number): string {
+  if (total <= 0) return '#6b7280'
+  const rate = hit / total
+  if (rate >= 0.6) return '#22c55e'
+  if (rate >= 0.4) return '#d97706'
+  return '#6b7280'
+}
 </script>
 
 <template>
@@ -564,6 +579,40 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
               <span class="stat-value stat-rate-value">
                 {{ stat.totalTriggered > 0 ? ((stat.totalExecuted / stat.totalTriggered) * 100).toFixed(1) : '0.0' }}%
               </span>
+            </div>
+          </div>
+          <!-- 命中统计 -->
+          <div v-if="stat.totalFinished > 0" class="stat-hit-section">
+            <div class="stat-hit-title">命中统计（已完赛 {{ stat.totalFinished }} 场）</div>
+            <div class="stat-body">
+              <div class="stat-item">
+                <span class="stat-label">半场有球</span>
+                <span class="stat-value" :style="{ color: hitRateColor(stat.hitFirstHalfGoal, stat.totalFinished) }">
+                  {{ stat.hitFirstHalfGoal }}/{{ stat.totalFinished }}
+                  <small class="stat-pct">{{ pct(stat.hitFirstHalfGoal, stat.totalFinished) }}</small>
+                </span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">半场O1.5</span>
+                <span class="stat-value" :style="{ color: hitRateColor(stat.hitHalfOver15, stat.totalFinished) }">
+                  {{ stat.hitHalfOver15 }}/{{ stat.totalFinished }}
+                  <small class="stat-pct">{{ pct(stat.hitHalfOver15, stat.totalFinished) }}</small>
+                </span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">全场O2.5</span>
+                <span class="stat-value" :style="{ color: hitRateColor(stat.hitFullOver25, stat.totalFinished) }">
+                  {{ stat.hitFullOver25 }}/{{ stat.totalFinished }}
+                  <small class="stat-pct">{{ pct(stat.hitFullOver25, stat.totalFinished) }}</small>
+                </span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">BTS</span>
+                <span class="stat-value" :style="{ color: hitRateColor(stat.hitBothTeamsScored, stat.totalFinished) }">
+                  {{ stat.hitBothTeamsScored }}/{{ stat.totalFinished }}
+                  <small class="stat-pct">{{ pct(stat.hitBothTeamsScored, stat.totalFinished) }}</small>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -1258,6 +1307,28 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 0;
+}
+
+.stat-hit-section {
+  border-top: 1px dashed #e2e8f0;
+}
+
+.stat-hit-title {
+  padding: 0.4rem 1rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.stat-hit-section .stat-body {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stat-pct {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 .stat-item {

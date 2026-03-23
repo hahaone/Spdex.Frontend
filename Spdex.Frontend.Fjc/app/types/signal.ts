@@ -145,4 +145,14 @@ export interface SignalStats {
   totalExpired: number
   totalActive: number
   executionRate: number
+  /** 已完赛数 */
+  totalFinished: number
+  /** 上半场有进球命中数 */
+  hitFirstHalfGoal: number
+  /** 半场 Over 1.5 命中数 */
+  hitHalfOver15: number
+  /** 全场 Over 2.5 命中数 */
+  hitFullOver25: number
+  /** BTS 命中数 */
+  hitBothTeamsScored: number
 }
