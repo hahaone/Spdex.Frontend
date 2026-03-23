@@ -106,7 +106,31 @@ const histParams = computed(() => ({
 
 const { data: histResponse, status: histStatus, refreshing: histRefreshing, manualRefresh: histRefresh } = useSignalHistory(histParams)
 const histResult = computed<SignalHistoryResult | null>(() => histResponse.value?.data ?? null)
-const histItems = computed(() => histResult.value?.items ?? [])
+
+/** 按 eventId+modelId 合并同一场比赛的多条历史记录（兼容旧数据） */
+const histItems = computed(() => {
+  const raw = histResult.value?.items ?? []
+  const map = new Map<string, typeof raw[0]>()
+  for (const rec of raw) {
+    const key = `${rec.eventId}_${rec.modelId}`
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, { ...rec })
+    } else {
+      // 合并：保留最新状态、累加触发次数
+      existing.triggerCount += Math.max(rec.triggerCount, 1)
+      // 如果新记录比已有的更早，保留更早的触发时间
+      if (rec.triggeredAt < existing.triggeredAt) {
+        existing.triggeredAt = rec.triggeredAt
+      }
+      // 保留有比分的记录
+      if (!existing.halfScore && rec.halfScore) existing.halfScore = rec.halfScore
+      if (!existing.finalScore && rec.finalScore) existing.finalScore = rec.finalScore
+      if (existing.isHit == null && rec.isHit != null) existing.isHit = rec.isHit
+    }
+  }
+  return [...map.values()]
+})
 const histTotal = computed(() => histResult.value?.total ?? 0)
 const histTotalPages = computed(() => histResult.value?.totalPages ?? 0)
 const histLoading = computed(() => histStatus.value === 'pending' || histRefreshing.value)
