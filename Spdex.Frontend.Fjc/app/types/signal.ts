@@ -89,7 +89,7 @@ export interface SignalModelSummary {
   activeSignalCount: number
 }
 
-/** 历史信号记录（DB） */
+/** 历史信号记录（DB，含比赛结果） */
 export interface SignalRecord {
   id: number
   signalId: string
@@ -108,8 +108,17 @@ export interface SignalRecord {
   snapshotJson: string | null
   conditionsJson: string | null
   waitCondJson: string | null
+  triggersJson: string | null
   createdAt: string
   updatedAt: string
+  /** 半场比分 */
+  halfScore: string | null
+  /** 全场比分 */
+  finalScore: string | null
+  /** 是否命中 */
+  isHit: boolean | null
+  /** 触发次数 */
+  triggerCount: number
 }
 
 /** 历史信号分页响应 */

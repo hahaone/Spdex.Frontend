@@ -404,13 +404,15 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
               <th>开赛时间</th>
               <th>状态</th>
               <th>触发时间</th>
-              <th>执行时间</th>
-              <th>执行者</th>
+              <th>半场比分</th>
+              <th>全场比分</th>
+              <th>命中</th>
+              <th>触发次数</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="histItems.length === 0">
-              <td colspan="7" class="empty">暂无历史记录</td>
+              <td colspan="9" class="empty">暂无历史记录</td>
             </tr>
             <tr v-for="rec in histItems" :key="rec.id">
               <td>
@@ -431,8 +433,16 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
                 </span>
               </td>
               <td class="col-time">{{ formatMatchTimeSlash(rec.triggeredAt) }}</td>
-              <td class="col-time">{{ rec.executedAt ? formatDateTime(rec.executedAt) : '-' }}</td>
-              <td>{{ rec.executedBy || '-' }}</td>
+              <td class="col-score">{{ rec.halfScore || '-' }}</td>
+              <td class="col-score">{{ rec.finalScore || '-' }}</td>
+              <td class="col-hit">
+                <span v-if="rec.isHit === true" class="hit-yes">✅</span>
+                <span v-else-if="rec.isHit === false" class="hit-no">❌</span>
+                <span v-else>-</span>
+              </td>
+              <td class="col-trigger-count">
+                <span :class="{ 'trigger-multi': rec.triggerCount > 1 }">{{ rec.triggerCount }}</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1035,6 +1045,26 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
   font-size: 0.85rem;
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* ── 比分/命中/触发次数 ── */
+.col-score {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.col-hit {
+  text-align: center;
+}
+.hit-yes { font-size: 1rem; }
+.hit-no { font-size: 1rem; }
+.col-trigger-count {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.trigger-multi {
+  color: #d97706;
+  font-weight: 700;
 }
 
 /* ── 队伍 ── */
