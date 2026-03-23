@@ -140,9 +140,13 @@ export interface SignalHistoryResult {
 export interface SignalStats {
   modelId: string
   modelName: string
+  /** 总比赛数（按 modelId + eventId 去重） */
   totalTriggered: number
+  /** 已执行比赛数 */
   totalExecuted: number
+  /** 已过期比赛数 */
   totalExpired: number
+  /** 活跃比赛数 */
   totalActive: number
   executionRate: number
   /** 已完赛数 */

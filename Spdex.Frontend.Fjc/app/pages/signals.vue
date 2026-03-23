@@ -253,7 +253,7 @@ function hitRateColor(hit: number, total: number): string {
         <ul>
           <li><b>实时信号</b>：展示内存中的活跃信号，30 秒自动刷新。可按状态和模型筛选，支持查看详情、确认执行、取消操作。</li>
           <li><b>历史记录</b>：查询数据库中的所有信号记录，支持按模型、状态、日期范围、赛事 ID 分页查询。</li>
-          <li><b>统计概览</b>：按模型分组展示触发数、执行数、过期数和执行率，支持按天数范围筛选。</li>
+          <li><b>统计概览</b>：按模型分组展示比赛数、已执行场次、已过期场次和执行率；同一场比赛多次触发只统计一次，支持按天数范围筛选。</li>
         </ul>
       </div>
     </div>
@@ -559,7 +559,7 @@ function hitRateColor(hit: number, total: number): string {
           </div>
           <div class="stat-body">
             <div class="stat-item">
-              <span class="stat-label">总触发</span>
+              <span class="stat-label">总比赛</span>
               <span class="stat-value">{{ stat.totalTriggered }}</span>
             </div>
             <div class="stat-item">
