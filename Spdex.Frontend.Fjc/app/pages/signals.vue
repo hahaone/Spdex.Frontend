@@ -127,6 +127,9 @@ const histItems = computed(() => {
       if (!existing.halfScore && rec.halfScore) existing.halfScore = rec.halfScore
       if (!existing.finalScore && rec.finalScore) existing.finalScore = rec.finalScore
       if (existing.isHit == null && rec.isHit != null) existing.isHit = rec.isHit
+      if (existing.halfOver15 == null && rec.halfOver15 != null) existing.halfOver15 = rec.halfOver15
+      if (existing.fullOver25 == null && rec.fullOver25 != null) existing.fullOver25 = rec.fullOver25
+      if (existing.bothTeamsScored == null && rec.bothTeamsScored != null) existing.bothTeamsScored = rec.bothTeamsScored
     }
   }
   return [...map.values()]
@@ -431,12 +434,15 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
               <th>半场比分</th>
               <th>全场比分</th>
               <th>命中</th>
+              <th>半场O1.5</th>
+              <th>全场O2.5</th>
+              <th>BTS</th>
               <th>触发次数</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="histItems.length === 0">
-              <td colspan="9" class="empty">暂无历史记录</td>
+              <td colspan="12" class="empty">暂无历史记录</td>
             </tr>
             <tr v-for="rec in histItems" :key="rec.id">
               <td>
@@ -462,6 +468,21 @@ const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Execu
               <td class="col-hit">
                 <span v-if="rec.isHit === true" class="hit-yes">✅</span>
                 <span v-else-if="rec.isHit === false" class="hit-no">❌</span>
+                <span v-else>-</span>
+              </td>
+              <td class="col-hit">
+                <span v-if="rec.halfOver15 === true" class="hit-yes">✅</span>
+                <span v-else-if="rec.halfOver15 === false" class="hit-no">❌</span>
+                <span v-else>-</span>
+              </td>
+              <td class="col-hit">
+                <span v-if="rec.fullOver25 === true" class="hit-yes">✅</span>
+                <span v-else-if="rec.fullOver25 === false" class="hit-no">❌</span>
+                <span v-else>-</span>
+              </td>
+              <td class="col-hit">
+                <span v-if="rec.bothTeamsScored === true" class="hit-yes">✅</span>
+                <span v-else-if="rec.bothTeamsScored === false" class="hit-no">❌</span>
                 <span v-else>-</span>
               </td>
               <td class="col-trigger-count">

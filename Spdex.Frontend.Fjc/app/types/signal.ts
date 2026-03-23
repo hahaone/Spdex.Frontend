@@ -115,8 +115,14 @@ export interface SignalRecord {
   halfScore: string | null
   /** 全场比分 */
   finalScore: string | null
-  /** 是否命中 */
+  /** 上半场有进球 */
   isHit: boolean | null
+  /** 半场进球 Over 1.5 */
+  halfOver15: boolean | null
+  /** 全场进球 Over 2.5 */
+  fullOver25: boolean | null
+  /** 双方都有进球 */
+  bothTeamsScored: boolean | null
   /** 触发次数 */
   triggerCount: number
 }
