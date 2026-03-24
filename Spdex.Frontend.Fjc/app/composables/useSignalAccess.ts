@@ -5,7 +5,7 @@
  */
 
 /** 允许访问信号页面的用户 ID 列表 */
-const ALLOWED_USER_IDS: number[] = [1]
+const ALLOWED_USER_IDS: number[] = [1, 131501]
 
 export function useSignalAccess() {
   const { user } = useAuth()
