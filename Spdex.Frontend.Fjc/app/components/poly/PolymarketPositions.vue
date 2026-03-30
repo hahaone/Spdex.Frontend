@@ -32,14 +32,18 @@ watch(() => props.conditionId, () => {
   fetchHolders()
 }, { immediate: true })
 
-// YES = outcomeIndex 0, NO = outcomeIndex 1
+// YES = outcomeIndex 0 或第一个 token, NO = outcomeIndex 1 或第二个 token
 const yesHolders = computed(() => {
-  const t = holders.value.find(h => h.outcomeIndex === 0)
-  return t?.holders ?? []
+  const byIdx = holders.value.find(h => h.outcomeIndex === 0)
+  if (byIdx) return byIdx.holders
+  // fallback: 第一个 token 视为 YES
+  return holders.value[0]?.holders ?? []
 })
 const noHolders = computed(() => {
-  const t = holders.value.find(h => h.outcomeIndex === 1)
-  return t?.holders ?? []
+  const byIdx = holders.value.find(h => h.outcomeIndex === 1)
+  if (byIdx) return byIdx.holders
+  // fallback: 第二个 token 视为 NO
+  return holders.value[1]?.holders ?? []
 })
 
 const maxRows = computed(() => Math.max(yesHolders.value.length, noHolders.value.length))
