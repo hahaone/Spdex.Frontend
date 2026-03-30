@@ -91,7 +91,19 @@ function computeStats(trades: PolymarketTradeTick[]): TradeStats {
   return { count: trades.length, buyCount, sellCount, buyAmount, sellAmount }
 }
 
-const pageStats = computed(() => computeStats(filteredItems.value))
+// 全量统计（来自 meta 聚合 API，非当前页）
+const globalStats = computed(() => {
+  if (!meta.value?.markets) return { count: 0, buyCount: 0, sellCount: 0, buyAmount: 0, sellAmount: 0 }
+  let buyCount = 0, sellCount = 0, buyAmount = 0, sellAmount = 0, count = 0
+  for (const m of meta.value.markets) {
+    count += m.tradeCount
+    buyCount += m.buyCount
+    sellCount += m.sellCount
+    buyAmount += m.buySize  // buySize = sum of (price * size) for buys
+    sellAmount += m.sellSize
+  }
+  return { count, buyCount, sellCount, buyAmount, sellAmount }
+})
 
 // ── 分页 ──
 const totalCount = computed(() => ticks.value?.totalCount ?? 0)
@@ -180,11 +192,11 @@ function runnerLabel(conditionId: string): string {
         </div>
       </div>
 
-      <!-- 统计摘要 -->
+      <!-- 统计摘要（全量） -->
       <div class="stats-bar">
-        <span>当前页 {{ pageStats.count }} 笔</span>
-        <span class="stat-buy">买 {{ pageStats.buyCount }} 笔 {{ formatAmount(pageStats.buyAmount) }}</span>
-        <span class="stat-sell">卖 {{ pageStats.sellCount }} 笔 {{ formatAmount(pageStats.sellAmount) }}</span>
+        <span>共 {{ globalStats.count.toLocaleString() }} 笔</span>
+        <span class="stat-buy">买 {{ globalStats.buyCount.toLocaleString() }} 笔 {{ formatAmount(globalStats.buyAmount) }}</span>
+        <span class="stat-sell">卖 {{ globalStats.sellCount.toLocaleString() }} 笔 {{ formatAmount(globalStats.sellAmount) }}</span>
       </div>
 
       <!-- 数据表格 -->

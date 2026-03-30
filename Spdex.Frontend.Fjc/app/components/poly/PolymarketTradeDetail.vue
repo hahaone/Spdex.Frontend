@@ -48,7 +48,8 @@ function computeStats(trades: PolymarketTradeTick[]): ChipStats {
   return { count: trades.length, buyCount, sellCount, buyAmount, sellAmount }
 }
 
-const activeStats = computed(() => computeStats(filteredTrades.value))
+// 全量统计（不受筛选影响）
+const allStats = computed(() => computeStats(props.trades))
 
 function formatStatsSummary(s: ChipStats): string {
   if (s.count === 0) return '0 笔'
@@ -116,7 +117,7 @@ function traderDisplay(t: PolymarketTradeTick): string {
         No ({{ noStats.count }})
       </button>
       <span class="text-[11px] text-gray-400 tabular-nums ml-1">
-        {{ formatStatsSummary(activeStats) }}
+        {{ formatStatsSummary(allStats) }}
       </span>
     </div>
 
