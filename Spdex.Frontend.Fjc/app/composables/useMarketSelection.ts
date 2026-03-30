@@ -23,7 +23,7 @@ import {
 
 // ─── Types ───
 
-export type MarketViewTabKey = 'orderbook' | 'graph' | 'about' | 'trades'
+export type MarketViewTabKey = 'orderbook' | 'graph' | 'about' | 'trades' | 'positions'
 export type MarketSide = 'yes' | 'no'
 
 export interface MarketEntry {
@@ -45,6 +45,7 @@ export const MARKET_VIEW_TABS: Array<{ key: MarketViewTabKey; label: string }> =
   { key: 'graph', label: 'Graph' },
   { key: 'about', label: 'About' },
   { key: 'trades', label: '成交明细' },
+  { key: 'positions', label: '持仓排行' },
 ]
 
 // ─── Internal helpers ───

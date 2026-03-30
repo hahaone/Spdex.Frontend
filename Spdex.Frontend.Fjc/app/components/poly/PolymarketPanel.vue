@@ -451,6 +451,10 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             </div>
           </template>
 
+          <template v-else-if="activeViewTab === 'positions'">
+            <PolymarketPositions :condition-id="activeConditionId" :label="activeMarketLabel" />
+          </template>
+
           <template v-else>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div class="rounded-lg bg-gray-50 p-3">

@@ -141,6 +141,23 @@ export interface PolymarketTradeTicksPage {
   pageSize: number
 }
 
+// ─── 持仓排行 ───
+
+export interface PolymarketHolder {
+  proxyWallet: string
+  name: string | null
+  pseudonym: string | null
+  profileImage: string | null
+  verified: boolean
+  amount: number
+}
+
+export interface PolymarketTokenHolders {
+  token: string
+  outcomeIndex: number | null
+  holders: PolymarketHolder[]
+}
+
 // ─── BSW API 响应包装 ───
 
 export interface BswApiResult<T> {
