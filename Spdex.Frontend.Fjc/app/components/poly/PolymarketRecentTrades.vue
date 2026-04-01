@@ -8,8 +8,9 @@ const props = withDefaults(
   defineProps<{
     trades: PolymarketTradeTick[]
     limit?: number
+    kickoffUtc?: string | null
   }>(),
-  { limit: 50 },
+  { limit: 50, kickoffUtc: null },
 )
 
 const oddsFormat = inject(ODDS_FORMAT_KEY, ref<OddsFormat>('decimal'))
@@ -51,6 +52,64 @@ function traderDisplayName(t: PolymarketTradeTick): string | null {
 function traderProfileUrl(t: PolymarketTradeTick): string | null {
   if (t.proxyWallet) return `https://polymarket.com/profile/${t.proxyWallet}`
   return null
+}
+
+// ─── Price Delta (价差) ───
+const priceDeltaMap = computed(() => {
+  const map = new Map<string, number | null>()
+  // Group by conditionId+outcome, sort by time, compute sequential deltas
+  const grouped = new Map<string, PolymarketTradeTick[]>()
+  for (const t of props.trades) {
+    const key = `${t.conditionId}_${t.outcome}`
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key)!.push(t)
+  }
+  for (const [, trades] of grouped) {
+    const sorted = [...trades].sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
+    for (let i = 0; i < sorted.length; i++) {
+      const tKey = tradeKey(sorted[i])
+      if (i === 0) { map.set(tKey, null); continue }
+      const delta = Math.round((sorted[i].price - sorted[i - 1].price) * 10000) / 10000
+      map.set(tKey, delta)
+    }
+  }
+  return map
+})
+
+function getDelta(t: PolymarketTradeTick): number | null {
+  return priceDeltaMap.value.get(tradeKey(t)) ?? null
+}
+
+function deltaColor(d: number | null): string {
+  if (d == null || d === 0) return 'color:#9ca3af'
+  return d > 0 ? 'color:#16a34a' : 'color:#dc2626'
+}
+
+function formatDelta(d: number | null): string {
+  if (d == null) return ''
+  if (d === 0) return '0'
+  const pct = (d * 100).toFixed(1)
+  return d > 0 ? `+${pct}` : pct
+}
+
+// ─── Time Phase Mark ───
+function getTimeMark(tradeUtc: string): string {
+  if (!props.kickoffUtc) return ''
+  const tradeMs = new Date(tradeUtc).getTime()
+  const kickoffMs = new Date(props.kickoffUtc).getTime()
+  const diffMin = (kickoffMs - tradeMs) / 60000
+  if (diffMin < 0) return 'LIVE'
+  if (diffMin <= 2) return 'PP'
+  if (diffMin < 30) return 'P'
+  if (diffMin >= 50 && diffMin <= 65) return 'PS'
+  if (diffMin < 60) return 'P0'
+  if (diffMin < 120) return 'P1'
+  if (diffMin < 180) return 'P2'
+  if (diffMin < 360) return 'P3'
+  if (diffMin < 720) return 'P6'
+  if (diffMin < 1440) return 'P12'
+  if (diffMin < 2880) return 'P24'
+  return 'P48'
 }
 
 const hoveredTradeKey = ref<string | null>(null)
@@ -183,7 +242,7 @@ function tickY(value: number): number {
 
     <!-- Trade table -->
     <div class="trade-grid px-2 py-1 text-[10px] text-gray-400 uppercase tracking-wider">
-      <span>时间</span><span>方向</span><span>交易者</span><span class="text-right">价格</span><span class="text-right">成交量</span>
+      <span>时间</span><span>方向</span><span>交易者</span><span class="text-right">价格</span><span class="text-right">价差</span><span class="text-right">成交量</span><span v-if="kickoffUtc" class="text-center">标记</span>
     </div>
     <div
       v-for="(trade, i) in visibleTrades" :key="i"
@@ -202,8 +261,10 @@ function tickY(value: number): number {
         <a v-if="traderDisplayName(trade)" :href="traderProfileUrl(trade) ?? '#'" target="_blank" rel="noopener" class="text-[11px] text-blue-500 hover:underline" @click.stop>{{ traderDisplayName(trade) }}</a>
         <span v-else class="text-[11px] text-gray-400">—</span>
       </span>
-      <span class="relative text-right tabular-nums font-semibold text-gray-900">{{ fmt(trade.price) }}</span>
+      <span class="relative text-right tabular-nums font-semibold text-gray-900">{{ (trade.price * 100).toFixed(1) }}%</span>
+      <span class="relative text-right tabular-nums text-[11px] font-medium" :style="deltaColor(getDelta(trade))">{{ formatDelta(getDelta(trade)) }}</span>
       <span class="relative text-right tabular-nums font-medium text-gray-600">{{ formatSize(trade.size) }}</span>
+      <span v-if="kickoffUtc" class="relative text-center text-[10px] text-gray-400 font-medium">{{ getTimeMark(trade.timestampUtc) }}</span>
     </div>
 
     <button v-if="hasMore" class="w-full text-center text-xs text-blue-500 hover:underline py-2" @click="showMore">
@@ -215,7 +276,7 @@ function tickY(value: number): number {
 </template>
 
 <style scoped>
-.trade-grid { display: grid; grid-template-columns: 64px 1fr minmax(0, 100px) 56px 56px; gap: 4px; align-items: center; }
+.trade-grid { display: grid; grid-template-columns: 64px 1fr minmax(0, 90px) 52px 42px 52px 36px; gap: 4px; align-items: center; }
 .bubble { transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .bubble:hover, .bubble-active { transform: translate(-50%, -50%) scale(1.25); }
 .tooltip-fade-enter-active { transition: opacity 0.1s ease; }

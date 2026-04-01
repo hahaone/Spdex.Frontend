@@ -61,7 +61,7 @@ const polymarketUrl = computed(() => {
 // ─── Market selection (composable) ───
 const {
   activeMarketKey, activeCategoryKey, activeFamilyKey, activeLineKey, activeViewTab,
-  primaryLink, kickoffTimeLabel, kickoffDateLabel,
+  primaryLink, kickoffUtc, kickoffTimeLabel, kickoffDateLabel,
   categoryTabs, familyTabs, lineTabs, lineScopedMarkets,
   activeMarketSide, activeTradeMarket, activeBookMarket, recentTrades,
   activeMarketLabel, activeOptionLabel, activeMarketNotional, activeMarketTradeCount,
@@ -419,7 +419,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             </div>
             <div v-if="recentTrades.length > 0">
               <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">成交量 Top {{ recentTrades.length }}</div>
-              <PolymarketRecentTrades :trades="recentTrades" :limit="50" />
+              <PolymarketRecentTrades :trades="recentTrades" :limit="50" :kickoff-utc="kickoffUtc" />
             </div>
           </template>
 

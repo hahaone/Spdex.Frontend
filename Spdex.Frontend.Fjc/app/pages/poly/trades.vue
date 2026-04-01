@@ -132,6 +132,41 @@ function traderDisplay(t: PolymarketTradeTick): string {
 function runnerLabel(conditionId: string): string {
   return runnerMap.value.get(conditionId)?.label ?? conditionId.slice(0, 8)
 }
+
+// ── 价差 (Price Delta) ──
+function tradeKey(t: PolymarketTradeTick): string { return `${t.timestampUtc}_${t.price}_${t.size}_${t.conditionId}` }
+
+const priceDeltaMap = computed(() => {
+  const map = new Map<string, number | null>()
+  const items = ticks.value?.items ?? []
+  const grouped = new Map<string, PolymarketTradeTick[]>()
+  for (const t of items) {
+    const key = `${t.conditionId}_${t.outcome}`
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key)!.push(t)
+  }
+  for (const [, trades] of grouped) {
+    const sorted = [...trades].sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
+    for (let i = 0; i < sorted.length; i++) {
+      const k = tradeKey(sorted[i])
+      if (i === 0) { map.set(k, null); continue }
+      map.set(k, Math.round((sorted[i].price - sorted[i - 1].price) * 10000) / 10000)
+    }
+  }
+  return map
+})
+
+function getDelta(t: PolymarketTradeTick): number | null { return priceDeltaMap.value.get(tradeKey(t)) ?? null }
+function deltaColor(d: number | null): string {
+  if (d == null || d === 0) return 'color:#9ca3af'
+  return d > 0 ? 'color:#16a34a' : 'color:#dc2626'
+}
+function formatDelta(d: number | null): string {
+  if (d == null) return ''
+  if (d === 0) return '0'
+  const pct = (d * 100).toFixed(1)
+  return d > 0 ? `+${pct}` : pct
+}
 </script>
 
 <template>
@@ -209,6 +244,7 @@ function runnerLabel(conditionId: string): string {
               <th class="col-side">方向</th>
               <th class="col-outcome">结果</th>
               <th class="col-price">价格</th>
+              <th class="col-delta">价差</th>
               <th class="col-size">数量</th>
               <th class="col-amount">金额</th>
               <th class="col-trader">交易者</th>
@@ -224,7 +260,8 @@ function runnerLabel(conditionId: string): string {
               <td class="col-outcome">
                 <span :class="['outcome-badge', t.outcome === 'Yes' ? 'outcome-yes' : 'outcome-no']">{{ t.outcome }}</span>
               </td>
-              <td class="col-price">{{ (t.price * 100).toFixed(1) }}¢</td>
+              <td class="col-price">{{ (t.price * 100).toFixed(1) }}%</td>
+              <td class="col-delta" :style="deltaColor(getDelta(t))">{{ formatDelta(getDelta(t)) }}</td>
               <td class="col-size">{{ formatSize(t.size) }}</td>
               <td class="col-amount">{{ formatAmount(t.price * t.size) }}</td>
               <td class="col-trader">
@@ -238,7 +275,7 @@ function runnerLabel(conditionId: string): string {
               </td>
             </tr>
             <tr v-if="filteredItems.length === 0">
-              <td colspan="8" class="no-data">暂无成交数据</td>
+              <td colspan="9" class="no-data">暂无成交数据</td>
             </tr>
           </tbody>
         </table>
@@ -351,7 +388,8 @@ function runnerLabel(conditionId: string): string {
 .data-table tbody tr:hover { background: #fafafa; }
 
 .col-time { font-variant-numeric: tabular-nums; color: #6b7280; }
-.col-price, .col-size, .col-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.col-price, .col-delta, .col-size, .col-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.col-delta { font-size: 11px; font-weight: 500; }
 .col-amount { font-weight: 600; }
 .col-trader { max-width: 120px; overflow: hidden; text-overflow: ellipsis; color: #9ca3af; }
 

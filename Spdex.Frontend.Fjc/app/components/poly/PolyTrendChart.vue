@@ -1,388 +1,271 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import {
-  type TrendChartSeries,
-  type ChartLayout,
-  DEFAULT_LAYOUT,
-  catmullRomToBezier,
-  buildFillPath,
-  mapX as tsToX,
-  mapY as priceToY,
-  chartWidth as cw,
-  totalHeight as th,
-  findNearestByTs,
-} from '~/utils/polymarketChart'
-
-// ─── Props ───
+import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { createChart, LineSeries, type IChartApi, type LineData, type Time, ColorType, LineStyle, CrosshairMode } from 'lightweight-charts'
+import type { TrendChartSeries, TrendDataPoint } from '~/utils/polymarketChart'
+import dayjs from 'dayjs'
 
 export interface VolumeBucket {
-  index: number
-  x: number
-  width: number
-  totalNotional: number
-  buyNotional: number
-  sellNotional: number
-  tradeCount: number
+  index: number; x: number; width: number
+  totalNotional: number; buyNotional: number; sellNotional: number; tradeCount: number
 }
 
 const props = withDefaults(
   defineProps<{
     series: TrendChartSeries[]
-    volumeBuckets: VolumeBucket[]
-    volumeMax: number
+    volumeBuckets?: VolumeBucket[]
+    volumeMax?: number
     timeRange: { minTs: number; maxTs: number; start: string; end: string }
     chartScale: { min: number; max: number; ticks: number[] }
     height?: number
   }>(),
-  { height: 224 },
+  { height: 400, volumeMax: 0 },
 )
 
-// ─── Layout ───
+// ─── Hover state ───
+interface LabelInfo { label: string; color: string; pct: number }
+interface FloatInfo { label: string; color: string; pct: number; x: number; y: number }
+const hoverTime = ref<string | null>(null)
+const hoverLabels = reactive<LabelInfo[]>([])
+const floats = reactive<FloatInfo[]>([])
+const isHovering = ref(false)
+const fadeLeft = ref(0)
 
-const layout = computed<ChartLayout>(() => ({
-  ...DEFAULT_LAYOUT,
-  priceHeight: props.height,
-}))
+// ─── Time range presets ───
+type TimePreset = '1H' | '6H' | '1D' | '1W' | '1M' | 'ALL'
+const TIME_PRESETS: TimePreset[] = ['1H', '6H', '1D', '1W', '1M', 'ALL']
+const activePreset = ref<TimePreset>('ALL')
 
-const viewWidth = computed(() => layout.value.viewWidth)
-const viewHeight = computed(() => th(layout.value))
-const chartW = computed(() => cw(layout.value))
-const priceBottom = computed(() => layout.value.padTop + layout.value.priceHeight)
-const volumeTop = computed(() => priceBottom.value)
-const volumeBottom = computed(() => volumeTop.value + layout.value.volumeHeight)
-
-// ─── Helpers ───
-
-function formatPercent(raw: number | null): string {
-  if (raw == null) return '-'
-  return `${Math.round(raw * 100)}%`
+const PRESET_MS: Record<TimePreset, number> = {
+  '1H': 3600000, '6H': 21600000, '1D': 86400000,
+  '1W': 604800000, '1M': 2592000000, 'ALL': 0,
 }
 
-function formatCompact(val: number): string {
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`
-  return `$${Math.round(val)}`
-}
+function selectPreset(p: TimePreset) { activePreset.value = p; applyTimeRange() }
 
-function formatTime(ts: number): string {
-  const d = new Date(ts)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  const ss = String(d.getSeconds()).padStart(2, '0')
-  return `${mm}-${dd} ${hh}:${min}:${ss}`
-}
-
-function formatHour(ts: number): string {
-  const d = new Date(ts)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-function mx(ts: number): number {
-  return tsToX(ts, props.timeRange.minTs, props.timeRange.maxTs, layout.value)
-}
-
-function my(price: number): number {
-  return priceToY(price, props.chartScale.min, props.chartScale.max, layout.value)
-}
-
-// ─── Rendered series ───
-
-interface RenderedSeries {
-  key: string
-  label: string
-  color: string
-  curvePath: string
-  firstX: number
-  lastX: number
-  lastY: number
-  lastPct: number | null
-}
-
-const isSingleSeries = computed(() => props.series.length === 1)
-
-const renderedSeries = computed<RenderedSeries[]>(() => {
-  return props.series.map((s) => {
-    const pts = s.dataPoints.map(dp => ({
-      x: mx(dp.ts),
-      y: my(dp.price),
-    }))
-
-    const curvePath = catmullRomToBezier(pts)
-
-    let firstX = layout.value.padLeft
-    let lastX = layout.value.padLeft + cw(layout.value)
-    let lastY = layout.value.padTop + layout.value.priceHeight / 2
-
-    if (pts.length > 0) {
-      firstX = pts[0]!.x
-      lastX = pts[pts.length - 1]!.x
-      lastY = pts[pts.length - 1]!.y
-    }
-
-    return { key: s.key, label: s.label, color: s.color, curvePath, firstX, lastX, lastY, lastPct: s.lastPct }
-  })
-})
-
-// ─── End labels (collision-avoided) ───
-
-const endLabels = computed(() => {
-  const labels = renderedSeries.value.map(s => ({
-    key: s.key,
-    label: formatPercent(s.lastPct),
-    color: s.color,
-    x: s.lastX + 6,
-    y: s.lastY,
-  }))
-  labels.sort((a, b) => a.y - b.y)
-  const minGap = 11
-  for (let i = 1; i < labels.length; i++) {
-    if (labels[i]!.y - labels[i - 1]!.y < minGap) {
-      labels[i]!.y = labels[i - 1]!.y + minGap
-    }
-  }
-  return labels
-})
-
-// ─── Grid ticks ───
-
-const gridLines = computed(() =>
-  props.chartScale.ticks.map(tick => ({
-    tick,
-    y: my(tick),
-    label: formatPercent(tick),
-  })),
-)
-
-// ─── Volume bars ───
-
-const volumeBarsRendered = computed(() => {
-  const vMax = props.volumeMax || 1
-  const vH = layout.value.volumeHeight
-  const sqrtMax = Math.sqrt(vMax)
-  return props.volumeBuckets
-    .filter(b => b.totalNotional > 0)
-    .map(b => {
-      const barX = layout.value.padLeft + (b.x / 100) * chartW.value
-      const barW = (b.width / 100) * chartW.value
-      const barH = Math.max(2, (Math.sqrt(b.totalNotional) / sqrtMax) * vH)
-      return {
-        ...b,
-        svgX: barX + barW * 0.1,
-        svgWidth: barW * 0.8,
-        svgY: vH - barH,
-        svgHeight: barH,
-        isBuy: b.buyNotional >= b.sellNotional,
-      }
-    })
-})
-
-// ─── Time axis labels ───
-
-const timeLabels = computed(() => {
-  const { minTs, maxTs } = props.timeRange
-  if (!minTs || !maxTs) return []
-  const span = maxTs - minTs
-  if (span <= 0) return [{ x: layout.value.padLeft + chartW.value / 2, label: formatHour(minTs), anchor: 'middle' as const }]
-
-  const count = 4
-  const labels: { x: number; label: string; anchor: 'start' | 'middle' | 'end' }[] = []
-  for (let i = 0; i <= count; i++) {
-    const frac = i / count
-    const ts = minTs + frac * span
-    const x = layout.value.padLeft + frac * chartW.value
-    const anchor: 'start' | 'middle' | 'end' = i === 0 ? 'start' : i === count ? 'end' : 'middle'
-    labels.push({ x, label: formatHour(ts), anchor })
-  }
-  return labels
-})
-
-// ─── Hover / Crosshair ───
-
+// ─── Chart ───
 const chartContainer = ref<HTMLDivElement | null>(null)
-const hoverTs = ref<number | null>(null)
+let chart: IChartApi | null = null
+let seriesList: { api: any; meta: TrendChartSeries; points: TrendDataPoint[] }[] = []
 
-function onMouseMove(event: MouseEvent) {
-  if (!chartContainer.value) return
-  const rect = chartContainer.value.getBoundingClientRect()
-  const mouseX = event.clientX - rect.left
-  const svgFraction = mouseX / rect.width
-  const svgX = svgFraction * viewWidth.value
-  const ly = layout.value
-  const chartLeft = ly.padLeft
-  const chartRight = ly.padLeft + cw(ly)
+function dedupeByTime(pts: { time: Time; value: number }[]): LineData[] {
+  if (!pts.length) return []
+  const s = [...pts].sort((a, b) => (a.time as number) - (b.time as number))
+  const r: LineData[] = [s[0] as LineData]
+  for (let i = 1; i < s.length; i++) {
+    if ((s[i].time as number) > (r[r.length - 1].time as number)) r.push(s[i] as LineData)
+    else r[r.length - 1] = s[i] as LineData
+  }
+  return r
+}
 
-  if (svgX < chartLeft || svgX > chartRight) {
-    hoverTs.value = null
-    return
+function findPriceAtTime(points: TrendDataPoint[], targetMs: number): number | null {
+  if (!points.length) return null
+  if (targetMs <= points[0].ts) return points[0].price
+  if (targetMs >= points[points.length - 1].ts) return points[points.length - 1].price
+  let lo = 0, hi = points.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (points[mid].ts <= targetMs) lo = mid
+    else hi = mid - 1
+  }
+  return points[lo].price
+}
+
+const tzOffsetSec = -new Date().getTimezoneOffset() * 60
+
+function buildChart() {
+  if (!chartContainer.value || !props.series.length) return
+  if (chart) { chart.remove(); chart = null; seriesList = [] }
+
+  chart = createChart(chartContainer.value, {
+    width: chartContainer.value.clientWidth,
+    height: props.height,
+    layout: {
+      background: { type: ColorType.Solid, color: '#ffffff' },
+      textColor: 'rgba(0,0,0,0.35)',
+      fontFamily: "'Inter', sans-serif",
+      fontSize: 11,
+      attributionLogo: false,
+    },
+    grid: {
+      vertLines: { visible: false },
+      horzLines: { color: 'rgba(0,0,0,0.05)', style: LineStyle.Dotted },
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+      vertLine: { color: 'rgba(0,0,0,0.12)', style: LineStyle.Solid, width: 1, labelVisible: false },
+      horzLine: { visible: false, labelVisible: false },
+    },
+    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.05, bottom: 0.05 } },
+    timeScale: { borderVisible: false, rightOffset: 8, fixLeftEdge: true, fixRightEdge: true, timeVisible: true, secondsVisible: false },
+    handleScroll: { mouseWheel: false, pressedMouseMove: false },
+    handleScale: { mouseWheel: false, pinch: false },
+  } as any)
+
+  let hasData = false
+  for (const s of props.series) {
+    const validPoints = s.dataPoints
+      .filter(p => p.ts > 0 && p.price >= 0 && p.price <= 1)
+      .sort((a, b) => a.ts - b.ts)
+
+    const chartData = dedupeByTime(
+      validPoints.map(p => ({
+        time: (Math.floor(p.ts / 1000) + tzOffsetSec) as Time,
+        value: Math.round(p.price * 10000) / 100,
+      })),
+    )
+    if (!chartData.length) continue
+
+    try {
+      const line = chart.addSeries(LineSeries, {
+        color: s.color, lineWidth: 2, lineType: 0,
+        priceFormat: { type: 'custom', formatter: (v: number) => `${Math.round(v)}%` },
+        crosshairMarkerVisible: true, crosshairMarkerRadius: 4,
+        crosshairMarkerBorderColor: '#ffffff', crosshairMarkerBorderWidth: 2,
+        lastValueVisible: false, priceLineVisible: false, title: '',
+      })
+      line.setData(chartData)
+      seriesList.push({ api: line, meta: s, points: validPoints })
+      hasData = true
+    }
+    catch (e) { console.warn('[Chart]', s.label, e) }
   }
 
-  const timeFraction = (svgX - chartLeft) / cw(ly)
-  const { minTs, maxTs } = props.timeRange
-  hoverTs.value = minTs + timeFraction * (maxTs - minTs)
+  if (hasData) applyTimeRange()
+
+  const localChart = chart
+  chart.subscribeCrosshairMove((param: any) => {
+    if (!param?.time) {
+      isHovering.value = false
+      hoverTime.value = null
+      hoverLabels.length = 0
+      floats.length = 0
+      fadeLeft.value = 0
+      return
+    }
+
+    const chartSec = param.time as number
+    const realMs = (chartSec - tzOffsetSec) * 1000
+    isHovering.value = true
+    hoverTime.value = dayjs(realMs).format('MMM D, HH:mm')
+
+    const xCoord = localChart.timeScale().timeToCoordinate(param.time)
+    const px = typeof xCoord === 'number' ? xCoord : 0
+    fadeLeft.value = px
+
+    hoverLabels.length = 0
+    floats.length = 0
+    for (const sr of seriesList) {
+      const price = findPriceAtTime(sr.points, realMs)
+      if (price !== null) {
+        const pct = Math.round(price * 100)
+        hoverLabels.push({ label: sr.meta.label, color: sr.meta.color, pct })
+
+        const pctValue = Math.round(price * 10000) / 100
+        const yCoord = sr.api.priceToCoordinate(pctValue)
+        const py = typeof yCoord === 'number' ? yCoord : 0
+        floats.push({ label: sr.meta.label, color: sr.meta.color, pct, x: px, y: py })
+      }
+    }
+  })
+
+  const obs = new ResizeObserver(() => {
+    if (chart && chartContainer.value) chart.applyOptions({ width: chartContainer.value.clientWidth })
+  })
+  obs.observe(chartContainer.value)
+  ;(chartContainer.value as any).__ro = obs
 }
 
-function onMouseLeave() {
-  hoverTs.value = null
+function applyTimeRange() {
+  if (!chart || !seriesList.length) return
+  if (activePreset.value === 'ALL') { chart.timeScale().fitContent(); return }
+  const ms = PRESET_MS[activePreset.value]
+  const now = Date.now()
+  try {
+    chart.timeScale().setVisibleRange({
+      from: (Math.floor((now - ms) / 1000) + tzOffsetSec) as Time,
+      to: (Math.floor(now / 1000) + tzOffsetSec) as Time,
+    })
+  }
+  catch { chart.timeScale().fitContent() }
 }
 
-const hoverSeriesValues = computed(() => {
-  if (hoverTs.value === null) return []
-  return props.series.map(s => {
-    const idx = findNearestByTs(s.dataPoints, hoverTs.value!)
-    if (idx < 0) return { key: s.key, label: s.label, color: s.color, price: null, y: 0 }
-    const dp = s.dataPoints[idx]!
-    return { key: s.key, label: s.label, color: s.color, price: dp.price, y: my(dp.price) }
-  }).filter(v => v.price !== null)
+onMounted(() => nextTick(buildChart))
+onUnmounted(() => {
+  if (chartContainer.value) { const o = (chartContainer.value as any).__ro; if (o) o.disconnect() }
+  if (chart) { chart.remove(); chart = null }
 })
-
-const hoverX = computed(() => {
-  if (hoverTs.value === null) return 0
-  return mx(hoverTs.value)
-})
-
-const hoverTimeLabel = computed(() => {
-  if (hoverTs.value === null) return ''
-  return formatTime(hoverTs.value)
-})
-
-const hoveredBucketIndex = computed<number | null>(() => {
-  if (hoverTs.value === null) return null
-  const { minTs, maxTs } = props.timeRange
-  const span = maxTs - minTs
-  if (span <= 0) return 0
-  const count = props.volumeBuckets.length
-  if (count === 0) return null
-  const idx = Math.floor(((hoverTs.value - minTs) / span) * count)
-  return Math.max(0, Math.min(count - 1, idx))
-})
-
-const hoveredBucket = computed(() => {
-  if (hoveredBucketIndex.value === null) return null
-  return props.volumeBuckets[hoveredBucketIndex.value] ?? null
-})
-
-const tooltipStyle = computed(() => {
-  if (hoverTs.value === null || !chartContainer.value) return { display: 'none' as const }
-  const rect = chartContainer.value.getBoundingClientRect()
-  const fraction = (hoverTs.value - props.timeRange.minTs) / (props.timeRange.maxTs - props.timeRange.minTs || 1)
-  const pixelX = fraction * rect.width
-  const left = fraction > 0.7 ? Math.max(8, pixelX - 170) : pixelX + 16
-  return { left: `${left}px`, top: '8px' }
-})
+watch(() => [props.series, props.timeRange], () => nextTick(buildChart), { deep: true })
 </script>
 
 <template>
-  <div ref="chartContainer" class="relative select-none">
-    <svg
-      :viewBox="`0 0 ${viewWidth} ${viewHeight}`"
-      class="w-full"
-      style="max-height: 320px; height: auto"
-      xmlns="http://www.w3.org/2000/svg"
-      @mousemove="onMouseMove"
-      @mouseleave="onMouseLeave"
-    >
-      <!-- Grid lines -->
-      <line
-        v-for="gl in gridLines" :key="`grid-${gl.tick}`"
-        :x1="layout.padLeft" :x2="layout.padLeft + chartW" :y1="gl.y" :y2="gl.y"
-        stroke="#e5e7eb" stroke-dasharray="4 3" stroke-width="0.5"
-      />
-
-      <!-- Y-axis labels -->
-      <text
-        v-for="gl in gridLines" :key="`ylabel-${gl.tick}`"
-        :x="layout.padLeft - 6" :y="gl.y + 3.5"
-        text-anchor="end" font-size="10" fill="#9ca3af" class="tabular-nums"
-      >
-        {{ gl.label }}
-      </text>
-
-      <!-- Single-series fill -->
-      <path
-        v-if="isSingleSeries && renderedSeries.length > 0"
-        :d="buildFillPath(renderedSeries[0]!.curvePath, renderedSeries[0]!.firstX, renderedSeries[0]!.lastX, priceBottom)"
-        :fill="renderedSeries[0]!.color" fill-opacity="0.08"
-      />
-
-      <!-- Curve paths -->
-      <path
-        v-for="s in renderedSeries" :key="`curve-${s.key}`"
-        :d="s.curvePath" :stroke="s.color" fill="none"
-        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"
-      />
-
-      <!-- Endpoint dots -->
-      <circle
-        v-for="s in renderedSeries" :key="`dot-${s.key}`"
-        :cx="s.lastX" :cy="s.lastY" r="3.5" :fill="s.color" stroke="#fff" stroke-width="1.5"
-      />
-
-      <!-- End labels -->
-      <text
-        v-for="el in endLabels" :key="`endlabel-${el.key}`"
-        :x="el.x" :y="el.y + 3.5"
-        text-anchor="start" font-size="10" font-weight="600" :fill="el.color" class="tabular-nums"
-      >
-        {{ el.label }}
-      </text>
-
-      <!-- Volume area -->
-      <g :transform="`translate(0, ${volumeTop})`">
-        <line :x1="layout.padLeft" :x2="layout.padLeft + chartW" y1="0" y2="0" stroke="#e5e7eb" stroke-width="0.5" />
-        <rect
-          v-for="bar in volumeBarsRendered" :key="`vol-${bar.index}`"
-          :x="bar.svgX" :width="bar.svgWidth" :y="bar.svgY" :height="bar.svgHeight"
-          :fill="bar.isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'"
-          :opacity="hoveredBucketIndex === bar.index ? 0.85 : 0.55"
-        />
-      </g>
-
-      <!-- Volume labels -->
-      <text v-if="volumeBarsRendered.length > 0" :x="layout.padLeft + 2" :y="volumeTop + 9" text-anchor="start" font-size="8" fill="#9ca3af">Vol</text>
-      <text v-if="volumeBarsRendered.length > 0" :x="layout.padLeft + chartW - 2" :y="volumeTop + 9" text-anchor="end" font-size="8" fill="#9ca3af" class="tabular-nums">
-        {{ formatCompact(volumeMax) }}
-      </text>
-
-      <!-- Time axis labels -->
-      <text
-        v-for="(tl, i) in timeLabels" :key="`time-${i}`"
-        :x="tl.x" :y="volumeBottom + 12" :text-anchor="tl.anchor"
-        font-size="9" fill="#9ca3af" class="tabular-nums"
-      >
-        {{ tl.label }}
-      </text>
-
-      <!-- Crosshair overlay -->
-      <template v-if="hoverTs !== null">
-        <line :x1="hoverX" :y1="layout.padTop" :x2="hoverX" :y2="volumeBottom" stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3 2" opacity="0.5" />
-        <circle
-          v-for="hv in hoverSeriesValues" :key="`hover-dot-${hv.key}`"
-          :cx="hoverX" :cy="hv.y" r="3.5" :fill="hv.color" stroke="#fff" stroke-width="1.5"
-        />
-      </template>
-
-      <!-- Invisible capture rect -->
-      <rect :x="layout.padLeft" :y="layout.padTop" :width="chartW" :height="layout.priceHeight + layout.volumeHeight" fill="transparent" class="cursor-crosshair" />
-    </svg>
-
-    <!-- Tooltip -->
-    <div
-      v-if="hoverTs !== null && hoverSeriesValues.length > 0"
-      class="absolute z-30 pointer-events-none rounded-lg border border-gray-200 bg-white shadow-lg px-3 py-2 min-w-[140px]"
-      :style="tooltipStyle"
-    >
-      <div class="text-[10px] text-gray-400 tabular-nums mb-1">{{ hoverTimeLabel }}</div>
-      <div v-for="hv in hoverSeriesValues" :key="`tt-${hv.key}`" class="flex items-center gap-1.5 py-0.5">
-        <span class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: hv.color }" />
-        <span class="text-xs text-gray-500 truncate">{{ hv.label }}</span>
-        <span class="ml-auto text-xs font-semibold tabular-nums text-gray-900">{{ formatPercent(hv.price) }}</span>
+  <div class="w-full">
+    <!-- Header: hover time (left) + labels (right) -->
+    <div class="flex items-center justify-between mb-1 min-h-[48px]">
+      <div class="text-xs text-gray-400 tabular-nums min-w-[100px]">
+        {{ isHovering && hoverTime ? hoverTime : '' }}
       </div>
-      <div v-if="hoveredBucket" class="mt-1 pt-1 border-t border-gray-200 flex items-center gap-2 text-[10px] text-gray-400 tabular-nums">
-        <span>Vol {{ formatCompact(hoveredBucket.totalNotional) }}</span>
-        <span>{{ hoveredBucket.tradeCount }} 笔</span>
+      <div class="flex items-end gap-5">
+        <template v-if="isHovering && hoverLabels.length > 0">
+          <div v-for="h in hoverLabels" :key="h.label" class="text-right leading-tight">
+            <div class="text-[10px] font-medium" :style="{ color: h.color }">{{ h.label }}</div>
+            <div class="text-xl font-bold tabular-nums" :style="{ color: h.color }">{{ h.pct }}%</div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-for="s in series" :key="s.key" class="text-right leading-tight">
+            <div class="text-[10px] font-medium" :style="{ color: s.color }">{{ s.label }}</div>
+            <div class="text-xl font-bold tabular-nums" :style="{ color: s.color }">
+              {{ Math.round((s.lastPct ?? 0) * 100) }}%
+            </div>
+          </div>
+        </template>
       </div>
+    </div>
+
+    <!-- Chart wrapper -->
+    <div class="relative">
+      <div
+        ref="chartContainer"
+        class="w-full rounded-lg overflow-hidden"
+        :style="{ height: `${height}px` }"
+      />
+
+      <!-- Fade overlay -->
+      <div
+        v-show="isHovering && fadeLeft > 0"
+        class="absolute top-0 bottom-0 z-[5] pointer-events-none transition-[left] duration-75"
+        :style="{ left: `${fadeLeft}px`, right: '0', background: 'rgba(255,255,255,0.55)' }"
+      />
+
+      <!-- Floating labels at crosshair Y -->
+      <div
+        v-for="fl in floats"
+        :key="fl.label"
+        v-show="isHovering && fl.y > 0"
+        class="absolute z-10 pointer-events-none text-[11px] font-bold whitespace-nowrap leading-none"
+        :style="{
+          left: `${fl.x + 10}px`,
+          top: `${fl.y - 7}px`,
+          color: fl.color,
+          textShadow: '0 0 4px rgba(255,255,255,0.9), 0 0 2px rgba(255,255,255,0.9)',
+        }"
+      >
+        {{ fl.label }} <span class="text-sm">{{ fl.pct }}%</span>
+      </div>
+    </div>
+
+    <!-- Time range presets -->
+    <div class="flex items-center justify-end gap-1 mt-2">
+      <button
+        v-for="preset in TIME_PRESETS"
+        :key="preset"
+        class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+        :class="activePreset === preset
+          ? 'bg-blue-500 text-white'
+          : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+        @click="selectPreset(preset)"
+      >{{ preset }}</button>
     </div>
   </div>
 </template>

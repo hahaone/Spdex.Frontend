@@ -158,7 +158,7 @@ function traderDisplay(t: PolymarketTradeTick): string {
                   : 'bg-red-100 text-red-700'"
               >{{ t.outcome }}</span>
             </td>
-            <td class="px-2 py-1.5 text-right tabular-nums font-medium text-gray-900">{{ fmt(t.price) }}</td>
+            <td class="px-2 py-1.5 text-right tabular-nums font-medium text-gray-900">{{ (t.price * 100).toFixed(1) }}%</td>
             <td class="px-2 py-1.5 text-right tabular-nums text-gray-600">{{ formatSize(t.size) }}</td>
             <td class="px-2 py-1.5 text-right tabular-nums font-medium text-gray-900">{{ formatAmount(t.price * t.size) }}</td>
             <td class="px-2 py-1.5 text-gray-400 max-w-[120px] truncate">
