@@ -67,9 +67,9 @@ const priceDeltaMap = computed(() => {
   for (const [, trades] of grouped) {
     const sorted = [...trades].sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
     for (let i = 0; i < sorted.length; i++) {
-      const tKey = tradeKey(sorted[i])
+      const tKey = tradeKey(sorted[i]!)
       if (i === 0) { map.set(tKey, null); continue }
-      const delta = Math.round((sorted[i].price - sorted[i - 1].price) * 10000) / 10000
+      const delta = Math.round((sorted[i]!.price - sorted[i - 1]!.price) * 10000) / 10000
       map.set(tKey, delta)
     }
   }

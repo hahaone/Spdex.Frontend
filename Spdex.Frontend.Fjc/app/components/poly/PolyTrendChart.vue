@@ -50,25 +50,25 @@ let seriesList: { api: any; meta: TrendChartSeries; points: TrendDataPoint[] }[]
 function dedupeByTime(pts: { time: Time; value: number }[]): LineData[] {
   if (!pts.length) return []
   const s = [...pts].sort((a, b) => (a.time as number) - (b.time as number))
-  const r: LineData[] = [s[0] as LineData]
+  const r: LineData[] = [s[0]! as LineData]
   for (let i = 1; i < s.length; i++) {
-    if ((s[i].time as number) > (r[r.length - 1].time as number)) r.push(s[i] as LineData)
-    else r[r.length - 1] = s[i] as LineData
+    if ((s[i]!.time as number) > (r[r.length - 1]!.time as number)) r.push(s[i]! as LineData)
+    else r[r.length - 1] = s[i]! as LineData
   }
   return r
 }
 
 function findPriceAtTime(points: TrendDataPoint[], targetMs: number): number | null {
   if (!points.length) return null
-  if (targetMs <= points[0].ts) return points[0].price
-  if (targetMs >= points[points.length - 1].ts) return points[points.length - 1].price
+  if (targetMs <= points[0]!.ts) return points[0]!.price
+  if (targetMs >= points[points.length - 1]!.ts) return points[points.length - 1]!.price
   let lo = 0, hi = points.length - 1
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1
-    if (points[mid].ts <= targetMs) lo = mid
+    if (points[mid]!.ts <= targetMs) lo = mid
     else hi = mid - 1
   }
-  return points[lo].price
+  return points[lo]!.price
 }
 
 const tzOffsetSec = -new Date().getTimezoneOffset() * 60
