@@ -150,6 +150,33 @@ export interface PolymarketHolder {
   profileImage: string | null
   verified: boolean
   amount: number
+  avgPrice: number
+  totalBought: number
+  initialValue: number
+}
+
+export interface PolymarketHolderSnapshot {
+  eventId: string
+  conditionId: string
+  marketQuestion: string | null
+  offsetLabel: string
+  offsetMinutes: number
+  capturedAtUtc: string
+  kickoffUtc: string
+  tokens: PolymarketHolderSnapshotToken[]
+}
+
+export interface PolymarketHolderSnapshotToken {
+  tokenIndex: number
+  token: string
+  holders: PolymarketHolderSnapshotEntry[]
+}
+
+export interface PolymarketHolderSnapshotEntry {
+  proxyWallet: string
+  name: string | null
+  pseudonym: string | null
+  amount: number
 }
 
 export interface PolymarketTokenHolders {

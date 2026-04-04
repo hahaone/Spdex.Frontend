@@ -452,7 +452,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
           </template>
 
           <template v-else-if="activeViewTab === 'positions'">
-            <PolymarketPositions :condition-id="activeConditionId" :label="activeMarketLabel" />
+            <PolymarketPositions :condition-id="activeConditionId" :event-id="primaryLink?.polymarketEventId" :label="activeMarketLabel" />
           </template>
 
           <template v-else>
