@@ -87,9 +87,9 @@ function deltaColor(d: number | null): string {
 
 function formatDelta(d: number | null): string {
   if (d == null) return ''
-  if (d === 0) return '0'
-  const pct = (d * 100).toFixed(1)
-  return d > 0 ? `+${pct}` : pct
+  if (d === 0) return '0.00'
+  const sign = d > 0 ? '+' : ''
+  return `${sign}${d.toFixed(2)}`
 }
 
 // ─── Time Phase Mark ───
