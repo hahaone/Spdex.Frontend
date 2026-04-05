@@ -149,6 +149,7 @@ function statusColor(status: string): string {
     case 'Executable': return '#22c55e'
     case 'Expired': return '#6b7280'
     case 'Executed': return '#8b5cf6'
+    case 'Cancelled': return '#ef4444'
     default: return '#94a3b8'
   }
 }
@@ -160,11 +161,12 @@ function statusLabel(status: string): string {
     case 'Executable': return '可执行'
     case 'Expired': return '已过期'
     case 'Executed': return '已执行'
+    case 'Cancelled': return '已撤销'
     default: return status
   }
 }
 
-const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Executed']
+const allStatuses = ['Triggered', 'Conditional', 'Executable', 'Expired', 'Executed', 'Cancelled']
 
 /** 百分比格式化 */
 function pct(hit: number, total: number): string {
@@ -355,7 +357,7 @@ function hitRateColor(hit: number, total: number): string {
                   @click="handleAck(sig.signalId)"
                 >执行</button>
                 <button
-                  v-if="sig.status !== 'Expired' && sig.status !== 'Executed'"
+                  v-if="sig.status !== 'Expired' && sig.status !== 'Executed' && sig.status !== 'Cancelled'"
                   class="action-btn expire-btn"
                   title="取消信号"
                   @click="handleExpire(sig.signalId)"
@@ -452,7 +454,10 @@ function hitRateColor(hit: number, total: number): string {
                   {{ statusLabel(rec.status) }}
                 </span>
               </td>
-              <td class="col-time">{{ formatMatchTimeSlash(rec.triggeredAt) }}</td>
+              <td class="col-time">
+                {{ formatMatchTimeSlash(rec.triggeredAt) }}
+                <span v-if="rec.triggerWindowLabel" class="window-label">{{ rec.triggerWindowLabel }}</span>
+              </td>
               <td class="col-score">{{ rec.halfScore || '-' }}</td>
               <td class="col-score">{{ rec.finalScore || '-' }}</td>
               <td class="col-hit">
@@ -544,6 +549,10 @@ function hitRateColor(hit: number, total: number): string {
             <div class="stat-item">
               <span class="stat-label">已过期</span>
               <span class="stat-value" style="color: #6b7280">{{ stat.totalExpired }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">已撤销</span>
+              <span class="stat-value" style="color: #ef4444">{{ stat.totalCancelled }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">活跃中</span>
@@ -1134,6 +1143,17 @@ function hitRateColor(hit: number, total: number): string {
 .trigger-multi {
   color: #d97706;
   font-weight: 700;
+}
+
+.window-label {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  background: #dbeafe;
+  color: #2563eb;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 /* ── 队伍 ── */

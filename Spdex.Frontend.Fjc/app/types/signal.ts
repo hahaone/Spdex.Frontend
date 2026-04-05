@@ -4,7 +4,7 @@
  */
 
 /** 信号状态枚举 */
-export type SignalStatus = 'Triggered' | 'Conditional' | 'Executable' | 'Expired' | 'Executed'
+export type SignalStatus = 'Triggered' | 'Conditional' | 'Executable' | 'Expired' | 'Executed' | 'Cancelled'
 
 /** 条件评估结果 */
 export interface ConditionResult {
@@ -125,6 +125,8 @@ export interface SignalRecord {
   bothTeamsScored: boolean | null
   /** 触发次数 */
   triggerCount: number
+  /** 首次触发分时窗口标签 */
+  triggerWindowLabel: string | null
 }
 
 /** 历史信号分页响应 */
@@ -146,6 +148,8 @@ export interface SignalStats {
   totalExecuted: number
   /** 已过期比赛数 */
   totalExpired: number
+  /** 已撤销比赛数 */
+  totalCancelled: number
   /** 活跃比赛数 */
   totalActive: number
   executionRate: number
