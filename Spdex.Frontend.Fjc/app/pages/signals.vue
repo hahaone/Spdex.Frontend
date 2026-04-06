@@ -175,6 +175,12 @@ function pct(hit: number, total: number): string {
 }
 
 /** 命中率颜色：>=60% 绿色，>=40% 橙色，<40% 灰色 */
+/** PMark 样式 */
+function pmarkClass(mark: string): string {
+  if (!mark) return ''
+  return 'pmark-' + mark.toLowerCase()
+}
+
 function hitRateColor(hit: number, total: number): string {
   if (total <= 0) return '#6b7280'
   const rate = hit / total
@@ -456,7 +462,7 @@ function hitRateColor(hit: number, total: number): string {
               </td>
               <td class="col-time">
                 {{ formatMatchTimeSlash(rec.triggeredAt) }}
-                <span v-if="rec.triggerWindowLabel" class="window-label">{{ rec.triggerWindowLabel }}</span>
+                <span v-if="rec.triggerWindowLabel" :class="['pmark-badge', pmarkClass(rec.triggerWindowLabel)]">{{ rec.triggerWindowLabel }}</span>
               </td>
               <td class="col-score">{{ rec.halfScore || '-' }}</td>
               <td class="col-score">{{ rec.finalScore || '-' }}</td>
@@ -1145,16 +1151,19 @@ function hitRateColor(hit: number, total: number): string {
   font-weight: 700;
 }
 
-.window-label {
-  display: inline-block;
-  margin-left: 0.3rem;
-  padding: 0.05rem 0.35rem;
-  background: #dbeafe;
-  color: #2563eb;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
+/* ── PMark 标签 ── */
+.pmark-badge { display: inline-block; margin-left: 0.3rem; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+.pmark-ps { background: #fef3c7; color: #92400e; }
+.pmark-pp { background: #fde68a; color: #78350f; }
+.pmark-p { background: #fee2e2; color: #991b1b; }
+.pmark-p0 { background: #fce7f3; color: #9d174d; }
+.pmark-p1 { background: #ede9fe; color: #5b21b6; }
+.pmark-p2 { background: #dbeafe; color: #1e40af; }
+.pmark-p3 { background: #ccfbf1; color: #0f766e; }
+.pmark-p6 { background: #d1fae5; color: #065f46; }
+.pmark-p12 { background: #f3f4f6; color: #6b7280; }
+.pmark-p24 { background: #e5e7eb; color: #4b5563; }
+.pmark-p48 { background: #d1d5db; color: #374151; }
 
 /* ── 队伍 ── */
 .team-home {
