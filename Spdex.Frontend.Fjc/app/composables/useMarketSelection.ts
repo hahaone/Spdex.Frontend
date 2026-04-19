@@ -418,9 +418,14 @@ export function useMarketSelection(
 
   const recentTrades = computed(() => {
     const market = activeTradeMarket.value
-    const raw = (market && market.recentTrades && market.recentTrades.length > 0)
-      ? market.recentTrades
-      : (trades.value?.recentTrades ?? [])
+    // 优先使用后端返回的 topTrades（全量 TTL 窗口内按 size 排序的 TOP N），
+    // 避免大单被"最近 N 笔"时间窗口挤出。回退到 recentTrades 兼容旧部署。
+    const marketTop = market?.topTrades && market.topTrades.length > 0 ? market.topTrades : null
+    const eventTop = trades.value?.topTrades && trades.value.topTrades.length > 0 ? trades.value.topTrades : null
+    const raw = marketTop
+      ?? (market && market.recentTrades && market.recentTrades.length > 0
+        ? market.recentTrades
+        : eventTop ?? trades.value?.recentTrades ?? [])
     return [...raw].sort((a, b) => b.size - a.size).slice(0, 50)
   })
 

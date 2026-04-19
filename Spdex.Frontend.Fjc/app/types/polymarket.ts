@@ -36,7 +36,10 @@ export interface PolymarketEventTradesAggregate {
   firstTradeAtUtc: string | null
   lastTradeAtUtc: string | null
   markets: PolymarketMarketTradesAggregate[]
+  /** 最近 N 笔按时间排序（受限于最近 200-2000 笔） */
   recentTrades: PolymarketTradeTick[]
+  /** 全量 TTL 窗口内按 size 排序的 TOP N（BSW 后端 polymarket_trade_ticks 全量查询，TOP 100 事件级） */
+  topTrades?: PolymarketTradeTick[] | null
 }
 
 export interface PolymarketMarketTradesAggregate {
@@ -59,7 +62,10 @@ export interface PolymarketMarketTradesAggregate {
   maxPrice: number | null
   lastPrice: number | null
   lastTradeAtUtc: string | null
+  /** 最近 N 笔按时间排序（受限于最近 200 笔） */
   recentTrades: PolymarketTradeTick[]
+  /** 全量 TTL 窗口内按 size 排序的 TOP N（BSW 后端 TOP 50 市场级） */
+  topTrades?: PolymarketTradeTick[] | null
 }
 
 export interface PolymarketTradeTick {
