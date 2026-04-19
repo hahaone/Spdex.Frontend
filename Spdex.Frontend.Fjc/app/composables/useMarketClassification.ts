@@ -77,6 +77,25 @@ export function isMoneylineMarket(type: string, question = ''): boolean {
     || q.includes(' end in a draw')
 }
 
+// ─── Outcome label mapping ───
+
+/**
+ * 根据市场类型将 Yes/No 转换为上下文标签。
+ * 总分市场: Yes → Over, No → Under
+ * 让分市场: Yes → 赢盘, No → 输盘
+ * BTTS市场: Yes/No 保持
+ * 其他: 保持 Yes/No
+ */
+export function outcomeLabel(outcome: string, sportsMarketType: string, question = ''): string {
+  if (isTotalsMarket(sportsMarketType, question)) {
+    return outcome === 'Yes' ? 'Over' : outcome === 'No' ? 'Under' : outcome
+  }
+  if (isSpreadMarket(sportsMarketType, question)) {
+    return outcome === 'Yes' ? '赢盘' : outcome === 'No' ? '输盘' : outcome
+  }
+  return outcome
+}
+
 // ─── Market classification ───
 
 export function marketCategory(type: string, question: string): MarketCategoryKey {

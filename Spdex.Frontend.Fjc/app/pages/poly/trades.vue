@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PolymarketTradeTick, PolymarketMarketTradesAggregate } from '~/types/polymarket'
+import { outcomeLabel } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
 // ── 路由参数 ──
@@ -30,6 +31,21 @@ const runnerMap = computed<Map<string, RunnerInfo>>(() => {
   }
   return map
 })
+
+// 按 conditionId 索引 market，用于 outcomeLabel 查询市场类型
+const marketByCondition = computed(() => {
+  const map = new Map<string, PolymarketMarketTradesAggregate>()
+  for (const m of meta.value?.markets ?? []) {
+    if (m.conditionId) map.set(m.conditionId, m)
+  }
+  return map
+})
+
+function displayOutcome(t: PolymarketTradeTick): string {
+  const m = marketByCondition.value.get(t.conditionId)
+  if (!m) return t.outcome
+  return outcomeLabel(t.outcome, m.sportsMarketType, m.question)
+}
 
 function extractRunnerLabel(m: PolymarketMarketTradesAggregate): string {
   // 尝试从 question 提取队名
@@ -258,7 +274,7 @@ function formatDelta(d: number | null): string {
                 <span :class="['side-badge', t.side === 'BUY' ? 'side-buy' : 'side-sell']">{{ t.side }}</span>
               </td>
               <td class="col-outcome">
-                <span :class="['outcome-badge', t.outcome === 'Yes' ? 'outcome-yes' : 'outcome-no']">{{ t.outcome }}</span>
+                <span :class="['outcome-badge', t.outcome === 'Yes' ? 'outcome-yes' : 'outcome-no']">{{ displayOutcome(t) }}</span>
               </td>
               <td class="col-price">{{ (t.price * 100).toFixed(1) }}%</td>
               <td class="col-delta" :style="deltaColor(getDelta(t))">{{ formatDelta(getDelta(t)) }}</td>

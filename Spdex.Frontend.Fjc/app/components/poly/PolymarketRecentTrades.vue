@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, inject, nextTick } from 'vue'
-import type { PolymarketTradeTick } from '~/types/polymarket'
+import type { PolymarketTradeTick, PolymarketMarketTradesAggregate } from '~/types/polymarket'
 import { formatPolyOdds, ODDS_FORMAT_KEY, type OddsFormat } from '~/composables/usePolymarketMetrics'
+import { outcomeLabel } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
 const props = withDefaults(
@@ -9,9 +10,26 @@ const props = withDefaults(
     trades: PolymarketTradeTick[]
     limit?: number
     kickoffUtc?: string | null
+    /** 用于按 conditionId 查询市场类型，渲染总分/让分的上下文标签 */
+    markets?: PolymarketMarketTradesAggregate[]
   }>(),
-  { limit: 50, kickoffUtc: null },
+  { limit: 50, kickoffUtc: null, markets: () => [] },
 )
+
+// 按 conditionId 索引 market，用于 outcomeLabel 查找
+const marketByCondition = computed(() => {
+  const map = new Map<string, PolymarketMarketTradesAggregate>()
+  for (const m of props.markets ?? []) {
+    if (m.conditionId) map.set(m.conditionId, m)
+  }
+  return map
+})
+
+function displayOutcome(t: PolymarketTradeTick): string {
+  const m = marketByCondition.value.get(t.conditionId)
+  if (!m) return t.outcome
+  return outcomeLabel(t.outcome, m.sportsMarketType, m.question)
+}
 
 const oddsFormat = inject(ODDS_FORMAT_KEY, ref<OddsFormat>('decimal'))
 const displayLimit = ref(props.limit)
@@ -219,7 +237,7 @@ function tickY(value: number): number {
           >
             <div class="flex items-center gap-2">
               <span class="font-bold" :class="tooltip.trade.side === 'BUY' ? 'text-green-400' : 'text-red-400'">{{ tooltip.trade.side }}</span>
-              <span class="text-gray-400">{{ tooltip.trade.outcome }}</span>
+              <span class="text-gray-400">{{ displayOutcome(tooltip.trade) }}</span>
               <span v-if="traderDisplayName(tooltip.trade)" class="text-blue-400 truncate max-w-[120px]">{{ traderDisplayName(tooltip.trade) }}</span>
             </div>
             <div class="flex items-center gap-3 mt-0.5">
@@ -255,7 +273,7 @@ function tickY(value: number): number {
       <span class="relative tabular-nums text-gray-400">{{ formatTime(trade.timestampUtc) }}</span>
       <span class="relative">
         <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold" :class="trade.side === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ trade.side }}</span>
-        <span class="ml-1 text-gray-400">{{ trade.outcome }}</span>
+        <span class="ml-1 text-gray-400">{{ displayOutcome(trade) }}</span>
       </span>
       <span class="relative truncate">
         <a v-if="traderDisplayName(trade)" :href="traderProfileUrl(trade) ?? '#'" target="_blank" rel="noopener" class="text-[11px] text-blue-500 hover:underline" @click.stop>{{ traderDisplayName(trade) }}</a>

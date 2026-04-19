@@ -419,7 +419,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             </div>
             <div v-if="recentTrades.length > 0">
               <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">成交量 Top {{ recentTrades.length }}</div>
-              <PolymarketRecentTrades :trades="recentTrades" :limit="50" :kickoff-utc="kickoffUtc" />
+              <PolymarketRecentTrades :trades="recentTrades" :limit="50" :kickoff-utc="kickoffUtc" :markets="trades?.markets ?? []" />
             </div>
           </template>
 
@@ -441,7 +441,11 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
           </template>
 
           <template v-else-if="activeViewTab === 'trades'">
-            <PolymarketTradeDetail :trades="activeTradeMarket?.recentTrades ?? []" />
+            <PolymarketTradeDetail
+              :trades="activeTradeMarket?.recentTrades ?? []"
+              :sports-market-type="activeTradeMarket?.sportsMarketType ?? ''"
+              :question="activeTradeMarket?.question ?? ''"
+            />
             <div v-if="trades?.eventId" class="mt-2 text-right">
               <NuxtLink
                 :to="{ path: '/poly/trades', query: { eventId: trades.eventId, spdexEventId: links?.[0]?.spdexEventId, home: cnHome, away: cnAway } }"

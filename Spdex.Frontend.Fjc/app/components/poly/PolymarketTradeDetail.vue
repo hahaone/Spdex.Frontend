@@ -2,14 +2,22 @@
 import { ref, computed, inject } from 'vue'
 import type { PolymarketTradeTick } from '~/types/polymarket'
 import { formatPolyOdds, ODDS_FORMAT_KEY, type OddsFormat } from '~/composables/usePolymarketMetrics'
+import { outcomeLabel } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
 const props = withDefaults(
   defineProps<{
     trades: PolymarketTradeTick[]
+    /** 当前市场类型与问题，用于将 Yes/No 显示为 Over/Under 或 赢盘/输盘 */
+    sportsMarketType?: string
+    question?: string
   }>(),
-  {},
+  { sportsMarketType: '', question: '' },
 )
+
+function displayOutcome(outcome: string): string {
+  return outcomeLabel(outcome, props.sportsMarketType, props.question)
+}
 
 const oddsFormat = inject(ODDS_FORMAT_KEY, ref<OddsFormat>('decimal'))
 
@@ -156,7 +164,7 @@ function traderDisplay(t: PolymarketTradeTick): string {
                 :class="t.outcome === 'Yes'
                   ? 'bg-green-100 text-green-700'
                   : 'bg-red-100 text-red-700'"
-              >{{ t.outcome }}</span>
+              >{{ displayOutcome(t.outcome) }}</span>
             </td>
             <td class="px-2 py-1.5 text-right tabular-nums font-medium text-gray-900">{{ (t.price * 100).toFixed(1) }}%</td>
             <td class="px-2 py-1.5 text-right tabular-nums text-gray-600">{{ formatSize(t.size) }}</td>
