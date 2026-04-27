@@ -454,7 +454,17 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             />
             <div v-if="trades?.eventId" class="mt-2 text-right">
               <NuxtLink
-                :to="{ path: '/poly/trades', query: { eventId: trades.eventId, spdexEventId: links?.[0]?.spdexEventId, home: cnHome, away: cnAway } }"
+                :to="{
+                  path: '/poly/trades',
+                  query: {
+                    eventId: trades.eventId,
+                    spdexEventId: links?.[0]?.spdexEventId,
+                    home: cnHome,
+                    away: cnAway,
+                    // 传当前 active market 的 conditionId（让分/总分时跳进去也能精准过滤）
+                    conditionId: activeConditionId ?? undefined,
+                  },
+                }"
                 target="_blank"
                 class="text-xs text-blue-500 hover:underline"
               >查看全部成交 →</NuxtLink>

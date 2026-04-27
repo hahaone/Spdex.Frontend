@@ -15,7 +15,11 @@ function isBswOk(result: BswApiResult<unknown>): boolean {
  * 通过 Spdex.WebApi 代理调用 BSW 的 TradeTicks 接口获取分页数据，
  * 同时首次加载 Trades 聚合以获取 market 元数据（runner 名称映射）。
  */
-export function usePolyTradeTicks(polymarketEventId: Ref<string | null>) {
+export function usePolyTradeTicks(
+  polymarketEventId: Ref<string | null>,
+  conditionId: Ref<string | null> = ref(null),
+  outcome: Ref<string | null> = ref(null),
+) {
   const ticks = ref<PolymarketTradeTicksPage | null>(null)
   const meta = ref<PolymarketEventTradesAggregate | null>(null)
   const loading = ref(false)
@@ -56,9 +60,19 @@ export function usePolyTradeTicks(polymarketEventId: Ref<string | null>) {
     loading.value = true
     error.value = null
     try {
+      const params: Record<string, unknown> = {
+        eventId,
+        page: page.value,
+        pageSize: pageSize.value,
+      }
+      // 传 conditionId 时 BSW 会忽略 eventId 用 conditionId 全局查
+      // 解决让分/总分等市场 ticks 实际存放在 family event 下的问题
+      if (conditionId.value) params.conditionId = conditionId.value
+      if (outcome.value) params.outcome = outcome.value
+
       const result = await apiFetch<BswApiResult<PolymarketTradeTicksPage>>(
         '/api/polymarket/Get/Soccer/TradeTicks',
-        { eventId, page: page.value, pageSize: pageSize.value },
+        params,
       )
       if (isBswOk(result)) {
         ticks.value = result.data
@@ -84,7 +98,7 @@ export function usePolyTradeTicks(polymarketEventId: Ref<string | null>) {
     fetchTicks()
   }
 
-  // 监听 eventId 变化
+  // 监听 eventId 变化（重置 meta + ticks）
   watch(polymarketEventId, () => {
     page.value = 1
     meta.value = null
@@ -92,6 +106,12 @@ export function usePolyTradeTicks(polymarketEventId: Ref<string | null>) {
     fetchMeta()
     fetchTicks()
   }, { immediate: true })
+
+  // 监听 conditionId / outcome 变化，重新加载分页（不重载 meta）
+  watch([conditionId, outcome], () => {
+    page.value = 1
+    fetchTicks()
+  })
 
   return {
     ticks,

@@ -9,25 +9,51 @@ const polymarketEventId = computed(() => (route.query.eventId as string) || null
 const cnHome = computed(() => (route.query.home as string) || null)
 const cnAway = computed(() => (route.query.away as string) || null)
 const leagueName = computed(() => (route.query.league as string) || null)
+// 从入口（让分/总分等）传入的 conditionId/outcome：用于服务端过滤 + UI 默认筛选
+const queryConditionId = computed(() => (route.query.conditionId as string) || null)
+const queryOutcome = computed(() => (route.query.outcome as string) || null)
+
+// ── 筛选状态（先声明，便于 conditionId 服务端过滤 reactive 化）──
+type OutcomeFilter = 'all' | 'yes' | 'no'
+const activeConditionFilter = ref<string>(queryConditionId.value || 'all')
+const activeOutcomeFilter = ref<OutcomeFilter>(
+  queryOutcome.value === 'Yes' ? 'yes' : queryOutcome.value === 'No' ? 'no' : 'all',
+)
+
+// 服务端 conditionId/outcome 过滤参数（为 'all' 时不过滤）
+const serverConditionId = computed(() => activeConditionFilter.value !== 'all' ? activeConditionFilter.value : null)
+const serverOutcome = computed(() => {
+  if (activeOutcomeFilter.value === 'yes') return 'Yes'
+  if (activeOutcomeFilter.value === 'no') return 'No'
+  return null
+})
 
 // ── 数据 ──
-const { ticks, meta, loading, error, page, pageSize, goToPage, setPageSize } = usePolyTradeTicks(polymarketEventId)
+const { ticks, meta, loading, error, page, pageSize, goToPage, setPageSize } = usePolyTradeTicks(
+  polymarketEventId,
+  serverConditionId,
+  serverOutcome,
+)
 
 useHead({ title: computed(() => {
   if (cnHome.value && cnAway.value) return `Poly 成交 ${cnHome.value} vs ${cnAway.value}`
   return 'Poly 成交明细'
 }) })
 
-// ── Runner 元数据映射 ──
-interface RunnerInfo { conditionId: string; label: string; question: string }
+// ── Runner 元数据映射（含所有市场类型：1X2 / 让分 / 总分 / BTTS 等）──
+interface RunnerInfo { conditionId: string; label: string; question: string; sportsMarketType: string }
 const runnerMap = computed<Map<string, RunnerInfo>>(() => {
   const map = new Map<string, RunnerInfo>()
   if (!meta.value?.markets) return map
   for (const m of meta.value.markets) {
-    if (m.sportsMarketType !== 'winner') continue
-    // BSW 的 question 通常是 "Will X win?" 这种形式
+    if (!m.conditionId) continue
     const label = extractRunnerLabel(m)
-    map.set(m.conditionId, { conditionId: m.conditionId, label, question: m.question })
+    map.set(m.conditionId, {
+      conditionId: m.conditionId,
+      label,
+      question: m.question,
+      sportsMarketType: m.sportsMarketType,
+    })
   }
   return map
 })
@@ -48,10 +74,15 @@ function displayOutcome(t: PolymarketTradeTick): string {
 }
 
 function extractRunnerLabel(m: PolymarketMarketTradesAggregate): string {
-  // 尝试从 question 提取队名
   const q = m.question ?? ''
-  const match = q.match(/^Will (.+?) win/)
-  if (match) return localizeName(match[1]!)
+  // 1X2: "Will X win?" → 提取队名
+  const winMatch = q.match(/^Will (.+?) win/)
+  if (winMatch) return localizeName(winMatch[1]!)
+  if (/draw/i.test(q)) return '平局'
+  // 总分：保留原 question（如 "O/U 2.5 Goals"）
+  // 让分：保留原 question
+  // 其他：截取前 32 字符
+  if (q.length > 0) return q.length > 32 ? q.slice(0, 32) + '…' : q
   return m.conditionId.slice(0, 8)
 }
 
@@ -71,22 +102,9 @@ function localizeName(name: string): string {
   return name
 }
 
-// ── 筛选 ──
-type OutcomeFilter = 'all' | 'yes' | 'no'
-const activeConditionFilter = ref<string>('all')
-const activeOutcomeFilter = ref<OutcomeFilter>('all')
-
-const filteredItems = computed(() => {
-  const items = ticks.value?.items ?? []
-  return items.filter((t) => {
-    if (activeConditionFilter.value !== 'all' && t.conditionId !== activeConditionFilter.value) return false
-    if (activeOutcomeFilter.value !== 'all') {
-      const want = activeOutcomeFilter.value === 'yes' ? 'Yes' : 'No'
-      if (t.outcome !== want) return false
-    }
-    return true
-  })
-})
+// ── 筛选（state 已在顶部声明）──
+// 服务端已按 serverConditionId/serverOutcome 过滤，这里直接使用返回的 items
+const filteredItems = computed(() => ticks.value?.items ?? [])
 
 // ── 统计 ──
 interface TradeStats {
