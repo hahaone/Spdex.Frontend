@@ -173,8 +173,12 @@ function tradeKey(t: PolymarketTradeTick): string { return `${t.timestampUtc}_${
 const priceDeltaMap = computed(() => {
   const map = new Map<string, number | null>()
   const items = ticks.value?.items ?? []
+  // bridgeTicks 是当前页之后（时间更老）的少量成交，用于跨页价差桥接：
+  // 让每页最后一笔成交也能找到前一笔同 runner+outcome 的参考价格。
+  const bridges = ticks.value?.bridgeTicks ?? []
+  const allForDelta = [...items, ...bridges]
   const grouped = new Map<string, PolymarketTradeTick[]>()
-  for (const t of items) {
+  for (const t of allForDelta) {
     const key = `${t.conditionId}_${t.outcome}`
     if (!grouped.has(key)) grouped.set(key, [])
     grouped.get(key)!.push(t)

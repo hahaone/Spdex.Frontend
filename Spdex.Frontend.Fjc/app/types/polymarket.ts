@@ -145,6 +145,11 @@ export interface PolymarketTradeTicksPage {
   totalCount: number
   page: number
   pageSize: number
+  /**
+   * 紧随当前页之后（时间更老）的少量成交，用于跨页价差计算。
+   * 不渲染，仅用作每页最后一笔同 runner+outcome 成交的"前一笔"参考。
+   */
+  bridgeTicks?: PolymarketTradeTick[] | null
 }
 
 // ─── 持仓排行 ───
