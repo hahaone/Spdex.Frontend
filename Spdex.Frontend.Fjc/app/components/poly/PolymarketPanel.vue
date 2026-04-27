@@ -63,7 +63,7 @@ const {
   activeMarketKey, activeCategoryKey, activeFamilyKey, activeLineKey, activeViewTab,
   primaryLink, kickoffUtc, kickoffTimeLabel, kickoffDateLabel,
   categoryTabs, familyTabs, lineTabs, lineScopedMarkets,
-  activeMarketSide, activeTradeMarket, activeBookMarket, recentTrades,
+  activeMarketSide, activeTradeMarket, activeBookMarket, recentTrades, deltaSourceTrades,
   activeMarketLabel, activeOptionLabel, activeMarketNotional, activeMarketTradeCount,
   activeMarketQuestion, activeMarketId, activeConditionId,
   marketViewTabs, findTradeMarketByKey, resolveDisplayProbability, optionOddsLabel,
@@ -419,7 +419,13 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             </div>
             <div v-if="recentTrades.length > 0">
               <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">成交量 Top {{ recentTrades.length }}</div>
-              <PolymarketRecentTrades :trades="recentTrades" :limit="50" :kickoff-utc="kickoffUtc" :markets="trades?.markets ?? []" />
+              <PolymarketRecentTrades
+                :trades="recentTrades"
+                :limit="50"
+                :kickoff-utc="kickoffUtc"
+                :markets="trades?.markets ?? []"
+                :delta-source-trades="deltaSourceTrades"
+              />
             </div>
           </template>
 

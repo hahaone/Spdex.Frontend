@@ -12,8 +12,13 @@ const props = withDefaults(
     kickoffUtc?: string | null
     /** 用于按 conditionId 查询市场类型，渲染总分/让分的上下文标签 */
     markets?: PolymarketMarketTradesAggregate[]
+    /**
+     * 价差计算专用源（更完整的时间序列，含 recentTrades + topTrades 合并去重）。
+     * 不传时退化到 props.trades —— 仅 TOP 50 内做相邻价差，准确度受限。
+     */
+    deltaSourceTrades?: PolymarketTradeTick[]
   }>(),
-  { limit: 50, kickoffUtc: null, markets: () => [] },
+  { limit: 50, kickoffUtc: null, markets: () => [], deltaSourceTrades: () => [] },
 )
 
 // 按 conditionId 索引 market，用于 outcomeLabel 查找
@@ -73,11 +78,15 @@ function traderProfileUrl(t: PolymarketTradeTick): string | null {
 }
 
 // ─── Price Delta (价差) ───
+// 使用 deltaSourceTrades（完整时间序列）计算每笔成交相对前一笔同 runner 的价差。
+// 渲染只显示 props.trades（TOP 50 大单），但 delta 是基于全量数据计算的，准确反映"上一笔同 runner 价格"。
 const priceDeltaMap = computed(() => {
   const map = new Map<string, number | null>()
-  // Group by conditionId+outcome, sort by time, compute sequential deltas
+  // 优先用 deltaSourceTrades（覆盖更全），无则回退到 props.trades
+  const source = props.deltaSourceTrades?.length ? props.deltaSourceTrades : props.trades
+  // 按 conditionId+outcome 分组，组内按时间排序，逐笔计算 delta
   const grouped = new Map<string, PolymarketTradeTick[]>()
-  for (const t of props.trades) {
+  for (const t of source) {
     const key = `${t.conditionId}_${t.outcome}`
     if (!grouped.has(key)) grouped.set(key, [])
     grouped.get(key)!.push(t)

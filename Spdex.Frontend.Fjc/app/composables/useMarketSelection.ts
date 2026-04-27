@@ -429,6 +429,32 @@ export function useMarketSelection(
     return [...raw].sort((a, b) => b.size - a.size).slice(0, 50)
   })
 
+  /**
+   * 价差计算专用源：合并市场级 recentTrades（最近 1000 笔时间序列）+ topTrades，
+   * 用于计算 TOP 50 大单的"上一笔同 runner 价格"，避免被 size 截断导致 delta 不准。
+   * 时间序列覆盖越完整，TOP 50 中每笔大单的前一笔越接近真实成交，价差才准确。
+   */
+  const deltaSourceTrades = computed(() => {
+    const market = activeTradeMarket.value
+    const list: PolymarketTradeTick[] = []
+    if (market) {
+      if (market.recentTrades?.length) list.push(...market.recentTrades)
+      if (market.topTrades?.length) list.push(...market.topTrades)
+    }
+    if (list.length === 0 && trades.value) {
+      if (trades.value.recentTrades?.length) list.push(...trades.value.recentTrades)
+      if (trades.value.topTrades?.length) list.push(...trades.value.topTrades)
+    }
+    // 按 (timestamp + price + size + outcome + conditionId) 去重
+    const seen = new Set<string>()
+    const result: PolymarketTradeTick[] = []
+    for (const t of list) {
+      const k = `${t.conditionId}|${t.outcome}|${t.timestampUtc}|${t.price}|${t.size}`
+      if (!seen.has(k)) { seen.add(k); result.push(t) }
+    }
+    return result
+  })
+
   // ─── Display labels ───
 
   const activeMarketLabel = computed(() => {
@@ -502,7 +528,7 @@ export function useMarketSelection(
     primaryLink, kickoffUtc, kickoffTimeLabel, kickoffDateLabel,
     allMarketEntries, categoryTabs, familyTabs, lineTabs,
     categoryMarkets, familyMarkets, lineScopedMarkets,
-    activeMarketSide, activeTradeMarket, activeBookMarket, recentTrades,
+    activeMarketSide, activeTradeMarket, activeBookMarket, recentTrades, deltaSourceTrades,
     activeMarketLabel, activeOptionLabel, activeMarketNotional, activeMarketTradeCount,
     activeMarketQuestion, activeMarketId, activeConditionId,
     marketViewTabs: MARKET_VIEW_TABS,
