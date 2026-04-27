@@ -82,6 +82,11 @@ export interface PolymarketTradeTick {
   traderPseudonym: string | null
   traderProfileImage: string | null
   outcomeIndex: number | null
+  /**
+   * 服务端预计算的"上一笔同 conditionId+outcome 成交价"，仅 TopTrades 列表内填充。
+   * 前端直接 (price - previousPrice) 即得正确价差，不依赖 RecentTrades 时间窗口。
+   */
+  previousPrice?: number | null
 }
 
 // ─── Book (Orderbook) ───

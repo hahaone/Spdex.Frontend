@@ -104,6 +104,10 @@ const priceDeltaMap = computed(() => {
 })
 
 function getDelta(t: PolymarketTradeTick): number | null {
+  // 优先使用服务端预计算的 previousPrice（不依赖前端时间窗口的 deltaSourceTrades）
+  if (t.previousPrice != null) {
+    return Math.round((t.price - t.previousPrice) * 10000) / 10000
+  }
   return priceDeltaMap.value.get(tradeKey(t)) ?? null
 }
 
