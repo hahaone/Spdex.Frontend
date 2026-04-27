@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PolymarketTradeTick, PolymarketMarketTradesAggregate } from '~/types/polymarket'
-import { outcomeLabel } from '~/composables/useMarketClassification'
+import { outcomeLabel, marketFamily, marketFamilyLabel, marketFamilyOrder, type MarketFamilyKey } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
 // ── 路由参数 ──
@@ -41,7 +41,7 @@ useHead({ title: computed(() => {
 }) })
 
 // ── Runner 元数据映射（含所有市场类型：1X2 / 让分 / 总分 / BTTS 等）──
-interface RunnerInfo { conditionId: string; label: string; question: string; sportsMarketType: string }
+interface RunnerInfo { conditionId: string; label: string; question: string; sportsMarketType: string; family: MarketFamilyKey }
 const runnerMap = computed<Map<string, RunnerInfo>>(() => {
   const map = new Map<string, RunnerInfo>()
   if (!meta.value?.markets) return map
@@ -53,9 +53,42 @@ const runnerMap = computed<Map<string, RunnerInfo>>(() => {
       label,
       question: m.question,
       sportsMarketType: m.sportsMarketType,
+      family: marketFamily(m.sportsMarketType, m.question),
     })
   }
   return map
+})
+
+// ── 按 family 分组（用于 UI 分组展示选项按钮）──
+const runnersByFamily = computed<Map<MarketFamilyKey, RunnerInfo[]>>(() => {
+  const map = new Map<MarketFamilyKey, RunnerInfo[]>()
+  for (const info of runnerMap.value.values()) {
+    if (!map.has(info.family)) map.set(info.family, [])
+    map.get(info.family)!.push(info)
+  }
+  // 排序 family 内的 runners（按 label 字母序，独赢例外保持 主/平/客 顺序由后端给出）
+  return map
+})
+
+// 当前 family（默认从 activeConditionFilter 推导）
+const activeFamily = ref<MarketFamilyKey>('moneyline')
+
+// 监听初始 conditionId 推导 family（meta 加载后才能知道）
+watch([runnerMap, activeConditionFilter], ([m, cid]) => {
+  if (cid !== 'all' && m.has(cid)) {
+    activeFamily.value = m.get(cid)!.family
+  }
+}, { immediate: true })
+
+// 可用 family 列表（按预定义顺序，跳过空的）
+const availableFamilies = computed<MarketFamilyKey[]>(() => {
+  const keys = Array.from(runnersByFamily.value.keys())
+  return keys.sort((a, b) => marketFamilyOrder(a) - marketFamilyOrder(b))
+})
+
+// 当前 family 下的 runners
+const familyRunners = computed<RunnerInfo[]>(() => {
+  return runnersByFamily.value.get(activeFamily.value) ?? []
 })
 
 // 按 conditionId 索引 market，用于 outcomeLabel 查询市场类型
@@ -74,15 +107,29 @@ function displayOutcome(t: PolymarketTradeTick): string {
 }
 
 function extractRunnerLabel(m: PolymarketMarketTradesAggregate): string {
-  const q = m.question ?? ''
+  const q = (m.question ?? '').trim()
+  // 1X2 平局
+  if (/^will.*draw/i.test(q) || /end in a draw/i.test(q)) return '平局'
   // 1X2: "Will X win?" → 提取队名
-  const winMatch = q.match(/^Will (.+?) win/)
-  if (winMatch) return localizeName(winMatch[1]!)
-  if (/draw/i.test(q)) return '平局'
-  // 总分：保留原 question（如 "O/U 2.5 Goals"）
-  // 让分：保留原 question
-  // 其他：截取前 32 字符
-  if (q.length > 0) return q.length > 32 ? q.slice(0, 32) + '…' : q
+  const winMatch = q.match(/^Will (.+?) win\??$/i)
+  if (winMatch) return localizeName(winMatch[1]!.trim())
+  // 总分：从 question 中提取 "O/U 2.5 Goals" 关键部分
+  const ouMatch = q.match(/O\/U\s*(\d+(?:\.\d+)?)\s*(Goals?|Corners?|Cards?)?/i)
+  if (ouMatch) return `O/U ${ouMatch[1]}`
+  // 让分：提取 "Spread: TeamName ±N.N"
+  const spreadMatch = q.match(/Spread:\s*(.+?)\s*\(([+-]?\d+(?:\.\d+)?)\)/i)
+  if (spreadMatch) return `${localizeName(spreadMatch[1]!.trim())} ${spreadMatch[2]}`
+  // 比分：提取 "X-Y"（保留原 home/away 顺序）
+  const scoreMatch = q.match(/(\d+)\s*-\s*(\d+)/)
+  if (scoreMatch && /exact|correct/i.test(q)) return `${scoreMatch[1]}-${scoreMatch[2]}`
+  // 半场领先：Will X be leading at halftime?
+  const htMatch = q.match(/Will (.+?) be leading at halftime/i)
+  if (htMatch) return `${localizeName(htMatch[1]!.trim())} 半场领先`
+  if (/leading at halftime|halftime/i.test(q) && /draw|tie/i.test(q)) return '半场平局'
+  // BTTS
+  if (/both teams.*score/i.test(q)) return /\bno\b/i.test(q) ? 'BTTS 否' : 'BTTS 是'
+  // 兜底：原文截断
+  if (q.length > 0) return q.length > 24 ? q.slice(0, 24) + '…' : q
   return m.conditionId.slice(0, 8)
 }
 
@@ -242,16 +289,28 @@ function formatDelta(d: number | null): string {
           >No</button>
         </div>
 
-        <div v-if="runnerMap.size > 0" class="filter-group">
+        <!-- 市场族 tabs：1X2 / 让分 / 总分 / 双方进球 / 比分 / 半场 -->
+        <div v-if="availableFamilies.length > 1" class="filter-group">
+          <span class="filter-label">市场</span>
+          <button
+            v-for="fk in availableFamilies" :key="fk"
+            :class="['filter-chip', 'chip-family', { active: activeFamily === fk }]"
+            @click="activeFamily = fk; activeConditionFilter = 'all'"
+          >{{ marketFamilyLabel(fk) }}</button>
+        </div>
+
+        <!-- 当前市场族下的选项 -->
+        <div v-if="familyRunners.length > 0" class="filter-group">
           <span class="filter-label">选项</span>
           <button
             :class="['filter-chip', { active: activeConditionFilter === 'all' }]"
             @click="activeConditionFilter = 'all'"
           >全部</button>
           <button
-            v-for="[cid, info] in runnerMap" :key="cid"
-            :class="['filter-chip', { active: activeConditionFilter === cid }]"
-            @click="activeConditionFilter = activeConditionFilter === cid ? 'all' : cid"
+            v-for="info in familyRunners" :key="info.conditionId"
+            :class="['filter-chip', { active: activeConditionFilter === info.conditionId }]"
+            :title="info.question"
+            @click="activeConditionFilter = activeConditionFilter === info.conditionId ? 'all' : info.conditionId"
           >{{ info.label }}</button>
         </div>
 
@@ -363,13 +422,18 @@ function formatDelta(d: number | null): string {
 }
 .filter-group {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
 }
 .filter-label {
   font-size: 12px;
   color: #6b7280;
   font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 .filter-chip {
   padding: 3px 10px;
@@ -380,6 +444,10 @@ function formatDelta(d: number | null): string {
   color: #374151;
   cursor: pointer;
   transition: all 0.15s;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .filter-chip:hover { background: #f3f4f6; }
 .filter-chip.active {
@@ -387,6 +455,8 @@ function formatDelta(d: number | null): string {
   color: #fff;
   border-color: #3b82f6;
 }
+.chip-family { font-weight: 600; }
+.chip-family.active { background: #6d28d9; border-color: #6d28d9; }
 .chip-yes.active { background: #16a34a; border-color: #16a34a; }
 .chip-no.active { background: #dc2626; border-color: #dc2626; }
 
