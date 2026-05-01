@@ -175,6 +175,7 @@ function windowRatioDisplay(w: typeof windows.value[0]): string {
       <!-- ★ 所有分时统计摘要行 -->
       <div v-if="windows.length > 0" class="summary-panel">
         <div class="summary-title">分时统计摘要</div>
+        <div class="summary-scroll">
         <table class="summary-table">
           <thead>
             <tr>
@@ -219,6 +220,7 @@ function windowRatioDisplay(w: typeof windows.value[0]): string {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       <!-- Tab 栏 + 排序按钮 + 刷新（合并为一行） -->
@@ -517,6 +519,11 @@ function windowRatioDisplay(w: typeof windows.value[0]): string {
   border-radius: 6px;
   overflow: hidden;
   background: #fff;
+}
+/* iPad / 手机上表格列总宽 > 容器时启用横向滚动；标题不参与滚动 */
+.summary-panel .summary-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .summary-panel .summary-title {
   padding: 6px 14px;

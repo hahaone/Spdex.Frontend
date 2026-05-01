@@ -217,6 +217,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
           <button v-if="!polyEnabled" class="poly-load-btn" @click="polyEnabled = true">📊 加载 Poly 数据</button>
           <span v-else-if="polyLoading" class="poly-loading-hint">Poly 加载中...</span>
         </div>
+        <div class="summary-scroll">
         <table class="summary-table">
           <thead>
             <tr>
@@ -268,6 +269,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       <!-- Tab 栏 + 排序按钮 + 刷新（合并为一行） -->
@@ -582,6 +584,11 @@ function windowRatioDisplay(w: TimeWindowData): string {
   border-radius: 6px;
   overflow: hidden;
   background: #fff;
+}
+/* iPad / 手机上表格列总宽 > 容器时启用横向滚动；标题不参与滚动 */
+.summary-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .summary-title {
   padding: 6px 14px;

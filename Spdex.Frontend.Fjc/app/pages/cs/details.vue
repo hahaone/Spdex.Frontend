@@ -226,6 +226,7 @@ function toggleSection(key: string) {
       <!-- ★ 分时统计摘要 -->
       <div v-if="windows.length > 0" class="summary-panel">
         <div class="summary-title">分时统计摘要</div>
+        <div class="summary-scroll">
         <table class="summary-table">
           <thead>
             <tr>
@@ -263,6 +264,7 @@ function toggleSection(key: string) {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       <!-- Tab 栏 -->
@@ -620,6 +622,11 @@ function toggleSection(key: string) {
   border-radius: 6px;
   overflow: hidden;
   background: #fff;
+}
+/* iPad / 手机上表格列总宽 > 容器时启用横向滚动；标题不参与滚动 */
+.summary-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .summary-title {
   padding: 6px 14px;
