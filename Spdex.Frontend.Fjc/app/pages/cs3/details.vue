@@ -154,6 +154,18 @@ function formatPolyIndex(s: PolyWindowStats): string {
 }
 
 /**
+ * BP量比 = (必发成交量 / 7.8) / Poly量
+ * 7.8 为必发金额单位到 USD 的换算系数。Poly 量为 USD 计价。
+ * 显示为百分比，分母无效时返回 '-'。
+ */
+function formatBpRatio(w: TimeWindowData, s: PolyWindowStats | undefined): string {
+  if (!w.odds || w.odds.totalAmount <= 0) return '-'
+  if (!s || s.volume <= 0) return '-'
+  const ratio = (w.odds.totalAmount / 7.8) / s.volume
+  return `${(ratio * 100).toFixed(0)}%`
+}
+
+/**
  * V2.0: 分时环比高亮规则
  * <130% AND 分时成交量>40K → 红色加粗
  * >500% AND 分时成交量>40K → 蓝色加粗
@@ -231,6 +243,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
               <th class="st-poly-vol">Poly量</th>
               <th class="st-poly-idx">Poly指数</th>
               <th class="st-poly-pct">Poly环比</th>
+              <th class="st-bp-ratio">BP量比</th>
             </tr>
           </thead>
           <tbody>
@@ -266,6 +279,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
                 <template v-if="polyWindowStats[idx]?.pctChange != null">{{ polyWindowStats[idx]!.pctChange!.toFixed(0) }}%</template>
                 <template v-else>-</template>
               </td>
+              <td class="st-bp-ratio">{{ formatBpRatio(w, polyWindowStats[idx]) }}</td>
             </tr>
           </tbody>
         </table>
@@ -685,6 +699,24 @@ td.st-poly-pct {
 .summary-active td.st-poly-idx,
 .summary-active td.st-poly-pct {
   background: #f3e8ff;
+}
+th.st-bp-ratio {
+  background: #ede9fe !important;
+  color: #5b21b6;
+  font-size: 11px;
+  white-space: nowrap;
+}
+td.st-bp-ratio {
+  background: #f5f3ff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  font-weight: 600;
+  color: #5b21b6;
+  font-size: 12px;
+}
+.summary-active td.st-bp-ratio {
+  background: #ede9fe;
 }
 
 /* ── 提炼表入口链接 ── */
