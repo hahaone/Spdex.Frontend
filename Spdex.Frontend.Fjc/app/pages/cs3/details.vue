@@ -156,13 +156,13 @@ function formatPolyIndex(s: PolyWindowStats): string {
 /**
  * BP量比 = (必发成交量 / 7.8) / Poly量
  * 7.8 为必发金额单位到 USD 的换算系数。Poly 量为 USD 计价。
- * 显示为百分比，分母无效时返回 '-'。
+ * 显示为两位小数倍数，分母无效时返回 '-'。
  */
 function formatBpRatio(w: TimeWindowData, s: PolyWindowStats | undefined): string {
   if (!w.odds || w.odds.totalAmount <= 0) return '-'
   if (!s || s.volume <= 0) return '-'
   const ratio = (w.odds.totalAmount / 7.8) / s.volume
-  return `${(ratio * 100).toFixed(0)}%`
+  return ratio.toFixed(2)
 }
 
 /**
