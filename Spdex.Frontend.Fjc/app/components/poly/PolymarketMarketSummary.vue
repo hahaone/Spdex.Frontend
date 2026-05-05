@@ -2,6 +2,7 @@
 import { computed, inject, ref } from 'vue'
 import type { PolymarketEventTradesAggregate, PolymarketMarketTradesAggregate } from '~/types/polymarket'
 import { formatPolyOdds, formatCompactCurrency, ODDS_FORMAT_KEY, type OddsFormat } from '~/composables/usePolymarketMetrics'
+import { outcomeLabel } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
 const props = defineProps<{
@@ -66,6 +67,23 @@ function formatTime(utc: string | null): string {
           <span class="text-sm font-semibold text-green-500 tabular-nums">{{ market.buyCount }}</span>
           <span class="text-gray-400">/</span>
           <span class="text-sm font-semibold text-red-500 tabular-nums">{{ market.sellCount }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="market && (market.yesNotional > 0 || market.noNotional > 0)" class="grid grid-cols-2 gap-2">
+      <div class="rounded-lg bg-gray-50 p-2.5">
+        <div class="text-[10px] text-gray-400 uppercase tracking-wider">{{ outcomeLabel('Yes', market.sportsMarketType) }} 成交额</div>
+        <div class="text-base font-bold text-green-500 tabular-nums">{{ formatCompactCurrency(market.yesNotional) }}</div>
+        <div class="text-[10px] text-gray-400 tabular-nums">
+          {{ market.totalNotional > 0 ? ((market.yesNotional / market.totalNotional) * 100).toFixed(1) : '0' }}%
+        </div>
+      </div>
+      <div class="rounded-lg bg-gray-50 p-2.5">
+        <div class="text-[10px] text-gray-400 uppercase tracking-wider">{{ outcomeLabel('No', market.sportsMarketType) }} 成交额</div>
+        <div class="text-base font-bold text-red-500 tabular-nums">{{ formatCompactCurrency(market.noNotional) }}</div>
+        <div class="text-[10px] text-gray-400 tabular-nums">
+          {{ market.totalNotional > 0 ? ((market.noNotional / market.totalNotional) * 100).toFixed(1) : '0' }}%
         </div>
       </div>
     </div>
