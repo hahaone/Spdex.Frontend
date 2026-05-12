@@ -7,7 +7,6 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
     '@nuxt/devtools',
-    '@nuxtjs/tailwindcss',
   ],
 
   // Runtime config: values can be overridden by environment variables
@@ -50,7 +49,14 @@ export default defineNuxtConfig({
   },
 
   // Global CSS
-  css: ['~/assets/css/global.css'],
+  css: ['~/assets/css/tailwind.css', '~/assets/css/global.css'],
+
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  },
 
   // SSR enabled (default), can switch to SPA if needed
   ssr: true,

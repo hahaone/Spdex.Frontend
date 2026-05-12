@@ -11,6 +11,12 @@ interface MatchListParams {
   sport?: string // 'soccer' | 'basketball'
 }
 
+type RefreshOptions = { silent?: boolean } | Event
+
+function isSilentRefresh(options?: RefreshOptions): boolean {
+  return !!options && 'silent' in options && options.silent === true
+}
+
 export function useMatchList(params: Ref<MatchListParams>) {
   const refreshing = ref(false)
 
@@ -20,13 +26,19 @@ export function useMatchList(params: Ref<MatchListParams>) {
   })
 
   /** 手动刷新（不改变参数，仅重新请求） */
-  async function manualRefresh() {
-    refreshing.value = true
+  async function manualRefresh(options?: RefreshOptions) {
+    const silent = isSilentRefresh(options)
+    if (!silent) {
+      refreshing.value = true
+    }
+
     try {
       await fetchResult.refresh()
     }
     finally {
-      refreshing.value = false
+      if (!silent) {
+        refreshing.value = false
+      }
     }
   }
 

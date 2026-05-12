@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss'
 
 export default {
-  content: [],  // @nuxtjs/tailwindcss 模块自动扫描
+  content: ['./app/**/*.{vue,js,jsx,mjs,ts,tsx}'],
   theme: {
     extend: {
       colors: {

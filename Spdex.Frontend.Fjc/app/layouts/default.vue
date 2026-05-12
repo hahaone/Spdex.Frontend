@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const route = useRoute()
-const { user, isLoggedIn, isJcOnly, logout } = useAuth()
+const { user, isLoggedIn, logout } = useAuth()
 
 /** 令牌类型显示文本 */
 const tokenLabel = computed(() => {
@@ -20,6 +20,7 @@ const navItems = computed(() => {
   const items = [
     { label: '足球', to: '/', icon: '⚽' },
     { label: '篮球', to: '/bk', icon: '🏀' },
+    { label: '现场', to: '/live', icon: '▦' },
   ]
   if (canAccessSignals.value) {
     items.push({ label: '信号', to: '/signals', icon: '📡' })
@@ -30,9 +31,10 @@ const navItems = computed(() => {
 /** 当前选中的导航项：精确匹配路径前缀 */
 function isActive(to: string): boolean {
   if (to === '/bk') return route.path.startsWith('/bk')
+  if (to === '/live') return route.path.startsWith('/live')
   if (to === '/signals') return route.path.startsWith('/signals')
   // 足球（默认）：不是篮球也不是信号
-  return !route.path.startsWith('/bk') && !route.path.startsWith('/signals')
+  return !route.path.startsWith('/bk') && !route.path.startsWith('/live') && !route.path.startsWith('/signals')
 }
 
 const config = useRuntimeConfig()
