@@ -9,6 +9,18 @@ export interface LiveMatchOddsTopTradesResponse {
   missingEvents: LiveMatchOddsMissingEvent[]
 }
 
+export interface LiveExchangeRateResponse {
+  baseCurrency: string
+  quoteCurrency: string
+  rate: number
+  provider: string
+  source: string
+  fetchedAtUtc: string
+  cachedUntilUtc: string
+  stale: boolean
+  fallback: boolean
+}
+
 export interface LiveMatchOddsMissingEvent {
   eventId: string
   triedMarketIds: string[]

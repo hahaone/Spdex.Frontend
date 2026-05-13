@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import type { ApiResponse } from '~/types/api'
 import type { MatchListItem, MatchListResult } from '~/types/match'
-import type { LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary } from '~/types/live'
+import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary } from '~/types/live'
 import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatMoney } from '~/utils/formatters'
 
 const MATCH_REFRESH_INTERVAL_MS = 30_000
 const LIVE_TRADE_REFRESH_INTERVAL_MS = 5_000
-const BETFAIR_GBP_TO_HKD_RATE = 9.8
+const FX_RATE_REFRESH_INTERVAL_MS = 15 * 60_000
+const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
 
 const { isJcOnly } = useAuth()
 
@@ -51,10 +53,18 @@ const queryParams = computed(() => ({
 }))
 
 const { data: response, status, refreshing, manualRefresh } = useMatchList(queryParams)
+const { data: fxRateResponse, refresh: refreshFxRate } = useApiFetch<ApiResponse<LiveExchangeRateResponse>>(
+  '/api/live/fx-rates/GBP/HKD',
+  { server: false },
+)
 const isMatchLoading = computed(() => status.value === 'pending' || refreshing.value)
 const result = computed<MatchListResult | null>(() => response.value?.data ?? null)
 const apiMatches = computed(() => result.value?.items ?? [])
 const leagues = computed(() => result.value?.leagues ?? [])
+const betfairGbpToHkdRate = computed(() => {
+  const rate = Number(fxRateResponse.value?.data?.rate ?? 0)
+  return Number.isFinite(rate) && rate > 0 ? rate : FALLBACK_BETFAIR_GBP_TO_HKD_RATE
+})
 
 watch(apiMatches, (items) => {
   if (items.length > 0) {
@@ -123,6 +133,7 @@ const previousSignatures = ref<Map<number, string>>(new Map())
 let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let liveTradeRefreshTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+let fxRateRefreshTimer: ReturnType<typeof setInterval> | null = null
 let autoRefreshActive = false
 type RefreshOptions = { silent?: boolean } | PointerEvent
 
@@ -166,6 +177,14 @@ onMounted(() => {
 
     void liveTrades.refresh({ silent: true })
   }, LIVE_TRADE_REFRESH_INTERVAL_MS)
+
+  fxRateRefreshTimer = setInterval(() => {
+    if (document.visibilityState === 'hidden') {
+      return
+    }
+
+    void refreshFxRate()
+  }, FX_RATE_REFRESH_INTERVAL_MS)
 })
 
 onBeforeUnmount(() => {
@@ -184,6 +203,11 @@ onBeforeUnmount(() => {
   if (countdownTimer) {
     clearInterval(countdownTimer)
     countdownTimer = null
+  }
+
+  if (fxRateRefreshTimer) {
+    clearInterval(fxRateRefreshTimer)
+    fxRateRefreshTimer = null
   }
 })
 
@@ -337,7 +361,7 @@ function formatTradeTime(value: string | null | undefined): string {
 function toHkdAmount(amount: number | null | undefined): number {
   const raw = Number(amount ?? 0)
   if (!Number.isFinite(raw) || raw <= 0) return 0
-  return raw * BETFAIR_GBP_TO_HKD_RATE
+  return raw * betfairGbpToHkdRate.value
 }
 
 function formatHkdMoney(amount: number | null | undefined): string {
