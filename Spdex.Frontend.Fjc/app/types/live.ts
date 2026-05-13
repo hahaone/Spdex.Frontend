@@ -62,6 +62,8 @@ export interface LiveMatchOddsTopTradeSummary {
   tradedPrice?: number | null
   tradedSizeDelta?: number | null
   bestBackPrice?: number | null
+  bestBackSize?: number | null
   bestLayPrice?: number | null
+  bestLaySize?: number | null
   sideHint: 'backPressure' | 'layPressure' | 'unknown' | string
 }

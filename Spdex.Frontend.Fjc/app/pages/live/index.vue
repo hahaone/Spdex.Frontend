@@ -387,6 +387,20 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
   if (!trade) return '-'
   return `${formatHkdMoney(toHkdAmount(tradeTotalDelta(trade)))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
 }
+
+function formatBookLevel(size: number | null | undefined, price: number | null | undefined): string {
+  const priceValue = Number(price ?? 0)
+  if (!Number.isFinite(priceValue) || priceValue <= 0) return '-'
+
+  const sizeHkd = toHkdAmount(size)
+  if (sizeHkd <= 0) return `- (${priceValue.toFixed(2)})`
+
+  return `${formatHkdMoney(sizeHkd)} (${priceValue.toFixed(2)})`
+}
+
+function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
+  return `${formatBookLevel(trade.bestBackSize, trade.bestBackPrice)} / ${formatBookLevel(trade.bestLaySize, trade.bestLayPrice)}`
+}
 </script>
 
 <template>
@@ -529,7 +543,7 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
                       <td>{{ formatPriceMove(trade) }}</td>
                       <td>{{ formatHkdMoney(toHkdAmount(tradeTotalDelta(trade))) }}</td>
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
-                      <td>{{ trade.bestBackPrice?.toFixed(2) ?? '-' }} / {{ trade.bestLayPrice?.toFixed(2) ?? '-' }}</td>
+                      <td>{{ formatBackLayBook(trade) }}</td>
                     </tr>
                     <tr v-if="(getLiveItem(item)?.topTrades?.length ?? 0) === 0">
                       <td colspan="8" class="empty-cell">{{ liveEmptyText(item) }}</td>
