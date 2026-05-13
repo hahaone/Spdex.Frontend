@@ -86,10 +86,10 @@ const apiVisibleMatches = computed(() => {
   if (liveStatus.value === 'finished') {
     return apiMatches.value.filter(isFinishedMatch)
   }
-  return apiMatches.value
+  return apiMatches.value.filter(item => !isFinishedMatch(item))
 })
 
-const matches = computed(() => {
+const matchCandidates = computed(() => {
   const apiItems = apiVisibleMatches.value
   const ids = pinnedEventIds.value
   if (ids.size === 0) return apiItems
@@ -103,16 +103,28 @@ const matches = computed(() => {
     else apiNormal.push(item)
   }
 
-  const extraPinned = pinnedItems.value.filter(item => !apiIdSet.has(item.match.eventId))
+  const extraPinned = pinnedItems.value.filter(item =>
+    !apiIdSet.has(item.match.eventId)
+    && (liveStatus.value === 'finished' ? isFinishedMatch(item) : !isFinishedMatch(item)),
+  )
   return [...apiPinned, ...extraPinned, ...apiNormal]
 })
 
-const liveMarkets = computed(() => matches.value.map(item => ({
+const liveMarkets = computed(() => matchCandidates.value.map(item => ({
   eventId: item.match.eventId,
   marketId: item.match.marketId1,
 })))
 const liveTrades = useLiveMatchOddsTopTrades(liveMarkets)
 const liveByEventId = computed(() => liveTrades.byEventId.value)
+const matches = computed(() => {
+  if (liveStatus.value !== 'running') return matchCandidates.value
+
+  return matchCandidates.value.filter((item) => {
+    const live = liveByEventId.value.get(item.match.eventId)
+    const marketStatus = live?.marketStatus?.toUpperCase()
+    return marketStatus !== 'CLOSED'
+  })
+})
 const missingLiveEventIds = computed(() => new Set(
   liveTrades.data.value?.missingEventIds.map(id => Number(id)).filter(Number.isFinite) ?? [],
 ))
