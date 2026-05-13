@@ -44,6 +44,12 @@ export interface MatchListItem {
   match: Match
   asianAvrLet: string | null
   bfAmount: number
+  /** 临场终盘 Betfair 主胜指数 */
+  bfIndexHome: number
+  /** 临场终盘 Betfair 平局指数 */
+  bfIndexDraw: number
+  /** 临场终盘 Betfair 客胜指数 */
+  bfIndexAway: number
   /** 亚盘总成交额（亚盘所有 Runners 的 Amount 汇总） */
   asianAmount: number
   pMark: string | null

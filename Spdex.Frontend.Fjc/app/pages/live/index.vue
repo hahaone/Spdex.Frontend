@@ -3,6 +3,10 @@ import type { MatchListItem, MatchListResult } from '~/types/match'
 import type { LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary } from '~/types/live'
 import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatMoney } from '~/utils/formatters'
 
+const MATCH_REFRESH_INTERVAL_MS = 30_000
+const LIVE_TRADE_REFRESH_INTERVAL_MS = 5_000
+const BETFAIR_GBP_TO_HKD_RATE = 9.8
+
 const { isJcOnly } = useAuth()
 
 const {
@@ -107,12 +111,19 @@ const pendingLiveEventIds = computed(() => new Set(
 ))
 const isInitialLoading = computed(() => isMatchLoading.value && response.value == null)
 const isRefreshing = computed(() => refreshing.value)
+const nowMs = ref(Date.now())
+const nextMatchRefreshAt = ref(Date.now() + MATCH_REFRESH_INTERVAL_MS)
+const refreshCountdownSeconds = computed(() =>
+  Math.max(0, Math.ceil((nextMatchRefreshAt.value - nowMs.value) / 1000)),
+)
 
 const expandedEventIds = ref<Set<number>>(new Set())
 const flashEventIds = ref<Set<number>>(new Set())
 const previousSignatures = ref<Map<number, string>>(new Map())
-let matchRefreshTimer: ReturnType<typeof setInterval> | null = null
+let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let liveTradeRefreshTimer: ReturnType<typeof setInterval> | null = null
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+let autoRefreshActive = false
 type RefreshOptions = { silent?: boolean } | PointerEvent
 
 function normalizeRefreshOptions(options?: RefreshOptions): { silent?: boolean } {
@@ -138,26 +149,30 @@ watch(
 )
 
 watch(liveMarkets, () => {
-  liveTrades.refresh({ silent: liveTrades.data.value != null })
+  void liveTrades.refresh({ silent: liveTrades.data.value != null })
 }, { immediate: true })
 
 onMounted(() => {
-  matchRefreshTimer = setInterval(() => {
-    refreshAll({ silent: true })
-  }, 30_000)
+  autoRefreshActive = true
+  scheduleNextMatchRefresh()
+  countdownTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
 
   liveTradeRefreshTimer = setInterval(() => {
     if (document.visibilityState === 'hidden') {
       return
     }
 
-    liveTrades.refresh({ silent: true })
-  }, 5_000)
+    void liveTrades.refresh({ silent: true })
+  }, LIVE_TRADE_REFRESH_INTERVAL_MS)
 })
 
 onBeforeUnmount(() => {
+  autoRefreshActive = false
+
   if (matchRefreshTimer) {
-    clearInterval(matchRefreshTimer)
+    clearTimeout(matchRefreshTimer)
     matchRefreshTimer = null
   }
 
@@ -165,13 +180,37 @@ onBeforeUnmount(() => {
     clearInterval(liveTradeRefreshTimer)
     liveTradeRefreshTimer = null
   }
+
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
 })
 
 async function refreshAll(options?: RefreshOptions) {
   const refreshOptions = normalizeRefreshOptions(options)
-  await manualRefresh(refreshOptions)
-  await nextTick()
-  await liveTrades.refresh(refreshOptions)
+  try {
+    await manualRefresh(refreshOptions)
+    await nextTick()
+    await liveTrades.refresh(refreshOptions)
+  }
+  finally {
+    scheduleNextMatchRefresh()
+  }
+}
+
+function scheduleNextMatchRefresh() {
+  if (!autoRefreshActive) return
+
+  if (matchRefreshTimer) {
+    clearTimeout(matchRefreshTimer)
+  }
+
+  nowMs.value = Date.now()
+  nextMatchRefreshAt.value = nowMs.value + MATCH_REFRESH_INTERVAL_MS
+  matchRefreshTimer = setTimeout(() => {
+    void refreshAll({ silent: true })
+  }, MATCH_REFRESH_INTERVAL_MS)
 }
 
 function flashExpandButton(eventId: number) {
@@ -259,10 +298,16 @@ function directionMark(direction: string | null | undefined): string {
 function formatPriceMove(trade: LiveMatchOddsTopTradeSummary | null | undefined): string {
   if (!trade) return '-'
   const to = trade.priceTo ?? trade.tradedPrice
-  if (!to) return '-'
-  if (trade.priceFrom && trade.priceFrom !== to) {
-    return `${trade.priceFrom.toFixed(2)} → ${to.toFixed(2)} ${directionMark(trade.priceDirection)}`
+  const from = trade.priceFrom ?? null
+  if (trade.priceDirection === 'flat') {
+    const price = to ?? from
+    return price ? `${price.toFixed(2)} 横盘` : '横盘'
   }
+  if (!to) return '-'
+  if (from && from !== to) {
+    return `${from.toFixed(2)} → ${to.toFixed(2)} ${directionMark(trade.priceDirection)}`
+  }
+  if (from === to) return `${to.toFixed(2)} 横盘`
   return `${to.toFixed(2)} ${directionMark(trade.priceDirection)}`
 }
 
@@ -273,12 +318,39 @@ function formatTradeTime(value: string | null | undefined): string {
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
   const ss = String(d.getSeconds()).padStart(2, '0')
-  return `${hh}:${mm}:${ss}`
+  const ms = String(d.getMilliseconds()).padStart(3, '0')
+  return `${hh}:${mm}:${ss}.${ms}`
+}
+
+function toHkdAmount(amount: number | null | undefined): number {
+  const raw = Number(amount ?? 0)
+  if (!Number.isFinite(raw) || raw <= 0) return 0
+  return raw * BETFAIR_GBP_TO_HKD_RATE
+}
+
+function formatHkdMoney(amount: number | null | undefined): string {
+  return `HK$ ${formatMoney(Number(amount ?? 0))}`
+}
+
+function formatHkdCompact(amount: number | null | undefined): string {
+  const value = Number(amount ?? 0)
+  if (!Number.isFinite(value) || value <= 0) return '-'
+  return `HK$ ${formatBfAmount(value)}`
+}
+
+function formatBfIndex(item: MatchListItem): string {
+  const indexes = [item.bfIndexHome, item.bfIndexDraw, item.bfIndexAway]
+    .map(value => Number(value ?? 0))
+
+  if (indexes.every(value => !Number.isFinite(value) || value <= 0)) return '-'
+  return indexes
+    .map(value => (Number.isFinite(value) && value > 0 ? Math.round(value).toString() : '-'))
+    .join('-')
 }
 
 function formatBfMaxBetSummary(item: MatchListItem): string {
   if (!item.bfMaxBet) return '-'
-  const amount = formatMoney(item.bfMaxBet)
+  const amount = formatHkdMoney(item.bfMaxBet)
   const pct = item.bfMaxBetPercent.toFixed(0)
   const attr = item.bfMaxBetAttr || '-'
   const pmark = item.bfPMark ? `,${item.bfPMark}` : ''
@@ -286,10 +358,18 @@ function formatBfMaxBetSummary(item: MatchListItem): string {
   return `${amount} (${pct}%,${attr}${pmark}) ${selection}`
 }
 
+function formatLiveTotal(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
+  if (!live?.totalMatched) return '-'
+  const liveTotalHkd = toHkdAmount(live.totalMatched)
+  const prematchHkd = Number(item.bfAmount ?? 0)
+  const pureLiveTotal = Math.max(0, liveTotalHkd - prematchHkd)
+  return formatHkdCompact(pureLiveTotal)
+}
+
 function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
   const trade = live?.maxTopTrade
   if (!trade) return '-'
-  return `${formatMoney(trade.amount)} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
+  return `${formatHkdMoney(toHkdAmount(trade.amount))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
 }
 </script>
 
@@ -334,9 +414,10 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
         竞彩
       </button>
 
-      <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll">
+      <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll()">
         <span class="refresh-icon" :class="{ spinning: isInitialLoading || isRefreshing }">&#8635;</span>
         刷新
+        <span class="refresh-countdown">{{ refreshCountdownSeconds }}s</span>
       </button>
 
       <div class="filter-info">
@@ -363,7 +444,8 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
             <th class="col-max">标盘最大单</th>
             <th class="col-money">成交</th>
             <th class="col-index">必指</th>
-            <th class="col-live">现场成交</th>
+            <th class="col-live-total">现场总成交</th>
+            <th class="col-live">现场最大单</th>
             <th class="col-action" />
           </tr>
         </thead>
@@ -386,8 +468,9 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
                 <span>{{ item.bfMaxBetOdds ? item.bfMaxBetOdds.toFixed(2) : '-' }}</span>
               </td>
               <td class="max-cell">{{ formatBfMaxBetSummary(item) }}</td>
-              <td class="money-cell">{{ formatBfAmount(item.bfAmount) }}</td>
-              <td class="index-cell">-</td>
+              <td class="money-cell">{{ formatHkdCompact(item.bfAmount) }}</td>
+              <td class="index-cell">{{ formatBfIndex(item) }}</td>
+              <td class="live-total-cell">{{ formatLiveTotal(getLiveItem(item), item) }}</td>
               <td class="live-cell">{{ formatLiveSummary(getLiveItem(item), item) }}</td>
               <td>
                 <button
@@ -399,7 +482,7 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
               </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
-              <td colspan="10">
+              <td colspan="11">
                 <table class="top-table">
                   <thead>
                     <tr>
@@ -424,7 +507,7 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
-                      <td>{{ formatMoney(trade.amount) }}</td>
+                      <td>{{ formatHkdMoney(toHkdAmount(trade.amount)) }}</td>
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
                       <td>{{ trade.bestBackPrice?.toFixed(2) ?? '-' }} / {{ trade.bestLayPrice?.toFixed(2) ?? '-' }}</td>
                     </tr>
@@ -521,6 +604,14 @@ select {
   gap: 6px;
 }
 
+.refresh-countdown {
+  min-width: 30px;
+  padding-left: 6px;
+  border-left: 1px solid #d8deea;
+  color: #6d7890;
+  font-variant-numeric: tabular-nums;
+}
+
 .refresh-btn:disabled {
   opacity: 0.65;
   cursor: default;
@@ -584,7 +675,7 @@ select {
 .top-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1180px;
+  min-width: 1320px;
 }
 
 th {
@@ -608,6 +699,21 @@ td {
 
 .match-row:nth-child(4n + 1) td {
   background: #fbfcfe;
+}
+
+th.col-live-total,
+th.col-live {
+  background: #edf7ff;
+}
+
+.match-row td.live-total-cell,
+.match-row td.live-cell {
+  background: #f7fbff;
+}
+
+.match-row:nth-child(4n + 1) td.live-total-cell,
+.match-row:nth-child(4n + 1) td.live-cell {
+  background: #f1f8ff;
 }
 
 .pin-btn {
@@ -639,12 +745,14 @@ td {
 
 .price-cell,
 .money-cell,
-.index-cell {
+.index-cell,
+.live-total-cell {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .max-cell,
+.live-total-cell,
 .live-cell {
   font-weight: 700;
 }
