@@ -145,12 +145,18 @@ const hasPendingVisibleLiveTrades = computed(() =>
   matchCandidates.value.some(item => pendingLiveEventIds.value.has(item.match.eventId)),
 )
 const isInitialLoading = computed(() => isMatchLoading.value && response.value == null)
+const nowMs = ref(Date.now())
+const nextMatchRefreshAt = ref(Date.now() + MATCH_REFRESH_INTERVAL_MS)
+const refreshCountdownSeconds = computed(() =>
+  Math.max(0, Math.ceil((nextMatchRefreshAt.value - nowMs.value) / 1000)),
+)
 
 const expandedEventIds = ref<Set<number>>(new Set())
 const flashEventIds = ref<Set<number>>(new Set())
 const previousSignatures = ref<Map<number, string>>(new Map())
 let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let liveTradeRefreshTimer: ReturnType<typeof setInterval> | null = null
+let countdownTimer: ReturnType<typeof setInterval> | null = null
 let fxRateRefreshTimer: ReturnType<typeof setInterval> | null = null
 let autoRefreshActive = false
 type RefreshOptions = { silent?: boolean } | PointerEvent
@@ -184,6 +190,9 @@ watch(liveMarkets, () => {
 onMounted(() => {
   autoRefreshActive = true
   scheduleNextMatchRefresh()
+  countdownTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
 
   liveTradeRefreshTimer = setInterval(() => {
     if (
@@ -218,6 +227,11 @@ onBeforeUnmount(() => {
     liveTradeRefreshTimer = null
   }
 
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+
   if (fxRateRefreshTimer) {
     clearInterval(fxRateRefreshTimer)
     fxRateRefreshTimer = null
@@ -243,6 +257,8 @@ function scheduleNextMatchRefresh() {
     clearTimeout(matchRefreshTimer)
   }
 
+  nowMs.value = Date.now()
+  nextMatchRefreshAt.value = nowMs.value + MATCH_REFRESH_INTERVAL_MS
   matchRefreshTimer = setTimeout(() => {
     void refreshAll({ silent: true })
   }, MATCH_REFRESH_INTERVAL_MS)
@@ -517,6 +533,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
       <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll()">
         <span class="refresh-icon" :class="{ spinning: isInitialLoading }">&#8635;</span>
         刷新
+        <span class="refresh-countdown">列表 {{ refreshCountdownSeconds }}s</span>
       </button>
 
       <div class="filter-info">
@@ -713,6 +730,14 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.refresh-countdown {
+  min-width: 30px;
+  padding-left: 6px;
+  border-left: 1px solid #d8deea;
+  color: #6d7890;
+  font-variant-numeric: tabular-nums;
 }
 
 .refresh-btn:disabled {
