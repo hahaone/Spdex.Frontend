@@ -14,6 +14,8 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
   const loading = ref(false)
   const refreshing = ref(false)
   const error = ref<string | null>(null)
+  const refreshingEventIds = ref<Set<number>>(new Set())
+  const lastFetchedAtByEventId = ref<Map<number, number>>(new Map())
   const token = useCookie('spdex_token')
   let pendingRefresh = false
 
@@ -23,6 +25,8 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     if (refs.length === 0) {
       data.value = null
       error.value = null
+      refreshingEventIds.value = new Set()
+      lastFetchedAtByEventId.value = new Map()
       return
     }
 
@@ -45,6 +49,7 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     const itemMap = new Map<number, LiveMatchOddsEventItem>()
     const missingSet = new Set<number>()
     const pendingSet = new Set<number>()
+    pruneEventMaps(requested)
 
     for (const item of data.value?.items ?? []) {
       const eventId = Number(item.eventId)
@@ -76,14 +81,20 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
           const batch = batches[cursor++]
           if (!batch) return
 
+          const batchIds = batch.map(ref => ref.eventId)
+          markBatchRefreshing(batchIds, true)
           try {
             const result = await fetchBatch(batch)
-            mergeBatch(ids, itemMap, missingSet, pendingSet, batch.map(ref => ref.eventId), result)
+            markBatchFetched(batchIds)
+            mergeBatch(ids, itemMap, missingSet, pendingSet, batchIds, result)
             successCount += 1
           }
           catch (err) {
             failureCount += 1
             firstError ??= err
+          }
+          finally {
+            markBatchRefreshing(batchIds, false)
           }
         }
       }
@@ -197,6 +208,33 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     )
   }
 
+  function markBatchRefreshing(eventIds: number[], active: boolean) {
+    const next = new Set(refreshingEventIds.value)
+    for (const id of eventIds) {
+      if (active) next.add(id)
+      else next.delete(id)
+    }
+    refreshingEventIds.value = next
+  }
+
+  function markBatchFetched(eventIds: number[]) {
+    const fetchedAt = Date.now()
+    const next = new Map(lastFetchedAtByEventId.value)
+    for (const id of eventIds) {
+      next.set(id, fetchedAt)
+    }
+    lastFetchedAtByEventId.value = next
+  }
+
+  function pruneEventMaps(requested: Set<number>) {
+    refreshingEventIds.value = new Set(
+      Array.from(refreshingEventIds.value).filter(id => requested.has(id)),
+    )
+    lastFetchedAtByEventId.value = new Map(
+      Array.from(lastFetchedAtByEventId.value.entries()).filter(([id]) => requested.has(id)),
+    )
+  }
+
   function buildResponseSnapshot(
     requestedIds: number[],
     itemMap: Map<number, LiveMatchOddsEventItem>,
@@ -251,6 +289,8 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     byEventId,
     loading,
     refreshing,
+    refreshingEventIds,
+    lastFetchedAtByEventId,
     error,
     refresh,
   }

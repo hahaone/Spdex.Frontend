@@ -8,6 +8,7 @@ const MATCH_REFRESH_INTERVAL_MS = 30_000
 const LIVE_TRADE_REFRESH_INTERVAL_MS = 5_000
 const FX_RATE_REFRESH_INTERVAL_MS = 15 * 60_000
 const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
+const EFFECTIVE_LIVE_BIG_TRADE_HKD = 156_000
 
 const { isJcOnly } = useAuth()
 
@@ -55,7 +56,7 @@ const queryParams = computed(() => ({
 const { data: response, status, refreshing, manualRefresh } = useMatchList(queryParams)
 const { data: fxRateResponse, refresh: refreshFxRate } = useApiFetch<ApiResponse<LiveExchangeRateResponse>>(
   '/api/live/fx-rates/GBP/HKD',
-  { server: false },
+  { server: false, baseURL: '' },
 )
 const isMatchLoading = computed(() => status.value === 'pending' || refreshing.value)
 const result = computed<MatchListResult | null>(() => response.value?.data ?? null)
@@ -183,7 +184,7 @@ onMounted(() => {
   }, 1000)
 
   liveTradeRefreshTimer = setInterval(() => {
-    if (document.visibilityState === 'hidden') {
+    if (document.visibilityState === 'hidden' || liveStatus.value !== 'running') {
       return
     }
 
@@ -307,11 +308,11 @@ function isLiveMaxLatest(live: LiveMatchOddsEventItem | undefined): boolean {
   return !!maxKey && maxKey === live?.latestTopTradeKey
 }
 
-function isLiveMaxLatestTrade(
+function isLatestTopTrade(
   trade: LiveMatchOddsTopTradeSummary,
   live: LiveMatchOddsEventItem | undefined,
 ): boolean {
-  return isLiveMaxLatest(live) && trade.key === live?.maxTopTrade?.key
+  return !!live?.latestTopTradeKey && trade.key === live.latestTopTradeKey
 }
 
 function liveEmptyText(item: MatchListItem): string {
@@ -320,6 +321,36 @@ function liveEmptyText(item: MatchListItem): string {
   if (pendingLiveEventIds.value.has(item.match.eventId)) return '现场成交加载中...'
   if (missingLiveEventIds.value.has(item.match.eventId)) return '未匹配 Betfair Match Odds'
   return '暂无现场成交'
+}
+
+function liveRefreshSeconds(item: MatchListItem): number | null {
+  if (liveStatus.value !== 'running' || isFinishedMatch(item)) return null
+  const fetchedAt = liveTrades.lastFetchedAtByEventId.value.get(item.match.eventId)
+  if (!fetchedAt) return null
+  return Math.max(0, Math.ceil((fetchedAt + LIVE_TRADE_REFRESH_INTERVAL_MS - nowMs.value) / 1000))
+}
+
+function liveRefreshLabel(item: MatchListItem): string {
+  if (liveStatus.value !== 'running' || isFinishedMatch(item)) return '已完场'
+
+  const eventId = item.match.eventId
+  if (liveTrades.refreshingEventIds.value.has(eventId)) return '更新中'
+
+  const seconds = liveRefreshSeconds(item)
+  if (seconds == null) {
+    return liveTrades.loading.value || pendingLiveEventIds.value.has(eventId) ? '加载中' : '待更新'
+  }
+
+  if (seconds > 0) return `${seconds}s`
+  return liveTrades.refreshing.value ? '排队' : '待刷新'
+}
+
+function liveRefreshClass(item: MatchListItem): string {
+  if (liveStatus.value !== 'running' || isFinishedMatch(item)) return 'paused'
+  if (liveTrades.refreshingEventIds.value.has(item.match.eventId)) return 'active'
+  const seconds = liveRefreshSeconds(item)
+  if (seconds == null) return 'muted'
+  return seconds <= 1 ? 'due' : 'idle'
 }
 
 function runnerLabel(trade: LiveMatchOddsTopTradeSummary | null | undefined, item: MatchListItem): string {
@@ -390,6 +421,33 @@ function tradeTotalDelta(trade: LiveMatchOddsTopTradeSummary): number {
   return trade.snapshotTotalMatchedDelta || trade.amount
 }
 
+function tradeTotalDeltaHkd(trade: LiveMatchOddsTopTradeSummary): number {
+  return toHkdAmount(tradeTotalDelta(trade))
+}
+
+function prematchMaxBetHkd(item: MatchListItem): number {
+  const value = Number(item.bfMaxBet ?? 0)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function isEffectiveLiveBigTrade(
+  trade: LiveMatchOddsTopTradeSummary | null | undefined,
+  item: MatchListItem,
+): boolean {
+  if (!trade) return false
+
+  const liveAmount = tradeTotalDeltaHkd(trade)
+  if (liveAmount <= 0) return false
+
+  const prematchMax = prematchMaxBetHkd(item)
+  return liveAmount > EFFECTIVE_LIVE_BIG_TRADE_HKD
+    || (prematchMax > 0 && liveAmount > prematchMax)
+}
+
+function hasEffectiveLiveMax(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): boolean {
+  return isEffectiveLiveBigTrade(live?.maxTopTrade, item)
+}
+
 function formatBfIndex(item: MatchListItem): string {
   const indexes = [item.bfIndexHome, item.bfIndexDraw, item.bfIndexAway]
     .map(value => Number(value ?? 0))
@@ -421,7 +479,7 @@ function formatLiveTotal(live: LiveMatchOddsEventItem | undefined, item: MatchLi
 function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
   const trade = live?.maxTopTrade
   if (!trade) return '-'
-  return `${formatHkdMoney(toHkdAmount(tradeTotalDelta(trade)))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
+  return `${formatHkdMoney(tradeTotalDeltaHkd(trade))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
 }
 
 function formatBookLevel(size: number | null | undefined, price: number | null | undefined): string {
@@ -483,7 +541,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
       <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll()">
         <span class="refresh-icon" :class="{ spinning: isInitialLoading || isRefreshing }">&#8635;</span>
         刷新
-        <span class="refresh-countdown">{{ refreshCountdownSeconds }}s</span>
+        <span class="refresh-countdown">列表 {{ refreshCountdownSeconds }}s</span>
       </button>
 
       <div class="filter-info">
@@ -539,16 +597,27 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               <td class="live-total-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
                 {{ formatLiveTotal(getLiveItem(item), item) }}
               </td>
-              <td class="live-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
+              <td
+                class="live-cell"
+                :class="{
+                  'live-latest': isLiveMaxLatest(getLiveItem(item)),
+                  'live-effective-big': hasEffectiveLiveMax(getLiveItem(item), item),
+                }"
+              >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
               </td>
-              <td>
-                <button
-                  :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
-                  @click="toggleExpanded(item.match.eventId)"
-                >
-                  {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
-                </button>
+              <td class="action-cell">
+                <div class="action-cell-inner">
+                  <span :class="['live-refresh-pill', liveRefreshClass(item)]">
+                    {{ liveRefreshLabel(item) }}
+                  </span>
+                  <button
+                    :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
+                    @click="toggleExpanded(item.match.eventId)"
+                  >
+                    {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
@@ -570,14 +639,16 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                     <tr
                       v-for="trade in getLiveItem(item)?.topTrades ?? []"
                       :key="trade.key"
-                      :class="{ latest: isLiveMaxLatestTrade(trade, getLiveItem(item)) }"
+                      :class="{ latest: isLatestTopTrade(trade, getLiveItem(item)) }"
                     >
                       <td>{{ trade.rank }}</td>
                       <td>{{ formatTradeTime(trade.timestamp) }}</td>
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
-                      <td>{{ formatHkdMoney(toHkdAmount(tradeTotalDelta(trade))) }}</td>
+                      <td :class="{ 'effective-big-amount': isEffectiveLiveBigTrade(trade, item) }">
+                        {{ formatHkdMoney(tradeTotalDeltaHkd(trade)) }}
+                      </td>
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
                       <td>{{ formatBackLayBook(trade) }}</td>
                     </tr>
@@ -793,6 +864,11 @@ th.col-live {
   background: #fff7df;
 }
 
+.match-row td.live-cell.live-effective-big,
+.match-row:nth-child(4n + 1) td.live-cell.live-effective-big {
+  color: #d62929;
+}
+
 .pin-btn {
   border: 0;
   background: transparent;
@@ -832,6 +908,48 @@ th.col-live {
 .live-total-cell,
 .live-cell {
   font-weight: 700;
+}
+
+.action-cell {
+  text-align: right;
+}
+
+.action-cell-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.live-refresh-pill {
+  min-width: 48px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-refresh-pill.idle {
+  color: #2f56c5;
+  background: #eaf0ff;
+}
+
+.live-refresh-pill.active {
+  color: #087d5d;
+  background: #e7f8f2;
+}
+
+.live-refresh-pill.due {
+  color: #9a6500;
+  background: #fff3d8;
+}
+
+.live-refresh-pill.muted,
+.live-refresh-pill.paused {
+  color: #7c8799;
+  background: #f2f4f7;
 }
 
 .expand-btn {
@@ -876,6 +994,11 @@ th.col-live {
 .top-table tr.latest td {
   font-weight: 800;
   background: #fff7df;
+}
+
+.top-table td.effective-big-amount {
+  color: #d62929;
+  font-weight: 800;
 }
 
 .empty-cell {
