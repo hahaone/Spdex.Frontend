@@ -266,6 +266,18 @@ function getLiveItem(item: MatchListItem): LiveMatchOddsEventItem | undefined {
   return liveByEventId.value.get(item.match.eventId)
 }
 
+function isLiveMaxLatest(live: LiveMatchOddsEventItem | undefined): boolean {
+  const maxKey = live?.maxTopTrade?.key
+  return !!maxKey && maxKey === live?.latestTopTradeKey
+}
+
+function isLiveMaxLatestTrade(
+  trade: LiveMatchOddsTopTradeSummary,
+  live: LiveMatchOddsEventItem | undefined,
+): boolean {
+  return isLiveMaxLatest(live) && trade.key === live?.maxTopTrade?.key
+}
+
 function liveEmptyText(item: MatchListItem): string {
   if (liveTrades.error.value) return '现场成交加载失败，等待下次自动刷新'
   if (liveTrades.loading.value) return '现场成交加载中...'
@@ -474,8 +486,12 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
               <td class="max-cell">{{ formatBfMaxBetSummary(item) }}</td>
               <td class="money-cell">{{ formatHkdCompact(item.bfAmount) }}</td>
               <td class="index-cell">{{ formatBfIndex(item) }}</td>
-              <td class="live-total-cell">{{ formatLiveTotal(getLiveItem(item), item) }}</td>
-              <td class="live-cell">{{ formatLiveSummary(getLiveItem(item), item) }}</td>
+              <td class="live-total-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
+                {{ formatLiveTotal(getLiveItem(item), item) }}
+              </td>
+              <td class="live-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
+                {{ formatLiveSummary(getLiveItem(item), item) }}
+              </td>
               <td>
                 <button
                   :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
@@ -504,7 +520,7 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
                     <tr
                       v-for="trade in getLiveItem(item)?.topTrades ?? []"
                       :key="trade.key"
-                      :class="{ latest: trade.key === getLiveItem(item)?.latestTopTradeKey }"
+                      :class="{ latest: isLiveMaxLatestTrade(trade, getLiveItem(item)) }"
                     >
                       <td>{{ trade.rank }}</td>
                       <td>{{ formatTradeTime(trade.timestamp) }}</td>
@@ -718,6 +734,13 @@ th.col-live {
 .match-row:nth-child(4n + 1) td.live-total-cell,
 .match-row:nth-child(4n + 1) td.live-cell {
   background: #f1f8ff;
+}
+
+.match-row td.live-total-cell.live-latest,
+.match-row td.live-cell.live-latest,
+.match-row:nth-child(4n + 1) td.live-total-cell.live-latest,
+.match-row:nth-child(4n + 1) td.live-cell.live-latest {
+  background: #fff7df;
 }
 
 .pin-btn {
