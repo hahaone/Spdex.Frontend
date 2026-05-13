@@ -338,6 +338,10 @@ function formatHkdCompact(amount: number | null | undefined): string {
   return `HK$ ${formatBfAmount(value)}`
 }
 
+function tradeTotalDelta(trade: LiveMatchOddsTopTradeSummary): number {
+  return trade.snapshotTotalMatchedDelta || trade.amount
+}
+
 function formatBfIndex(item: MatchListItem): string {
   const indexes = [item.bfIndexHome, item.bfIndexDraw, item.bfIndexAway]
     .map(value => Number(value ?? 0))
@@ -369,7 +373,7 @@ function formatLiveTotal(live: LiveMatchOddsEventItem | undefined, item: MatchLi
 function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
   const trade = live?.maxTopTrade
   if (!trade) return '-'
-  return `${formatHkdMoney(toHkdAmount(trade.amount))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
+  return `${formatHkdMoney(toHkdAmount(tradeTotalDelta(trade)))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
 }
 </script>
 
@@ -507,7 +511,7 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
-                      <td>{{ formatHkdMoney(toHkdAmount(trade.amount)) }}</td>
+                      <td>{{ formatHkdMoney(toHkdAmount(tradeTotalDelta(trade))) }}</td>
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
                       <td>{{ trade.bestBackPrice?.toFixed(2) ?? '-' }} / {{ trade.bestLayPrice?.toFixed(2) ?? '-' }}</td>
                     </tr>
