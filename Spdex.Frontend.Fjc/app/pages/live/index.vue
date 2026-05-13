@@ -9,6 +9,8 @@ const LIVE_TRADE_REFRESH_INTERVAL_MS = 5_000
 const FX_RATE_REFRESH_INTERVAL_MS = 15 * 60_000
 const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
 const EFFECTIVE_LIVE_BIG_TRADE_HKD = 156_000
+const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 const { isJcOnly } = useAuth()
 
@@ -34,11 +36,18 @@ if (isJcOnly.value) {
 }
 
 function dateStringByOffset(offsetDays: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + offsetDays)
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const partMap = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  const baseUtc = Date.UTC(Number(partMap.year), Number(partMap.month) - 1, Number(partMap.day))
+  const d = new Date(baseUtc + offsetDays * ONE_DAY_MS)
+  const yyyy = d.getUTCFullYear()
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}`
 }
 
@@ -132,20 +141,16 @@ const missingLiveEventIds = computed(() => new Set(
 const pendingLiveEventIds = computed(() => new Set(
   liveTrades.data.value?.pendingEventIds.map(id => Number(id)).filter(Number.isFinite) ?? [],
 ))
-const isInitialLoading = computed(() => isMatchLoading.value && response.value == null)
-const isRefreshing = computed(() => refreshing.value)
-const nowMs = ref(Date.now())
-const nextMatchRefreshAt = ref(Date.now() + MATCH_REFRESH_INTERVAL_MS)
-const refreshCountdownSeconds = computed(() =>
-  Math.max(0, Math.ceil((nextMatchRefreshAt.value - nowMs.value) / 1000)),
+const hasPendingVisibleLiveTrades = computed(() =>
+  matchCandidates.value.some(item => pendingLiveEventIds.value.has(item.match.eventId)),
 )
+const isInitialLoading = computed(() => isMatchLoading.value && response.value == null)
 
 const expandedEventIds = ref<Set<number>>(new Set())
 const flashEventIds = ref<Set<number>>(new Set())
 const previousSignatures = ref<Map<number, string>>(new Map())
 let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let liveTradeRefreshTimer: ReturnType<typeof setInterval> | null = null
-let countdownTimer: ReturnType<typeof setInterval> | null = null
 let fxRateRefreshTimer: ReturnType<typeof setInterval> | null = null
 let autoRefreshActive = false
 type RefreshOptions = { silent?: boolean } | PointerEvent
@@ -179,12 +184,12 @@ watch(liveMarkets, () => {
 onMounted(() => {
   autoRefreshActive = true
   scheduleNextMatchRefresh()
-  countdownTimer = setInterval(() => {
-    nowMs.value = Date.now()
-  }, 1000)
 
   liveTradeRefreshTimer = setInterval(() => {
-    if (document.visibilityState === 'hidden' || liveStatus.value !== 'running') {
+    if (
+      document.visibilityState === 'hidden'
+      || (liveStatus.value !== 'running' && !hasPendingVisibleLiveTrades.value)
+    ) {
       return
     }
 
@@ -213,11 +218,6 @@ onBeforeUnmount(() => {
     liveTradeRefreshTimer = null
   }
 
-  if (countdownTimer) {
-    clearInterval(countdownTimer)
-    countdownTimer = null
-  }
-
   if (fxRateRefreshTimer) {
     clearInterval(fxRateRefreshTimer)
     fxRateRefreshTimer = null
@@ -243,8 +243,6 @@ function scheduleNextMatchRefresh() {
     clearTimeout(matchRefreshTimer)
   }
 
-  nowMs.value = Date.now()
-  nextMatchRefreshAt.value = nowMs.value + MATCH_REFRESH_INTERVAL_MS
   matchRefreshTimer = setTimeout(() => {
     void refreshAll({ silent: true })
   }, MATCH_REFRESH_INTERVAL_MS)
@@ -323,34 +321,11 @@ function liveEmptyText(item: MatchListItem): string {
   return '暂无现场成交'
 }
 
-function liveRefreshSeconds(item: MatchListItem): number | null {
-  if (liveStatus.value !== 'running' || isFinishedMatch(item)) return null
-  const fetchedAt = liveTrades.lastFetchedAtByEventId.value.get(item.match.eventId)
-  if (!fetchedAt) return null
-  return Math.max(0, Math.ceil((fetchedAt + LIVE_TRADE_REFRESH_INTERVAL_MS - nowMs.value) / 1000))
-}
-
-function liveRefreshLabel(item: MatchListItem): string {
-  if (liveStatus.value !== 'running' || isFinishedMatch(item)) return '已完场'
-
-  const eventId = item.match.eventId
-  if (liveTrades.refreshingEventIds.value.has(eventId)) return '更新中'
-
-  const seconds = liveRefreshSeconds(item)
-  if (seconds == null) {
-    return liveTrades.loading.value || pendingLiveEventIds.value.has(eventId) ? '加载中' : '待更新'
-  }
-
-  if (seconds > 0) return `${seconds}s`
-  return liveTrades.refreshing.value ? '排队' : '待刷新'
-}
-
-function liveRefreshClass(item: MatchListItem): string {
-  if (liveStatus.value !== 'running' || isFinishedMatch(item)) return 'paused'
-  if (liveTrades.refreshingEventIds.value.has(item.match.eventId)) return 'active'
-  const seconds = liveRefreshSeconds(item)
-  if (seconds == null) return 'muted'
-  return seconds <= 1 ? 'due' : 'idle'
+function liveMainFallbackText(item: MatchListItem): string {
+  if (pendingLiveEventIds.value.has(item.match.eventId)) return '生成中'
+  if (missingLiveEventIds.value.has(item.match.eventId)) return '未匹配'
+  if (liveTrades.error.value) return '-'
+  return '-'
 }
 
 function runnerLabel(trade: LiveMatchOddsTopTradeSummary | null | undefined, item: MatchListItem): string {
@@ -469,7 +444,7 @@ function formatBfMaxBetSummary(item: MatchListItem): string {
 }
 
 function formatLiveTotal(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
-  if (!live?.totalMatched) return '-'
+  if (!live?.totalMatched) return live ? '-' : liveMainFallbackText(item)
   const liveTotalHkd = toHkdAmount(live.totalMatched)
   const prematchHkd = Number(item.bfAmount ?? 0)
   const pureLiveTotal = Math.max(0, liveTotalHkd - prematchHkd)
@@ -477,6 +452,7 @@ function formatLiveTotal(live: LiveMatchOddsEventItem | undefined, item: MatchLi
 }
 
 function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
+  if (!live) return liveMainFallbackText(item)
   const trade = live?.maxTopTrade
   if (!trade) return '-'
   return `${formatHkdMoney(tradeTotalDeltaHkd(trade))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
@@ -539,9 +515,8 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
       </button>
 
       <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll()">
-        <span class="refresh-icon" :class="{ spinning: isInitialLoading || isRefreshing }">&#8635;</span>
+        <span class="refresh-icon" :class="{ spinning: isInitialLoading }">&#8635;</span>
         刷新
-        <span class="refresh-countdown">列表 {{ refreshCountdownSeconds }}s</span>
       </button>
 
       <div class="filter-info">
@@ -607,17 +582,12 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                 {{ formatLiveSummary(getLiveItem(item), item) }}
               </td>
               <td class="action-cell">
-                <div class="action-cell-inner">
-                  <span :class="['live-refresh-pill', liveRefreshClass(item)]">
-                    {{ liveRefreshLabel(item) }}
-                  </span>
-                  <button
-                    :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
-                    @click="toggleExpanded(item.match.eventId)"
-                  >
-                    {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
-                  </button>
-                </div>
+                <button
+                  :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
+                  @click="toggleExpanded(item.match.eventId)"
+                >
+                  {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
+                </button>
               </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
@@ -743,14 +713,6 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.refresh-countdown {
-  min-width: 30px;
-  padding-left: 6px;
-  border-left: 1px solid #d8deea;
-  color: #6d7890;
-  font-variant-numeric: tabular-nums;
 }
 
 .refresh-btn:disabled {
@@ -912,44 +874,6 @@ th.col-live {
 
 .action-cell {
   text-align: right;
-}
-
-.action-cell-inner {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.live-refresh-pill {
-  min-width: 48px;
-  padding: 3px 7px;
-  border-radius: 999px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.live-refresh-pill.idle {
-  color: #2f56c5;
-  background: #eaf0ff;
-}
-
-.live-refresh-pill.active {
-  color: #087d5d;
-  background: #e7f8f2;
-}
-
-.live-refresh-pill.due {
-  color: #9a6500;
-  background: #fff3d8;
-}
-
-.live-refresh-pill.muted,
-.live-refresh-pill.paused {
-  color: #7c8799;
-  background: #f2f4f7;
 }
 
 .expand-btn {

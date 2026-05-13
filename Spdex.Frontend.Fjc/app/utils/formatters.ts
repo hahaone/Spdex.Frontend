@@ -96,8 +96,18 @@ export function formatBfAmount(amount: number): string {
 
 /** 日期格式化为中文显示（首页日期选择器用） */
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/
 export function formatDateCN(dateStr: string): string {
   if (!dateStr) return ''
+  const match = dateOnlyPattern.exec(dateStr)
+  if (match) {
+    const year = Number(match[1])
+    const month = Number(match[2])
+    const day = Number(match[3])
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+    return `${year}年${month}月${day}日 周${weekDays[weekday]}`
+  }
+
   const d = new Date(dateStr)
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 周${weekDays[d.getDay()]}`
 }
