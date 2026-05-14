@@ -50,10 +50,17 @@ export interface LiveMatchOddsEventItem {
   marketTime?: string | null
   lastUpdatedAtUtc?: string | null
   totalMatched?: number | null
+  runnerLtps: LiveMatchOddsRunnerLtp[]
   topSignature: string
   latestTopTradeKey?: string | null
   maxTopTrade?: LiveMatchOddsTopTradeSummary | null
   topTrades: LiveMatchOddsTopTradeSummary[]
+}
+
+export interface LiveMatchOddsRunnerLtp {
+  selectionId: string
+  runnerName?: string | null
+  lastPriceTraded?: number | null
 }
 
 export interface LiveMatchOddsTopTradeSummary {

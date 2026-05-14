@@ -11,6 +11,7 @@ const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
 const EFFECTIVE_LIVE_BIG_TRADE_HKD = 156_000
 const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
+const DRAW_SELECTION_ID = 58805
 
 const { isJcOnly } = useAuth()
 
@@ -348,7 +349,7 @@ function runnerLabel(trade: LiveMatchOddsTopTradeSummary | null | undefined, ite
   if (!trade) return '-'
   const selectionId = Number(trade.selectionId)
   if (selectionId === item.match.homeTeamId) return '主'
-  if (selectionId === 58805) return '平'
+  if (selectionId === DRAW_SELECTION_ID) return '平'
   if (selectionId === item.match.guestTeamId) return '客'
   return trade.runnerName || trade.selectionId || '-'
 }
@@ -467,11 +468,29 @@ function formatLiveTotal(live: LiveMatchOddsEventItem | undefined, item: MatchLi
   return formatHkdCompact(pureLiveTotal)
 }
 
+function formatLiveLtp(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
+  if (!live) return liveMainFallbackText(item)
+
+  const prices = [
+    formatRunnerLtp(live, item.match.homeTeamId),
+    formatRunnerLtp(live, DRAW_SELECTION_ID),
+    formatRunnerLtp(live, item.match.guestTeamId),
+  ]
+  return prices.some(price => price !== '-') ? prices.join('-') : '-'
+}
+
 function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): string {
   if (!live) return liveMainFallbackText(item)
   const trade = live?.maxTopTrade
   if (!trade) return '-'
   return `${formatHkdMoney(tradeTotalDeltaHkd(trade))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
+}
+
+function formatRunnerLtp(live: LiveMatchOddsEventItem, selectionId: number): string {
+  const target = String(selectionId)
+  const row = live.runnerLtps?.find(item => item.selectionId === target)
+  const value = Number(row?.lastPriceTraded ?? 0)
+  return Number.isFinite(value) && value > 0 ? value.toFixed(2) : '-'
 }
 
 function formatBookLevel(size: number | null | undefined, price: number | null | undefined): string {
@@ -561,6 +580,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <th class="col-money">成交</th>
             <th class="col-index">必指</th>
             <th class="col-live-total">现场总成交</th>
+            <th class="col-live-ltp">现场价位</th>
             <th class="col-live">现场最大单</th>
             <th class="col-action" />
           </tr>
@@ -589,6 +609,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               <td class="live-total-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
                 {{ formatLiveTotal(getLiveItem(item), item) }}
               </td>
+              <td class="live-ltp-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
+                {{ formatLiveLtp(getLiveItem(item), item) }}
+              </td>
               <td
                 class="live-cell"
                 :class="{
@@ -608,7 +631,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
-              <td colspan="11">
+              <td colspan="12">
                 <table class="top-table">
                   <thead>
                     <tr>
@@ -806,6 +829,10 @@ select {
   min-width: 1320px;
 }
 
+.live-table {
+  min-width: 1380px;
+}
+
 th {
   height: 40px;
   padding: 0 10px;
@@ -830,25 +857,62 @@ td {
 }
 
 th.col-live-total,
+th.col-live-ltp,
 th.col-live {
   background: #edf7ff;
 }
 
 .match-row td.live-total-cell,
+.match-row td.live-ltp-cell,
 .match-row td.live-cell {
   background: #f7fbff;
 }
 
 .match-row:nth-child(4n + 1) td.live-total-cell,
+.match-row:nth-child(4n + 1) td.live-ltp-cell,
 .match-row:nth-child(4n + 1) td.live-cell {
   background: #f1f8ff;
 }
 
 .match-row td.live-total-cell.live-latest,
+.match-row td.live-ltp-cell.live-latest,
 .match-row td.live-cell.live-latest,
 .match-row:nth-child(4n + 1) td.live-total-cell.live-latest,
+.match-row:nth-child(4n + 1) td.live-ltp-cell.live-latest,
 .match-row:nth-child(4n + 1) td.live-cell.live-latest {
   background: #fff7df;
+}
+
+.col-pin {
+  width: 44px;
+}
+
+.col-league {
+  width: 66px;
+}
+
+.col-time {
+  width: 88px;
+}
+
+.col-price {
+  width: 58px;
+}
+
+.col-index {
+  width: 76px;
+}
+
+.col-live-total {
+  width: 112px;
+}
+
+.col-live-ltp {
+  width: 122px;
+}
+
+.col-action {
+  width: 50px;
 }
 
 .match-row td.live-cell.live-effective-big,
@@ -886,13 +950,15 @@ th.col-live {
 .price-cell,
 .money-cell,
 .index-cell,
-.live-total-cell {
+.live-total-cell,
+.live-ltp-cell {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .max-cell,
 .live-total-cell,
+.live-ltp-cell,
 .live-cell {
   font-weight: 700;
 }
