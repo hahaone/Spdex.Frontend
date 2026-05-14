@@ -619,7 +619,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       <th>价格</th>
                       <th>金额</th>
                       <th>成交价位</th>
-                      <th>Back/Lay</th>
+                      <th>挂卖/挂买</th>
                     </tr>
                   </thead>
                   <tbody>
