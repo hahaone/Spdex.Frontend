@@ -957,8 +957,6 @@ th.col-live {
 }
 
 .max-cell,
-.live-total-cell,
-.live-ltp-cell,
 .live-cell {
   font-weight: 700;
 }
