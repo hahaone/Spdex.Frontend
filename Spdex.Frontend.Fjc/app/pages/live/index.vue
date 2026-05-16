@@ -9,6 +9,7 @@ const LIVE_TRADE_REFRESH_INTERVAL_MS = 5_000
 const FX_RATE_REFRESH_INTERVAL_MS = 15 * 60_000
 const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
 const EFFECTIVE_LIVE_BIG_TRADE_HKD = 156_000
+const LIVE_TRADE_COMPARE_THRESHOLD_HKD = 40_000
 const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const DRAW_SELECTION_ID = 58805
@@ -422,22 +423,33 @@ function prematchMaxBetHkd(item: MatchListItem): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-function isEffectiveLiveBigTrade(
+type LiveTradePromptClass = 'live-trade-normal' | 'live-trade-alert' | 'live-trade-alert-strong'
+
+function getLiveTradePromptClass(
   trade: LiveMatchOddsTopTradeSummary | null | undefined,
   item: MatchListItem,
-): boolean {
-  if (!trade) return false
+): LiveTradePromptClass {
+  if (!trade) return 'live-trade-normal'
 
   const liveAmount = tradeTotalDeltaHkd(trade)
-  if (liveAmount <= 0) return false
+  if (liveAmount <= 0) return 'live-trade-normal'
+
+  if (liveAmount > EFFECTIVE_LIVE_BIG_TRADE_HKD) {
+    return 'live-trade-alert-strong'
+  }
 
   const prematchMax = prematchMaxBetHkd(item)
-  return liveAmount > EFFECTIVE_LIVE_BIG_TRADE_HKD
-    || (prematchMax > 0 && liveAmount > prematchMax)
+  if (prematchMax > 0 && liveAmount > prematchMax) {
+    return liveAmount >= LIVE_TRADE_COMPARE_THRESHOLD_HKD
+      ? 'live-trade-alert-strong'
+      : 'live-trade-alert'
+  }
+
+  return 'live-trade-normal'
 }
 
-function hasEffectiveLiveMax(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): boolean {
-  return isEffectiveLiveBigTrade(live?.maxTopTrade, item)
+function liveMaxPromptClass(live: LiveMatchOddsEventItem | undefined, item: MatchListItem): LiveTradePromptClass {
+  return getLiveTradePromptClass(live?.maxTopTrade, item)
 }
 
 function formatBfIndex(item: MatchListItem): string {
@@ -614,10 +626,10 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
               <td
                 class="live-cell"
-                :class="{
-                  'live-latest': isLiveMaxLatest(getLiveItem(item)),
-                  'live-effective-big': hasEffectiveLiveMax(getLiveItem(item), item),
-                }"
+                :class="[
+                  { 'live-latest': isLiveMaxLatest(getLiveItem(item)) },
+                  liveMaxPromptClass(getLiveItem(item), item),
+                ]"
               >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
               </td>
@@ -656,7 +668,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
-                      <td :class="{ 'effective-big-amount': isEffectiveLiveBigTrade(trade, item) }">
+                      <td :class="getLiveTradePromptClass(trade, item)">
                         {{ formatHkdMoney(tradeTotalDeltaHkd(trade)) }}
                       </td>
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
@@ -915,11 +927,6 @@ th.col-live {
   width: 50px;
 }
 
-.match-row td.live-cell.live-effective-big,
-.match-row:nth-child(4n + 1) td.live-cell.live-effective-big {
-  color: #d62929;
-}
-
 .pin-btn {
   border: 0;
   background: transparent;
@@ -956,9 +963,24 @@ th.col-live {
   font-variant-numeric: tabular-nums;
 }
 
-.max-cell,
-.live-cell {
+.max-cell {
   font-weight: 700;
+}
+
+.live-cell {
+  font-weight: 400;
+}
+
+.match-row td.live-cell.live-trade-alert,
+.match-row:nth-child(4n + 1) td.live-cell.live-trade-alert {
+  color: #d62929;
+  font-weight: 400;
+}
+
+.match-row td.live-cell.live-trade-alert-strong,
+.match-row:nth-child(4n + 1) td.live-cell.live-trade-alert-strong {
+  color: #d62929;
+  font-weight: 800;
 }
 
 .action-cell {
@@ -1009,8 +1031,27 @@ th.col-live {
   background: #fff7df;
 }
 
-.top-table td.effective-big-amount {
+.top-table td.live-trade-alert {
   color: #d62929;
+  font-weight: 400;
+}
+
+.top-table td.live-trade-alert-strong {
+  color: #d62929;
+  font-weight: 800;
+}
+
+.top-table td.live-trade-normal {
+  color: #2f3746;
+  font-weight: 400;
+}
+
+.top-table tr.latest td.live-trade-normal,
+.top-table tr.latest td.live-trade-alert {
+  font-weight: 400;
+}
+
+.top-table tr.latest td.live-trade-alert-strong {
   font-weight: 800;
 }
 
