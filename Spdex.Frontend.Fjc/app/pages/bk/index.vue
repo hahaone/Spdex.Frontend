@@ -20,6 +20,8 @@ const selectedLeague = ref('')
 const selectedStatus = ref<'upcoming' | 'started' | 'all'>('upcoming')
 const currentPage = ref(1)
 const pageSize = 20
+const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 // 构建查询参数（响应式）— 篮球专用
 const queryParams = computed(() => ({
@@ -122,6 +124,10 @@ function onStatusChange(status: 'upcoming' | 'started' | 'all') {
   currentPage.value = 1
 }
 
+function shouldAutoRefreshCurrentList(): boolean {
+  return selectedStatus.value === 'upcoming' || selectedStatus.value === 'started'
+}
+
 function shiftDate(days: number) {
   const base = selectedDate.value ? new Date(selectedDate.value) : new Date()
   base.setDate(base.getDate() + days)
@@ -170,6 +176,22 @@ const detailLinks = [
   { path: 'bk/uo', label: 'OU', title: '大小', color: '#556b2f' },
   { path: 'bk/handicap', label: '亚', title: '亚盘', color: '#8a2be2' },
 ]
+
+onMounted(() => {
+  autoRefreshTimer = setInterval(() => {
+    if (document.visibilityState !== 'visible') return
+    if (!shouldAutoRefreshCurrentList()) return
+    if (isLoading.value) return
+    void manualRefresh({ silent: true })
+  }, AUTO_REFRESH_INTERVAL_MS)
+})
+
+onUnmounted(() => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
+})
 </script>
 
 <template>

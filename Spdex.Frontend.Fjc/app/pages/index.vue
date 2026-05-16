@@ -24,6 +24,8 @@ const selectedStatus = ref<'upcoming' | 'started' | 'all'>('upcoming')
 const jcOnly = ref(isJcOnly.value) // jc 令牌用户默认开启
 const currentPage = ref(1)
 const pageSize = 20
+const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 // jc 令牌用户强制竞彩过滤
 if (isJcOnly.value) {
@@ -129,6 +131,10 @@ function onStatusChange(status: 'upcoming' | 'started' | 'all') {
   selectedStatus.value = status
   selectedLeague.value = ''
   currentPage.value = 1
+}
+
+function shouldAutoRefreshCurrentList(): boolean {
+  return selectedStatus.value === 'upcoming' || selectedStatus.value === 'started'
 }
 
 function toggleJcOnly() {
@@ -306,6 +312,22 @@ const detailLinks = [
   { path: 'cs7', label: '角', title: '角球', color: '#ff7f50' },
   { path: 'poly', label: 'Poly', title: 'Polymarket', color: '#6d28d9' },
 ]
+
+onMounted(() => {
+  autoRefreshTimer = setInterval(() => {
+    if (document.visibilityState !== 'visible') return
+    if (!shouldAutoRefreshCurrentList()) return
+    if (isLoading.value) return
+    void manualRefresh({ silent: true })
+  }, AUTO_REFRESH_INTERVAL_MS)
+})
+
+onUnmounted(() => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
+})
 </script>
 
 <template>
