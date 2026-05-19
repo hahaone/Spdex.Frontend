@@ -331,6 +331,29 @@ function isLatestTopTrade(
   return !!live?.latestTopTradeKey && trade.key === live.latestTopTradeKey
 }
 
+const NEAR_TRADE_WINDOW_MS = 3_000
+
+/**
+ * 新进入 TOP10 的成交单（latestTopTradeKey 对应行），
+ * 如果与其他 TOP10 大单成交时间差 < 3 秒，则返回 true，
+ * 用于把时间单元格高亮为粗体红字（识别簇拥成交）。
+ */
+function isNewTradeNearOthers(
+  trade: LiveMatchOddsTopTradeSummary,
+  live: LiveMatchOddsEventItem | undefined,
+): boolean {
+  if (!live?.latestTopTradeKey || trade.key !== live.latestTopTradeKey) return false
+  const t = Date.parse(trade.timestamp)
+  if (Number.isNaN(t)) return false
+  for (const other of live.topTrades) {
+    if (other.key === trade.key) continue
+    const ot = Date.parse(other.timestamp)
+    if (Number.isNaN(ot)) continue
+    if (Math.abs(t - ot) < NEAR_TRADE_WINDOW_MS) return true
+  }
+  return false
+}
+
 function liveEmptyText(item: MatchListItem): string {
   if (liveTrades.error.value) return '现场成交加载失败，等待下次自动刷新'
   if (liveTrades.loading.value) return '现场成交加载中...'
@@ -664,7 +687,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       :class="{ latest: isLatestTopTrade(trade, getLiveItem(item)) }"
                     >
                       <td>{{ trade.rank }}</td>
-                      <td>{{ formatTradeTime(trade.timestamp) }}</td>
+                      <td :class="{ 'time-near-collision': isNewTradeNearOthers(trade, getLiveItem(item)) }">{{ formatTradeTime(trade.timestamp) }}</td>
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
@@ -1052,6 +1075,13 @@ th.col-live {
 }
 
 .top-table tr.latest td.live-trade-alert-strong {
+  font-weight: 800;
+}
+
+/* 新进入 TOP10 大单成交时间，与其他 TOP10 成交时间差 < 3s 时高亮（簇拥成交识别） */
+.top-table td.time-near-collision,
+.top-table tr.latest td.time-near-collision {
+  color: #d62929;
   font-weight: 800;
 }
 
