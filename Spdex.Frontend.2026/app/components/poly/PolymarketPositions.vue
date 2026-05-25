@@ -4,6 +4,7 @@ import type { PolymarketTokenHolders, PolymarketHolder, PolymarketHolderSnapshot
 const props = defineProps<{
   conditionId: string | null
   eventId?: string | null
+  spdexEventId?: number | null
   label?: string
 }>()
 
@@ -23,12 +24,12 @@ async function fetchHolders() {
     const [holdersRes, snapshotsRes] = await Promise.all([
       $fetch<BswApiResult<PolymarketTokenHolders[]>>(
         '/api/polymarket/Get/Soccer/Holders',
-        { params: { conditionId: props.conditionId, limit: 20 }, headers },
+        { params: { conditionId: props.conditionId, spdexEventId: props.spdexEventId, limit: 20 }, headers },
       ),
       props.eventId
         ? $fetch<BswApiResult<PolymarketHolderSnapshot[]>>(
             '/api/polymarket/Get/Soccer/HolderSnapshots',
-            { params: { eventId: props.eventId, conditionId: props.conditionId }, headers },
+            { params: { eventId: props.eventId, conditionId: props.conditionId, spdexEventId: props.spdexEventId }, headers },
           ).catch(() => null)
         : Promise.resolve(null),
     ])

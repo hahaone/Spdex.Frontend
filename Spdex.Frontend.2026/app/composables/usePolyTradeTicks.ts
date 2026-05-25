@@ -19,6 +19,7 @@ export function usePolyTradeTicks(
   polymarketEventId: Ref<string | null>,
   conditionId: Ref<string | null> = ref(null),
   outcome: Ref<string | null> = ref(null),
+  spdexEventId: Ref<number | null> = ref(null),
 ) {
   const ticks = ref<PolymarketTradeTicksPage | null>(null)
   const meta = ref<PolymarketEventTradesAggregate | null>(null)
@@ -45,7 +46,7 @@ export function usePolyTradeTicks(
     try {
       const result = await apiFetch<BswApiResult<PolymarketEventTradesAggregate>>(
         '/api/polymarket/Get/Soccer/Trades',
-        { eventId, limit: 1, includeFamily: true },
+        { eventId, spdexEventId: spdexEventId.value, limit: 1, includeFamily: true },
       )
       meta.value = isBswOk(result) ? result.data : null
     }
@@ -62,6 +63,7 @@ export function usePolyTradeTicks(
     try {
       const params: Record<string, unknown> = {
         eventId,
+        spdexEventId: spdexEventId.value,
         page: page.value,
         pageSize: pageSize.value,
       }

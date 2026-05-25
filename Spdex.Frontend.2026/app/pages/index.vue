@@ -325,6 +325,7 @@ const detailLinks = [
   { path: 'cs4', label: 'OU', title: '大小', color: '#556b2f' },
   { path: 'cs5', label: '亚', title: '亚盘', color: '#8a2be2' },
   { path: 'cs7', label: '角', title: '角球', color: '#ff7f50' },
+  { path: 'poly', label: 'Poly', title: 'Polymarket', color: '#6d28d9' },
 ]
 
 onMounted(() => {
@@ -524,7 +525,9 @@ onUnmounted(() => {
                 <NuxtLink
                   v-for="link in detailLinks"
                   :key="link.path"
-                  :to="`/${link.path}/details?id=${item.match.eventId}`"
+                  :to="link.path === 'poly'
+                    ? `/poly/details?id=${item.match.eventId}&home=${encodeURIComponent(item.match.homeTeam)}&away=${encodeURIComponent(item.match.guestTeam)}&league=${encodeURIComponent(item.match.sortName || item.match.fullName)}`
+                    : `/${link.path}/details?id=${item.match.eventId}`"
                   :title="link.title"
                   class="detail-btn"
                   :style="{ backgroundColor: link.color }"

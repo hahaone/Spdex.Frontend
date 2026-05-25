@@ -76,15 +76,15 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
       const [tradesResult, bookResult, windowStatsResult] = await Promise.all([
         apiFetch<BswApiResult<PolymarketEventTradesAggregate>>(
           `/api/polymarket/Get/Soccer/Trades`,
-          { eventId: polyEventId, limit: 10000, includeFamily: true },
+          { eventId: polyEventId, spdexEventId: eventId, limit: 10000, includeFamily: true },
         ),
         apiFetch<BswApiResult<PolymarketEventBookAggregate>>(
           `/api/polymarket/Get/Soccer/Book`,
-          { eventId: polyEventId, levels: 10, includeFamily: true },
+          { eventId: polyEventId, spdexEventId: eventId, levels: 10, includeFamily: true },
         ),
         apiFetch<BswApiResult<PolymarketTradeWindowStatsResult>>(
           `/api/polymarket/Get/Soccer/TradeWindowStats`,
-          { polymarketEventId: polyEventId },
+          { polymarketEventId: polyEventId, spdexEventId: eventId },
         ).catch(() => null), // 新接口失败不影响原有功能
       ])
 

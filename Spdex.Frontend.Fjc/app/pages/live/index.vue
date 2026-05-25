@@ -636,7 +636,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                 <strong>{{ item.match.guestTeam }}</strong>
                 <div class="mobile-live-meta">
                   <span>现场价位 {{ formatLiveLtp(getLiveItem(item), item) }}</span>
-                  <span>现场最大单 {{ formatLiveSummary(getLiveItem(item), item) }}</span>
+                  <span :class="liveMaxPromptClass(getLiveItem(item), item)">
+                    现场最大单 {{ formatLiveSummary(getLiveItem(item), item) }}
+                  </span>
                 </div>
               </td>
               <td class="price-cell">
@@ -1140,6 +1142,16 @@ th.col-live {
     color: #40506a;
     font-size: 12px;
     line-height: 1.35;
+  }
+
+  .mobile-live-meta .live-trade-alert {
+    color: #d62929;
+    font-weight: 400;
+  }
+
+  .mobile-live-meta .live-trade-alert-strong {
+    color: #d62929;
+    font-weight: 800;
   }
 
   th.col-live-ltp,
