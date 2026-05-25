@@ -88,6 +88,14 @@ jobs:
             fi
             docker compose pull frontend2026
             docker compose up -d frontend2026
+            sleep 3
+            docker ps --filter "name=spdex-frontend-2026"
+            command -v ss >/dev/null 2>&1 && ss -ltnp | grep ':3001' || true
+            if ! curl -fsS --max-time 10 http://127.0.0.1:3001/login >/dev/null; then
+              echo "frontend2026 health check failed; recent container logs:"
+              docker logs --tail 200 spdex-frontend-2026 || true
+              exit 1
+            fi
             docker image prune -f
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
