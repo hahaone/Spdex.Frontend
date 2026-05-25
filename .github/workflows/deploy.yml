@@ -96,6 +96,17 @@ jobs:
               docker logs --tail 200 spdex-frontend-2026 || true
               exit 1
             fi
+            if ! curl -fsS --max-time 10 http://127.0.0.1:3001/tc26-9xq4v7 >/dev/null; then
+              echo "frontend2026 management page health check failed; recent container logs:"
+              docker logs --tail 200 spdex-frontend-2026 || true
+              exit 1
+            fi
+            api_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:3001/api/admin/teaching2026/opened || true)
+            if [ -z "$api_status" ] || [ "$api_status" = "000" ] || [ "$api_status" -ge 500 ]; then
+              echo "frontend2026 API proxy health check failed with status $api_status; recent container logs:"
+              docker logs --tail 200 spdex-frontend-2026 || true
+              exit 1
+            fi
             docker image prune -f
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}

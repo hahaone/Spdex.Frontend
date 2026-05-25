@@ -9,8 +9,10 @@ RUN npm ci --ignore-scripts
 # Build args for version tracking
 ARG BUILD_SHA=unknown
 ARG BUILD_TIME=unknown
+ARG API_INTERNAL_URL=http://127.0.0.1:5000
 ENV BUILD_SHA=${BUILD_SHA}
 ENV BUILD_TIME=${BUILD_TIME}
+ENV API_INTERNAL_URL=${API_INTERNAL_URL}
 
 # Copy everything, then prepare and build
 COPY . .

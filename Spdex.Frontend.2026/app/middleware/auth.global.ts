@@ -1,10 +1,10 @@
 /**
  * 全局认证路由守卫。
- * 除 /login 和 /admin 页面外，所有路由都需要有效的 2026 教学频道 token。
+ * 除 /login 和 2026 管理页外，所有路由都需要有效的 2026 教学频道 token。
  * 2026 教学频道不需要额外绑定口令。
  */
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (to.path === '/login' || to.path.startsWith('/admin')) return
+  if (to.path === '/login' || to.path.startsWith('/tc26-9xq4v7')) return
 
   const token = useCookie('spdex_token')
 
