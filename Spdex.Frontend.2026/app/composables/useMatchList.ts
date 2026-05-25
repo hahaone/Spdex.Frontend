@@ -1,0 +1,50 @@
+import type { ApiResponse } from '~/types/api'
+import type { MatchListResult } from '~/types/match'
+
+interface MatchListParams {
+  date?: string | null
+  league?: string | null
+  jc?: number
+  status?: string | null
+  page?: number
+  pageSize?: number
+  sport?: string // 'soccer' | 'basketball'
+}
+
+type RefreshOptions = { silent?: boolean } | Event
+
+function isSilentRefresh(options?: RefreshOptions): boolean {
+  return !!options && 'silent' in options && options.silent === true
+}
+
+export function useMatchList(params: Ref<MatchListParams>) {
+  const refreshing = ref(false)
+
+  const fetchResult = useApiFetch<ApiResponse<MatchListResult>>('/api/teaching2026/matches', {
+    params,
+    watch: [params],
+  })
+
+  /** 手动刷新（不改变参数，仅重新请求） */
+  async function manualRefresh(options?: RefreshOptions) {
+    const silent = isSilentRefresh(options)
+    if (!silent) {
+      refreshing.value = true
+    }
+
+    try {
+      await fetchResult.refresh()
+    }
+    finally {
+      if (!silent) {
+        refreshing.value = false
+      }
+    }
+  }
+
+  return {
+    ...fetchResult,
+    refreshing,
+    manualRefresh,
+  }
+}

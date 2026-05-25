@@ -1,0 +1,77 @@
+// https://nuxt.com/docs/api/configuration/nuxt-config
+export default defineNuxtConfig({
+  compatibilityDate: '2025-01-01',
+
+  devtools: { enabled: true },
+
+  modules: [
+    '@nuxt/eslint',
+    '@nuxt/devtools',
+  ],
+
+  // Runtime config: values can be overridden by environment variables
+  runtimeConfig: {
+    // Server-only keys (not exposed to client)
+    apiSecret: '',
+    // Public keys (exposed to client via NUXT_PUBLIC_*)
+    public: {
+      apiBase: 'http://localhost:5010', // Spdex.WebApi local development address
+      buildSha: process.env.BUILD_SHA || 'dev',
+      buildTime: process.env.BUILD_TIME || '',
+    },
+  },
+
+  // Proxy /api requests to .NET backend
+  // In Docker: API_INTERNAL_URL=http://webapi:5010
+  // In development: defaults to http://localhost:5010
+  routeRules: {
+    '/api/**': {
+      proxy: { to: `${process.env.API_INTERNAL_URL || 'http://localhost:5010'}/api/**` },
+    },
+  },
+
+  // TypeScript strict mode
+  typescript: {
+    strict: true,
+    typeCheck: true,
+  },
+
+  // Auto-import custom composables and types
+  imports: {
+    dirs: ['composables', 'types'],
+  },
+
+  // Disable path prefix for components (use filename only, not dir/Filename)
+  components: {
+    dirs: [
+      { path: '~/components', pathPrefix: false },
+    ],
+  },
+
+  // Global CSS
+  css: ['~/assets/css/tailwind.css', '~/assets/css/global.css'],
+
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  },
+
+  // SSR enabled (default), can switch to SPA if needed
+  ssr: true,
+
+  app: {
+    head: {
+      title: '2026教学频道',
+      meta: [
+        { charset: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'description', content: 'SPdex 2026 teaching channel' },
+      ],
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+      ],
+    },
+  },
+})

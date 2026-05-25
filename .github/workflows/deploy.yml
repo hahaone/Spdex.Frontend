@@ -30,7 +30,7 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Build and push FJCX Docker image
         uses: docker/build-push-action@v6
         with:
           context: ./Spdex.Frontend.Fjc
@@ -41,6 +41,18 @@ jobs:
           tags: |
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:latest
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}
+
+      - name: Build and push 2026 Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Spdex.Frontend.2026
+          push: true
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+          tags: |
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026:latest
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026:${{ github.sha }}
 
   deploy:
     needs: build
@@ -63,6 +75,19 @@ jobs:
             cd /home/spdex/core
             docker compose pull frontend
             docker compose up -d frontend
+            for attempt in $(seq 1 30); do
+              if docker compose config --services | grep -qx frontend2026; then
+                break
+              fi
+              echo "Waiting for frontend2026 service in docker-compose.yml... ($attempt/30)"
+              sleep 10
+            done
+            if ! docker compose config --services | grep -qx frontend2026; then
+              echo "frontend2026 service not found in docker-compose.yml; deploy Spdex.Core first."
+              exit 1
+            fi
+            docker compose pull frontend2026
+            docker compose up -d frontend2026
             docker image prune -f
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
