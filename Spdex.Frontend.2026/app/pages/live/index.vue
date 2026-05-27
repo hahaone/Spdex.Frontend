@@ -14,8 +14,6 @@ const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const DRAW_SELECTION_ID = 58805
 
-const { isJcOnly } = useAuth()
-
 const {
   pinnedItems,
   pinnedEventIds,
@@ -29,13 +27,8 @@ const {
 const selectedDay = ref<'today' | 'yesterday'>('today')
 const selectedLeague = ref('')
 const liveStatus = ref<'running' | 'finished'>('running')
-const jcOnly = ref(isJcOnly.value)
 const currentPage = ref(1)
 const pageSize = 100
-
-if (isJcOnly.value) {
-  jcOnly.value = true
-}
 
 function dateStringByOffset(offsetDays: number): string {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -59,7 +52,6 @@ const queryParams = computed(() => ({
   date: selectedDate.value,
   league: selectedLeague.value || undefined,
   status: liveStatus.value === 'running' ? 'started' : 'all',
-  jc: (jcOnly.value || isJcOnly.value) ? 1 : undefined,
   page: currentPage.value,
   pageSize,
 }))
@@ -290,13 +282,6 @@ function setStatus(value: 'running' | 'finished') {
 
 function onLeagueChange(value: string) {
   selectedLeague.value = value
-  currentPage.value = 1
-}
-
-function toggleJcOnly() {
-  if (isJcOnly.value) return
-  jcOnly.value = !jcOnly.value
-  selectedLeague.value = ''
   currentPage.value = 1
 }
 
@@ -576,14 +561,6 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
         </select>
       </div>
 
-      <button
-        v-if="!isJcOnly"
-        :class="['jc-btn', { active: jcOnly }]"
-        @click="toggleJcOnly"
-      >
-        竞彩
-      </button>
-
       <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll()">
         <span class="refresh-icon" :class="{ spinning: isInitialLoading }">&#8635;</span>
         刷新
@@ -622,9 +599,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
         </thead>
         <tbody>
           <template v-for="item in matches" :key="item.match.eventId">
-            <tr class="match-row">
+            <tr class="match-row" @click="toggleExpanded(item.match.eventId)">
               <td>
-                <button class="pin-btn" :class="{ pinned: isPinned(item.match.eventId) }" @click="togglePin(item)">
+                <button class="pin-btn" :class="{ pinned: isPinned(item.match.eventId) }" @click.stop="togglePin(item)">
                   ★
                 </button>
               </td>
@@ -665,7 +642,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               <td class="action-cell">
                 <button
                   :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
-                  @click="toggleExpanded(item.match.eventId)"
+                  @click.stop="toggleExpanded(item.match.eventId)"
                 >
                   {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
                 </button>
@@ -763,7 +740,6 @@ select {
 }
 
 .status-btn,
-.jc-btn,
 .refresh-btn {
   height: 34px;
   border: 0;
@@ -778,13 +754,11 @@ select {
   border-left: 1px solid #cdd4df;
 }
 
-.status-btn.active,
-.jc-btn.active {
+.status-btn.active {
   background: #2f56c5;
   color: #fff;
 }
 
-.jc-btn,
 .refresh-btn {
   border: 1px solid #cdd4df;
   border-radius: 6px;
@@ -891,6 +865,10 @@ td {
   font-size: 13px;
   border-top: 1px solid #edf0f5;
   white-space: nowrap;
+}
+
+.match-row {
+  cursor: pointer;
 }
 
 .match-row:nth-child(4n + 1) td {

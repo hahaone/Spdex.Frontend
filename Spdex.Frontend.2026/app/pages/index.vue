@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { MatchListResult } from '~/types/match'
-import type { ApiResponse } from '~/types/api'
 import { formatMoney, formatBfAmount, formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
-
-// --- 令牌权限 ---
-const { isJcOnly } = useAuth()
 
 // --- 关注（置顶）功能 ---
 const {
@@ -22,23 +18,16 @@ const selectedDate = ref('')
 const selectedDay = ref<'today' | 'yesterday'>('today')
 const selectedLeague = ref('')
 const selectedStatus = ref<'upcoming' | 'started' | 'all'>('upcoming')
-const jcOnly = ref(isJcOnly.value) // jc 令牌用户默认开启
 const currentPage = ref(1)
 const pageSize = 20
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
-
-// jc 令牌用户强制竞彩过滤
-if (isJcOnly.value) {
-  jcOnly.value = true
-}
 
 // 构建查询参数（响应式）
 const queryParams = computed(() => ({
   date: selectedDate.value || undefined,
   league: selectedLeague.value || undefined,
   status: selectedStatus.value,
-  jc: (jcOnly.value || isJcOnly.value) ? 1 : undefined,
   page: currentPage.value,
   pageSize,
 }))
@@ -152,24 +141,6 @@ function shouldAutoRefreshCurrentList(): boolean {
   return selectedStatus.value === 'upcoming' || selectedStatus.value === 'started'
 }
 
-function toggleJcOnly() {
-  // jc 令牌用户不允许关闭竞彩过滤
-  if (isJcOnly.value) return
-  jcOnly.value = !jcOnly.value
-  selectedLeague.value = ''
-  currentPage.value = 1
-}
-
-/** 日期前后切换 */
-function shiftDate(days: number) {
-  const base = selectedDate.value ? new Date(selectedDate.value) : new Date()
-  base.setDate(base.getDate() + days)
-  const yyyy = base.getFullYear()
-  const mm = String(base.getMonth() + 1).padStart(2, '0')
-  const dd = String(base.getDate()).padStart(2, '0')
-  onDateChange(`${yyyy}-${mm}-${dd}`)
-}
-
 // 格式化函数 → 已移至 ~/utils/formatters.ts
 // 保留 formatMatchTime 别名兼容模板调用
 const formatMatchTime = formatMatchTimeSlash
@@ -189,33 +160,9 @@ function formatHandicap(val: string | null): string {
   return `${sign}${num.toFixed(2)}`
 }
 
-// 最大单注列表单元格摘要（简短显示在表格中），包含P标记
-// V2.0: 金额与括号间加空格
-function formatMaxBetSummary(item: typeof matches.value[0]): string {
-  if (!item.maxBet) return ''
-  const amount = formatMoney(item.maxBet)
-  const per = item.maxBetPercent.toFixed(0)
-  const attr = item.maxBetAttr || '-'
-  const pmark = item.pMark ? `,${item.pMark}` : ''
-  const selection = item.maxBetSelection || '-'
-  return `${amount} (${per}%,${attr}${pmark}) ${selection}`
-}
-
 // V2.0: 波胆最大单注去掉高亮算法
 function isMaxBetHighlight(_item: typeof matches.value[0]): boolean {
   return false
-}
-
-// 标盘最大单注摘要
-// V2.0: 金额与括号间加空格
-function formatBfMaxBetSummary(item: typeof matches.value[0]): string {
-  if (!item.bfMaxBet) return ''
-  const amount = formatMoney(item.bfMaxBet)
-  const per = item.bfMaxBetPercent.toFixed(0)
-  const attr = item.bfMaxBetAttr || '-'
-  const pmark = item.bfPMark ? `,${item.bfPMark}` : ''
-  const selection = item.bfMaxBetSelection || '-'
-  return `${amount} (${per}%,${attr}${pmark}) ${selection}`
 }
 
 // V2.0: 波胆最大单注后缀（括号部分+选项名）
@@ -374,12 +321,6 @@ onUnmounted(() => {
           :class="['status-btn', { active: selectedStatus === 'all' }]"
           @click="onStatusChange('all')"
         >全部</button>
-        <button
-          :class="['status-btn jc-btn', { active: jcOnly || isJcOnly, locked: isJcOnly }]"
-          :disabled="isJcOnly"
-          :title="isJcOnly ? '竞彩版令牌，仅可查看竞彩比赛' : '切换竞彩过滤'"
-          @click="toggleJcOnly"
-        >竞彩</button>
       </div>
       <div class="filter-group">
         <label>联赛</label>
@@ -859,22 +800,6 @@ onUnmounted(() => {
 
 .status-btn.active + .status-btn {
   border-left-color: #1e40af;
-}
-
-.status-btn.jc-btn {
-  margin-left: 6px;
-  border-left: 1px solid #d1d5db;
-  border-radius: 4px;
-}
-
-.status-btn.jc-btn.active {
-  background: #b22222;
-  border-color: #b22222;
-}
-
-.status-btn.jc-btn.locked {
-  opacity: 0.7;
-  cursor: not-allowed;
 }
 
 /* --- 刷新按钮 --- */
