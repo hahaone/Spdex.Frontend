@@ -1,6 +1,0 @@
-export { homeMetrics } from './mockHome'
-export { footballMatches } from './mockMatches'
-export { marketDetail } from './mockMarket'
-export { chartSeries, chartSeriesAlt } from './mockChart'
-export { tradeRows } from './mockTrades'
-export { liveDetail, liveMatches, upcomingDetail } from './mockLive'

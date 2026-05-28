@@ -31,6 +31,13 @@ function formatPrice(value: number): string {
   return value > 0 ? value.toFixed(2) : '-'
 }
 
+function bigBetSideKey(side: string): string {
+  if (side.includes('主')) return 'home'
+  if (side.includes('客')) return 'away'
+  if (side.includes('平')) return 'draw'
+  return 'mute'
+}
+
 const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 </script>
 
@@ -91,6 +98,9 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
     <div class="index-row">
       <span class="metric-pill">必指 <b class="num">{{ match.bfIndex.join('/') }}</b></span>
       <span class="metric-pill">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
+      <span v-if="match.bigBetSide" :class="['big-bet', `side-${bigBetSideKey(match.bigBetSide)}`]" :title="match.bigBetAttr">
+        大单 {{ match.bigBetSide }} {{ match.bigBetAttr }}
+      </span>
       <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
       <ChevronRight :size="16" />
     </div>
@@ -270,6 +280,19 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
   font-weight: 780;
   color: #246b3b;
 }
+
+.big-bet {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.big-bet.side-home { background: #e2f1fa; color: #1672b3; }
+.big-bet.side-away { background: #fff4d8; color: #8a6212; }
+.big-bet.side-draw { background: #eef1f6; color: #4a5364; }
+.big-bet.side-mute { background: #eef1f6; color: #6b7280; }
 
 .index-row {
   display: flex;

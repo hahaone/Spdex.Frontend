@@ -13,12 +13,25 @@ export interface DashboardMetricRaw {
   status: DashboardMetricStatus
 }
 
+export interface BigTradeTickerItem {
+  eventId: number
+  homeTeam: string
+  awayTeam: string
+  selection: string
+  amount: number
+  amountText: string
+  attr: string
+  odds: number
+  timeText: string
+}
+
 export interface DashboardMetricsResultRaw {
   bfVolume: DashboardMetricRaw
   polyVolume: DashboardMetricRaw
   bfIndex: DashboardMetricRaw
   polyIndex: DashboardMetricRaw
   doubleRed: DashboardMetricRaw
+  bigTradesTicker: BigTradeTickerItem[]
   generatedAt: string
   prematchSixHourLockApplied: boolean
 }

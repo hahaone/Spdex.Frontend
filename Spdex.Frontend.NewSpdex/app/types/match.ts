@@ -22,6 +22,10 @@ export interface MatchSummary {
   euroBookmaker?: string
   /** 首选公司凯利三值，0/0/0 = 无数据。 */
   kelly?: [number, number, number]
+  /** 标盘最大单注方向（"主"/"平"/"客"），空串=无数据。 */
+  bigBetSide?: string
+  /** 标盘最大单注属性（"买+"/"卖-"），空串=无数据。 */
+  bigBetAttr?: string
 }
 
 export interface MatchListResult {

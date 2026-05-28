@@ -5,7 +5,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
-import type { DashboardMetric, DashboardMetricRaw, DashboardMetricsResultRaw } from '~/types/dashboard'
+import type { BigTradeTickerItem, DashboardMetric, DashboardMetricRaw, DashboardMetricsResultRaw } from '~/types/dashboard'
 
 /** 后端 metric.id → 前端 UI tone（控制色条颜色） */
 const TONE_MAP: Record<string, DashboardMetric['tone']> = {
@@ -61,8 +61,13 @@ export function useDashboardMetrics() {
 
   const generatedAt = computed(() => result.data.value?.data?.generatedAt ?? null)
 
+  const bigTradesTicker = computed<BigTradeTickerItem[]>(() =>
+    result.data.value?.data?.bigTradesTicker ?? [],
+  )
+
   return {
     metrics,
+    bigTradesTicker,
     prematchSixHourLockApplied,
     generatedAt,
     pending: result.pending,

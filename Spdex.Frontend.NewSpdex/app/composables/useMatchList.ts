@@ -31,6 +31,8 @@ interface BackendMatchSummary {
   kellyHome?: number
   kellyDraw?: number
   kellyAway?: number
+  bigBetSide?: string
+  bigBetAttr?: string
 }
 
 interface BackendMatchListResult {
@@ -101,6 +103,8 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     euro: hasEuro ? euro : undefined,
     euroBookmaker: hasEuro ? item.euroBookmaker : undefined,
     kelly: hasKelly ? kelly : undefined,
+    bigBetSide: item.bigBetSide || undefined,
+    bigBetAttr: item.bigBetAttr || undefined,
   }
 }
 

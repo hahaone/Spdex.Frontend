@@ -3,7 +3,14 @@ import { ArrowRight, Bot, ChevronRight, Crown, Lock, Sparkles, TrendingUp } from
 
 const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/')
 
-const { metrics, prematchSixHourLockApplied, pending } = useDashboardMetrics()
+const { metrics, bigTradesTicker, prematchSixHourLockApplied, pending } = useDashboardMetrics()
+
+function tickerSideClass(selection: string): string {
+  if (selection.includes('主')) return 'side-home'
+  if (selection.includes('客')) return 'side-away'
+  if (selection.includes('平')) return 'side-draw'
+  return 'side-mute'
+}
 const { user, tier } = useAuth()
 
 const tierLabel: Record<string, string> = {
@@ -38,6 +45,24 @@ const featureCards = [
       </div>
       <div class="hero-meta">
         <span>POLY · 必发 · 双红 · 让分 · 进球</span>
+      </div>
+    </section>
+
+    <section v-if="bigTradesTicker.length" class="ticker-band">
+      <span class="ticker-label">🔥 大单</span>
+      <div class="ticker-scroll scrollbar-none">
+        <NuxtLink
+          v-for="t in bigTradesTicker"
+          :key="`${t.eventId}-${t.timeText}`"
+          :to="`/football/${t.eventId}`"
+          :class="['ticker-item', tickerSideClass(t.selection)]"
+          :title="`${t.homeTeam} vs ${t.awayTeam} ${t.attr}`"
+        >
+          <span class="t-amount num">{{ t.amountText }}</span>
+          <span class="t-side">{{ t.selection }}</span>
+          <span class="t-odds num">@{{ t.odds.toFixed(2) }}</span>
+          <span class="t-time num">{{ t.timeText }}</span>
+        </NuxtLink>
       </div>
     </section>
 
@@ -190,6 +215,56 @@ const featureCards = [
   font-size: 0.76rem;
   font-weight: 720;
 }
+
+.ticker-band {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  background: #fff8e3;
+  border-bottom: 1px solid #fce4a8;
+}
+
+.ticker-label {
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #c46613;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.ticker-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 6px;
+}
+
+.ticker-item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 760;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ticker-item.side-home { background: #e2f1fa; color: #1672b3; border-color: #b8d8eb; }
+.ticker-item.side-away { background: #fff4d8; color: #8a6212; border-color: #f0d484; }
+.ticker-item.side-draw { background: #eef1f6; color: #4a5364; border-color: #c4ccd9; }
+.ticker-item.side-mute { background: #f4f6fb; color: #6b7280; border-color: #dde2eb; }
+
+.t-amount { font-weight: 820; }
+.t-side { padding: 0 4px; border-radius: 2px; background: rgba(255,255,255,0.6); font-weight: 800; }
+.t-odds { opacity: 0.86; }
+.t-time { opacity: 0.7; font-size: 0.68rem; }
 
 .home-grid {
   display: grid;

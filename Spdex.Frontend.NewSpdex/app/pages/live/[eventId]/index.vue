@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ArrowLeft, BarChart3, Lock } from '@lucide/vue'
-import { liveDetail as mockLiveDetail } from '~/data/mockPrototype'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
-const { detail } = useMatchDetail(eventId)
-const { snapshot, pending, refresh } = useLiveSnapshot(eventId)
+const { detail, euroOdds } = useMatchDetail(eventId)
+const { snapshot } = useLiveSnapshot(eventId)
 
 const match = computed(() => detail.value?.match)
 
@@ -28,9 +27,36 @@ const statusLabel = computed(() => {
 
 const liveDataPending = computed(() => snapshot.value?.dataStatus === 'pending')
 
-// 价格面板 / 价格比较暂时仍走 mock —— 需要后端在 stage 3.5 暴露
-const oddsPanel = mockLiveDetail.oddsPanel
-const priceCompare = mockLiveDetail.priceCompare
+// 价格面板：从 useMatchDetail 的 3 个 section 提取主/平/客
+const oddsPanel = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  const rows: Array<{ market: string, home: string, drawOrLine: string, away: string }> = []
+  if (d.standard.length) {
+    const [h, dr, a] = [d.standard[0]?.price, d.standard[1]?.price, d.standard[2]?.price]
+    rows.push({ market: '标盘 1X2', home: h ?? '-', drawOrLine: dr ?? '-', away: a ?? '-' })
+  }
+  if (d.handicap.length) {
+    const note = d.handicap[1]?.price || match.value?.handicap || '-'
+    rows.push({ market: '让分', home: d.handicap[0]?.price ?? '-', drawOrLine: note, away: d.handicap[2]?.price ?? '-' })
+  }
+  if (d.goals.length) {
+    const line = d.goals[1]?.price || '2.5'
+    rows.push({ market: '大小', home: d.goals[0]?.price ?? '-', drawOrLine: line, away: d.goals[2]?.price ?? '-' })
+  }
+  return rows
+})
+
+// 价格比较：从 euroOdds.bookMakers 取
+const priceCompare = computed(() => {
+  if (!euroOdds.value?.bookMakers) return []
+  return euroOdds.value.bookMakers.map(b => ({
+    book: b.name,
+    home: b.homeOdds.toFixed(2),
+    draw: b.drawOdds.toFixed(2),
+    away: b.awayOdds.toFixed(2),
+  }))
+})
 </script>
 
 <template>
@@ -102,7 +128,7 @@ const priceCompare = mockLiveDetail.priceCompare
     <section class="stats">
       <div class="section-title">
         <span>双红指标 / 轻量化 xG</span>
-        <NuxtLink :to="`/live/${eventId}/odds`" class="head-link focus-ring">
+        <NuxtLink :to="`/football/${eventId}/chart`" class="head-link focus-ring">
           <BarChart3 :size="14" />
         </NuxtLink>
       </div>
@@ -135,7 +161,7 @@ const priceCompare = mockLiveDetail.priceCompare
     <section class="compare">
       <div class="section-title brand">
         <span>价格比较</span>
-        <span class="book-count num">主流平台数 12</span>
+        <span class="book-count num">{{ priceCompare.length }} 家公司</span>
       </div>
       <div class="compare-grid">
         <div v-for="book in priceCompare" :key="book.book" class="compare-row">

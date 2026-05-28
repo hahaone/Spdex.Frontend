@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, Dumbbell, Home, Trophy, UserCircle } from '@lucide/vue'
+import { Activity, Bell, Dumbbell, Home, Trophy, UserCircle } from '@lucide/vue'
 
 const route = useRoute()
 
@@ -8,6 +8,7 @@ const navItems = [
   { label: '足球', to: '/football', icon: Trophy },
   { label: '篮球', to: '/basketball', icon: Dumbbell },
   { label: '实时', to: '/live', icon: Activity },
+  { label: '推送', to: '/push', icon: Bell },
   { label: '会员', to: '/account', icon: UserCircle },
 ]
 
@@ -40,7 +41,7 @@ function isActive(to: string): boolean {
   left: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   width: 100%;
   max-width: 520px;
