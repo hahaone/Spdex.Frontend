@@ -28,6 +28,7 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   appInOutBoard: false,
   prematchSixHourLock: true,
   jcOnly: false,
+  timeMachine: false,
 }
 
 export function useEntitlements(): Readonly<Entitlements> {

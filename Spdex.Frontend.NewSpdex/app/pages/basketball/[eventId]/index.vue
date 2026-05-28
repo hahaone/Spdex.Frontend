@@ -17,8 +17,11 @@ const options = [
   { label: '让分', value: 'handicap' },
 ]
 
-const sectionMode = computed<'standard' | 'poly' | 'goals' | 'handicap' | null>(() => {
-  return tab.value === 'all' ? null : tab.value
+type BasketballSectionKey = 'standard' | 'poly' | 'goals' | 'handicap'
+const sectionMode = computed<BasketballSectionKey | null>(() => {
+  const t = tab.value
+  if (t === 'standard' || t === 'poly' || t === 'goals' || t === 'handicap') return t
+  return null
 })
 const sectionRows = computed(() => {
   if (!sectionMode.value || !detail.value) return []

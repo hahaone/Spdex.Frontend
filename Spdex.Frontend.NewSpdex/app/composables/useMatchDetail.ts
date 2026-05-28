@@ -38,6 +38,8 @@ interface BackendDetailAccess {
   handicap: boolean
   tradeDetails: boolean
   euroOdds: boolean
+  cs: boolean
+  corner: boolean
 }
 
 export interface EuroBookmakerRow {
@@ -91,6 +93,8 @@ interface BackendMatchDetail {
   poly: BackendMarketSection | null
   goals: BackendMarketSection | null
   handicap: BackendMarketSection | null
+  cs: BackendMarketSection | null
+  corner: BackendMarketSection | null
   euroOdds: EuroOddsSection | null
   access: BackendDetailAccess
 }
@@ -151,6 +155,8 @@ export interface DetailAccess {
   handicap: boolean
   tradeDetails: boolean
   euroOdds: boolean
+  cs: boolean
+  corner: boolean
 }
 
 export function useMatchDetail(eventId: MaybeRef<number>) {
@@ -168,7 +174,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
   // 30s 自动刷新（赔率/成交实时变化）
   usePolling(() => result.refresh(), 30_000)
 
-  const detail = computed<MarketDetail | null>(() => {
+  const detail = computed(() => {
     const data = result.data.value?.data
     if (!data) return null
     return {
@@ -177,6 +183,8 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
       poly: mapSection(data.poly),
       goals: mapSection(data.goals),
       handicap: mapSection(data.handicap),
+      cs: mapSection(data.cs),
+      corner: mapSection(data.corner),
     }
   })
 
@@ -187,14 +195,18 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
     handicap: false,
     tradeDetails: false,
     euroOdds: false,
+    cs: false,
+    corner: false,
   })
 
-  /** 各 section note（如让分盘口 "-0.75"，进球盘口 ">2.5"） */
+  /** 各 section note。 */
   const sectionNotes = computed(() => ({
     standard: result.data.value?.data?.standard?.note ?? null,
     poly: result.data.value?.data?.poly?.note ?? null,
     goals: result.data.value?.data?.goals?.note ?? null,
     handicap: result.data.value?.data?.handicap?.note ?? null,
+    cs: result.data.value?.data?.cs?.note ?? null,
+    corner: result.data.value?.data?.corner?.note ?? null,
     euroOdds: result.data.value?.data?.euroOdds?.note ?? null,
   }))
 

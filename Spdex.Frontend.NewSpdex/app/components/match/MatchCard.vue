@@ -81,6 +81,13 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
       <span class="euro-cell num">{{ match.euro[2].toFixed(2) }}</span>
     </div>
 
+    <div v-if="match.kelly" class="kelly-row">
+      <span class="kelly-label">凯利</span>
+      <span class="kelly-cell num">{{ match.kelly[0].toFixed(2) }}</span>
+      <span class="kelly-cell num">{{ match.kelly[1].toFixed(2) }}</span>
+      <span class="kelly-cell num">{{ match.kelly[2].toFixed(2) }}</span>
+    </div>
+
     <div class="index-row">
       <span class="metric-pill">必指 <b class="num">{{ match.bfIndex.join('/') }}</b></span>
       <span class="metric-pill">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
@@ -233,6 +240,35 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
   text-align: center;
   font-weight: 780;
   color: #4a5364;
+}
+
+.kelly-row {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: center;
+  padding: 4px 9px;
+  background: #e9f7ef;
+  border-bottom: 1px solid #c2e6cf;
+  color: #246b3b;
+  font-size: 0.74rem;
+  font-weight: 740;
+}
+
+.kelly-label {
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #2e9c5f;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.kelly-cell {
+  text-align: center;
+  font-weight: 780;
+  color: #246b3b;
 }
 
 .index-row {

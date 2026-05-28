@@ -23,6 +23,7 @@ export interface Entitlements {
   appInOutBoard: boolean
   prematchSixHourLock: boolean
   jcOnly: boolean
+  timeMachine: boolean
 }
 
 export type MembershipTier =

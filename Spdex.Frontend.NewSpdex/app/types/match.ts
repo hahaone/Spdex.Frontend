@@ -20,6 +20,8 @@ export interface MatchSummary {
   euro?: [number, number, number]
   /** 欧赔首选公司名（如 "WilliamHill"）。 */
   euroBookmaker?: string
+  /** 首选公司凯利三值，0/0/0 = 无数据。 */
+  kelly?: [number, number, number]
 }
 
 export interface MatchListResult {

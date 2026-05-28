@@ -4,13 +4,15 @@ import type { MarketMetricRow } from '~/types/market'
 const props = defineProps<{
   title: string
   rows: MarketMetricRow[]
-  mode: 'standard' | 'poly' | 'goals' | 'handicap'
+  mode: 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
 }>()
 
 const primaryColumns = computed(() => {
   if (props.mode === 'poly') return ['选项', '价位', '成交', '指数', 'BP量比']
   if (props.mode === 'goals') return ['选项', '价位', '成交', '指数', '比例', '挂牌', '均衡']
   if (props.mode === 'handicap') return ['选项', '价位', '成交', '指数', '比例', '挂牌']
+  if (props.mode === 'cs') return ['比分', '赔率', '大注']
+  if (props.mode === 'corner') return ['区间', '价位', '成交', '比例']
   return ['选项', '价格', '成交', '必指', '比例']
 })
 
@@ -25,6 +27,8 @@ function rowPrimary(row: MarketMetricRow): string[] {
   if (props.mode === 'poly') return [row.selection, row.price, row.turnover || '-', String(row.polyIndex ?? '-'), row.ratio ?? '-']
   if (props.mode === 'goals') return [row.selection, row.price, row.turnover || '-', String(row.bfIndex ?? '-'), row.ratio ?? '-', row.listing ?? '-', row.balance ?? '-']
   if (props.mode === 'handicap') return [row.selection, row.price, row.turnover || '-', String(row.bfIndex ?? '-'), row.ratio ?? '-', row.listing ?? '-']
+  if (props.mode === 'cs') return [row.selection, row.price, row.turnover || '-']
+  if (props.mode === 'corner') return [row.selection, row.price, row.turnover || '-', row.ratio ?? '-']
   return [row.selection, row.price, row.turnover, String(row.bfIndex ?? '-'), row.ratio ?? '-']
 }
 

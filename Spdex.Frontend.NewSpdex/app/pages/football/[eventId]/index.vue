@@ -1,12 +1,52 @@
 <script setup lang="ts">
-import { ArrowLeft, BarChart3, Lock, RefreshCw, Table2 } from '@lucide/vue'
+import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Table2 } from '@lucide/vue'
 import type { MarketTab } from '~/types/market'
+import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
+const { entitlements } = useAuth()
 const { detail, access, euroOdds, pending, refresh } = useMatchDetail(eventId)
 const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
+const { fetchSnapshot } = useMatchSnapshot()
+
+// 时光机：现在 / -1h / -2h / -6h / -12h / -24h
+const timeMachinePoints = [
+  { label: '现在', hours: 0 },
+  { label: '-1h', hours: -1 },
+  { label: '-2h', hours: -2 },
+  { label: '-6h', hours: -6 },
+  { label: '-12h', hours: -12 },
+  { label: '-24h', hours: -24 },
+]
+const activeTimeOffset = ref<number | null>(null)
+const snapshot = ref<MatchSnapshot | null>(null)
+const snapshotLoading = ref(false)
+const hasTimeMachine = computed(() => entitlements.value?.timeMachine === true)
+
+async function selectTimePoint(hours: number) {
+  if (hours === 0) {
+    activeTimeOffset.value = null
+    snapshot.value = null
+    return
+  }
+  if (!hasTimeMachine.value) return
+  if (!detail.value?.match) return
+
+  snapshotLoading.value = true
+  activeTimeOffset.value = hours
+  const matchTime = new Date(detail.value.match.matchTime)
+  const targetTime = new Date(matchTime.getTime() + hours * 3600 * 1000)
+  const iso = targetTime.toISOString().slice(0, 19)
+  snapshot.value = await fetchSnapshot(eventId.value, iso)
+  snapshotLoading.value = false
+}
+
+const effectiveStandard = computed(() => snapshot.value?.standard ?? detail.value?.standard ?? [])
+const effectiveGoals = computed(() => snapshot.value?.goals ?? detail.value?.goals ?? [])
+const effectiveHandicap = computed(() => snapshot.value?.handicap ?? detail.value?.handicap ?? [])
+const isSnapshotMode = computed(() => snapshot.value !== null)
 
 const tab = ref<MarketTab>('all')
 const options = [
@@ -15,26 +55,35 @@ const options = [
   { label: 'Poly', value: 'poly' },
   { label: '进球', value: 'goals' },
   { label: '让分', value: 'handicap' },
+  { label: '比分', value: 'cs' },
+  { label: '角球', value: 'corner' },
 ]
 
-const sectionMode = computed<'standard' | 'poly' | 'goals' | 'handicap' | null>(() => {
-  return tab.value === 'all' ? null : tab.value
-})
+type SectionKey = 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
+
+const sectionMode = computed<SectionKey | null>(() =>
+  tab.value === 'all' ? null : (tab.value as SectionKey))
+
 const sectionRows = computed(() => {
   if (!sectionMode.value || !detail.value) return []
   return detail.value[sectionMode.value]
 })
+
 const sectionTitle = computed(() => {
-  if (sectionMode.value === 'standard') return '标盘核心'
-  if (sectionMode.value === 'poly') return 'Poly 核心'
-  if (sectionMode.value === 'goals') return '进球核心'
-  if (sectionMode.value === 'handicap') return '让分核心'
-  return ''
+  switch (sectionMode.value) {
+    case 'standard': return '标盘核心'
+    case 'poly': return 'Poly 核心'
+    case 'goals': return '进球核心'
+    case 'handicap': return '让分核心'
+    case 'cs': return '比分 CS Top 6'
+    case 'corner': return '角球 区间分布'
+    default: return ''
+  }
 })
 
 const match = computed(() => detail.value?.match)
 
-function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
+function jumpTo(target: SectionKey) {
   tab.value = target
   if (typeof window !== 'undefined') {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -84,14 +133,39 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
         </div>
       </section>
 
+      <section class="time-machine-band">
+        <div class="tm-head">
+          <Clock :size="13" />
+          <b>时光机</b>
+          <span v-if="!hasTimeMachine" class="tm-lock">
+            <Lock :size="11" /> 黄金及以上可用
+          </span>
+          <span v-if="isSnapshotMode" class="tm-active num">
+            实际匹配偏移 {{ snapshot?.actualHoursOffset }}h
+          </span>
+        </div>
+        <div class="tm-buttons">
+          <button
+            v-for="pt in timeMachinePoints"
+            :key="pt.hours"
+            type="button"
+            :class="['tm-btn focus-ring', { active: pt.hours === 0 ? !isSnapshotMode : activeTimeOffset === pt.hours, disabled: !hasTimeMachine && pt.hours !== 0 }]"
+            :disabled="!hasTimeMachine && pt.hours !== 0"
+            @click="selectTimePoint(pt.hours)"
+          >
+            {{ pt.label }}
+          </button>
+        </div>
+      </section>
+
       <div class="detail-grid">
         <div class="main-col">
           <section v-if="tab === 'all'" class="all-grid">
             <template v-if="access.standard">
               <MarketSummaryCard
-                title="标盘"
+                :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
                 tone="standard"
-                :rows="detail.standard"
+                :rows="effectiveStandard"
                 index-label="必指"
                 @open="jumpTo('standard')"
               />
@@ -116,9 +190,9 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 
             <template v-if="access.goals">
               <MarketSummaryCard
-                title="进球"
+                :title="isSnapshotMode ? `进球（${snapshot?.actualHoursOffset}h 前）` : '进球'"
                 tone="goals"
-                :rows="detail.goals"
+                :rows="effectiveGoals"
                 index-label="必指"
                 @open="jumpTo('goals')"
               />
@@ -130,9 +204,9 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 
             <template v-if="access.handicap">
               <MarketSummaryCard
-                title="让分"
+                :title="isSnapshotMode ? `让分（${snapshot?.actualHoursOffset}h 前）` : '让分'"
                 tone="handicap"
-                :rows="detail.handicap"
+                :rows="effectiveHandicap"
                 index-label="必指"
                 @open="jumpTo('handicap')"
               />
@@ -141,6 +215,26 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
               <Lock :size="14" />
               <span>让分数据未对当前会籍开放</span>
             </div>
+
+            <template v-if="access.cs && detail.cs.length">
+              <MarketSummaryCard
+                title="比分 CS"
+                tone="goals"
+                :rows="detail.cs.slice(0, 3)"
+                index-label="大注"
+                @open="jumpTo('cs')"
+              />
+            </template>
+
+            <template v-if="access.corner && detail.corner.length">
+              <MarketSummaryCard
+                title="角球"
+                tone="goals"
+                :rows="detail.corner"
+                index-label="区间"
+                @open="jumpTo('corner')"
+              />
+            </template>
           </section>
 
           <MarketMetricTable v-else-if="sectionMode" :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
@@ -536,6 +630,86 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   .all-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ─── 时光机 ─── */
+.time-machine-band {
+  display: grid;
+  gap: 5px;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
+  border-bottom: 1px solid #eaeef4;
+}
+
+.tm-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #4f3f86;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.tm-head b {
+  font-weight: 800;
+}
+
+.tm-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #fff8e3;
+  color: #8a6212;
+  font-size: 0.7rem;
+  font-weight: 740;
+}
+
+.tm-active {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #6e5aaf;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.tm-buttons {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.tm-btn {
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid #dcd2ed;
+  border-radius: 4px;
+  background: #fff;
+  color: #4f3f86;
+  font-size: 0.78rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.tm-btn:hover:not(.disabled):not(:disabled) {
+  border-color: #6e5aaf;
+}
+
+.tm-btn.active {
+  border-color: #6e5aaf;
+  background: #6e5aaf;
+  color: #fff;
+  font-weight: 800;
+}
+
+.tm-btn:disabled,
+.tm-btn.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ─── 欧赔 section ─── */

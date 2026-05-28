@@ -23,4 +23,6 @@ export const marketDetail: MarketDetail = {
     { key: 'draw', selection: '盘口', price: '-0.75', turnover: '30,000', bfIndex: 20, ratio: '20%', listing: '1.47%' },
     { key: 'away', selection: '客', price: '5.40', turnover: '50,000', bfIndex: 60, ratio: '50%', listing: '5.04%' },
   ],
+  cs: [],
+  corner: [],
 }

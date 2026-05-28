@@ -28,6 +28,9 @@ interface BackendMatchSummary {
   euroDraw?: number
   euroAway?: number
   euroBookmaker?: string
+  kellyHome?: number
+  kellyDraw?: number
+  kellyAway?: number
 }
 
 interface BackendMatchListResult {
@@ -76,6 +79,8 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const polyIndex = toTriple(item.polyIndex)
   const euro: [number, number, number] = [item.euroHome ?? 0, item.euroDraw ?? 0, item.euroAway ?? 0]
   const hasEuro = euro[0] > 0 || euro[1] > 0 || euro[2] > 0
+  const kelly: [number, number, number] = [item.kellyHome ?? 0, item.kellyDraw ?? 0, item.kellyAway ?? 0]
+  const hasKelly = kelly[0] > 0 || kelly[1] > 0 || kelly[2] > 0
 
   return {
     eventId: item.eventId,
@@ -95,6 +100,7 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     flags: item.flags ?? [],
     euro: hasEuro ? euro : undefined,
     euroBookmaker: hasEuro ? item.euroBookmaker : undefined,
+    kelly: hasKelly ? kelly : undefined,
   }
 }
 

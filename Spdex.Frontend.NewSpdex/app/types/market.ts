@@ -1,6 +1,6 @@
 import type { MatchSummary } from './match'
 
-export type MarketTab = 'all' | 'standard' | 'poly' | 'goals' | 'handicap'
+export type MarketTab = 'all' | 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
 
 export interface MarketMetricRow {
   key: string
@@ -25,6 +25,8 @@ export interface MarketDetail {
   poly: MarketMetricRow[]
   goals: MarketMetricRow[]
   handicap: MarketMetricRow[]
+  cs: MarketMetricRow[]
+  corner: MarketMetricRow[]
 }
 
 export interface ChartPoint {
