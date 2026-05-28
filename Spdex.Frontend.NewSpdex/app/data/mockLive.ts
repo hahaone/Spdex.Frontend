@@ -35,7 +35,7 @@ export const liveMatches: LiveMatchSummary[] = [
       handicap: ['1.88', '1.96', '-0.50'],
       total: ['1.93', '1.91', '3.25'],
     },
-    models: ['强压'],
+    models: ['上半场进球'],
   },
   {
     ...footballMatches[2]!,
@@ -51,7 +51,7 @@ export const liveMatches: LiveMatchSummary[] = [
       handicap: ['1.94', '1.92', '-1.25'],
       total: ['1.85', '2.00', '2.50'],
     },
-    models: ['双红', '强压'],
+    models: ['双红', '上半场进球'],
   },
   {
     ...footballMatches[6]!,
