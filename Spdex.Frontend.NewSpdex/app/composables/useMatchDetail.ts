@@ -37,6 +37,35 @@ interface BackendDetailAccess {
   goals: boolean
   handicap: boolean
   tradeDetails: boolean
+  euroOdds: boolean
+}
+
+export interface EuroBookmakerRow {
+  bid: number
+  name: string
+  homeOdds: number
+  drawOdds: number
+  awayOdds: number
+  homeKelly: number
+  drawKelly: number
+  awayKelly: number
+  returnPro: number
+}
+
+export interface EuroAverage {
+  homeOdds: number
+  drawOdds: number
+  awayOdds: number
+  homeKelly: number
+  drawKelly: number
+  awayKelly: number
+}
+
+export interface EuroOddsSection {
+  title: string
+  bookMakers: EuroBookmakerRow[]
+  average: EuroAverage | null
+  note: string | null
 }
 
 interface BackendMatchDetail {
@@ -62,6 +91,7 @@ interface BackendMatchDetail {
   poly: BackendMarketSection | null
   goals: BackendMarketSection | null
   handicap: BackendMarketSection | null
+  euroOdds: EuroOddsSection | null
   access: BackendDetailAccess
 }
 
@@ -120,6 +150,7 @@ export interface DetailAccess {
   goals: boolean
   handicap: boolean
   tradeDetails: boolean
+  euroOdds: boolean
 }
 
 export function useMatchDetail(eventId: MaybeRef<number>) {
@@ -155,6 +186,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
     goals: false,
     handicap: false,
     tradeDetails: false,
+    euroOdds: false,
   })
 
   /** 各 section note（如让分盘口 "-0.75"，进球盘口 ">2.5"） */
@@ -163,11 +195,16 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
     poly: result.data.value?.data?.poly?.note ?? null,
     goals: result.data.value?.data?.goals?.note ?? null,
     handicap: result.data.value?.data?.handicap?.note ?? null,
+    euroOdds: result.data.value?.data?.euroOdds?.note ?? null,
   }))
+
+  /** 欧赔 section（独立结构，不走 MarketMetricRow）。 */
+  const euroOdds = computed<EuroOddsSection | null>(() => result.data.value?.data?.euroOdds ?? null)
 
   return {
     detail,
     access,
+    euroOdds,
     sectionNotes,
     pending: result.pending,
     error: result.error,

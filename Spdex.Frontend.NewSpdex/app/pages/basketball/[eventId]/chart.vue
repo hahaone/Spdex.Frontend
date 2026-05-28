@@ -33,7 +33,7 @@ const { points, status, pending, refresh } = useChartSeries(eventId, graphType)
 
 const statusLabel = computed(() => {
   if (status.value === 'no-access') return '当前会籍未开放此走势'
-  if (status.value === 'pending') return '此走势类型待 stage 3.5 接入'
+  if (status.value === 'pending') return '此场赛事暂无该市场数据'
   return null
 })
 </script>
