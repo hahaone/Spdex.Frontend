@@ -24,6 +24,10 @@ interface BackendMatchSummary {
   polyAmount: number
   flags: string[]
   pMark: string | null
+  euroHome?: number
+  euroDraw?: number
+  euroAway?: number
+  euroBookmaker?: string
 }
 
 interface BackendMatchListResult {
@@ -70,6 +74,8 @@ function distributeTurnover(total: number, indexes: [number, number, number]): [
 function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const bfIndex = toTriple(item.bfIndex)
   const polyIndex = toTriple(item.polyIndex)
+  const euro: [number, number, number] = [item.euroHome ?? 0, item.euroDraw ?? 0, item.euroAway ?? 0]
+  const hasEuro = euro[0] > 0 || euro[1] > 0 || euro[2] > 0
 
   return {
     eventId: item.eventId,
@@ -87,6 +93,8 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     bfIndex,
     polyIndex,
     flags: item.flags ?? [],
+    euro: hasEuro ? euro : undefined,
+    euroBookmaker: hasEuro ? item.euroBookmaker : undefined,
   }
 }
 

@@ -16,6 +16,10 @@ export interface MatchSummary {
   bfIndex: [number, number, number]
   polyIndex: [number, number, number]
   flags: string[]
+  /** 欧赔（首选公司）三个赔率，0 = 无数据。 */
+  euro?: [number, number, number]
+  /** 欧赔首选公司名（如 "WilliamHill"）。 */
+  euroBookmaker?: string
 }
 
 export interface MatchListResult {

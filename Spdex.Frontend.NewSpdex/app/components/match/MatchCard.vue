@@ -74,6 +74,13 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
       </span>
     </div>
 
+    <div v-if="match.euro" class="euro-row" :title="match.euroBookmaker">
+      <span class="euro-label">欧赔</span>
+      <span class="euro-cell num">{{ match.euro[0].toFixed(2) }}</span>
+      <span class="euro-cell num">{{ match.euro[1].toFixed(2) }}</span>
+      <span class="euro-cell num">{{ match.euro[2].toFixed(2) }}</span>
+    </div>
+
     <div class="index-row">
       <span class="metric-pill">必指 <b class="num">{{ match.bfIndex.join('/') }}</b></span>
       <span class="metric-pill">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
@@ -197,6 +204,35 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
   position: relative;
   font-weight: 740;
   color: #1a2233;
+}
+
+.euro-row {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: center;
+  padding: 4px 9px;
+  background: #fff8e3;
+  border-bottom: 1px solid #fce4a8;
+  color: #8a6212;
+  font-size: 0.74rem;
+  font-weight: 740;
+}
+
+.euro-label {
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #c8a64b;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.euro-cell {
+  text-align: center;
+  font-weight: 780;
+  color: #4a5364;
 }
 
 .index-row {
