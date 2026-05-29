@@ -622,9 +622,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
         </thead>
         <tbody>
           <template v-for="item in matches" :key="item.match.eventId">
-            <tr class="match-row">
+            <tr class="match-row" @click="toggleExpanded(item.match.eventId)">
               <td>
-                <button class="pin-btn" :class="{ pinned: isPinned(item.match.eventId) }" @click="togglePin(item)">
+                <button class="pin-btn" :class="{ pinned: isPinned(item.match.eventId) }" @click.stop="togglePin(item)">
                   ★
                 </button>
               </td>
@@ -665,7 +665,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               <td class="action-cell">
                 <button
                   :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
-                  @click="toggleExpanded(item.match.eventId)"
+                  @click.stop="toggleExpanded(item.match.eventId)"
                 >
                   {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
                 </button>
@@ -891,6 +891,10 @@ td {
   font-size: 13px;
   border-top: 1px solid #edf0f5;
   white-space: nowrap;
+}
+
+.match-row {
+  cursor: pointer;
 }
 
 .match-row:nth-child(4n + 1) td {

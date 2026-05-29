@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BigHoldItemView, PriceSizeRow, TimeWindowData } from '~/types/bighold'
+import type { AsianTimeWindowData } from '~/types/asianbighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
@@ -29,6 +30,14 @@ const windows = computed(() => result.value?.windows ?? [])
 // ── 跨表共振：额外请求亚盘数据，提取 RefreshTime 集合 ──
 const asianQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
 const { data: asianData } = useAsianBigHold(asianQueryParams)
+
+const asianWindowsByOffset = computed(() => {
+  const map = new Map<number, AsianTimeWindowData>()
+  for (const w of asianData.value?.data?.windows ?? []) {
+    map.set(w.hoursOffset, w)
+  }
+  return map
+})
 
 /** 亚盘当前分时大注的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
 const asianTimeSet = computed<Set<string>>(() => {
@@ -86,13 +95,6 @@ function getLastPriceRows(selectionId: number): PriceSizeRow[] {
   const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
   if (!lp?.rawData) return []
   return parseRawData(lp.rawData)
-}
-
-/** 检查 LastPrice 是否有大额挂单（500/1000 价位 ≥ 200） */
-function hasLargeOrder(selectionId: number): boolean {
-  if (!activeWindow.value?.lastPrices) return false
-  const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
-  return lp?.hasLargeOrderAt500Or1000 ?? false
 }
 
 // ── Poly 分时统计（后端预计算） ──
@@ -189,6 +191,65 @@ function windowRatioDisplay(w: TimeWindowData): string {
   const ap = (w.odds.awayAmount / total * 100).toFixed(0)
   return `${hp}% | ${dp}% | ${ap}%`
 }
+
+function asianWindowFor(w: TimeWindowData): AsianTimeWindowData | undefined {
+  return asianWindowsByOffset.value.get(w.hoursOffset)
+}
+
+function asianSideTotal(w: AsianTimeWindowData | undefined, side: 'home' | 'away'): number {
+  if (!w) return 0
+  return side === 'home'
+    ? (w.homeSubtotal?.grandTotalBet ?? 0)
+    : (w.awaySubtotal?.grandTotalBet ?? 0)
+}
+
+function asianSideTotalByIndex(idx: number, side: 'home' | 'away'): number {
+  const bfWindow = windows.value[idx]
+  return bfWindow ? asianSideTotal(asianWindowFor(bfWindow), side) : 0
+}
+
+function asianHomeAwayRatioValue(w: TimeWindowData): number | null {
+  const asianWindow = asianWindowFor(w)
+  const homeTotal = asianSideTotal(asianWindow, 'home')
+  const awayTotal = asianSideTotal(asianWindow, 'away')
+  if (homeTotal <= 0 || awayTotal <= 0) return null
+  return homeTotal / awayTotal
+}
+
+function formatAsianHomeAwayRatio(w: TimeWindowData): string {
+  const ratio = asianHomeAwayRatioValue(w)
+  return ratio == null ? '-' : ratio.toFixed(3)
+}
+
+function asianHomeAwayRatioClass(w: TimeWindowData): string {
+  const ratio = asianHomeAwayRatioValue(w)
+  if (ratio == null) return ''
+  if (ratio > 2) return 'ratio-red-bold'
+  if (ratio > 1 && ratio < 2) return 'ratio-red'
+  if (ratio < 0.5) return 'ratio-blue-bold'
+  if (ratio < 1 && ratio > 0.5) return 'ratio-blue'
+  return ''
+}
+
+function asianSidePercent(idx: number, side: 'home' | 'away'): number | null {
+  const currentBfWindow = windows.value[idx]
+  const previousBfWindow = windows.value[idx + 1]
+  if (!currentBfWindow || !previousBfWindow) return null
+
+  const current = asianWindowFor(currentBfWindow)
+  const previous = asianWindowFor(previousBfWindow)
+  if (!current || !previous) return null
+
+  const previousTotal = asianSideTotal(previous, side)
+  if (previousTotal <= 0) return null
+
+  return asianSideTotal(current, side) / (previousTotal + 0.1) * 100
+}
+
+function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
+  const percent = asianSidePercent(idx, side)
+  return percent == null ? '-' : `${percent.toFixed(2)}%`
+}
 </script>
 
 <template>
@@ -240,6 +301,9 @@ function windowRatioDisplay(w: TimeWindowData): string {
               <th class="st-payout">盈亏</th>
               <th class="st-pct">分时环比</th>
               <th class="st-pct-detail">环比主平客</th>
+              <th class="st-asian-ratio">亚盘主客比</th>
+              <th class="st-asian-pct">分时环比主</th>
+              <th class="st-asian-pct">分时环比客</th>
               <th class="st-poly-vol">Poly量</th>
               <th class="st-poly-idx">Poly指数</th>
               <th class="st-poly-pct">Poly环比</th>
@@ -272,6 +336,15 @@ function windowRatioDisplay(w: TimeWindowData): string {
               <td class="st-pct-detail">
                 <template v-if="w.homeAmountPercent != null || w.drawAmountPercent != null || w.awayAmountPercent != null">{{ w.homeAmountPercent != null ? w.homeAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.drawAmountPercent != null ? w.drawAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.awayAmountPercent != null ? w.awayAmountPercent.toFixed(0) + '%' : '-' }}</template>
                 <template v-else>-</template>
+              </td>
+              <td class="st-asian-ratio">
+                <span :class="asianHomeAwayRatioClass(w)">{{ formatAsianHomeAwayRatio(w) }}</span>
+              </td>
+              <td class="st-asian-pct" :style="pctColorStyle(asianSidePercent(idx, 'home'), asianSideTotalByIndex(idx, 'home'))">
+                {{ formatAsianSidePercent(idx, 'home') }}
+              </td>
+              <td class="st-asian-pct" :style="pctColorStyle(asianSidePercent(idx, 'away'), asianSideTotalByIndex(idx, 'away'))">
+                {{ formatAsianSidePercent(idx, 'away') }}
               </td>
               <td class="st-poly-vol">{{ polyWindowStats[idx] ? formatPolyVol(polyWindowStats[idx]!.volume) : '-' }}</td>
               <td class="st-poly-idx">{{ polyWindowStats[idx] ? formatPolyIndex(polyWindowStats[idx]!) : '-' }}</td>
@@ -667,6 +740,57 @@ td.st-amount { font-variant-numeric: tabular-nums; text-align: right; }
 td.st-weight, td.st-payout { white-space: nowrap; }
 td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums; }
 td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── 亚盘摘要列样式（浅灰背景区分新增亚盘数据区域） ── */
+th.st-asian-ratio,
+th.st-asian-pct {
+  background: #e5e7eb !important;
+  color: #4b5563;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+td.st-asian-ratio,
+td.st-asian-pct {
+  background: #f6f7f9;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+td.st-asian-ratio {
+  text-align: right;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+td.st-asian-pct {
+  font-weight: 600;
+  color: #888;
+}
+
+td.st-asian-ratio .ratio-red {
+  color: #dc2626;
+}
+
+td.st-asian-ratio .ratio-red-bold {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+td.st-asian-ratio .ratio-blue {
+  color: #1d4ed8;
+}
+
+td.st-asian-ratio .ratio-blue-bold {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.summary-active td.st-asian-ratio,
+.summary-active td.st-asian-pct {
+  background: #e9ecef;
+}
 
 /* ── Poly 列样式（紫色背景区分必发数据区域） ── */
 th.st-poly-vol, th.st-poly-idx, th.st-poly-pct {

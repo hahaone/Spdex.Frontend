@@ -178,6 +178,7 @@ export interface AsianOdds0 {
 /** 亚盘整页响应 */
 export interface AsianBigHoldPageResult {
   match: AsianMatchInfo
+  /** 10 个时间窗口（当前, -15分, ..., -48h） */
   windows: AsianTimeWindowData[]
   netPayouts: Fj2Net[] | null
   netPayouts15: Fj2Net[] | null
