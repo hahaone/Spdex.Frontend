@@ -221,6 +221,15 @@ function formatAsianHomeAwayRatio(w: TimeWindowData): string {
   return ratio == null ? '-' : ratio.toFixed(3)
 }
 
+function formatAsianVolume(w: TimeWindowData): string {
+  const asianWindow = asianWindowFor(w)
+  const volume = asianSideTotal(asianWindow, 'home') + asianSideTotal(asianWindow, 'away')
+  if (volume <= 0) return '-'
+  if (volume >= 1_000_000) return `${(volume / 1_000_000).toFixed(1)}M`
+  if (volume >= 1_000) return `${(volume / 1_000).toFixed(1)}K`
+  return volume.toFixed(0)
+}
+
 function asianHomeAwayRatioClass(w: TimeWindowData): string {
   const ratio = asianHomeAwayRatioValue(w)
   if (ratio == null) return ''
@@ -248,7 +257,7 @@ function asianSidePercent(idx: number, side: 'home' | 'away'): number | null {
 
 function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
   const percent = asianSidePercent(idx, side)
-  return percent == null ? '-' : `${percent.toFixed(2)}%`
+  return percent == null ? '-' : `${percent.toFixed(0)}%`
 }
 </script>
 
@@ -301,9 +310,9 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
               <th class="st-payout">盈亏</th>
               <th class="st-pct">分时环比</th>
               <th class="st-pct-detail">环比主平客</th>
+              <th class="st-asian-volume">亚盘成交量</th>
               <th class="st-asian-ratio">亚盘主客比</th>
-              <th class="st-asian-pct">分时环比主</th>
-              <th class="st-asian-pct">分时环比客</th>
+              <th class="st-asian-pct">环比主客</th>
               <th class="st-poly-vol">Poly量</th>
               <th class="st-poly-idx">Poly指数</th>
               <th class="st-poly-pct">Poly环比</th>
@@ -337,14 +346,14 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                 <template v-if="w.homeAmountPercent != null || w.drawAmountPercent != null || w.awayAmountPercent != null">{{ w.homeAmountPercent != null ? w.homeAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.drawAmountPercent != null ? w.drawAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.awayAmountPercent != null ? w.awayAmountPercent.toFixed(0) + '%' : '-' }}</template>
                 <template v-else>-</template>
               </td>
+              <td class="st-asian-volume">{{ formatAsianVolume(w) }}</td>
               <td class="st-asian-ratio">
                 <span :class="asianHomeAwayRatioClass(w)">{{ formatAsianHomeAwayRatio(w) }}</span>
               </td>
-              <td class="st-asian-pct" :style="pctColorStyle(asianSidePercent(idx, 'home'), asianSideTotalByIndex(idx, 'home'))">
-                {{ formatAsianSidePercent(idx, 'home') }}
-              </td>
-              <td class="st-asian-pct" :style="pctColorStyle(asianSidePercent(idx, 'away'), asianSideTotalByIndex(idx, 'away'))">
-                {{ formatAsianSidePercent(idx, 'away') }}
+              <td class="st-asian-pct">
+                <span :style="pctColorStyle(asianSidePercent(idx, 'home'), asianSideTotalByIndex(idx, 'home'))">{{ formatAsianSidePercent(idx, 'home') }}</span>
+                <span class="ratio-sep">|</span>
+                <span :style="pctColorStyle(asianSidePercent(idx, 'away'), asianSideTotalByIndex(idx, 'away'))">{{ formatAsianSidePercent(idx, 'away') }}</span>
               </td>
               <td class="st-poly-vol">{{ polyWindowStats[idx] ? formatPolyVol(polyWindowStats[idx]!.volume) : '-' }}</td>
               <td class="st-poly-idx">{{ polyWindowStats[idx] ? formatPolyIndex(polyWindowStats[idx]!) : '-' }}</td>
@@ -712,7 +721,7 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
 }
 .summary-table th,
 .summary-table td {
-  padding: 6px 28px;
+  padding: 6px 12px;
   text-align: center;
   border-bottom: 1px solid #eee;
   line-height: 1.7;
@@ -742,6 +751,7 @@ td.st-pct { font-weight: 600; color: #b22222; font-variant-numeric: tabular-nums
 td.st-pct-detail { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ── 亚盘摘要列样式（浅灰背景区分新增亚盘数据区域） ── */
+th.st-asian-volume,
 th.st-asian-ratio,
 th.st-asian-pct {
   background: #e5e7eb !important;
@@ -750,6 +760,7 @@ th.st-asian-pct {
   white-space: nowrap;
 }
 
+td.st-asian-volume,
 td.st-asian-ratio,
 td.st-asian-pct {
   background: #f6f7f9;
@@ -758,6 +769,7 @@ td.st-asian-pct {
   font-size: 12px;
 }
 
+td.st-asian-volume,
 td.st-asian-ratio {
   text-align: right;
   font-weight: 600;
@@ -767,6 +779,11 @@ td.st-asian-ratio {
 td.st-asian-pct {
   font-weight: 600;
   color: #888;
+}
+
+td.st-asian-pct .ratio-sep {
+  color: #9ca3af;
+  padding: 0 4px;
 }
 
 td.st-asian-ratio .ratio-red {
@@ -787,6 +804,7 @@ td.st-asian-ratio .ratio-blue-bold {
   font-weight: 700;
 }
 
+.summary-active td.st-asian-volume,
 .summary-active td.st-asian-ratio,
 .summary-active td.st-asian-pct {
   background: #e9ecef;
