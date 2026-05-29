@@ -145,6 +145,35 @@ export function useAuth() {
     }
   }
 
+  async function register(payload: {
+    userName: string
+    password: string
+    email?: string
+    mobile?: string
+    nickName?: string
+  }): Promise<string | null> {
+    try {
+      const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/register', {
+        baseURL: config.public.apiBase as string,
+        method: 'POST',
+        body: payload,
+      })
+
+      if (res.code === 0 && res.data) {
+        token.value = res.data.token
+        user.value = res.data.user
+        scheduleRefresh()
+        return null
+      }
+
+      return res.message || '注册失败'
+    }
+    catch (err: unknown) {
+      const fetchErr = err as { data?: { message?: string } }
+      return fetchErr?.data?.message || '注册失败，请稍后重试'
+    }
+  }
+
   function logout() {
     if (refreshTimer.value) {
       clearTimeout(refreshTimer.value)
@@ -192,6 +221,7 @@ export function useAuth() {
     entitlements,
     userName,
     login,
+    register,
     logout,
     fetchUser,
     refreshToken,

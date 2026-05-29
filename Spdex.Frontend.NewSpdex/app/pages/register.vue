@@ -1,39 +1,45 @@
 <script setup lang="ts">
-import { AlertCircle, Bot, RefreshCw, ShieldCheck } from '@lucide/vue'
+import { AlertCircle, ShieldCheck } from '@lucide/vue'
 
 definePageMeta({ layout: false })
 
-const { login } = useAuth()
+const { register } = useAuth()
 
 const form = reactive({
   userName: '',
   password: '',
-  captcha: 'ABCD',
+  confirmPassword: '',
 })
-const captcha = ref('ABCD')
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 
-function refreshCaptcha() {
-  captcha.value = captcha.value === 'ABCD' ? 'S7P9' : 'ABCD'
-  form.captcha = captcha.value
-}
-
 async function submit() {
-  if (!form.userName.trim() || !form.password) {
+  errorMessage.value = null
+  const userName = form.userName.trim()
+
+  if (!userName || !form.password) {
     errorMessage.value = '请输入用户名和密码'
+    return
+  }
+  if (userName.length < 2 || userName.length > 50) {
+    errorMessage.value = '用户名长度需为 2-50 个字符'
+    return
+  }
+  if (form.password.length < 4) {
+    errorMessage.value = '密码至少需要 4 位'
+    return
+  }
+  if (form.password !== form.confirmPassword) {
+    errorMessage.value = '两次输入的密码不一致'
     return
   }
 
   loading.value = true
-  errorMessage.value = null
-
-  const err = await login(form.userName.trim(), form.password)
+  const err = await register({ userName, password: form.password })
   loading.value = false
 
   if (err) {
     errorMessage.value = err
-    refreshCaptcha()
     return
   }
 
@@ -49,28 +55,22 @@ async function submit() {
         <span class="brand-sub">超级指数系统</span>
       </div>
 
-      <h1>会员登录</h1>
+      <h1>会员注册</h1>
 
       <form class="login-form" @submit.prevent="submit">
         <label>
           <span class="lbl">用户名 / UserName</span>
-          <input v-model="form.userName" autocomplete="username">
+          <input v-model="form.userName" autocomplete="username" placeholder="2-50 个字符">
         </label>
 
         <label>
           <span class="lbl">密码 / Password</span>
-          <input v-model="form.password" type="password" autocomplete="current-password">
+          <input v-model="form.password" type="password" autocomplete="new-password" placeholder="至少 4 位">
         </label>
 
         <label>
-          <span class="lbl">验证码</span>
-          <div class="captcha-row">
-            <input v-model="form.captcha" maxlength="6">
-            <button type="button" class="captcha-code focus-ring" @click="refreshCaptcha">
-              <span class="num">{{ captcha }}</span>
-              <RefreshCw :size="13" />
-            </button>
-          </div>
+          <span class="lbl">确认密码 / Confirm</span>
+          <input v-model="form.confirmPassword" type="password" autocomplete="new-password">
         </label>
 
         <div v-if="errorMessage" class="error-banner">
@@ -80,25 +80,16 @@ async function submit() {
 
         <button type="submit" class="login-btn focus-ring" :disabled="loading">
           <ShieldCheck :size="16" />
-          <span>{{ loading ? '登录中…' : '登录' }}</span>
+          <span>{{ loading ? '注册中…' : '注册并登录' }}</span>
         </button>
       </form>
 
       <div class="login-links">
-        <NuxtLink to="/register">免费注册</NuxtLink>
-        <span class="divider">·</span>
-        <NuxtLink to="/account">会员权益</NuxtLink>
+        <span class="hint">已有账号？</span>
+        <NuxtLink to="/login">返回登录</NuxtLink>
       </div>
 
-      <NuxtLink class="ai-entry focus-ring" to="/">
-        <span class="ai-icon">
-          <Bot :size="16" />
-        </span>
-        <div class="ai-text">
-          <b>超级指数智能问答</b>
-          <span>体验 SPdex AI</span>
-        </div>
-      </NuxtLink>
+      <p class="reg-note">注册即创建免费会员，可查看主流赛事数据，随时可升级会籍。</p>
     </section>
   </main>
 </template>
@@ -190,26 +181,6 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(26, 140, 211, 0.14);
 }
 
-.captcha-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 100px;
-  gap: 6px;
-}
-
-.captcha-code {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  gap: 5px;
-  border: 1px solid #dde2eb;
-  border-radius: 4px;
-  background: linear-gradient(180deg, #ece5f4 0%, #dcd2ed 100%);
-  color: #4f3f86;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
 .login-btn {
   display: inline-flex;
   align-items: center;
@@ -252,53 +223,25 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin: 14px 0 12px;
-  color: #1a8cd3;
+  gap: 8px;
+  margin: 14px 0 10px;
   font-size: 0.78rem;
   font-weight: 740;
 }
 
-.login-links .divider {
+.login-links .hint {
   color: #9aa3b0;
 }
 
-.ai-entry {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  padding: 8px 11px;
-  border: 1px solid #dcd2ed;
-  border-radius: 5px;
-  background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
+.login-links a {
+  color: #1a8cd3;
 }
 
-.ai-icon {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 4px;
-  background: #6e5aaf;
-  color: #fff;
-}
-
-.ai-text {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.ai-text b {
-  font-size: 0.88rem;
-  font-weight: 800;
-  color: #4f3f86;
-}
-
-.ai-text span {
+.reg-note {
+  margin: 0;
   color: #6b7280;
-  font-size: 0.7rem;
-  font-weight: 720;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  text-align: center;
 }
 </style>
