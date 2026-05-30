@@ -4,11 +4,18 @@
  */
 const PUBLIC_PATHS = ['/login', '/register']
 
-export default defineNuxtRouteMiddleware((to) => {
-  const { isLoggedIn } = useAuth()
+export default defineNuxtRouteMiddleware(async (to) => {
+  const { isLoggedIn, user, fetchUser } = useAuth()
 
   if (PUBLIC_PATHS.includes(to.path)) return
   if (!isLoggedIn.value) {
     return navigateTo('/login')
+  }
+
+  // 有 token 但 user 未水合（硬刷新 / 直接打开链接，useState 不跨页面持久）→ 拉 /me 填充会籍 tier + 权益。
+  // 否则 useAuth().tier 兜底为 'Free'，首页会员中心、顶栏 tier 徽章、useEntitlements 都会把白金/黄金等误判为免费版。
+  if (import.meta.client && !user.value) {
+    const ok = await fetchUser()
+    if (!ok) return navigateTo('/login')
   }
 })
