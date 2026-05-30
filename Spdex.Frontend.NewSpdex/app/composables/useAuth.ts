@@ -12,6 +12,15 @@ import type { ApiResponse, AuthUser, LoginResponseData } from '~/types/auth'
 
 const TOKEN_COOKIE = 'newspdex_token'
 
+export interface AuthSubmitResult {
+  /** 业务是否成功（已登录/已注册，token 已存）。 */
+  ok: boolean
+  /** 错误信息（ok=false 时）。 */
+  error: string | null
+  /** 是否因验证码校验失败（后端 code=4001）——验证码开启时据此让滑块重试。 */
+  captchaFailed: boolean
+}
+
 function getTokenExp(jwt: string): number | null {
   try {
     const parts = jwt.split('.')
@@ -122,26 +131,30 @@ export function useAuth() {
     }
   }
 
-  async function login(loginName: string, password: string): Promise<string | null> {
+  async function login(loginName: string, password: string, captchaVerifyParam?: string): Promise<AuthSubmitResult> {
     try {
       const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/login', {
         baseURL: config.public.apiBase as string,
         method: 'POST',
-        body: { userName: loginName, password },
+        body: { userName: loginName, password, captchaVerifyParam },
       })
 
       if (res.code === 0 && res.data) {
         token.value = res.data.token
         user.value = res.data.user
         scheduleRefresh()
-        return null
+        return { ok: true, error: null, captchaFailed: false }
       }
 
-      return res.message || '登录失败'
+      return { ok: false, error: res.message || '登录失败', captchaFailed: res.code === 4001 }
     }
     catch (err: unknown) {
-      const fetchErr = err as { data?: { message?: string } }
-      return fetchErr?.data?.message || '登录失败，请检查用户名和密码'
+      const fetchErr = err as { data?: { message?: string, code?: number } }
+      return {
+        ok: false,
+        error: fetchErr?.data?.message || '登录失败，请检查用户名和密码',
+        captchaFailed: fetchErr?.data?.code === 4001,
+      }
     }
   }
 
@@ -151,7 +164,8 @@ export function useAuth() {
     email?: string
     mobile?: string
     nickName?: string
-  }): Promise<string | null> {
+    captchaVerifyParam?: string
+  }): Promise<AuthSubmitResult> {
     try {
       const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/register', {
         baseURL: config.public.apiBase as string,
@@ -163,14 +177,18 @@ export function useAuth() {
         token.value = res.data.token
         user.value = res.data.user
         scheduleRefresh()
-        return null
+        return { ok: true, error: null, captchaFailed: false }
       }
 
-      return res.message || '注册失败'
+      return { ok: false, error: res.message || '注册失败', captchaFailed: res.code === 4001 }
     }
     catch (err: unknown) {
-      const fetchErr = err as { data?: { message?: string } }
-      return fetchErr?.data?.message || '注册失败，请稍后重试'
+      const fetchErr = err as { data?: { message?: string, code?: number } }
+      return {
+        ok: false,
+        error: fetchErr?.data?.message || '注册失败，请稍后重试',
+        captchaFailed: fetchErr?.data?.code === 4001,
+      }
     }
   }
 

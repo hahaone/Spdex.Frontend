@@ -14,6 +14,11 @@ export default defineNuxtConfig({
       mockMode: process.env.NUXT_PUBLIC_MOCK_MODE !== 'false',
       buildSha: process.env.BUILD_SHA || 'dev',
       buildTime: process.env.BUILD_TIME || '',
+      // 阿里云验证码2.0（默认关闭；与后端 Captcha:Enabled 必须同开同关）
+      captchaEnabled: process.env.NUXT_PUBLIC_CAPTCHA_ENABLED === 'true',
+      captchaSceneId: process.env.NUXT_PUBLIC_CAPTCHA_SCENE_ID || '',
+      captchaPrefix: process.env.NUXT_PUBLIC_CAPTCHA_PREFIX || '',
+      captchaRegion: process.env.NUXT_PUBLIC_CAPTCHA_REGION || 'cn',
     },
   },
 

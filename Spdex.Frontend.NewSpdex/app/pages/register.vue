@@ -4,6 +4,7 @@ import { AlertCircle, ShieldCheck } from '@lucide/vue'
 definePageMeta({ layout: false })
 
 const { register } = useAuth()
+const { enabled: captchaEnabled, setup: setupCaptcha } = useCaptcha()
 
 const form = reactive({
   userName: '',
@@ -13,38 +14,69 @@ const form = reactive({
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 
-async function submit() {
+function validate(): boolean {
   errorMessage.value = null
   const userName = form.userName.trim()
-
   if (!userName || !form.password) {
     errorMessage.value = '请输入用户名和密码'
-    return
+    return false
   }
   if (userName.length < 2 || userName.length > 50) {
     errorMessage.value = '用户名长度需为 2-50 个字符'
-    return
+    return false
   }
   if (form.password.length < 4) {
     errorMessage.value = '密码至少需要 4 位'
-    return
+    return false
   }
   if (form.password !== form.confirmPassword) {
     errorMessage.value = '两次输入的密码不一致'
-    return
+    return false
   }
-
-  loading.value = true
-  const err = await register({ userName, password: form.password })
-  loading.value = false
-
-  if (err) {
-    errorMessage.value = err
-    return
-  }
-
-  await navigateTo('/')
+  return true
 }
+
+// 验证码关闭：直接提交
+async function submitDirect() {
+  if (!validate()) return
+  loading.value = true
+  const r = await register({ userName: form.userName.trim(), password: form.password })
+  loading.value = false
+  if (r.ok) { await navigateTo('/'); return }
+  errorMessage.value = r.error
+}
+
+// 验证码开启：滑块通过后由 SDK 回调此函数发注册请求
+async function captchaVerify(captchaVerifyParam: string) {
+  if (!validate()) return { captchaResult: true, bizResult: false }
+  loading.value = true
+  const r = await register({ userName: form.userName.trim(), password: form.password, captchaVerifyParam })
+  loading.value = false
+  if (r.captchaFailed) return { captchaResult: false, bizResult: false }
+  errorMessage.value = r.ok ? null : r.error
+  return { captchaResult: true, bizResult: r.ok }
+}
+
+function onBizResult(bizResult: boolean) {
+  if (bizResult) navigateTo('/')
+}
+
+// 验证码开启时由 SDK 接管 #register-submit 的点击（弹滑块）；关闭时直接提交
+function onSubmit() {
+  if (captchaEnabled.value) return
+  submitDirect()
+}
+
+onMounted(() => {
+  if (captchaEnabled.value) {
+    setupCaptcha({
+      buttonId: 'register-submit',
+      elementId: 'register-captcha-element',
+      verify: captchaVerify,
+      onBizResult,
+    })
+  }
+})
 </script>
 
 <template>
@@ -57,7 +89,7 @@ async function submit() {
 
       <h1>会员注册</h1>
 
-      <form class="login-form" @submit.prevent="submit">
+      <form class="login-form" @submit.prevent="onSubmit">
         <label>
           <span class="lbl">用户名 / UserName</span>
           <input v-model="form.userName" autocomplete="username" placeholder="2-50 个字符">
@@ -78,10 +110,11 @@ async function submit() {
           <span>{{ errorMessage }}</span>
         </div>
 
-        <button type="submit" class="login-btn focus-ring" :disabled="loading">
+        <button id="register-submit" type="button" class="login-btn focus-ring" :disabled="loading" @click="onSubmit">
           <ShieldCheck :size="16" />
           <span>{{ loading ? '注册中…' : '注册并登录' }}</span>
         </button>
+        <div id="register-captcha-element" />
       </form>
 
       <div class="login-links">

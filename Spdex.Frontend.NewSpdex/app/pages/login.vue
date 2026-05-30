@@ -1,44 +1,68 @@
 <script setup lang="ts">
-import { AlertCircle, Bot, RefreshCw, ShieldCheck } from '@lucide/vue'
+import { AlertCircle, Bot, ShieldCheck } from '@lucide/vue'
 
 definePageMeta({ layout: false })
 
 const { login } = useAuth()
+const { enabled: captchaEnabled, setup: setupCaptcha } = useCaptcha()
 
 const form = reactive({
   userName: '',
   password: '',
-  captcha: 'ABCD',
 })
-const captcha = ref('ABCD')
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 
-function refreshCaptcha() {
-  captcha.value = captcha.value === 'ABCD' ? 'S7P9' : 'ABCD'
-  form.captcha = captcha.value
-}
-
-async function submit() {
+function validate(): boolean {
   if (!form.userName.trim() || !form.password) {
     errorMessage.value = '请输入用户名和密码'
-    return
+    return false
   }
-
-  loading.value = true
   errorMessage.value = null
-
-  const err = await login(form.userName.trim(), form.password)
-  loading.value = false
-
-  if (err) {
-    errorMessage.value = err
-    refreshCaptcha()
-    return
-  }
-
-  await navigateTo('/')
+  return true
 }
+
+// 验证码关闭：直接提交
+async function submitDirect() {
+  if (!validate()) return
+  loading.value = true
+  const r = await login(form.userName.trim(), form.password)
+  loading.value = false
+  if (r.ok) { await navigateTo('/'); return }
+  errorMessage.value = r.error
+}
+
+// 验证码开启：滑块通过后由 SDK 回调此函数发登录请求
+async function captchaVerify(captchaVerifyParam: string) {
+  if (!validate()) return { captchaResult: true, bizResult: false }
+  loading.value = true
+  const r = await login(form.userName.trim(), form.password, captchaVerifyParam)
+  loading.value = false
+  if (r.captchaFailed) return { captchaResult: false, bizResult: false }
+  errorMessage.value = r.ok ? null : r.error
+  return { captchaResult: true, bizResult: r.ok }
+}
+
+function onBizResult(bizResult: boolean) {
+  if (bizResult) navigateTo('/')
+}
+
+// 验证码开启时由 SDK 接管 #login-submit 的点击（弹滑块）；关闭时直接提交
+function onSubmit() {
+  if (captchaEnabled.value) return
+  submitDirect()
+}
+
+onMounted(() => {
+  if (captchaEnabled.value) {
+    setupCaptcha({
+      buttonId: 'login-submit',
+      elementId: 'login-captcha-element',
+      verify: captchaVerify,
+      onBizResult,
+    })
+  }
+})
 </script>
 
 <template>
@@ -51,7 +75,7 @@ async function submit() {
 
       <h1>会员登录</h1>
 
-      <form class="login-form" @submit.prevent="submit">
+      <form class="login-form" @submit.prevent="onSubmit">
         <label>
           <span class="lbl">用户名 / UserName</span>
           <input v-model="form.userName" autocomplete="username">
@@ -62,26 +86,16 @@ async function submit() {
           <input v-model="form.password" type="password" autocomplete="current-password">
         </label>
 
-        <label>
-          <span class="lbl">验证码</span>
-          <div class="captcha-row">
-            <input v-model="form.captcha" maxlength="6">
-            <button type="button" class="captcha-code focus-ring" @click="refreshCaptcha">
-              <span class="num">{{ captcha }}</span>
-              <RefreshCw :size="13" />
-            </button>
-          </div>
-        </label>
-
         <div v-if="errorMessage" class="error-banner">
           <AlertCircle :size="14" />
           <span>{{ errorMessage }}</span>
         </div>
 
-        <button type="submit" class="login-btn focus-ring" :disabled="loading">
+        <button id="login-submit" type="button" class="login-btn focus-ring" :disabled="loading" @click="onSubmit">
           <ShieldCheck :size="16" />
           <span>{{ loading ? '登录中…' : '登录' }}</span>
         </button>
+        <div id="login-captcha-element" />
       </form>
 
       <div class="login-links">
