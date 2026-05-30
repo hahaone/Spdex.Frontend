@@ -54,6 +54,18 @@ jobs:
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026:latest
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026:${{ github.sha }}
 
+      - name: Build and push NewSpdex Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Spdex.Frontend.NewSpdex
+          push: true
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+          tags: |
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex:latest
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex:${{ github.sha }}
+
   deploy:
     needs: build
     # push 含 [deploy] 时自动部署；手动触发时根据 deploy 参数决定
@@ -105,6 +117,27 @@ jobs:
             if [ -z "$api_status" ] || [ "$api_status" = "000" ] || [ "$api_status" -ge 500 ]; then
               echo "frontend2026 API proxy health check failed with status $api_status; recent container logs:"
               docker logs --tail 200 spdex-frontend-2026 || true
+              exit 1
+            fi
+            for attempt in $(seq 1 30); do
+              if docker compose config --services | grep -qx frontend-newspdex; then
+                break
+              fi
+              echo "Waiting for frontend-newspdex service in docker-compose.yml... ($attempt/30)"
+              sleep 10
+            done
+            if ! docker compose config --services | grep -qx frontend-newspdex; then
+              echo "frontend-newspdex service not found in docker-compose.yml; deploy Spdex.Core first."
+              exit 1
+            fi
+            docker compose pull frontend-newspdex
+            docker compose up -d frontend-newspdex
+            sleep 3
+            docker ps --filter "name=spdex-frontend-newspdex"
+            command -v ss >/dev/null 2>&1 && ss -ltnp | grep ':3002' || true
+            if ! curl -fsS --max-time 10 http://127.0.0.1:3002/login >/dev/null; then
+              echo "frontend-newspdex health check failed; recent container logs:"
+              docker logs --tail 200 spdex-frontend-newspdex || true
               exit 1
             fi
             docker image prune -f
