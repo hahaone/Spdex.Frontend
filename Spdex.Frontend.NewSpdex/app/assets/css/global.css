@@ -4,24 +4,148 @@
   box-sizing: border-box;
 }
 
+/* ─────────────────────────────────────────────
+   Design tokens — light (default)
+   Tailwind color tokens reference these vars
+   (see tailwind.config.ts), so every utility
+   class (text-ink/bg-panel/border-line/…) flips
+   automatically when .dark is set on <html>.
+   ───────────────────────────────────────────── */
+:root {
+  --ink: #1a2233;
+  --muted: #6b7280;
+  --soft: #9aa3b0;
+  --panel: #ffffff;
+  --line: #dde2eb;
+  --divider: #eaeef4;
+  --surface: #f3f6fb;
+  --canvas: #eef1f6;
+  --brand: #1a8cd3;
+  --brand-deep: #1672b3;
+  --brand-tint: #e2f1fa;
+  --brand-tint-strong: #c9e5f5;
+  --accent: #6e5aaf;
+  --accent-deep: #4f3f86;
+  --lavender: #ece5f4;
+  --lavender-strong: #dcd2ed;
+  --home-bg: #dceefd;
+  --home-strong: #c4dff8;
+  --draw-bg: #e0f1e0;
+  --draw-strong: #c8e6c9;
+  --away-bg: #fff3d5;
+  --away-strong: #fce4a8;
+  --buy: #d6324c;
+  --sell: #2e9c5f;
+  --pump: #06a7c1;
+  --up: #2e9c5f;
+  --down: #d6324c;
+  --warn: #b08113;
+  --signal: #c2410c;
+  --member: #0f766e;
+  --quant: #6e5aaf;
+  --poly: #6e5aaf;
+
+  /* shell + surfaces */
+  --app-bg: #eef1f6;
+  --app-bg-grad: linear-gradient(180deg, #eef1f6 0%, #e7ecf3 80%, #eef1f6 100%);
+  --shadow-soft: 0 6px 18px rgba(26, 34, 51, 0.06);
+  --shadow-elev: 0 2px 8px rgba(26, 34, 51, 0.08);
+  --card-shadow: 0 2px 8px rgba(26, 34, 51, 0.05);
+
+  /* chips / sections / rows */
+  --chip-strong-bg: #1a2233;
+  --chip-strong-fg: #ffffff;
+  --chip-mute-bg: #eef1f6;
+  --chip-mute-fg: #4a5364;
+  --signal-bg: #fdebd2;
+  --signal-bg-strong: #fbcfb5;
+  --signal-fg: #9a3409;
+  --red-soft-bg: #fce4e8;
+  --red-soft-fg: #b1253c;
+  --row-draw: #e6f3e6;
+  --row-away: #fff4d8;
+}
+
+/* ─────────────────────────────────────────────
+   Design tokens — dark
+   ───────────────────────────────────────────── */
+.dark {
+  --ink: #e6e9f0;
+  --muted: #99a3b4;
+  --soft: #707a8c;
+  --panel: #1a1f2b;
+  --line: #2c3340;
+  --divider: #242a36;
+  --surface: #161b24;
+  --canvas: #0f131a;
+  --brand: #3aa3e3;
+  --brand-deep: #5bb6ec;
+  --brand-tint: #16303f;
+  --brand-tint-strong: #1d3a4d;
+  --accent: #9b88d6;
+  --accent-deep: #b8a8e8;
+  --lavender: #272135;
+  --lavender-strong: #332b48;
+  --home-bg: #14283c;
+  --home-strong: #1f3a54;
+  --draw-bg: #163021;
+  --draw-strong: #1f422c;
+  --away-bg: #38320f;
+  --away-strong: #4a3f14;
+  --buy: #f2647c;
+  --sell: #4cc987;
+  --pump: #2bc0d8;
+  --up: #4cc987;
+  --down: #f2647c;
+  --warn: #d9a93a;
+  --signal: #f0823f;
+  --member: #2aa89b;
+  --quant: #9b88d6;
+  --poly: #9b88d6;
+
+  --app-bg: #0f131a;
+  --app-bg-grad: linear-gradient(180deg, #0f131a 0%, #0c0f16 80%, #0f131a 100%);
+  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --shadow-elev: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  --chip-strong-bg: #e6e9f0;
+  --chip-strong-fg: #11151c;
+  --chip-mute-bg: #232a36;
+  --chip-mute-fg: #aab3c2;
+  --signal-bg: #3a2615;
+  --signal-bg-strong: #4a3018;
+  --signal-fg: #f0a868;
+  --red-soft-bg: #3a1d24;
+  --red-soft-fg: #f2899c;
+  --row-draw: #163021;
+  --row-away: #38320f;
+}
+
 html {
   min-width: 320px;
-  background: #eef1f6;
-  color: #1a2233;
+  background: var(--app-bg);
+  color: var(--ink);
   -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  background: linear-gradient(180deg, #eef1f6 0%, #e7ecf3 80%, #eef1f6 100%);
-  color: #1a2233;
+  background: var(--app-bg-grad);
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* smooth theme transition on the big surfaces */
+html,
+body {
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 button,
@@ -63,41 +187,41 @@ img {
 }
 
 .focus-ring:focus-visible {
-  outline: 2px solid #1a8cd3;
+  outline: 2px solid var(--brand);
   outline-offset: 1px;
 }
 
 .page-band {
   padding: 10px 12px;
-  border-bottom: 1px solid #eaeef4;
-  background: #ffffff;
+  border-bottom: 1px solid var(--divider);
+  background: var(--panel);
 }
 
 .data-card {
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(26, 34, 51, 0.05);
+  background: var(--panel);
+  box-shadow: var(--card-shadow);
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .positive,
 .up,
 .sell-color {
-  color: #2e9c5f;
+  color: var(--sell);
 }
 
 .negative,
 .down,
 .buy-color {
-  color: #d6324c;
+  color: var(--buy);
 }
 
 .pump-color {
-  color: #06a7c1;
+  color: var(--pump);
 }
 
 .section-title {
@@ -105,8 +229,8 @@ img {
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: linear-gradient(180deg, #ece5f4 0%, #e3daf0 100%);
-  color: #4f3f86;
+  background: linear-gradient(180deg, var(--lavender) 0%, var(--lavender-strong) 100%);
+  color: var(--accent-deep);
   font-size: 0.78rem;
   font-weight: 760;
   letter-spacing: 0.02em;
@@ -114,30 +238,30 @@ img {
 }
 
 .section-title.brand {
-  background: linear-gradient(180deg, #e2f1fa 0%, #c9e5f5 100%);
-  color: #1672b3;
+  background: linear-gradient(180deg, var(--brand-tint) 0%, var(--brand-tint-strong) 100%);
+  color: var(--brand-deep);
 }
 
 .section-title.signal {
-  background: linear-gradient(180deg, #fde6db 0%, #fbcfb5 100%);
-  color: #9a3409;
+  background: linear-gradient(180deg, var(--signal-bg) 0%, var(--signal-bg-strong) 100%);
+  color: var(--signal-fg);
 }
 
 .row-home {
-  background: #dceefd;
+  background: var(--home-bg);
 }
 
 .row-draw {
-  background: #e6f3e6;
+  background: var(--row-draw);
 }
 
 .row-away {
-  background: #fff4d8;
+  background: var(--row-away);
 }
 
 .col-head {
-  background: #ece5f4;
-  color: #4f3f86;
+  background: var(--lavender);
+  color: var(--accent-deep);
   font-size: 0.7rem;
   font-weight: 760;
   letter-spacing: 0.02em;
@@ -154,33 +278,33 @@ img {
 }
 
 .tag-brand {
-  background: #1a8cd3;
+  background: var(--brand);
   color: #fff;
 }
 
 .tag-ink {
-  background: #1a2233;
-  color: #fff;
+  background: var(--chip-strong-bg);
+  color: var(--chip-strong-fg);
 }
 
 .tag-mute {
-  background: #eef1f6;
-  color: #4a5364;
+  background: var(--chip-mute-bg);
+  color: var(--chip-mute-fg);
 }
 
 .tag-signal {
-  background: #fdebd2;
-  color: #9a3409;
+  background: var(--signal-bg);
+  color: var(--signal-fg);
 }
 
 .tag-double-red {
-  background: #fce4e8;
-  color: #b1253c;
+  background: var(--red-soft-bg);
+  color: var(--red-soft-fg);
 }
 
 .tag-quant {
-  background: #ece5f4;
-  color: #4f3f86;
+  background: var(--lavender);
+  color: var(--accent-deep);
 }
 
 .metric-pill {
@@ -188,8 +312,8 @@ img {
   align-items: center;
   padding: 1px 6px;
   border-radius: 3px;
-  background: #f1f3f8;
-  color: #4a5364;
+  background: var(--chip-mute-bg);
+  color: var(--chip-mute-fg);
   font-size: 0.72rem;
   font-weight: 740;
   letter-spacing: 0.02em;

@@ -2,7 +2,7 @@
  * 全局路由守卫：未登录跳 /login。
  * 基于真实 JWT token（cookie），与后端 /api/newspdex/auth 配合使用。
  */
-const PUBLIC_PATHS = ['/login', '/register']
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password']
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const { isLoggedIn, user, fetchUser } = useAuth()

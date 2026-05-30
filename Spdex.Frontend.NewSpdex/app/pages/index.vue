@@ -186,7 +186,7 @@ const featureCards = [
 
 .hero {
   padding: 10px 12px;
-  background: linear-gradient(120deg, #1a8cd3 0%, #1672b3 60%, #4f3f86 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--brand-deep) 60%, var(--accent-deep) 100%);
   color: #fff;
 }
 
@@ -222,8 +222,8 @@ const featureCards = [
   align-items: center;
   gap: 7px;
   padding: 6px 9px;
-  background: #fff8e3;
-  border-bottom: 1px solid #fce4a8;
+  background: var(--away-bg);
+  border-bottom: 1px solid var(--away-strong);
 }
 
 .ticker-label {
@@ -256,10 +256,10 @@ const featureCards = [
   white-space: nowrap;
 }
 
-.ticker-item.side-home { background: #e2f1fa; color: #1672b3; border-color: #b8d8eb; }
-.ticker-item.side-away { background: #fff4d8; color: #8a6212; border-color: #f0d484; }
-.ticker-item.side-draw { background: #eef1f6; color: #4a5364; border-color: #c4ccd9; }
-.ticker-item.side-mute { background: #f4f6fb; color: #6b7280; border-color: #dde2eb; }
+.ticker-item.side-home { background: var(--brand-tint); color: var(--brand-deep); border-color: #b8d8eb; }
+.ticker-item.side-away { background: var(--away-bg); color: var(--warn); border-color: var(--away-strong); }
+.ticker-item.side-draw { background: var(--canvas); color: var(--muted); border-color: var(--line); }
+.ticker-item.side-mute { background: var(--surface); color: var(--muted); border-color: var(--line); }
 
 .t-amount { font-weight: 820; }
 .t-side { padding: 0 4px; border-radius: 2px; background: rgba(255,255,255,0.6); font-weight: 800; }
@@ -283,7 +283,7 @@ const featureCards = [
   margin: 0;
   font-size: 0.88rem;
   font-weight: 820;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .col-head .muted {
@@ -304,9 +304,9 @@ const featureCards = [
   min-height: 50px;
   gap: 8px;
   padding: 8px 10px 8px 12px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
@@ -332,19 +332,19 @@ const featureCards = [
 }
 
 .metric-row.bf .metric-dot {
-  background: #1a8cd3;
+  background: var(--brand);
 }
 
 .metric-row.poly .metric-dot {
-  background: #6e5aaf;
+  background: var(--accent);
 }
 
 .metric-row.index .metric-dot {
-  background: #2e9c5f;
+  background: var(--sell);
 }
 
 .metric-row.signal .metric-dot {
-  background: #d6324c;
+  background: var(--buy);
 }
 
 .metric-row strong {
@@ -360,8 +360,8 @@ const featureCards = [
 .threshold {
   padding: 1px 5px;
   border-radius: 2px;
-  background: #f1f3f8;
-  color: #4a5364;
+  background: var(--surface);
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
   white-space: nowrap;
@@ -372,11 +372,11 @@ const featureCards = [
   text-align: right;
   font-size: 1.3rem;
   font-weight: 860;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .metric-row.signal .metric-count {
-  color: #d6324c;
+  color: var(--buy);
 }
 
 .metric-row.is-pending {
@@ -384,18 +384,18 @@ const featureCards = [
 }
 
 .metric-row.is-pending .metric-count {
-  color: #9aa3b0;
+  color: var(--soft);
 }
 
 .metric-row svg {
-  color: #9aa3b0;
+  color: var(--soft);
 }
 
 .pending-tag {
   padding: 1px 5px;
   border-radius: 2px;
-  background: #f1f3f8;
-  color: #6b7280;
+  background: var(--surface);
+  color: var(--muted);
   font-size: 0.68rem;
   font-weight: 720;
 }
@@ -406,9 +406,9 @@ const featureCards = [
   gap: 5px;
   margin-bottom: 8px;
   padding: 5px 9px;
-  border: 1px solid #fce4a8;
+  border: 1px solid var(--away-strong);
   border-radius: 4px;
-  background: #fff8e3;
+  background: var(--away-bg);
   color: #8a6212;
   font-size: 0.74rem;
   font-weight: 720;
@@ -421,9 +421,9 @@ const featureCards = [
 
 .skeleton-row {
   height: 50px;
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 5px;
-  background: linear-gradient(90deg, #f3f6fb 0%, #eaeef4 50%, #f3f6fb 100%);
+  background: linear-gradient(90deg, var(--surface) 0%, var(--divider) 50%, var(--surface) 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.2s ease-in-out infinite;
 }
@@ -493,9 +493,9 @@ const featureCards = [
 .info-card {
   margin-top: 10px;
   padding: 10px 12px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .info-head {
@@ -512,7 +512,7 @@ const featureCards = [
 }
 
 .info-head .dot.brand {
-  background: #1a8cd3;
+  background: var(--brand);
 }
 
 .info-head h3 {
@@ -526,7 +526,7 @@ const featureCards = [
   gap: 4px;
   margin: 0;
   padding-left: 14px;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
   line-height: 1.45;
@@ -541,20 +541,20 @@ const featureCards = [
   gap: 10px;
   padding: 9px 12px;
   border-radius: 5px;
-  color: #1a2233;
+  color: var(--ink);
   text-decoration: none;
 }
 
 .upgrade-box {
   margin-bottom: 8px;
   border: 1px solid #c8a64b;
-  background: linear-gradient(180deg, #fff8e3 0%, #fff4d8 100%);
-  box-shadow: 0 3px 10px rgba(200, 166, 75, 0.18);
+  background: linear-gradient(180deg, var(--away-bg) 0%, var(--panel) 100%);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
 }
 
 .account-box {
-  border: 1px solid #dcd2ed;
-  background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
+  border: 1px solid var(--lavender-strong);
+  background: linear-gradient(180deg, var(--lavender) 0%, var(--panel) 100%);
 }
 
 .upgrade-icon {
@@ -573,7 +573,7 @@ const featureCards = [
   height: 36px;
   place-items: center;
   border-radius: 5px;
-  background: #6e5aaf;
+  background: var(--accent);
   color: #fff;
 }
 
@@ -593,14 +593,14 @@ const featureCards = [
 .account-text b {
   font-size: 0.92rem;
   font-weight: 820;
-  color: #4f3f86;
+  color: var(--accent-deep);
 }
 
 .upgrade-text span,
 .account-text span {
   font-size: 0.72rem;
   font-weight: 720;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 @media (min-width: 1024px) {

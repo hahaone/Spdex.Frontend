@@ -192,6 +192,64 @@ export function useAuth() {
     }
   }
 
+  /** 已登录修改密码：成功后后端旋转 JTI 并回新 token，这里续上。 */
+  async function changePassword(oldPassword: string, newPassword: string): Promise<AuthSubmitResult> {
+    if (!token.value) return { ok: false, error: '未登录', captchaFailed: false }
+    try {
+      const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/change-password', {
+        baseURL: config.public.apiBase as string,
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token.value}` },
+        body: { oldPassword, newPassword },
+      })
+      if (res.code === 0 && res.data) {
+        token.value = res.data.token
+        user.value = res.data.user
+        scheduleRefresh()
+        return { ok: true, error: null, captchaFailed: false }
+      }
+      return { ok: false, error: res.message || '修改失败', captchaFailed: false }
+    }
+    catch (err: unknown) {
+      const e = err as { data?: { message?: string } }
+      return { ok: false, error: e?.data?.message || '修改失败，请稍后重试', captchaFailed: false }
+    }
+  }
+
+  /** 找回密码：向用户名绑定的邮箱发送重置链接（后端统一返回成功，防枚举）。 */
+  async function forgotPassword(loginName: string, captchaVerifyParam?: string): Promise<AuthSubmitResult> {
+    try {
+      const res = await $fetch<ApiResponse<unknown>>('/api/newspdex/auth/forgot-password', {
+        baseURL: config.public.apiBase as string,
+        method: 'POST',
+        body: { userName: loginName, captchaVerifyParam },
+      })
+      if (res.code === 0) return { ok: true, error: null, captchaFailed: false }
+      return { ok: false, error: res.message || '提交失败', captchaFailed: res.code === 4001 }
+    }
+    catch (err: unknown) {
+      const e = err as { data?: { message?: string, code?: number } }
+      return { ok: false, error: e?.data?.message || '提交失败，请稍后重试', captchaFailed: e?.data?.code === 4001 }
+    }
+  }
+
+  /** 用邮件里的重置令牌设置新密码。 */
+  async function resetPassword(resetToken: string, newPassword: string): Promise<AuthSubmitResult> {
+    try {
+      const res = await $fetch<ApiResponse<unknown>>('/api/newspdex/auth/reset-password', {
+        baseURL: config.public.apiBase as string,
+        method: 'POST',
+        body: { token: resetToken, newPassword },
+      })
+      if (res.code === 0) return { ok: true, error: null, captchaFailed: false }
+      return { ok: false, error: res.message || '重置失败', captchaFailed: false }
+    }
+    catch (err: unknown) {
+      const e = err as { data?: { message?: string } }
+      return { ok: false, error: e?.data?.message || '重置失败，请稍后重试', captchaFailed: false }
+    }
+  }
+
   function logout() {
     if (refreshTimer.value) {
       clearTimeout(refreshTimer.value)
@@ -240,6 +298,9 @@ export function useAuth() {
     userName,
     login,
     register,
+    changePassword,
+    forgotPassword,
+    resetPassword,
     logout,
     fetchUser,
     refreshToken,

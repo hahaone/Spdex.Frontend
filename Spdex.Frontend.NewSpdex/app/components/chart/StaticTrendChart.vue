@@ -172,25 +172,25 @@ svg {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
 }
 
 .grid {
-  stroke: #eaeef4;
+  stroke: var(--divider);
   stroke-width: 0.8;
   stroke-dasharray: 2 3;
 }
 
 .axis {
-  stroke: #c4ccd9;
+  stroke: var(--line);
   stroke-width: 0.8;
 }
 
 .y-tick,
 .x-tick {
-  fill: #6b7280;
+  fill: var(--muted);
   font-size: 9px;
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
   letter-spacing: 0;
@@ -208,18 +208,18 @@ svg {
 }
 
 .home {
-  stroke: #d6324c;
-  color: #d6324c;
+  stroke: var(--buy);
+  color: var(--buy);
 }
 
 .draw {
-  stroke: #2e9c5f;
-  color: #2e9c5f;
+  stroke: var(--sell);
+  color: var(--sell);
 }
 
 .away {
-  stroke: #1a8cd3;
-  color: #1a8cd3;
+  stroke: var(--brand);
+  color: var(--brand);
 }
 
 .dot {
@@ -233,7 +233,7 @@ svg {
   align-items: center;
   gap: 12px;
   padding: 6px 2px 0;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }

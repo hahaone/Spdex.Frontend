@@ -136,15 +136,15 @@ onMounted(() => {
   background:
     radial-gradient(circle at 15% 10%, rgba(26, 140, 211, 0.12) 0, transparent 45%),
     radial-gradient(circle at 90% 85%, rgba(110, 90, 175, 0.12) 0, transparent 45%),
-    linear-gradient(180deg, #eef1f6 0%, #e2e7f1 100%);
+    linear-gradient(180deg, var(--canvas) 0%, #e2e7f1 100%);
 }
 
 .login-panel {
   width: min(100%, 380px);
   padding: 22px 18px;
-  border: 1px solid #dcd2ed;
+  border: 1px solid var(--lavender-strong);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 16px 38px rgba(26, 34, 51, 0.14);
 }
 
@@ -160,14 +160,14 @@ onMounted(() => {
   font-size: 1.42rem;
   font-weight: 880;
   letter-spacing: 0.02em;
-  background: linear-gradient(120deg, #1a8cd3 0%, #6e5aaf 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .brand-sub {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.76rem;
   font-weight: 720;
 }
@@ -177,7 +177,7 @@ h1 {
   font-size: 1.04rem;
   font-weight: 800;
   text-align: center;
-  color: #1a2233;
+  color: var(--ink);
   letter-spacing: 0.02em;
 }
 
@@ -192,7 +192,7 @@ label {
 }
 
 .lbl {
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -201,16 +201,16 @@ input {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   outline: none;
   font-size: 0.92rem;
 }
 
 input:focus {
-  border-color: #1a8cd3;
+  border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(26, 140, 211, 0.14);
 }
 
@@ -223,7 +223,7 @@ input:focus {
   margin-top: 4px;
   border: 0;
   border-radius: 4px;
-  background: linear-gradient(180deg, #1a8cd3 0%, #1672b3 100%);
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-deep) 100%);
   color: #fff;
   font-weight: 820;
   font-size: 0.96rem;
@@ -263,16 +263,16 @@ input:focus {
 }
 
 .login-links .hint {
-  color: #9aa3b0;
+  color: var(--soft);
 }
 
 .login-links a {
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .reg-note {
   margin: 0;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   line-height: 1.5;
   text-align: center;

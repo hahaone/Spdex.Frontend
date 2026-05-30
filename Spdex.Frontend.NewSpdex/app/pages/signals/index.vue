@@ -117,7 +117,7 @@ function matchKick(iso: string): string {
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
@@ -126,10 +126,10 @@ function matchKick(iso: string): string {
   display: inline-grid;
   min-height: 30px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 
 .spinning {
@@ -147,17 +147,17 @@ function matchKick(iso: string): string {
   gap: 5px;
   padding: 32px 16px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.84rem;
   font-weight: 720;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 5px;
   background: #f9fafc;
 }
 
 .empty p {
   margin: 4px 0 0;
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.92rem;
   font-weight: 800;
 }
@@ -166,9 +166,9 @@ function matchKick(iso: string): string {
   display: grid;
   gap: 4px;
   padding: 8px 10px 9px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .model-head {
@@ -176,13 +176,13 @@ function matchKick(iso: string): string {
   justify-content: space-between;
   align-items: baseline;
   padding-bottom: 4px;
-  border-bottom: 1px solid #eaeef4;
+  border-bottom: 1px solid var(--divider);
 }
 
 .model-head b {
   font-size: 0.88rem;
   font-weight: 820;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .signal-row {
@@ -191,7 +191,7 @@ function matchKick(iso: string): string {
   align-items: center;
   gap: 8px;
   padding: 6px 0;
-  color: #1a2233;
+  color: var(--ink);
   text-decoration: none;
 }
 
@@ -209,9 +209,9 @@ function matchKick(iso: string): string {
   border-radius: 50%;
 }
 
-.status-dot.tone-positive { background: #2e9c5f; }
+.status-dot.tone-positive { background: var(--sell); }
 .status-dot.tone-warm { background: #c46613; }
-.status-dot.tone-mute { background: #6b7280; }
+.status-dot.tone-mute { background: var(--muted); }
 
 .teams {
   min-width: 0;
@@ -228,7 +228,7 @@ function matchKick(iso: string): string {
   align-items: center;
   gap: 5px;
   padding-left: 13px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
@@ -254,7 +254,7 @@ function matchKick(iso: string): string {
   letter-spacing: 0.02em;
 }
 
-.status-tag.tone-positive { background: #e6f3e6; color: #246b3b; }
-.status-tag.tone-warm { background: #fff4d8; color: #8a6212; }
-.status-tag.tone-mute { background: #eef1f6; color: #4a5364; }
+.status-tag.tone-positive { background: var(--draw-bg); color: var(--sell); }
+.status-tag.tone-warm { background: var(--away-bg); color: #8a6212; }
+.status-tag.tone-mute { background: var(--canvas); color: var(--muted); }
 </style>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Bell, Moon, Search, UserCircle } from '@lucide/vue'
+import { Bell, Moon, Search, Sun, UserCircle } from '@lucide/vue'
 
 const route = useRoute()
 const { isLoggedIn, userName, tier, logout } = useAuth()
+const { isDark, toggle } = useTheme()
 
 const tierLabel: Record<string, string> = {
   Free: '免费版',
@@ -70,8 +71,9 @@ async function handleLogout() {
         <button class="action-btn focus-ring" aria-label="消息">
           <Bell :size="16" />
         </button>
-        <button class="action-btn focus-ring" aria-label="夜间模式">
-          <Moon :size="16" />
+        <button class="action-btn focus-ring" :aria-label="isDark ? '日间模式' : '夜间模式'" @click="toggle()">
+          <Sun v-if="isDark" :size="16" />
+          <Moon v-else :size="16" />
         </button>
 
         <div v-if="isLoggedIn" class="user-chip focus-ring">
@@ -93,9 +95,9 @@ async function handleLogout() {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: #ffffff;
-  border-bottom: 2px solid #1a8cd3;
-  box-shadow: 0 1px 6px rgba(26, 34, 51, 0.08);
+  background: var(--panel);
+  border-bottom: 2px solid var(--brand);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
 }
 
 .nav-inner {
@@ -119,7 +121,7 @@ async function handleLogout() {
   font-size: 1.4rem;
   font-weight: 900;
   letter-spacing: 0.02em;
-  background: linear-gradient(120deg, #1a8cd3 0%, #6e5aaf 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -127,7 +129,7 @@ async function handleLogout() {
 }
 
 .brand-sub {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -144,7 +146,7 @@ async function handleLogout() {
   position: relative;
   align-items: center;
   padding: 0 14px;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.92rem;
   font-weight: 760;
   letter-spacing: 0.01em;
@@ -152,11 +154,11 @@ async function handleLogout() {
 }
 
 .nav-link:hover {
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .nav-link.active {
-  color: #1a8cd3;
+  color: var(--brand);
   font-weight: 820;
 }
 
@@ -167,7 +169,7 @@ async function handleLogout() {
   bottom: -2px;
   left: 14px;
   height: 3px;
-  background: #1a8cd3;
+  background: var(--brand);
   border-radius: 3px 3px 0 0;
 }
 
@@ -185,12 +187,12 @@ async function handleLogout() {
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: #4a5364;
+  color: var(--muted);
 }
 
 .action-btn:hover {
-  background: #e2f1fa;
-  color: #1672b3;
+  background: var(--brand-tint);
+  color: var(--brand-deep);
 }
 
 .user-chip {
@@ -199,10 +201,10 @@ async function handleLogout() {
   gap: 6px;
   margin-left: 8px;
   padding: 4px 10px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #f3f6fb;
-  color: #1a2233;
+  background: var(--surface);
+  color: var(--ink);
   font-size: 0.84rem;
   font-weight: 760;
 }
@@ -222,20 +224,20 @@ async function handleLogout() {
   letter-spacing: 0.02em;
 }
 
-.tier-free      { background: #eef1f6; color: #4a5364; }
-.tier-expert    { background: #e2f1fa; color: #1672b3; }
-.tier-gold      { background: #fff4d8; color: #8a6212; }
-.tier-emerald   { background: #e6f3e6; color: #246b3b; }
+.tier-free      { background: var(--chip-mute-bg); color: var(--chip-mute-fg); }
+.tier-expert    { background: var(--brand-tint); color: var(--brand-deep); }
+.tier-gold      { background: var(--away-bg); color: #8a6212; }
+.tier-emerald   { background: var(--draw-bg); color: var(--sell); }
 .tier-ruby      { background: #fde0e7; color: #b1253c; }
-.tier-platinum  { background: linear-gradient(120deg, #6e5aaf 0%, #1a8cd3 100%); color: #fff; }
+.tier-platinum  { background: linear-gradient(120deg, var(--accent) 0%, var(--brand) 100%); color: #fff; }
 
 .logout-link {
   padding: 0 0 0 8px;
   margin-left: 4px;
   border: 0;
-  border-left: 1px solid #c4ccd9;
+  border-left: 1px solid var(--line);
   background: transparent;
-  color: #d6324c;
+  color: var(--buy);
   font-size: 0.78rem;
   font-weight: 720;
   cursor: pointer;
@@ -247,14 +249,14 @@ async function handleLogout() {
   margin-left: 6px;
   padding: 5px 14px;
   border-radius: 5px;
-  background: #1a8cd3;
+  background: var(--brand);
   color: #fff;
   font-size: 0.86rem;
   font-weight: 800;
 }
 
 .login-chip:hover {
-  background: #1672b3;
+  background: var(--brand-deep);
 }
 
 @media (max-width: 1180px) {

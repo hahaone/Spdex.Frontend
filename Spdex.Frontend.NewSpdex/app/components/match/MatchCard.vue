@@ -131,9 +131,9 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 <style scoped>
 .match-card {
   display: block;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
 }
@@ -144,8 +144,8 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   justify-content: space-between;
   gap: 8px;
   padding: 6px 9px;
-  border-bottom: 1px solid #eaeef4;
-  background: linear-gradient(180deg, #f9fbfd 0%, #f3f6fb 100%);
+  border-bottom: 1px solid var(--divider);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 100%);
 }
 
 .league {
@@ -170,7 +170,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 }
 
 .name {
-  color: #1a2233;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -195,15 +195,15 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   letter-spacing: 0.02em;
 }
 
-.st-upcoming { background: #eef1f6; color: #6b7280; }
-.st-started { background: #e7f6ee; color: #1f9d57; }
-.st-finished { background: #e9edf3; color: #51607a; }
+.st-upcoming { background: var(--canvas); color: var(--muted); }
+.st-started { background: var(--draw-bg); color: var(--sell); }
+.st-finished { background: var(--surface); color: var(--muted); }
 
 .live-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #21b06a;
+  background: var(--sell);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -213,7 +213,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 }
 
 .kick-off {
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 760;
 }
@@ -225,22 +225,22 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   gap: 10px;
   padding: 3px 9px;
   background: #fbfdff;
-  border-bottom: 1px solid #eaeef4;
+  border-bottom: 1px solid var(--divider);
 }
 
-.sc-label { font-size: 0.64rem; font-weight: 800; color: #1f9d57; }
-.sc-main { font-size: 1.05rem; font-weight: 880; color: #1a2233; letter-spacing: 0.05em; }
-.sc-half { font-size: 0.7rem; font-weight: 720; color: #6b7280; }
+.sc-label { font-size: 0.64rem; font-weight: 800; color: var(--sell); }
+.sc-main { font-size: 1.05rem; font-weight: 880; color: var(--ink); letter-spacing: 0.05em; }
+.sc-half { font-size: 0.7rem; font-weight: 720; color: var(--muted); }
 
 .grid-legend {
   display: grid;
   grid-template-columns: minmax(60px, 1.05fr) 46px 52px minmax(58px, 0.95fr);
   padding: 2px 0;
-  background: #fff;
+  background: var(--panel);
   border-bottom: 1px solid #f0f3f8;
   font-size: 0.6rem;
   font-weight: 760;
-  color: #9aa3b0;
+  color: var(--soft);
 }
 
 .grid-legend span { padding: 0 8px; text-align: center; }
@@ -251,8 +251,8 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   display: grid;
   grid-template-columns: minmax(60px, 1.05fr) 46px 52px minmax(58px, 0.95fr);
   gap: 1px;
-  background: #eaeef4;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--divider);
+  border-bottom: 1px solid var(--divider);
 }
 
 .cell {
@@ -260,7 +260,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   align-items: center;
   min-height: 27px;
   padding: 3px 8px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.86rem;
   font-weight: 720;
 }
@@ -270,11 +270,11 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .selection.handicap {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -282,7 +282,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 .odds {
   justify-content: center;
   background: #f3f9fe;
-  color: #1672b3;
+  color: var(--brand-deep);
   font-weight: 800;
 }
 
@@ -301,7 +301,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   background: rgba(26, 140, 211, 0.16);
 }
 
-.bfidx b { position: relative; color: #1672b3; font-weight: 760; }
+.bfidx b { position: relative; color: var(--brand-deep); font-weight: 760; }
 
 .turnover {
   position: relative;
@@ -319,7 +319,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   background: rgba(46, 156, 95, 0.16);
 }
 
-.turnover b { position: relative; font-weight: 740; color: #1a2233; }
+.turnover b { position: relative; font-weight: 740; color: var(--ink); }
 
 .meta-foot {
   display: flex;
@@ -327,7 +327,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   flex-wrap: wrap;
   gap: 5px;
   padding: 6px 9px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.7rem;
   font-weight: 720;
 }
@@ -336,15 +336,15 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   padding: 1px 6px;
   border-radius: 3px;
   background: #f1f4f9;
-  color: #4a5364;
+  color: var(--muted);
 }
 
-.m-chip b { font-weight: 800; color: #1a2233; }
-.m-chip.kelly { background: #e9f7ef; color: #246b3b; }
-.m-chip.kelly b { color: #246b3b; }
+.m-chip b { font-weight: 800; color: var(--ink); }
+.m-chip.kelly { background: #e9f7ef; color: var(--sell); }
+.m-chip.kelly b { color: var(--sell); }
 .m-chip.poly { background: #efeaf8; color: #5a3fa0; }
 .m-chip.poly b { color: #5a3fa0; }
-.m-chip.euro { background: #fff8e3; color: #8a6212; }
+.m-chip.euro { background: var(--away-bg); color: #8a6212; }
 .m-chip.euro b { color: #8a6212; }
 
 .big-bet {
@@ -355,15 +355,15 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   letter-spacing: 0.01em;
 }
 
-.big-bet.side-home { background: #e2f1fa; color: #1672b3; }
-.big-bet.side-away { background: #fff4d8; color: #8a6212; }
-.big-bet.side-draw { background: #eef1f6; color: #4a5364; }
-.big-bet.side-mute { background: #eef1f6; color: #6b7280; }
+.big-bet.side-home { background: var(--brand-tint); color: var(--brand-deep); }
+.big-bet.side-away { background: var(--away-bg); color: #8a6212; }
+.big-bet.side-draw { background: var(--canvas); color: var(--muted); }
+.big-bet.side-mute { background: var(--canvas); color: var(--muted); }
 
 .chev {
   flex: 0 0 auto;
   margin-left: auto;
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 @media (max-width: 370px) {

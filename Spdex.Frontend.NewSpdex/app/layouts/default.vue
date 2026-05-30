@@ -1,3 +1,13 @@
+<script setup lang="ts">
+const route = useRoute()
+const { maybeAutoStart } = useOnboarding()
+
+onMounted(() => {
+  // 仅首页首次访问自动弹新手引导（看过一次后 cookie 记 seen）
+  if (route.path === '/') maybeAutoStart()
+})
+</script>
+
 <template>
   <div class="viewport-shell">
     <DesktopNav class="desktop-only" />
@@ -10,6 +20,7 @@
       </main>
       <BottomNav class="mobile-only" />
     </div>
+    <OnboardingTour />
   </div>
 </template>
 
@@ -21,7 +32,7 @@
 .app-frame {
   min-height: 100vh;
   margin: 0 auto;
-  background: #f3f6fb;
+  background: var(--surface);
 }
 
 .app-content {
@@ -41,9 +52,9 @@
 @media (min-width: 768px) and (max-width: 1023px) {
   .app-frame {
     max-width: 720px;
-    border-right: 1px solid #dde2eb;
-    border-left: 1px solid #dde2eb;
-    box-shadow: 0 12px 32px rgba(26, 34, 51, 0.10);
+    border-right: 1px solid var(--line);
+    border-left: 1px solid var(--line);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.10);
   }
 }
 

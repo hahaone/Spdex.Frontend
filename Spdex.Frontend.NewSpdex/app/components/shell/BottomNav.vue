@@ -47,9 +47,9 @@ function isActive(to: string): boolean {
   max-width: 520px;
   margin: 0 auto;
   padding: 0 0 env(safe-area-inset-bottom);
-  background: #ffffff;
-  border-top: 1px solid #dde2eb;
-  box-shadow: 0 -2px 10px rgba(26, 34, 51, 0.05);
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
 }
 
 .nav-item {
@@ -59,7 +59,7 @@ function isActive(to: string): boolean {
   height: 52px;
   place-items: center;
   gap: 1px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.7rem;
   font-weight: 740;
   line-height: 1;
@@ -72,7 +72,7 @@ function isActive(to: string): boolean {
 }
 
 .nav-item.active {
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .nav-item.active::before {
@@ -82,12 +82,12 @@ function isActive(to: string): boolean {
   left: 18%;
   right: 18%;
   height: 2px;
-  background: #1a8cd3;
+  background: var(--brand);
   border-radius: 0 0 2px 2px;
 }
 
 .nav-item:active {
-  background: #f3f6fb;
+  background: var(--surface);
 }
 
 @media (max-width: 370px) {
@@ -105,8 +105,8 @@ function isActive(to: string): boolean {
   .bottom-nav {
     right: calc((100% - 520px) / 2);
     left: calc((100% - 520px) / 2);
-    border-right: 1px solid #dde2eb;
-    border-left: 1px solid #dde2eb;
+    border-right: 1px solid var(--line);
+    border-left: 1px solid var(--line);
     border-radius: 10px 10px 0 0;
   }
 }

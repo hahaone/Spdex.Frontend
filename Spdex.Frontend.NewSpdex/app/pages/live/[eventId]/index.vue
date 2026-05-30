@@ -185,7 +185,7 @@ const priceCompare = computed(() => {
   padding: 1px 6px;
   border-radius: 2px;
   background: #e6f2ff;
-  color: #1672b3;
+  color: var(--brand-deep);
   font-size: 0.7rem;
   font-weight: 760;
 }
@@ -196,18 +196,18 @@ const priceCompare = computed(() => {
   gap: 3px;
   padding: 1px 6px;
   border-radius: 2px;
-  background: #f1f3f8;
-  color: #6b7280;
+  background: var(--surface);
+  color: var(--muted);
   font-size: 0.68rem;
   font-weight: 720;
 }
 
 .empty-section {
   padding: 20px 12px;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 4px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   text-align: center;
   font-size: 0.78rem;
   font-weight: 720;
@@ -217,8 +217,8 @@ const priceCompare = computed(() => {
   display: grid;
   gap: 7px;
   padding: 8px 12px 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
-  border-bottom: 1px solid #eaeef4;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--divider);
 }
 
 .back {
@@ -226,7 +226,7 @@ const priceCompare = computed(() => {
   width: fit-content;
   align-items: center;
   gap: 4px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -237,7 +237,7 @@ const priceCompare = computed(() => {
   gap: 6px;
   font-size: 0.8rem;
   font-weight: 760;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .code {
@@ -254,7 +254,7 @@ const priceCompare = computed(() => {
   margin-left: auto;
   padding: 1px 7px;
   border-radius: 3px;
-  background: #d6324c;
+  background: var(--buy);
   color: #fff;
   font-size: 0.76rem;
   font-weight: 800;
@@ -287,15 +287,15 @@ const priceCompare = computed(() => {
 }
 
 .score-block .num:first-child {
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .score-block .num:last-child {
-  color: #d6324c;
+  color: var(--buy);
 }
 
 .colon {
-  color: #9aa3b0;
+  color: var(--soft);
   font-size: 1.1rem;
 }
 
@@ -304,7 +304,7 @@ const priceCompare = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -336,12 +336,12 @@ const priceCompare = computed(() => {
 }
 
 .card-badge.red {
-  background: #d6324c;
+  background: var(--buy);
 }
 
 .card-badge.yellow {
   background: #d5b300;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .venue-scroll {
@@ -349,17 +349,17 @@ const priceCompare = computed(() => {
   overflow-x: auto;
   gap: 6px;
   padding: 7px 10px;
-  background: #fff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 
 .venue-chip {
   flex: 0 0 auto;
   padding: 4px 8px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 3px;
-  background: #f7fafd;
-  color: #4a5364;
+  background: var(--surface);
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
@@ -369,8 +369,8 @@ section.stats,
 section.odds,
 section.compare {
   padding: 8px 10px;
-  background: #fff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 
 .section-title {
@@ -384,7 +384,7 @@ section.compare {
   place-items: center;
   border-radius: 3px;
   background: rgba(26, 140, 211, 0.14);
-  color: #1672b3;
+  color: var(--brand-deep);
 }
 
 .timeline-grid,
@@ -393,8 +393,8 @@ section.compare {
 .compare-grid {
   display: grid;
   gap: 1px;
-  background: #eaeef4;
-  border: 1px solid #eaeef4;
+  background: var(--divider);
+  border: 1px solid var(--divider);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -405,7 +405,7 @@ section.compare {
   gap: 8px;
   align-items: center;
   padding: 6px 9px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.78rem;
 }
 
@@ -424,7 +424,7 @@ section.compare {
 
 .event-row .minute {
   font-weight: 800;
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .event-row.away .minute {
@@ -438,11 +438,11 @@ section.compare {
 }
 
 .event-row.goal b {
-  color: #2e9c5f;
+  color: var(--sell);
 }
 
 .event-row.red b {
-  color: #d6324c;
+  color: var(--buy);
 }
 
 .event-row.yellow b {
@@ -455,28 +455,28 @@ section.compare {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .stat-row .lbl {
   padding: 0 8px;
   font-size: 0.76rem;
   font-weight: 780;
-  color: #4a5364;
+  color: var(--muted);
 }
 
 .stat-row .home-val {
   text-align: right;
   font-weight: 800;
   font-size: 0.92rem;
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .stat-row .away-val {
   text-align: left;
   font-weight: 800;
   font-size: 0.92rem;
-  color: #d6324c;
+  color: var(--buy);
 }
 
 .odds-row,
@@ -485,7 +485,7 @@ section.compare {
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.78rem;
 }
 
@@ -495,7 +495,7 @@ section.compare {
 
 .odds-row .lbl {
   font-weight: 800;
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-size: 0.76rem;
 }
 
@@ -505,7 +505,7 @@ section.compare {
 }
 
 .odds-row .num.line {
-  color: #1672b3;
+  color: var(--brand-deep);
 }
 
 .compare-row {
@@ -514,14 +514,14 @@ section.compare {
 
 .compare-row .book {
   font-weight: 800;
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.78rem;
 }
 
 .compare-row .num {
   text-align: center;
   font-weight: 740;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .book-count {
@@ -552,7 +552,7 @@ section.compare {
 
   .header,
   .venue-scroll {
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
     border-radius: 6px;
   }
 
@@ -580,7 +580,7 @@ section.compare {
   section.odds,
   section.compare {
     border-radius: 6px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
   }
 
   section.timeline {

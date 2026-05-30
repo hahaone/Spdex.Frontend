@@ -220,7 +220,7 @@ function goBack() {
   gap: 3px;
   border: none;
   background: transparent;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -251,10 +251,10 @@ function goBack() {
   column-gap: 11px;
   align-items: center;
   padding: 12px 14px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   cursor: pointer;
   text-align: left;
 }
@@ -270,12 +270,12 @@ function goBack() {
 }
 
 .channel-btn span {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
 
-.channel-btn.yft { border-color: #1a8cd3; }
+.channel-btn.yft { border-color: var(--brand); }
 .channel-btn.alipay { border-color: #0984e3; }
 .channel-btn.silk { border-color: #c8a64b; }
 
@@ -291,15 +291,15 @@ function goBack() {
   gap: 8px;
   place-items: center;
   padding: 30px 16px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
   font-size: 0.86rem;
 }
 
 .error-band {
-  border-color: #d6324c;
+  border-color: var(--buy);
   background: #fde8eb;
   color: #b1253c;
 }
@@ -312,7 +312,7 @@ function goBack() {
   padding: 8px 14px;
   border: 1px solid #b1253c;
   border-radius: 4px;
-  background: #fff;
+  background: var(--panel);
   color: #b1253c;
   font-size: 0.82rem;
   font-weight: 800;
@@ -325,9 +325,9 @@ function goBack() {
   display: grid;
   gap: 8px;
   padding: 14px 14px 16px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .yft-band h2,
@@ -348,9 +348,9 @@ function goBack() {
 .qr-box img {
   width: 200px;
   height: 200px;
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 4px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .qr-fallback {
@@ -361,27 +361,27 @@ function goBack() {
 }
 
 .pay-link {
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
   word-break: break-all;
 }
 
 .success-band {
-  border-color: #246b3b;
-  background: linear-gradient(180deg, #e9f7ef 0%, #fff 80%);
-  color: #1a2233;
+  border-color: var(--sell);
+  background: linear-gradient(180deg, #e9f7ef 0%, var(--panel) 80%);
+  color: var(--ink);
   text-align: center;
 }
 
 .success-band svg {
   margin: 4px auto 0;
-  color: #246b3b;
+  color: var(--sell);
 }
 
 .hint {
   margin: 0;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
   text-align: center;
@@ -395,9 +395,9 @@ function goBack() {
   gap: 5px;
   margin-top: 6px;
   padding: 9px 14px;
-  border: 1px solid #1a8cd3;
+  border: 1px solid var(--brand);
   border-radius: 4px;
-  background: #1a8cd3;
+  background: var(--brand);
   color: #fff;
   font-size: 0.86rem;
   font-weight: 800;

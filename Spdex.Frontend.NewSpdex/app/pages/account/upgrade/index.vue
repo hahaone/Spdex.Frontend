@@ -8,12 +8,12 @@ const { getSilkBalance, getCustomerService } = useCreateOrder()
 
 // 当前用户余额（用于锦囊不足提示）
 const silkBalance = ref<number>(0)
-const customerWechat = ref<string>('')
+const customerQQ = ref<string>('')
 
 onMounted(async () => {
   const [balance, cs] = await Promise.all([getSilkBalance(), getCustomerService()])
   silkBalance.value = Math.round(balance?.total ?? 0)
-  customerWechat.value = cs?.wechat ?? 'spdex2026'
+  customerQQ.value = cs?.qq || '2735629769'
 })
 
 // V3 风格的卡片配色
@@ -130,10 +130,10 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
           <b>工作室版需联系客服开通</b>
         </div>
         <div class="studio-body">
-          <span>客服微信：</span>
-          <b class="num">{{ customerWechat }}</b>
+          <span>客服 QQ：</span>
+          <b class="num">{{ customerQQ }}</b>
         </div>
-        <p class="studio-hint">工作室版含定制研究群、专属信号、独立 Q 系统。请添加客服微信沟通。</p>
+        <p class="studio-hint">工作室版含定制研究群、专属信号、独立 Q 系统。请添加客服 QQ 沟通。</p>
       </section>
 
       <!-- 支付方式说明 -->
@@ -172,7 +172,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
   text-decoration: none;
@@ -190,9 +190,9 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   align-items: center;
   gap: 3px;
   padding: 3px 9px;
-  border: 1px solid #fce4a8;
+  border: 1px solid var(--away-strong);
   border-radius: 3px;
-  background: #fff8e3;
+  background: var(--away-bg);
   color: #8a6212;
   font-size: 0.74rem;
   font-weight: 800;
@@ -204,7 +204,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
 .empty {
   padding: 28px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.84rem;
 }
 
@@ -224,17 +224,17 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   display: grid;
   gap: 8px;
   padding: 11px 12px 12px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
   position: relative;
 }
 
-.plan-card.tone-emerald { border-color: #2e9c5f; background: linear-gradient(180deg, #e9f7ef 0%, #fff 80%); }
-.plan-card.tone-platinum { border-color: #6e5aaf; background: linear-gradient(180deg, #ece5f4 0%, #fff 80%); }
-.plan-card.tone-gold { border-color: #c8a64b; background: linear-gradient(180deg, #fff4d8 0%, #fff 80%); }
-.plan-card.tone-ruby { border-color: #b1253c; background: linear-gradient(180deg, #fde8eb 0%, #fff 80%); }
-.plan-card.tone-expert { border-color: #1a8cd3; }
+.plan-card.tone-emerald { border-color: var(--sell); background: linear-gradient(180deg, #e9f7ef 0%, var(--panel) 80%); }
+.plan-card.tone-platinum { border-color: var(--accent); background: linear-gradient(180deg, var(--lavender) 0%, var(--panel) 80%); }
+.plan-card.tone-gold { border-color: #c8a64b; background: linear-gradient(180deg, var(--away-bg) 0%, var(--panel) 80%); }
+.plan-card.tone-ruby { border-color: #b1253c; background: linear-gradient(180deg, #fde8eb 0%, var(--panel) 80%); }
+.plan-card.tone-expert { border-color: var(--brand); }
 .plan-card.tone-free { border-color: #c0c8d4; }
 
 .card-head h2 { margin: 0; font-size: 1.04rem; font-weight: 820; }
@@ -255,7 +255,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
 
 .desc {
   margin: 0;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.76rem;
   font-weight: 720;
   line-height: 1.45;
@@ -267,7 +267,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   right: 9px;
   padding: 2px 7px;
   border-radius: 3px;
-  background: #246b3b;
+  background: var(--sell);
   color: #fff;
   font-size: 0.66rem;
   font-weight: 800;
@@ -284,10 +284,10 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   font-size: 0.82rem;
   font-weight: 760;
   cursor: pointer;
@@ -296,7 +296,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
 
 .price-row:active { background: #f4f6fb; }
 
-.stage-name { color: #4a5364; }
+.stage-name { color: var(--muted); }
 
 .price-amount { color: #b1253c; font-weight: 820; }
 
@@ -311,7 +311,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   margin: 0;
   padding: 6px 0;
   text-align: center;
-  color: #246b3b;
+  color: var(--sell);
   font-size: 0.8rem;
   font-weight: 800;
 }
@@ -321,7 +321,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   display: grid;
   gap: 4px;
   padding: 11px 12px 12px;
-  border: 1px dashed #6e5aaf;
+  border: 1px dashed var(--accent);
   border-radius: 5px;
   background: #faf8fd;
 }
@@ -330,26 +330,26 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-size: 0.86rem;
   font-weight: 820;
 }
 
 .studio-body {
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.82rem;
   font-weight: 740;
 }
 
 .studio-body b {
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-weight: 820;
   letter-spacing: 0.02em;
 }
 
 .studio-hint {
   margin: 0;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
   line-height: 1.55;
@@ -360,9 +360,9 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   display: grid;
   gap: 6px;
   padding: 9px 11px 10px;
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .pay-info h2 {
@@ -382,10 +382,10 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   align-items: center;
   gap: 3px;
   padding: 3px 9px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 3px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 740;
 }
@@ -395,7 +395,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   align-items: center;
   gap: 4px;
   margin: 0;
-  color: #246b3b;
+  color: var(--sell);
   font-size: 0.72rem;
   font-weight: 720;
   line-height: 1.55;

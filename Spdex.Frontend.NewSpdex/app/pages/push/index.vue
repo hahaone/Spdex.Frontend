@@ -145,13 +145,13 @@ const permLabel = computed(() => {
   align-items: center;
   gap: 5px;
   margin: 0;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 1rem;
   font-weight: 820;
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
@@ -160,10 +160,10 @@ const permLabel = computed(() => {
   display: inline-grid;
   min-height: 30px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 
 .spinning { animation: spin 0.8s linear infinite; }
@@ -174,22 +174,22 @@ const permLabel = computed(() => {
   align-items: center;
   gap: 5px;
   padding: 6px 9px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
 
 .perm-banner.active {
-  border-color: #2e9c5f;
+  border-color: var(--sell);
   background: #e9f7ef;
-  color: #246b3b;
+  color: var(--sell);
 }
 
 .perm-banner.denied {
-  border-color: #d6324c;
+  border-color: var(--buy);
   background: #fde0e7;
   color: #b1253c;
 }
@@ -197,9 +197,9 @@ const permLabel = computed(() => {
 .perm-btn {
   margin-left: auto;
   padding: 3px 9px;
-  border: 1px solid #1a8cd3;
+  border: 1px solid var(--brand);
   border-radius: 3px;
-  background: #1a8cd3;
+  background: var(--brand);
   color: #fff;
   font-size: 0.74rem;
   font-weight: 800;
@@ -211,17 +211,17 @@ const permLabel = computed(() => {
   gap: 5px;
   padding: 32px 16px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.84rem;
   font-weight: 720;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 5px;
   background: #f9fafc;
 }
 
 .empty p {
   margin: 4px 0 0;
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.92rem;
   font-weight: 800;
 }
@@ -235,10 +235,10 @@ const permLabel = computed(() => {
   display: grid;
   gap: 3px;
   padding: 8px 11px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   text-decoration: none;
 }
 
@@ -259,7 +259,7 @@ const permLabel = computed(() => {
 }
 
 .trig {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .card-body b {
@@ -283,18 +283,18 @@ const permLabel = computed(() => {
 .status-tag {
   padding: 1px 6px;
   border-radius: 2px;
-  background: #eef1f6;
-  color: #4a5364;
+  background: var(--canvas);
+  color: var(--muted);
   font-weight: 800;
 }
 
 .status-tag.exec {
-  background: #e6f3e6;
-  color: #246b3b;
+  background: var(--draw-bg);
+  color: var(--sell);
 }
 
 .status-tag.cond {
-  background: #fff4d8;
+  background: var(--away-bg);
   color: #8a6212;
 }
 
@@ -308,6 +308,6 @@ const permLabel = computed(() => {
 
 .chev {
   margin-left: auto;
-  color: #1a8cd3;
+  color: var(--brand);
 }
 </style>

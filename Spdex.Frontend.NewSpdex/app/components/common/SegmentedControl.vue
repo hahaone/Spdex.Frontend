@@ -48,10 +48,10 @@ const emit = defineEmits<{
   min-height: 30px;
   gap: 4px;
   padding: 0 11px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
   font-size: 0.8rem;
   font-weight: 740;
   white-space: nowrap;
@@ -59,23 +59,23 @@ const emit = defineEmits<{
 }
 
 .segmented-item:active {
-  background: #f3f6fb;
+  background: var(--surface);
 }
 
 .segmented.tone-brand .segmented-item.active {
-  border-color: #1a8cd3;
-  background: #1a8cd3;
+  border-color: var(--brand);
+  background: var(--brand);
   color: #fff;
 }
 
 .segmented.tone-accent .segmented-item.active {
-  border-color: #6e5aaf;
-  background: #6e5aaf;
+  border-color: var(--accent);
+  background: var(--accent);
   color: #fff;
 }
 
 .segmented.tone-ink .segmented-item.active {
-  border-color: #1a2233;
+  border-color: var(--ink);
   background: #1a2233;
   color: #fff;
 }

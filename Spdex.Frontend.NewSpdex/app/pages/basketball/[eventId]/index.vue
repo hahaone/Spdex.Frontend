@@ -182,7 +182,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 .loading, .empty {
   padding: 40px 16px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.86rem;
   font-weight: 720;
 }
@@ -191,10 +191,10 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   align-items: center;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 6px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -203,10 +203,10 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   align-items: center;
   justify-content: center;
   height: 180px;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 4px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -214,15 +214,15 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   display: grid;
   gap: 6px;
   padding: 8px 12px 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
-  border-bottom: 1px solid #eaeef4;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--divider);
 }
 .back {
   display: inline-flex;
   width: fit-content;
   align-items: center;
   gap: 4px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -232,12 +232,12 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   gap: 5px;
   font-size: 0.8rem;
   font-weight: 760;
-  color: #1a2233;
+  color: var(--ink);
 }
 .code {
   padding: 0 5px;
   border-radius: 3px;
-  background: #246b3b;
+  background: var(--sell);
   color: #fff;
   font-size: 0.68rem;
   letter-spacing: 0.04em;
@@ -245,7 +245,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 }
 .kick {
   margin-left: 4px;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.76rem;
 }
 .teams {
@@ -268,7 +268,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 .handicap {
   padding: 2px 8px;
   border-radius: 3px;
-  background: #246b3b;
+  background: var(--sell);
   color: #fff;
   font-size: 0.82rem;
   font-weight: 800;
@@ -280,15 +280,15 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   justify-content: center;
   gap: 6px;
   flex-wrap: wrap;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
 .dot { opacity: 0.4; }
 .tab-band {
   padding: 8px 10px;
-  background: #ffffff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 .tab-row {
   display: grid;
@@ -299,19 +299,19 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 .band-label {
   font-size: 0.86rem;
   font-weight: 800;
-  color: #4f3f86;
+  color: var(--accent-deep);
 }
 .detail-grid { display: grid; }
 .all-grid {
   display: grid;
   gap: 8px;
   padding: 10px 10px;
-  background: #f3f6fb;
+  background: var(--surface);
 }
 .chart-preview {
   padding: 10px 12px;
-  background: #fff;
-  border-top: 1px solid #eaeef4;
+  background: var(--panel);
+  border-top: 1px solid var(--divider);
 }
 .chart-title-row {
   display: flex;
@@ -334,15 +334,15 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   width: 28px;
   height: 28px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 .quick-stats {
   padding: 10px 12px;
-  background: #fff;
-  border-top: 1px solid #eaeef4;
+  background: var(--panel);
+  border-top: 1px solid var(--divider);
 }
 .quick-stats h3 {
   margin: 0 0 8px;
@@ -354,14 +354,14 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   align-items: center;
   justify-content: space-between;
   padding: 5px 0;
-  border-top: 1px solid #eef1f6;
+  border-top: 1px solid var(--canvas);
   font-size: 0.8rem;
   font-weight: 720;
-  color: #4a5364;
+  color: var(--muted);
 }
 .stat-row:first-of-type { border-top: 0; }
 .stat-row b {
-  color: #1a2233;
+  color: var(--ink);
   font-weight: 780;
 }
 
@@ -370,14 +370,14 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   .match-header {
     border-radius: 6px;
     padding: 14px 18px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
   }
   .teams .team { font-size: 1.24rem; }
   .handicap { font-size: 0.96rem; }
   .tab-band {
     border-radius: 6px;
     padding: 12px 16px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
   }
   .detail-grid {
     grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
@@ -392,7 +392,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   }
   .chart-preview, .quick-stats {
     border-radius: 6px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
   }
 }
 

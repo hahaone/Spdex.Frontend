@@ -80,9 +80,9 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
 <style scoped>
 .live-card {
   display: block;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
 }
@@ -93,8 +93,8 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
   justify-content: space-between;
   gap: 6px;
   padding: 5px 9px;
-  background: linear-gradient(180deg, #f9fbfd 0%, #f3f6fb 100%);
-  border-bottom: 1px solid #eaeef4;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--divider);
 }
 
 .league {
@@ -117,7 +117,7 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
 }
 
 .name {
-  color: #1a2233;
+  color: var(--ink);
   white-space: nowrap;
 }
 
@@ -179,17 +179,17 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
 }
 
 .row-home-bg {
-  background: #dceefd;
-  color: #1a2233;
+  background: var(--home-bg);
+  color: var(--ink);
 }
 
 .row-away-bg {
-  background: #fff4d8;
-  color: #1a2233;
+  background: var(--away-bg);
+  color: var(--ink);
 }
 
 .model {
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -199,14 +199,14 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
   align-items: center;
   gap: 6px;
   padding: 3px 9px 5px;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
 
 .subline svg {
   margin-left: auto;
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 .side-cluster {
@@ -216,12 +216,12 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
 }
 
 .corner {
-  color: #4a5364;
+  color: var(--muted);
 }
 
 .half {
   padding: 0 4px;
-  color: #1a2233;
+  color: var(--ink);
   font-weight: 760;
 }
 
@@ -237,20 +237,20 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
 }
 
 .card-badge.red {
-  background: #d6324c;
+  background: var(--buy);
 }
 
 .card-badge.yellow {
   background: #d5b300;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .odds-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
-  background: #eaeef4;
-  border-top: 1px solid #eaeef4;
+  background: var(--divider);
+  border-top: 1px solid var(--divider);
 }
 
 .odds-row {
@@ -259,14 +259,14 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
   gap: 4px;
   align-items: center;
   padding: 4px 6px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.74rem;
   font-weight: 740;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .odds-row .lbl {
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -276,6 +276,6 @@ const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === '
 }
 
 .odds-row .num.line {
-  color: #1672b3;
+  color: var(--brand-deep);
 }
 </style>

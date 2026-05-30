@@ -82,8 +82,8 @@ function isNegative(value: unknown): boolean {
 <style scoped>
 .market-section {
   padding: 8px 10px 10px;
-  background: #ffffff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 
 .section-title {
@@ -97,10 +97,10 @@ function isNegative(value: unknown): boolean {
 }
 
 .table-wrap {
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
   overflow-x: auto;
-  background: #fff;
+  background: var(--panel);
 }
 
 .metric-table {
@@ -113,15 +113,15 @@ function isNegative(value: unknown): boolean {
 .metric-table th,
 .metric-table td {
   padding: 5px 7px;
-  border-bottom: 1px solid #eaeef4;
+  border-bottom: 1px solid var(--divider);
   text-align: right;
   white-space: nowrap;
   font-weight: 740;
 }
 
 .metric-table th {
-  background: #ece5f4;
-  color: #4f3f86;
+  background: var(--lavender);
+  color: var(--accent-deep);
   font-size: 0.7rem;
   letter-spacing: 0.02em;
   font-weight: 780;
@@ -137,7 +137,7 @@ function isNegative(value: unknown): boolean {
 }
 
 .metric-table th:first-child {
-  background: #dcd2ed;
+  background: var(--lavender-strong);
 }
 
 .metric-table tbody td.first-col {
@@ -149,15 +149,15 @@ function isNegative(value: unknown): boolean {
 }
 
 .metric-table tbody tr.row-home td.first-col {
-  background: #dceefd;
+  background: var(--home-bg);
 }
 
 .metric-table tbody tr.row-draw td.first-col {
-  background: #e6f3e6;
+  background: var(--draw-bg);
 }
 
 .metric-table tbody tr.row-away td.first-col {
-  background: #fff4d8;
+  background: var(--away-bg);
 }
 
 .extension-section {
@@ -166,7 +166,7 @@ function isNegative(value: unknown): boolean {
 
 .ext-head {
   padding: 2px 4px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 760;
   letter-spacing: 0.02em;
@@ -183,22 +183,22 @@ function isNegative(value: unknown): boolean {
   grid-template-columns: 30px repeat(2, minmax(0, 1fr));
   gap: 3px 8px;
   padding: 5px 8px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
   font-size: 0.73rem;
   font-weight: 720;
 }
 
 .extension-row.row-home {
-  border-color: #c4dff8;
+  border-color: var(--home-strong);
 }
 
 .extension-row.row-draw {
-  border-color: #c8e6c9;
+  border-color: var(--draw-strong);
 }
 
 .extension-row.row-away {
-  border-color: #fce4a8;
+  border-color: var(--away-strong);
 }
 
 .extension-row .ext-key {
@@ -206,23 +206,23 @@ function isNegative(value: unknown): boolean {
   align-self: center;
   font-size: 0.92rem;
   font-weight: 820;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .extension-row span {
   min-width: 0;
   overflow: hidden;
-  color: #4a5364;
+  color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .extension-row span b {
-  color: #1a2233;
+  color: var(--ink);
   font-weight: 760;
 }
 
 .extension-row span.negative b {
-  color: #d6324c;
+  color: var(--buy);
 }
 </style>

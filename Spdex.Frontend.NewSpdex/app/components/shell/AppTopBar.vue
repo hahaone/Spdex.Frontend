@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Bell, Moon, Search, Zap } from '@lucide/vue'
+import { Bell, Moon, Search, Sun, Zap } from '@lucide/vue'
 
 const route = useRoute()
+const { isDark, toggle } = useTheme()
 
 const title = computed(() => {
   if (route.path.startsWith('/football')) return '今日足球'
@@ -34,8 +35,9 @@ const title = computed(() => {
       <button class="icon-btn focus-ring" aria-label="消息">
         <Bell :size="17" />
       </button>
-      <button class="icon-btn focus-ring" aria-label="夜间模式">
-        <Moon :size="17" />
+      <button class="icon-btn focus-ring" :aria-label="isDark ? '日间模式' : '夜间模式'" @click="toggle()">
+        <Sun v-if="isDark" :size="17" />
+        <Moon v-else :size="17" />
       </button>
     </div>
   </header>
@@ -51,9 +53,9 @@ const title = computed(() => {
   align-items: center;
   min-height: 44px;
   padding: max(6px, env(safe-area-inset-top)) 10px 6px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
-  border-bottom: 2px solid #1a8cd3;
-  box-shadow: 0 1px 4px rgba(26, 34, 51, 0.06);
+  background: var(--panel);
+  border-bottom: 2px solid var(--brand);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .brand {
@@ -66,7 +68,7 @@ const title = computed(() => {
   font-size: 1.16rem;
   font-weight: 880;
   letter-spacing: 0.02em;
-  background: linear-gradient(120deg, #1a8cd3 0%, #6e5aaf 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -75,7 +77,7 @@ const title = computed(() => {
 .top-title {
   min-width: 0;
   padding: 0 8px;
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.95rem;
   font-weight: 780;
   text-align: center;
@@ -100,12 +102,12 @@ const title = computed(() => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #4a5364;
+  color: var(--muted);
 }
 
 .icon-btn:active {
-  background: #e2f1fa;
-  color: #1672b3;
+  background: var(--brand-tint);
+  color: var(--brand-deep);
 }
 
 @media (max-width: 370px) {

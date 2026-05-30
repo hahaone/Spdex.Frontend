@@ -93,8 +93,8 @@ function awayRed(m: typeof matches.value[number]): number {
   display: grid;
   gap: 6px;
   padding: 9px 10px;
-  background: #ffffff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 
 .filter-head {
@@ -110,7 +110,7 @@ function awayRed(m: typeof matches.value[number]): number {
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
@@ -123,7 +123,7 @@ function awayRed(m: typeof matches.value[number]): number {
 }
 
 .hint {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
@@ -132,10 +132,10 @@ function awayRed(m: typeof matches.value[number]): number {
   display: inline-grid;
   min-height: 30px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 
 .spinning { animation: spin 0.8s linear infinite; }
@@ -149,7 +149,7 @@ function awayRed(m: typeof matches.value[number]): number {
 
 .empty {
   padding: 30px 0;
-  color: #6b7280;
+  color: var(--muted);
   text-align: center;
   font-size: 0.84rem;
   font-weight: 720;
@@ -159,10 +159,10 @@ function awayRed(m: typeof matches.value[number]): number {
   display: grid;
   gap: 5px;
   padding: 8px 10px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
 }
 
@@ -173,7 +173,7 @@ function awayRed(m: typeof matches.value[number]): number {
 }
 
 .card-head .league {
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 740;
   white-space: nowrap;
@@ -185,7 +185,7 @@ function awayRed(m: typeof matches.value[number]): number {
 .card-head .minute {
   padding: 1px 6px;
   border-radius: 2px;
-  background: #d6324c;
+  background: var(--buy);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 820;
@@ -196,8 +196,8 @@ function awayRed(m: typeof matches.value[number]): number {
   display: grid;
   gap: 2px;
   padding: 3px 0;
-  border-top: 1px solid #eaeef4;
-  border-bottom: 1px solid #eaeef4;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
 }
 
 .row {
@@ -229,7 +229,7 @@ function awayRed(m: typeof matches.value[number]): number {
   font-weight: 800;
 }
 
-.card-badge.yellow { background: #fff4d8; color: #8a6212; }
+.card-badge.yellow { background: var(--away-bg); color: #8a6212; }
 .card-badge.red { background: #fde0e7; color: #b1253c; }
 
 .score {
@@ -244,7 +244,7 @@ function awayRed(m: typeof matches.value[number]): number {
   align-items: center;
   gap: 10px;
   padding-top: 3px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
@@ -255,12 +255,12 @@ function awayRed(m: typeof matches.value[number]): number {
   gap: 3px;
 }
 
-.stat-label { color: #6b7280; }
-.stat-val { color: #1a2233; font-weight: 780; }
+.stat-label { color: var(--muted); }
+.stat-val { color: var(--ink); font-weight: 780; }
 
 .chevron {
   margin-left: auto;
-  color: #1a8cd3;
+  color: var(--brand);
 }
 
 @media (min-width: 1024px) {
@@ -272,7 +272,7 @@ function awayRed(m: typeof matches.value[number]): number {
   .live-filters {
     gap: 10px;
     padding: 14px 16px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
     border-radius: 6px;
     box-shadow: 0 2px 8px rgba(26, 34, 51, 0.05);
   }

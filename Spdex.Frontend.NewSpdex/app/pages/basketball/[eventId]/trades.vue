@@ -103,22 +103,22 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   gap: 6px;
   margin: 12px 16px;
   padding: 10px 12px;
-  border: 1px dashed #fce4a8;
+  border: 1px dashed var(--away-strong);
   border-radius: 4px;
-  background: #fff8e3;
+  background: var(--away-bg);
   color: #8a6212;
   font-size: 0.82rem;
   font-weight: 720;
 }
 .access-lock.pending {
-  border-color: #dcd2ed;
+  border-color: var(--lavender-strong);
   background: #faf8fd;
-  color: #6e5aaf;
+  color: var(--accent);
 }
 .empty-row {
   padding: 18px 12px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.8rem;
   font-weight: 720;
 }
@@ -129,15 +129,15 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   display: grid;
   gap: 6px;
   padding: 8px 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
-  border-bottom: 1px solid #eaeef4;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--divider);
 }
 .back {
   display: inline-flex;
   width: fit-content;
   align-items: center;
   gap: 4px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -145,14 +145,14 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.92rem;
   font-weight: 780;
 }
 .line {
   padding: 1px 6px;
   border-radius: 3px;
-  background: #246b3b;
+  background: var(--sell);
   color: #fff;
   font-size: 0.74rem;
   font-weight: 800;
@@ -161,8 +161,8 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   display: grid;
   gap: 6px;
   padding: 8px 10px;
-  background: #fff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 .selection-row {
   display: grid;
@@ -174,14 +174,14 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   display: inline-grid;
   min-height: 28px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 .trade-band {
   padding: 8px 10px 12px;
-  background: #fff;
+  background: var(--panel);
 }
 .section-title {
   margin-bottom: 6px;
@@ -197,7 +197,7 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   opacity: 0.86;
 }
 .trade-table {
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -211,19 +211,19 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   font-weight: 740;
 }
 .trade-head {
-  background: #ece5f4;
-  color: #4f3f86;
+  background: var(--lavender);
+  color: var(--accent-deep);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
 .trade-row {
-  border-top: 1px solid #eaeef4;
+  border-top: 1px solid var(--divider);
 }
 .trade-row.row-home { background: #eaf4fe; }
-.trade-row.row-home:nth-child(odd) { background: #dceefd; }
+.trade-row.row-home:nth-child(odd) { background: var(--home-bg); }
 .trade-row.row-away { background: #fff9e6; }
-.trade-row.row-away:nth-child(odd) { background: #fff4d8; }
+.trade-row.row-away:nth-child(odd) { background: var(--away-bg); }
 .attr {
   display: inline-grid;
   place-items: center;
@@ -232,5 +232,5 @@ const { rows, status: tradeStatus, count, pending, refresh } = useTradeTicks(eve
   font-weight: 760;
 }
 .attr.buy { background: rgba(214, 50, 76, 0.16); color: #b1253c; }
-.attr.sell { background: rgba(46, 156, 95, 0.16); color: #246b3b; }
+.attr.sell { background: rgba(46, 156, 95, 0.16); color: var(--sell); }
 </style>

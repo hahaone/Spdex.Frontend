@@ -63,7 +63,7 @@ defineProps<{
 }
 
 .placeholder.volume .placeholder-head {
-  background: linear-gradient(120deg, #6e5aaf 0%, #4f3f86 100%);
+  background: linear-gradient(120deg, var(--accent) 0%, var(--accent-deep) 100%);
 }
 
 .placeholder.signals .placeholder-head {
@@ -71,7 +71,7 @@ defineProps<{
 }
 
 .placeholder.account .placeholder-head {
-  background: linear-gradient(120deg, #1a8cd3 0%, #6e5aaf 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
 }
 
 .placeholder-head svg {
@@ -113,19 +113,19 @@ p {
   align-items: center;
   justify-content: space-between;
   padding: 9px 11px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.84rem;
   font-weight: 740;
 }
 
 .row span {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .row b {
-  color: #1a2233;
+  color: var(--ink);
   font-weight: 800;
 }
 

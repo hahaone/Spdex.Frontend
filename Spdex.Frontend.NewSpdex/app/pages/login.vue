@@ -101,6 +101,8 @@ onMounted(() => {
       <div class="login-links">
         <NuxtLink to="/register">免费注册</NuxtLink>
         <span class="divider">·</span>
+        <NuxtLink to="/forgot-password">忘记密码</NuxtLink>
+        <span class="divider">·</span>
         <NuxtLink to="/account">会员权益</NuxtLink>
       </div>
 
@@ -126,15 +128,15 @@ onMounted(() => {
   background:
     radial-gradient(circle at 15% 10%, rgba(26, 140, 211, 0.12) 0, transparent 45%),
     radial-gradient(circle at 90% 85%, rgba(110, 90, 175, 0.12) 0, transparent 45%),
-    linear-gradient(180deg, #eef1f6 0%, #e2e7f1 100%);
+    linear-gradient(180deg, var(--canvas) 0%, #e2e7f1 100%);
 }
 
 .login-panel {
   width: min(100%, 380px);
   padding: 22px 18px;
-  border: 1px solid #dcd2ed;
+  border: 1px solid var(--lavender-strong);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 16px 38px rgba(26, 34, 51, 0.14);
 }
 
@@ -150,14 +152,14 @@ onMounted(() => {
   font-size: 1.42rem;
   font-weight: 880;
   letter-spacing: 0.02em;
-  background: linear-gradient(120deg, #1a8cd3 0%, #6e5aaf 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .brand-sub {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.76rem;
   font-weight: 720;
 }
@@ -167,7 +169,7 @@ h1 {
   font-size: 1.04rem;
   font-weight: 800;
   text-align: center;
-  color: #1a2233;
+  color: var(--ink);
   letter-spacing: 0.02em;
 }
 
@@ -182,7 +184,7 @@ label {
 }
 
 .lbl {
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -191,16 +193,16 @@ input {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   outline: none;
   font-size: 0.92rem;
 }
 
 input:focus {
-  border-color: #1a8cd3;
+  border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(26, 140, 211, 0.14);
 }
 
@@ -216,10 +218,10 @@ input:focus {
   justify-content: center;
   min-height: 38px;
   gap: 5px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: linear-gradient(180deg, #ece5f4 0%, #dcd2ed 100%);
-  color: #4f3f86;
+  background: linear-gradient(180deg, var(--lavender) 0%, var(--lavender-strong) 100%);
+  color: var(--accent-deep);
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -233,7 +235,7 @@ input:focus {
   margin-top: 4px;
   border: 0;
   border-radius: 4px;
-  background: linear-gradient(180deg, #1a8cd3 0%, #1672b3 100%);
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-deep) 100%);
   color: #fff;
   font-weight: 820;
   font-size: 0.96rem;
@@ -268,13 +270,13 @@ input:focus {
   justify-content: center;
   gap: 10px;
   margin: 14px 0 12px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
 
 .login-links .divider {
-  color: #9aa3b0;
+  color: var(--soft);
 }
 
 .ai-entry {
@@ -283,7 +285,7 @@ input:focus {
   align-items: center;
   gap: 9px;
   padding: 8px 11px;
-  border: 1px solid #dcd2ed;
+  border: 1px solid var(--lavender-strong);
   border-radius: 5px;
   background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
 }
@@ -294,7 +296,7 @@ input:focus {
   height: 30px;
   place-items: center;
   border-radius: 4px;
-  background: #6e5aaf;
+  background: var(--accent);
   color: #fff;
 }
 
@@ -307,11 +309,11 @@ input:focus {
 .ai-text b {
   font-size: 0.88rem;
   font-weight: 800;
-  color: #4f3f86;
+  color: var(--accent-deep);
 }
 
 .ai-text span {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.7rem;
   font-weight: 720;
 }

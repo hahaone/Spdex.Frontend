@@ -102,10 +102,10 @@ const statusLabel = computed(() => {
   justify-content: center;
   gap: 6px;
   height: 220px;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 4px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.82rem;
   font-weight: 720;
 }
@@ -116,15 +116,15 @@ const statusLabel = computed(() => {
   display: grid;
   gap: 6px;
   padding: 8px 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
-  border-bottom: 1px solid #eaeef4;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--divider);
 }
 .back {
   display: inline-flex;
   width: fit-content;
   align-items: center;
   gap: 4px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -132,14 +132,14 @@ const statusLabel = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.92rem;
   font-weight: 780;
 }
 .line {
   padding: 1px 6px;
   border-radius: 3px;
-  background: #246b3b;
+  background: var(--sell);
   color: #fff;
   font-size: 0.74rem;
   font-weight: 800;
@@ -148,8 +148,8 @@ const statusLabel = computed(() => {
   display: grid;
   gap: 7px;
   padding: 8px 10px;
-  background: #fff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 .group-row {
   display: grid;
@@ -160,8 +160,8 @@ const statusLabel = computed(() => {
 .group-label {
   padding: 3px 5px;
   border-radius: 3px;
-  background: #e6f3e6;
-  color: #246b3b;
+  background: var(--draw-bg);
+  color: var(--sell);
   font-size: 0.7rem;
   font-weight: 800;
   text-align: center;
@@ -179,17 +179,17 @@ const statusLabel = computed(() => {
   justify-content: center;
   min-height: 28px;
   padding: 0 10px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
   font-size: 0.76rem;
   font-weight: 740;
   white-space: nowrap;
 }
 .group-btn.active {
-  border-color: #246b3b;
-  background: #246b3b;
+  border-color: var(--sell);
+  background: var(--sell);
   color: #fff;
 }
 .time-row {
@@ -202,16 +202,16 @@ const statusLabel = computed(() => {
   display: inline-grid;
   min-height: 28px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 .chart-band {
   display: grid;
   gap: 8px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--panel);
 }
 .chart-title {
   display: flex;
@@ -226,8 +226,8 @@ h1 {
 .hint {
   padding: 1px 6px;
   border-radius: 3px;
-  background: #e6f3e6;
-  color: #246b3b;
+  background: var(--draw-bg);
+  color: var(--sell);
   font-size: 0.7rem;
   font-weight: 760;
 }

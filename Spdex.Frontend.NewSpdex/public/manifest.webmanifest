@@ -1,0 +1,18 @@
+{
+  "name": "新版 SPdex 超级指数",
+  "short_name": "SPdex",
+  "description": "SPdex 超级指数系统 — 必发指数、走势图、实时赛况",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef1f6",
+  "theme_color": "#1a8cd3",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

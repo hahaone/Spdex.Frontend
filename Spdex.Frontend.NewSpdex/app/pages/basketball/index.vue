@@ -126,8 +126,8 @@ const leagueOptions = computed(() => {
   display: grid;
   gap: 7px;
   padding: 9px 10px;
-  background: #ffffff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 
 .filter-head {
@@ -170,10 +170,10 @@ const leagueOptions = computed(() => {
   justify-content: center;
   min-height: 30px;
   gap: 4px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
   font-size: 0.76rem;
   font-weight: 740;
 }
@@ -181,10 +181,10 @@ const leagueOptions = computed(() => {
 select {
   min-height: 30px;
   padding: 0 9px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #1a2233;
+  background: var(--panel);
+  color: var(--ink);
   outline: none;
   font-size: 0.8rem;
   font-weight: 740;
@@ -207,7 +207,7 @@ select {
 
 .empty {
   padding: 30px 0;
-  color: #6b7280;
+  color: var(--muted);
   text-align: center;
   font-size: 0.84rem;
   font-weight: 720;
@@ -219,9 +219,9 @@ select {
   gap: 5px;
   margin: 8px 10px 0;
   padding: 5px 9px;
-  border: 1px solid #fce4a8;
+  border: 1px solid var(--away-strong);
   border-radius: 4px;
-  background: #fff8e3;
+  background: var(--away-bg);
   color: #8a6212;
   font-size: 0.74rem;
   font-weight: 720;
@@ -242,9 +242,9 @@ select {
 
 .skeleton-card {
   height: 90px;
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 6px;
-  background: linear-gradient(90deg, #f3f6fb 0%, #eaeef4 50%, #f3f6fb 100%);
+  background: linear-gradient(90deg, var(--surface) 0%, var(--divider) 50%, var(--surface) 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.2s ease-in-out infinite;
 }
@@ -267,7 +267,7 @@ select {
     top: 72px;
     gap: 10px;
     padding: 14px 14px 16px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
     border-radius: 6px;
     box-shadow: 0 2px 8px rgba(26, 34, 51, 0.05);
   }
@@ -275,7 +275,7 @@ select {
   .filter-head {
     display: flex;
     padding-bottom: 8px;
-    border-bottom: 1px solid #eaeef4;
+    border-bottom: 1px solid var(--divider);
   }
 
   .match-list {

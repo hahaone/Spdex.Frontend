@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Activity, ArrowUpRight, Coins, CreditCard, LogOut, Mail, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
+import { Activity, ArrowUpRight, ChevronRight, Coins, Compass, CreditCard, KeyRound, LogOut, Mail, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
 
 const { user, userName, tier, logout } = useAuth()
 const { summary, orders, ordersServiceAvailable, pending, refresh } = useAccount()
+const { start: startOnboarding } = useOnboarding()
 
 const tierLabel: Record<string, string> = {
   Free: '免费版',
@@ -109,6 +110,19 @@ onMounted(async () => {
       </span>
     </div>
 
+    <section class="settings-band">
+      <NuxtLink to="/account/change-password" class="setting-row focus-ring">
+        <KeyRound :size="15" />
+        <span>修改密码</span>
+        <ChevronRight :size="15" class="chev" />
+      </NuxtLink>
+      <button type="button" class="setting-row focus-ring" @click="startOnboarding">
+        <Compass :size="15" />
+        <span>新手引导</span>
+        <ChevronRight :size="15" class="chev" />
+      </button>
+    </section>
+
     <section class="orders-band">
       <div class="band-head">
         <h2>订单历史</h2>
@@ -159,7 +173,7 @@ onMounted(async () => {
   gap: 10px;
   padding: 12px 12px;
   border-radius: 6px;
-  background: linear-gradient(120deg, #1a8cd3 0%, #6e5aaf 100%);
+  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
   color: #fff;
   box-shadow: 0 4px 14px rgba(26, 140, 211, 0.25);
 }
@@ -198,7 +212,7 @@ onMounted(async () => {
   padding: 5px 10px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.92);
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.78rem;
   font-weight: 800;
   text-decoration: none;
@@ -216,15 +230,15 @@ onMounted(async () => {
   gap: 8px;
   align-items: center;
   padding: 10px 11px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
-.summary-card.tone-brand svg { color: #1a8cd3; }
-.summary-card.tone-accent svg { color: #6e5aaf; }
+.summary-card.tone-brand svg { color: var(--brand); }
+.summary-card.tone-accent svg { color: var(--accent); }
 .summary-card.tone-warm svg { color: #c46613; }
-.summary-card.tone-mute svg { color: #6b7280; }
+.summary-card.tone-mute svg { color: var(--muted); }
 
 .sc-body {
   display: grid;
@@ -233,13 +247,13 @@ onMounted(async () => {
 }
 
 .sc-label {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
 
 .sc-value {
-  color: #1a2233;
+  color: var(--ink);
   font-size: 0.92rem;
   font-weight: 800;
   white-space: nowrap;
@@ -252,10 +266,10 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 10px;
   padding: 6px 11px;
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 5px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -266,13 +280,53 @@ onMounted(async () => {
   gap: 4px;
 }
 
+.settings-band {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 740;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setting-row + .setting-row {
+  border-top: 1px solid var(--divider);
+}
+
+.setting-row > svg:first-child {
+  color: var(--brand);
+}
+
+.setting-row .chev {
+  color: var(--soft);
+}
+
+.setting-row:active {
+  background: var(--surface);
+}
+
 .orders-band {
   display: grid;
   gap: 6px;
   padding: 10px 11px 11px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .band-head {
@@ -288,7 +342,7 @@ onMounted(async () => {
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
@@ -297,20 +351,20 @@ onMounted(async () => {
 .empty {
   padding: 14px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
 
 .empty.service-down {
   color: #8a6212;
-  background: #fff8e3;
-  border: 1px solid #fce4a8;
+  background: var(--away-bg);
+  border: 1px solid var(--away-strong);
   border-radius: 4px;
 }
 
 .order-table {
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -327,14 +381,14 @@ onMounted(async () => {
 
 .order-head {
   background: #f4f6fb;
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-weight: 800;
   font-size: 0.72rem;
 }
 
 .order-row {
-  border-top: 1px solid #eaeef4;
-  color: #1a2233;
+  border-top: 1px solid var(--divider);
+  color: var(--ink);
 }
 
 .tag {
@@ -345,9 +399,9 @@ onMounted(async () => {
   font-weight: 760;
 }
 
-.tag.tone-positive { background: rgba(46, 156, 95, 0.16); color: #246b3b; }
+.tag.tone-positive { background: rgba(46, 156, 95, 0.16); color: var(--sell); }
 .tag.tone-negative { background: rgba(214, 50, 76, 0.16); color: #b1253c; }
-.tag.tone-mute { background: rgba(107, 114, 128, 0.14); color: #4a5364; }
+.tag.tone-mute { background: rgba(107, 114, 128, 0.14); color: var(--muted); }
 
 .logout-btn {
   display: inline-flex;
@@ -355,10 +409,10 @@ onMounted(async () => {
   justify-content: center;
   min-height: 38px;
   gap: 6px;
-  border: 1px solid #d6324c;
+  border: 1px solid var(--buy);
   border-radius: 5px;
-  background: #fff;
-  color: #d6324c;
+  background: var(--panel);
+  color: var(--buy);
   font-weight: 800;
   font-size: 0.86rem;
 }

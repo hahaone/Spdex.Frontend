@@ -333,7 +333,7 @@ function jumpTo(target: SectionKey) {
 .empty {
   padding: 40px 16px;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.86rem;
   font-weight: 720;
 }
@@ -343,18 +343,18 @@ function jumpTo(target: SectionKey) {
   align-items: center;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 6px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
 
 .access-card.poly {
-  border-color: #dcd2ed;
+  border-color: var(--lavender-strong);
   background: #faf8fd;
-  color: #6e5aaf;
+  color: var(--accent);
 }
 
 .chart-empty {
@@ -362,10 +362,10 @@ function jumpTo(target: SectionKey) {
   align-items: center;
   justify-content: center;
   height: 180px;
-  border: 1px dashed #dde2eb;
+  border: 1px dashed var(--line);
   border-radius: 4px;
   background: #f9fafc;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
 }
@@ -374,8 +374,8 @@ function jumpTo(target: SectionKey) {
   display: grid;
   gap: 6px;
   padding: 8px 12px 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafd 100%);
-  border-bottom: 1px solid #eaeef4;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--divider);
 }
 
 .back {
@@ -383,7 +383,7 @@ function jumpTo(target: SectionKey) {
   width: fit-content;
   align-items: center;
   gap: 4px;
-  color: #1a8cd3;
+  color: var(--brand);
   font-size: 0.78rem;
   font-weight: 740;
 }
@@ -404,7 +404,7 @@ function jumpTo(target: SectionKey) {
   gap: 5px;
   font-size: 0.8rem;
   font-weight: 760;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .code {
@@ -419,7 +419,7 @@ function jumpTo(target: SectionKey) {
 
 .kick {
   margin-left: 4px;
-  color: #4a5364;
+  color: var(--muted);
   font-size: 0.76rem;
 }
 
@@ -445,7 +445,7 @@ function jumpTo(target: SectionKey) {
 .handicap {
   padding: 2px 8px;
   border-radius: 3px;
-  background: #1a8cd3;
+  background: var(--brand);
   color: #fff;
   font-size: 0.82rem;
   font-weight: 800;
@@ -458,7 +458,7 @@ function jumpTo(target: SectionKey) {
   justify-content: center;
   gap: 6px;
   flex-wrap: wrap;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
@@ -469,8 +469,8 @@ function jumpTo(target: SectionKey) {
 
 .tab-band {
   padding: 8px 10px;
-  background: #ffffff;
-  border-bottom: 1px solid #eaeef4;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
 }
 
 .tab-row {
@@ -483,7 +483,7 @@ function jumpTo(target: SectionKey) {
 .band-label {
   font-size: 0.86rem;
   font-weight: 800;
-  color: #4f3f86;
+  color: var(--accent-deep);
 }
 
 .detail-grid {
@@ -494,13 +494,13 @@ function jumpTo(target: SectionKey) {
   display: grid;
   gap: 8px;
   padding: 10px 10px;
-  background: #f3f6fb;
+  background: var(--surface);
 }
 
 .chart-preview {
   padding: 10px 12px;
-  background: #fff;
-  border-top: 1px solid #eaeef4;
+  background: var(--panel);
+  border-top: 1px solid var(--divider);
 }
 
 .chart-title-row {
@@ -527,20 +527,20 @@ function jumpTo(target: SectionKey) {
   width: 28px;
   height: 28px;
   place-items: center;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
-  color: #4a5364;
+  background: var(--panel);
+  color: var(--muted);
 }
 
 .icon-link:active {
-  background: #f3f6fb;
+  background: var(--surface);
 }
 
 .quick-stats {
   padding: 10px 12px;
-  background: #fff;
-  border-top: 1px solid #eaeef4;
+  background: var(--panel);
+  border-top: 1px solid var(--divider);
 }
 
 .quick-stats h3 {
@@ -554,10 +554,10 @@ function jumpTo(target: SectionKey) {
   align-items: center;
   justify-content: space-between;
   padding: 5px 0;
-  border-top: 1px solid #eef1f6;
+  border-top: 1px solid var(--canvas);
   font-size: 0.8rem;
   font-weight: 720;
-  color: #4a5364;
+  color: var(--muted);
 }
 
 .stat-row:first-of-type {
@@ -565,7 +565,7 @@ function jumpTo(target: SectionKey) {
 }
 
 .stat-row b {
-  color: #1a2233;
+  color: var(--ink);
   font-weight: 780;
 }
 
@@ -578,7 +578,7 @@ function jumpTo(target: SectionKey) {
   .match-header {
     border-radius: 6px;
     padding: 14px 18px;
-    border: 1px solid #dde2eb;
+    border: 1px solid var(--line);
   }
 
   .header-main {
@@ -596,8 +596,8 @@ function jumpTo(target: SectionKey) {
   .tab-band {
     border-radius: 6px;
     padding: 12px 16px;
-    border: 1px solid #dde2eb;
-    border-bottom: 1px solid #dde2eb;
+    border: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
   }
 
   .detail-grid {
@@ -621,8 +621,8 @@ function jumpTo(target: SectionKey) {
   .chart-preview,
   .quick-stats {
     border-radius: 6px;
-    border: 1px solid #dde2eb;
-    border-top: 1px solid #dde2eb;
+    border: 1px solid var(--line);
+    border-top: 1px solid var(--line);
   }
 }
 
@@ -638,14 +638,14 @@ function jumpTo(target: SectionKey) {
   gap: 5px;
   padding: 7px 12px;
   background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
-  border-bottom: 1px solid #eaeef4;
+  border-bottom: 1px solid var(--divider);
 }
 
 .tm-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-size: 0.78rem;
   font-weight: 760;
 }
@@ -661,7 +661,7 @@ function jumpTo(target: SectionKey) {
   margin-left: auto;
   padding: 1px 6px;
   border-radius: 2px;
-  background: #fff8e3;
+  background: var(--away-bg);
   color: #8a6212;
   font-size: 0.7rem;
   font-weight: 740;
@@ -671,7 +671,7 @@ function jumpTo(target: SectionKey) {
   margin-left: auto;
   padding: 1px 6px;
   border-radius: 2px;
-  background: #6e5aaf;
+  background: var(--accent);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 800;
@@ -686,22 +686,22 @@ function jumpTo(target: SectionKey) {
 .tm-btn {
   min-height: 28px;
   padding: 0 6px;
-  border: 1px solid #dcd2ed;
+  border: 1px solid var(--lavender-strong);
   border-radius: 4px;
-  background: #fff;
-  color: #4f3f86;
+  background: var(--panel);
+  color: var(--accent-deep);
   font-size: 0.78rem;
   font-weight: 720;
   cursor: pointer;
 }
 
 .tm-btn:hover:not(.disabled):not(:disabled) {
-  border-color: #6e5aaf;
+  border-color: var(--accent);
 }
 
 .tm-btn.active {
-  border-color: #6e5aaf;
-  background: #6e5aaf;
+  border-color: var(--accent);
+  background: var(--accent);
   color: #fff;
   font-weight: 800;
 }
@@ -717,9 +717,9 @@ function jumpTo(target: SectionKey) {
   display: grid;
   gap: 6px;
   padding: 10px 11px 11px;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .euro-head {
@@ -735,13 +735,13 @@ function jumpTo(target: SectionKey) {
 }
 
 .euro-head .muted {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
 }
 
 .euro-table {
-  border: 1px solid #eaeef4;
+  border: 1px solid var(--divider);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -759,14 +759,14 @@ function jumpTo(target: SectionKey) {
 
 .euro-head-row {
   background: #f4f6fb;
-  color: #4f3f86;
+  color: var(--accent-deep);
   font-weight: 800;
   font-size: 0.7rem;
 }
 
 .euro-row {
-  border-top: 1px solid #eaeef4;
-  color: #1a2233;
+  border-top: 1px solid var(--divider);
+  color: var(--ink);
 }
 
 .euro-row .num {
@@ -786,6 +786,6 @@ function jumpTo(target: SectionKey) {
 }
 
 .euro-row.kelly-row {
-  color: #246b3b;
+  color: var(--sell);
 }
 </style>

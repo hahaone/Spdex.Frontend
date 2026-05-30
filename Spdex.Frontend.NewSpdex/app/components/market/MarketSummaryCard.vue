@@ -54,9 +54,9 @@ function indexValue(row: MarketMetricRow, tone: string): string {
   display: block;
   width: 100%;
   padding: 0;
-  border: 1px solid #dde2eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   text-align: left;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
@@ -71,22 +71,22 @@ function indexValue(row: MarketMetricRow, tone: string): string {
 }
 
 .summary-card.standard .summary-head {
-  background: linear-gradient(180deg, #e2f1fa 0%, #c9e5f5 100%);
-  color: #1672b3;
+  background: linear-gradient(180deg, var(--brand-tint) 0%, var(--brand-tint-strong) 100%);
+  color: var(--brand-deep);
 }
 
 .summary-card.poly .summary-head {
-  background: linear-gradient(180deg, #ece5f4 0%, #dcd2ed 100%);
-  color: #4f3f86;
+  background: linear-gradient(180deg, var(--lavender) 0%, var(--lavender-strong) 100%);
+  color: var(--accent-deep);
 }
 
 .summary-card.goals .summary-head {
-  background: linear-gradient(180deg, #e6f3e6 0%, #d0e9d0 100%);
-  color: #246b3b;
+  background: linear-gradient(180deg, var(--draw-bg) 0%, #d0e9d0 100%);
+  color: var(--sell);
 }
 
 .summary-card.handicap .summary-head {
-  background: linear-gradient(180deg, #fff4d8 0%, #ffe7b0 100%);
+  background: linear-gradient(180deg, var(--away-bg) 0%, #ffe7b0 100%);
   color: #8a6212;
 }
 
@@ -104,7 +104,7 @@ function indexValue(row: MarketMetricRow, tone: string): string {
 .summary-grid {
   display: grid;
   gap: 1px;
-  background: #eaeef4;
+  background: var(--divider);
 }
 
 .row {
@@ -113,13 +113,13 @@ function indexValue(row: MarketMetricRow, tone: string): string {
   gap: 6px;
   align-items: center;
   padding: 4px 9px;
-  background: #fff;
+  background: var(--panel);
   font-size: 0.8rem;
 }
 
 .row.col-head {
-  background: #ece5f4;
-  color: #4f3f86;
+  background: var(--lavender);
+  color: var(--accent-deep);
   font-size: 0.7rem;
   font-weight: 780;
   letter-spacing: 0.02em;
@@ -145,12 +145,12 @@ function indexValue(row: MarketMetricRow, tone: string): string {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #1a2233;
+  color: var(--ink);
 }
 
 .row .idx {
   font-weight: 780;
-  color: #1672b3;
+  color: var(--brand-deep);
 }
 
 @media (max-width: 370px) {
