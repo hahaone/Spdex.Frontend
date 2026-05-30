@@ -24,11 +24,15 @@ function toNumber(value: string): number {
 }
 
 function barWidth(value: string): string {
-  return `${Math.max(8, (toNumber(value) / maxTurnover.value) * 100)}%`
+  return `${Math.max(6, (toNumber(value) / maxTurnover.value) * 100)}%`
 }
 
-function formatPrice(value: number): string {
-  return value > 0 ? value.toFixed(2) : '-'
+function fmtOdds(value: number | undefined): string {
+  return value && value > 0 ? value.toFixed(2) : '-'
+}
+
+function bfPct(i: number): number {
+  return Math.round(props.match.bfIndex[i] ?? 0)
 }
 
 function bigBetSideKey(side: string): string {
@@ -38,7 +42,21 @@ function bigBetSideKey(side: string): string {
   return 'mute'
 }
 
+function fmtAmount(n: number): string {
+  if (n >= 1_000_000) return `¥${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `¥${(n / 1_000).toFixed(1)}K`
+  return `¥${Math.round(n)}`
+}
+
 const kickOff = computed(() => props.match.matchTime.slice(11, 16))
+const statusLabel = computed(() => {
+  if (props.match.status === 'finished') return '完场'
+  if (props.match.status === 'started') return '进行中'
+  return '未开'
+})
+const totalTurnover = computed(() => fmtAmount(props.match.bfAmount ?? 0))
+const hasPoly = computed(() => props.match.polyIndex.some(v => v > 0))
+const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.replace('-', ' : ') : ''))
 </script>
 
 <template>
@@ -49,60 +67,63 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
         <span class="name">{{ match.leagueName }}</span>
       </span>
       <span class="head-right">
+        <span :class="['status', `st-${match.status}`]">
+          <i v-if="match.status === 'started'" class="live-dot" />{{ statusLabel }}
+        </span>
         <span class="num kick-off">{{ kickOff }}</span>
         <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
         <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
-        <span class="tag tag-mute">{{ match.marketType }}</span>
       </span>
+    </div>
+
+    <div v-if="scoreText" class="score-strip">
+      <span class="sc-label">比分</span>
+      <span class="sc-main num">{{ scoreText }}</span>
+      <span v-if="match.halfScoreText" class="sc-half">半 {{ match.halfScoreText }}</span>
+    </div>
+
+    <div class="grid-legend">
+      <span class="lg-team">球队</span>
+      <span>必发</span>
+      <span>必指</span>
+      <span class="lg-to">成交</span>
     </div>
 
     <div :class="['market-grid', { 'two-way': twoWay }]">
-      <span class="row-home cell selection home">{{ match.homeTeam }}</span>
-      <span class="row-home cell num price">{{ formatPrice(match.prices[0]) }}</span>
-      <span class="row-home cell turnover">
-        <i :style="{ width: barWidth(match.turnovers[0]) }" />
-        <b class="num">{{ match.turnovers[0] }}</b>
-      </span>
+      <span class="cell selection home">{{ match.homeTeam }}</span>
+      <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[0]) }}</span>
+      <span class="cell bfidx"><i :style="{ width: `${bfPct(0)}%` }" /><b class="num">{{ bfPct(0) }}%</b></span>
+      <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[0]) }" /><b class="num">{{ match.turnovers[0] }}</b></span>
 
       <template v-if="!twoWay">
-        <span class="row-draw cell selection handicap">{{ match.handicap }}</span>
-        <span class="row-draw cell num price">{{ formatPrice(match.prices[1]) }}</span>
-        <span class="row-draw cell turnover">
-          <i :style="{ width: barWidth(match.turnovers[1]) }" />
-          <b class="num">{{ match.turnovers[1] }}</b>
-        </span>
+        <span class="cell selection handicap">{{ match.handicap || '平' }}</span>
+        <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[1]) }}</span>
+        <span class="cell bfidx"><i :style="{ width: `${bfPct(1)}%` }" /><b class="num">{{ bfPct(1) }}%</b></span>
+        <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[1]) }" /><b class="num">{{ match.turnovers[1] }}</b></span>
       </template>
 
-      <span class="row-away cell selection away">{{ match.awayTeam }}</span>
-      <span class="row-away cell num price">{{ formatPrice(match.prices[2]) }}</span>
-      <span class="row-away cell turnover">
-        <i :style="{ width: barWidth(match.turnovers[2]) }" />
-        <b class="num">{{ match.turnovers[2] }}</b>
+      <span class="cell selection away">{{ match.awayTeam }}</span>
+      <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[2]) }}</span>
+      <span class="cell bfidx"><i :style="{ width: `${bfPct(2)}%` }" /><b class="num">{{ bfPct(2) }}%</b></span>
+      <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[2]) }" /><b class="num">{{ match.turnovers[2] }}</b></span>
+    </div>
+
+    <div class="meta-foot">
+      <span class="m-chip total">成交 <b class="num">{{ totalTurnover }}</b></span>
+      <span v-if="match.euro" class="m-chip euro">欧赔 <b class="num">{{ match.euro[0].toFixed(2) }}/{{ match.euro[1].toFixed(2) }}/{{ match.euro[2].toFixed(2) }}</b></span>
+      <span v-if="match.kelly" class="m-chip kelly">
+        凯利 <b class="num">{{ match.kelly[0].toFixed(2) }}/{{ match.kelly[1].toFixed(2) }}/{{ match.kelly[2].toFixed(2) }}</b>
       </span>
-    </div>
-
-    <div v-if="match.euro" class="euro-row" :title="match.euroBookmaker">
-      <span class="euro-label">欧赔</span>
-      <span class="euro-cell num">{{ match.euro[0].toFixed(2) }}</span>
-      <span class="euro-cell num">{{ match.euro[1].toFixed(2) }}</span>
-      <span class="euro-cell num">{{ match.euro[2].toFixed(2) }}</span>
-    </div>
-
-    <div v-if="match.kelly" class="kelly-row">
-      <span class="kelly-label">凯利</span>
-      <span class="kelly-cell num">{{ match.kelly[0].toFixed(2) }}</span>
-      <span class="kelly-cell num">{{ match.kelly[1].toFixed(2) }}</span>
-      <span class="kelly-cell num">{{ match.kelly[2].toFixed(2) }}</span>
-    </div>
-
-    <div class="index-row">
-      <span class="metric-pill">必指 <b class="num">{{ match.bfIndex.join('/') }}</b></span>
-      <span class="metric-pill">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
-      <span v-if="match.bigBetSide" :class="['big-bet', `side-${bigBetSideKey(match.bigBetSide)}`]" :title="match.bigBetAttr">
-        大单 {{ match.bigBetSide }} {{ match.bigBetAttr }}
+      <span v-if="hasPoly" class="m-chip poly">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
+      <span
+        v-if="match.bigBetSide"
+        :class="['big-bet', `side-${bigBetSideKey(match.bigBetSide)}`]"
+        :title="match.bigBetAttr"
+      >
+        大单 {{ match.bigBetSide }}<template v-if="match.bigBetOdds">@{{ match.bigBetOdds.toFixed(2) }}</template> {{ match.bigBetAttr }}
       </span>
       <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
-      <ChevronRight :size="16" />
+      <ChevronRight class="chev" :size="16" />
     </div>
   </NuxtLink>
 </template>
@@ -110,7 +131,6 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 <style scoped>
 .match-card {
   display: block;
-  padding: 0;
   border: 1px solid #dde2eb;
   border-radius: 6px;
   background: #fff;
@@ -138,6 +158,7 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 }
 
 .code {
+  flex: 0 0 auto;
   padding: 0 4px;
   border-radius: 3px;
   background: #1a2233;
@@ -151,13 +172,44 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 .name {
   color: #1a2233;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .head-right {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  height: 17px;
+  border-radius: 3px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.st-upcoming { background: #eef1f6; color: #6b7280; }
+.st-started { background: #e7f6ee; color: #1f9d57; }
+.st-finished { background: #e9edf3; color: #51607a; }
+
+.live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #21b06a;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .kick-off {
@@ -166,9 +218,38 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
   font-weight: 760;
 }
 
+.score-strip {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  padding: 3px 9px;
+  background: #fbfdff;
+  border-bottom: 1px solid #eaeef4;
+}
+
+.sc-label { font-size: 0.64rem; font-weight: 800; color: #1f9d57; }
+.sc-main { font-size: 1.05rem; font-weight: 880; color: #1a2233; letter-spacing: 0.05em; }
+.sc-half { font-size: 0.7rem; font-weight: 720; color: #6b7280; }
+
+.grid-legend {
+  display: grid;
+  grid-template-columns: minmax(60px, 1.05fr) 46px 52px minmax(58px, 0.95fr);
+  padding: 2px 0;
+  background: #fff;
+  border-bottom: 1px solid #f0f3f8;
+  font-size: 0.6rem;
+  font-weight: 760;
+  color: #9aa3b0;
+}
+
+.grid-legend span { padding: 0 8px; text-align: center; }
+.grid-legend .lg-team { text-align: left; }
+.grid-legend .lg-to { text-align: right; }
+
 .market-grid {
   display: grid;
-  grid-template-columns: minmax(80px, 1.05fr) 48px minmax(76px, 0.95fr);
+  grid-template-columns: minmax(60px, 1.05fr) 46px 52px minmax(58px, 0.95fr);
   gap: 1px;
   background: #eaeef4;
   border-bottom: 1px solid #eaeef4;
@@ -177,8 +258,9 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 .cell {
   display: flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 27px;
   padding: 3px 8px;
+  background: #fff;
   font-size: 0.86rem;
   font-weight: 720;
 }
@@ -188,18 +270,38 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #1a2233;
 }
 
-.handicap {
+.selection.handicap {
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 740;
+}
+
+.odds {
   justify-content: center;
-  color: #4a5364;
-  font-size: 0.8rem;
+  background: #f3f9fe;
+  color: #1672b3;
+  font-weight: 800;
 }
 
-.price {
-  justify-content: flex-end;
-  font-weight: 780;
+.bfidx {
+  position: relative;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 0.76rem;
 }
+
+.bfidx i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(26, 140, 211, 0.16);
+}
+
+.bfidx b { position: relative; color: #1672b3; font-weight: 760; }
 
 .turnover {
   position: relative;
@@ -214,79 +316,43 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
   top: 0;
   bottom: 0;
   left: 0;
-  background: rgba(26, 140, 211, 0.18);
+  background: rgba(46, 156, 95, 0.16);
 }
 
-.turnover b {
-  position: relative;
-  font-weight: 740;
-  color: #1a2233;
-}
+.turnover b { position: relative; font-weight: 740; color: #1a2233; }
 
-.euro-row {
-  display: grid;
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
-  gap: 6px;
+.meta-foot {
+  display: flex;
   align-items: center;
-  padding: 4px 9px;
-  background: #fff8e3;
-  border-bottom: 1px solid #fce4a8;
-  color: #8a6212;
-  font-size: 0.74rem;
-  font-weight: 740;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 9px;
+  background: #fff;
+  font-size: 0.7rem;
+  font-weight: 720;
 }
 
-.euro-label {
-  padding: 1px 5px;
-  border-radius: 2px;
-  background: #c8a64b;
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-.euro-cell {
-  text-align: center;
-  font-weight: 780;
+.m-chip {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #f1f4f9;
   color: #4a5364;
 }
 
-.kelly-row {
-  display: grid;
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  align-items: center;
-  padding: 4px 9px;
-  background: #e9f7ef;
-  border-bottom: 1px solid #c2e6cf;
-  color: #246b3b;
-  font-size: 0.74rem;
-  font-weight: 740;
-}
-
-.kelly-label {
-  padding: 1px 5px;
-  border-radius: 2px;
-  background: #2e9c5f;
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-.kelly-cell {
-  text-align: center;
-  font-weight: 780;
-  color: #246b3b;
-}
+.m-chip b { font-weight: 800; color: #1a2233; }
+.m-chip.kelly { background: #e9f7ef; color: #246b3b; }
+.m-chip.kelly b { color: #246b3b; }
+.m-chip.poly { background: #efeaf8; color: #5a3fa0; }
+.m-chip.poly b { color: #5a3fa0; }
+.m-chip.euro { background: #fff8e3; color: #8a6212; }
+.m-chip.euro b { color: #8a6212; }
 
 .big-bet {
   padding: 1px 6px;
-  border-radius: 2px;
+  border-radius: 3px;
   font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .big-bet.side-home { background: #e2f1fa; color: #1672b3; }
@@ -294,26 +360,16 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 .big-bet.side-draw { background: #eef1f6; color: #4a5364; }
 .big-bet.side-mute { background: #eef1f6; color: #6b7280; }
 
-.index-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
-  background: #fff;
-  color: #4a5364;
-  font-size: 0.74rem;
-  font-weight: 720;
-}
-
-.index-row svg {
+.chev {
   flex: 0 0 auto;
   margin-left: auto;
   color: #1a8cd3;
 }
 
 @media (max-width: 370px) {
-  .market-grid {
-    grid-template-columns: minmax(72px, 1fr) 42px minmax(70px, 0.85fr);
+  .market-grid,
+  .grid-legend {
+    grid-template-columns: minmax(52px, 1fr) 42px 46px minmax(52px, 0.85fr);
   }
 
   .cell {

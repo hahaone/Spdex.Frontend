@@ -16,6 +16,8 @@ export interface MatchSummary {
   bfIndex: [number, number, number]
   polyIndex: [number, number, number]
   flags: string[]
+  /** 必发价位（Betfair 赔率）三个 [主,平,客]，0 = 无数据。 */
+  bfPrice?: [number, number, number]
   /** 欧赔（首选公司）三个赔率，0 = 无数据。 */
   euro?: [number, number, number]
   /** 欧赔首选公司名（如 "WilliamHill"）。 */
@@ -26,6 +28,16 @@ export interface MatchSummary {
   bigBetSide?: string
   /** 标盘最大单注属性（"买+"/"卖-"），空串=无数据。 */
   bigBetAttr?: string
+  /** 标盘最大单注赔率，0/undefined=无。 */
+  bigBetOdds?: number
+  /** 标盘最大单注金额（原始数值）。 */
+  bigBetAmount?: number
+  /** Betfair 总成交额（原始数值，前端格式化为 K/M）。 */
+  bfAmount?: number
+  /** 全场比分文本（"2-1"），仅 started/finished 有值。 */
+  scoreText?: string
+  /** 半场比分文本（"1-0"）。 */
+  halfScoreText?: string
 }
 
 export interface MatchListResult {

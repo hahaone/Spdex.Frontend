@@ -24,6 +24,9 @@ interface BackendMatchSummary {
   polyAmount: number
   flags: string[]
   pMark: string | null
+  bfPriceHome?: number
+  bfPriceDraw?: number
+  bfPriceAway?: number
   euroHome?: number
   euroDraw?: number
   euroAway?: number
@@ -33,6 +36,10 @@ interface BackendMatchSummary {
   kellyAway?: number
   bigBetSide?: string
   bigBetAttr?: string
+  bigBetOdds?: number
+  bigBetAmount?: number
+  score?: string
+  halfScore?: string
 }
 
 interface BackendMatchListResult {
@@ -79,6 +86,8 @@ function distributeTurnover(total: number, indexes: [number, number, number]): [
 function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const bfIndex = toTriple(item.bfIndex)
   const polyIndex = toTriple(item.polyIndex)
+  const bfPrice: [number, number, number] = [item.bfPriceHome ?? 0, item.bfPriceDraw ?? 0, item.bfPriceAway ?? 0]
+  const hasBfPrice = bfPrice[0] > 0 || bfPrice[1] > 0 || bfPrice[2] > 0
   const euro: [number, number, number] = [item.euroHome ?? 0, item.euroDraw ?? 0, item.euroAway ?? 0]
   const hasEuro = euro[0] > 0 || euro[1] > 0 || euro[2] > 0
   const kelly: [number, number, number] = [item.kellyHome ?? 0, item.kellyDraw ?? 0, item.kellyAway ?? 0]
@@ -100,11 +109,17 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     bfIndex,
     polyIndex,
     flags: item.flags ?? [],
+    bfPrice: hasBfPrice ? bfPrice : undefined,
     euro: hasEuro ? euro : undefined,
     euroBookmaker: hasEuro ? item.euroBookmaker : undefined,
     kelly: hasKelly ? kelly : undefined,
     bigBetSide: item.bigBetSide || undefined,
     bigBetAttr: item.bigBetAttr || undefined,
+    bigBetOdds: item.bigBetOdds || undefined,
+    bigBetAmount: item.bigBetAmount || undefined,
+    bfAmount: item.bfAmount,
+    scoreText: item.score || undefined,
+    halfScoreText: item.halfScore || undefined,
   }
 }
 
