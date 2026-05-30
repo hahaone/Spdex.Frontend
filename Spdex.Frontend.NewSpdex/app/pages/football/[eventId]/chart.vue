@@ -1,28 +1,25 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
-import type { ChartSeriesType } from '~/composables/useChartSeries'
+import { CHART_MARKETS } from '~/composables/useChartSeries'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
-const graphType = ref<ChartSeriesType>('1X2')
+const market = ref('standard')
+const metric = ref('odds')
 const timeRange = ref('6h')
 
-const graphGroups = [
-  { label: '标盘类', items: [
-    { label: '1X2', value: '1X2' as ChartSeriesType },
-    { label: 'CS', value: 'CS' as ChartSeriesType },
-    { label: 'HHT', value: 'HHT' as ChartSeriesType },
-    { label: 'HFT', value: 'HFT' as ChartSeriesType },
-    { label: '势能', value: 'momentum' as ChartSeriesType },
-    { label: '亚指', value: 'AI' as ChartSeriesType },
-  ] },
-  { label: '进/让', items: [
-    { label: '进球', value: 'goals' as ChartSeriesType },
-    { label: '让分', value: 'handicap' as ChartSeriesType },
-    { label: '角球', value: 'corner' as ChartSeriesType },
-  ] },
-]
+const currentMarket = computed(() => CHART_MARKETS.find(m => m.value === market.value) ?? CHART_MARKETS[0]!)
+const metrics = computed(() => currentMarket.value.metrics)
+
+// 切换盘口后，若当前指标不在新盘口的指标集合里，回退到第一个
+watch(market, () => {
+  if (!metrics.value.some(m => m.value === metric.value))
+    metric.value = metrics.value[0]?.value ?? 'odds'
+})
+
+// 组合成后端的复合 type："standard.bfindex" 等
+const graphType = computed(() => `${market.value}.${metric.value}`)
 
 const timeOptions = [
   { label: '6H', value: '6h' },
@@ -33,13 +30,17 @@ const timeOptions = [
 const { detail } = useMatchDetail(eventId)
 const match = computed(() => detail.value?.match)
 
-const { points, status, pending, refresh } = useChartSeries(eventId, graphType)
+const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventId, graphType)
 
 const statusLabel = computed(() => {
   if (status.value === 'no-access') return '当前会籍未开放此走势'
   if (status.value === 'pending') return '此场赛事暂无该市场数据'
   return null
 })
+
+const currentMetricLabel = computed(() =>
+  metricLabel.value || metrics.value.find(m => m.value === metric.value)?.label || '')
+const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetricLabel.value}`)
 </script>
 
 <template>
@@ -57,17 +58,32 @@ const statusLabel = computed(() => {
     </section>
 
     <section class="controls">
-      <div v-for="group in graphGroups" :key="group.label" class="group-row">
-        <span class="group-label">{{ group.label }}</span>
+      <div class="group-row">
+        <span class="group-label">盘口</span>
         <div class="group-buttons scrollbar-none">
           <button
-            v-for="item in group.items"
-            :key="item.value"
+            v-for="m in CHART_MARKETS"
+            :key="m.value"
             type="button"
-            :class="['group-btn focus-ring', { active: graphType === item.value }]"
-            @click="graphType = item.value"
+            :class="['group-btn focus-ring', { active: market === m.value }]"
+            @click="market = m.value"
           >
-            {{ item.label }}
+            {{ m.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="group-row">
+        <span class="group-label">指标</span>
+        <div class="group-buttons scrollbar-none">
+          <button
+            v-for="mt in metrics"
+            :key="mt.value"
+            type="button"
+            :class="['group-btn focus-ring', { active: metric === mt.value }]"
+            @click="metric = mt.value"
+          >
+            {{ mt.label }}
           </button>
         </div>
       </div>
@@ -82,7 +98,7 @@ const statusLabel = computed(() => {
 
     <section class="chart-band">
       <div class="chart-title">
-        <h1>{{ graphType }} 走势</h1>
+        <h1>{{ chartTitle }}</h1>
         <span class="hint">{{ timeRange.toUpperCase() }} · 自动刷新</span>
       </div>
 
@@ -90,7 +106,13 @@ const statusLabel = computed(() => {
         <Lock :size="14" />
         <span>{{ statusLabel }}</span>
       </div>
-      <StaticTrendChart v-else-if="points.length" :points="points" :height="220" />
+      <StaticTrendChart
+        v-else-if="points.length"
+        :points="points"
+        :series-labels="seriesLabels"
+        :unit="unit"
+        :height="220"
+      />
       <div v-else class="chart-placeholder">
         <span>{{ pending ? '加载中…' : '暂无走势数据' }}</span>
       </div>

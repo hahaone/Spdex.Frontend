@@ -1,19 +1,51 @@
 <script setup lang="ts">
 import type { ChartPoint } from '~/types/market'
+import type { ChartSeriesLabels } from '~/composables/useChartSeries'
 
 const props = defineProps<{
   points: ChartPoint[]
   height?: number
+  /** 三序列标签；draw 为 null 时只画两条线（如大小盘）。默认 主/平/客。 */
+  seriesLabels?: ChartSeriesLabels
+  /** 数值单位：odds/index/amount/percent/payout。决定 Y 轴与图例数值格式。默认 odds。 */
+  unit?: string
 }>()
 
 const width = 320
 const height = computed(() => props.height ?? 188)
-const pad = { left: 26, right: 8, top: 16, bottom: 32 }
+const pad = { left: 30, right: 8, top: 16, bottom: 32 }
 const chartW = width - pad.left - pad.right
 
-const allValues = computed(() => props.points.flatMap(p => [p.home, p.draw, p.away]))
-const minValue = computed(() => Math.min(...allValues.value) - 0.18)
-const maxValue = computed(() => Math.max(...allValues.value) + 0.18)
+const labels = computed<ChartSeriesLabels>(() => props.seriesLabels ?? { home: '主', draw: '平', away: '客' })
+const hasDraw = computed(() => labels.value.draw != null)
+const unit = computed(() => props.unit ?? 'odds')
+
+type Field = 'home' | 'draw' | 'away'
+const fields = computed<Field[]>(() => hasDraw.value ? ['home', 'draw', 'away'] : ['home', 'away'])
+
+/** 0 视为缺失（payout 例外：0/负数有意义）。 */
+function isMissing(v: number): boolean {
+  return v === 0 && unit.value !== 'payout'
+}
+
+// 仅用「实际渲染的序列、去掉缺失值」来定标尺，避免被占位 0 拉扁
+const scaleValues = computed(() => {
+  const vals = props.points.flatMap(p => fields.value.map(f => p[f]))
+  const filtered = vals.filter(v => Number.isFinite(v) && !isMissing(v))
+  return filtered.length > 0 ? filtered : [0, 1]
+})
+const minValue = computed(() => {
+  const lo = Math.min(...scaleValues.value)
+  const hi = Math.max(...scaleValues.value)
+  const span = hi - lo || Math.abs(hi) || 1
+  return lo - span * 0.12
+})
+const maxValue = computed(() => {
+  const lo = Math.min(...scaleValues.value)
+  const hi = Math.max(...scaleValues.value)
+  const span = hi - lo || Math.abs(hi) || 1
+  return hi + span * 0.12
+})
 const maxVolume = computed(() => Math.max(...props.points.map(p => p.volume), 1))
 const chartH = computed(() => height.value - pad.top - pad.bottom)
 
@@ -27,20 +59,51 @@ function yAt(value: number): number {
   return pad.top + (1 - (value - minValue.value) / span) * chartH.value
 }
 
-function linePath(field: 'home' | 'draw' | 'away'): string {
+// 缺口感知折线：缺失值断线（M 重新起笔），避免掉到 0
+function linePath(field: Field): string {
+  let d = ''
+  let pen = false
+  props.points.forEach((point, index) => {
+    const v = point[field]
+    if (isMissing(v) || !Number.isFinite(v)) { pen = false; return }
+    d += `${pen ? 'L' : 'M'} ${xAt(index).toFixed(2)} ${yAt(v).toFixed(2)} `
+    pen = true
+  })
+  return d.trim()
+}
+
+function visibleDots(field: Field) {
   return props.points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xAt(index).toFixed(2)} ${yAt(point[field]).toFixed(2)}`)
-    .join(' ')
+    .map((point, index) => ({ index, value: point[field] }))
+    .filter(d => !isMissing(d.value) && Number.isFinite(d.value))
 }
 
 function barHeight(volume: number): number {
-  return Math.max(3, (volume / maxVolume.value) * 34)
+  return Math.max(2, (volume / maxVolume.value) * 34)
+}
+
+function fmtAmount(n: number): string {
+  const a = Math.abs(n)
+  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (a >= 10_000) return `${(n / 10_000).toFixed(1)}万`
+  if (a >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return n.toFixed(0)
+}
+
+function fmtValue(v: number): string {
+  switch (unit.value) {
+    case 'index': return v.toFixed(0)
+    case 'percent': return `${v.toFixed(0)}%`
+    case 'amount': return fmtAmount(v)
+    case 'payout': return `${v > 0 ? '+' : ''}${fmtAmount(v)}`
+    default: return v.toFixed(2) // odds
+  }
 }
 
 const yTicks = computed(() => {
   const span = maxValue.value - minValue.value
   const step = span / 3
-  return [0, 1, 2, 3].map(i => {
+  return [0, 1, 2, 3].map((i) => {
     const val = minValue.value + step * i
     return { value: val, y: pad.top + (1 - i / 3) * chartH.value }
   })
@@ -49,7 +112,7 @@ const yTicks = computed(() => {
 
 <template>
   <div class="trend-chart">
-    <svg :viewBox="`0 0 ${width} ${height}`" role="img" aria-label="指数核心走势图">
+    <svg :viewBox="`0 0 ${width} ${height}`" role="img" aria-label="走势图">
       <g v-for="tick in yTicks" :key="tick.value">
         <line
           :x1="pad.left"
@@ -58,7 +121,7 @@ const yTicks = computed(() => {
           :y2="tick.y"
           class="grid"
         />
-        <text :x="pad.left - 4" :y="tick.y + 3" class="y-tick" text-anchor="end">{{ tick.value.toFixed(2) }}</text>
+        <text :x="pad.left - 4" :y="tick.y + 3" class="y-tick" text-anchor="end">{{ fmtValue(tick.value) }}</text>
       </g>
 
       <line :x1="pad.left" :x2="width - pad.right" :y1="height - pad.bottom" :y2="height - pad.bottom" class="axis" />
@@ -75,13 +138,15 @@ const yTicks = computed(() => {
       </g>
 
       <path class="line home" :d="linePath('home')" />
-      <path class="line draw" :d="linePath('draw')" />
+      <path v-if="hasDraw" class="line draw" :d="linePath('draw')" />
       <path class="line away" :d="linePath('away')" />
 
-      <g v-for="(point, index) in points" :key="`${point.time}-dots`">
-        <circle class="dot home" :cx="xAt(index)" :cy="yAt(point.home)" r="2.2" />
-        <circle class="dot draw" :cx="xAt(index)" :cy="yAt(point.draw)" r="2.2" />
-        <circle class="dot away" :cx="xAt(index)" :cy="yAt(point.away)" r="2.2" />
+      <g>
+        <circle v-for="d in visibleDots('home')" :key="`h-${d.index}`" class="dot home" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
+        <template v-if="hasDraw">
+          <circle v-for="d in visibleDots('draw')" :key="`d-${d.index}`" class="dot draw" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
+        </template>
+        <circle v-for="d in visibleDots('away')" :key="`a-${d.index}`" class="dot away" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
       </g>
 
       <text :x="pad.left" :y="height - 8" class="x-tick">{{ points[0]?.time }}</text>
@@ -89,9 +154,9 @@ const yTicks = computed(() => {
       <text :x="width - pad.right" :y="height - 8" class="x-tick" text-anchor="end">{{ points[points.length - 1]?.time }}</text>
     </svg>
     <div class="legend">
-      <span><i class="home" />主</span>
-      <span><i class="draw" />平</span>
-      <span><i class="away" />客</span>
+      <span><i class="home" />{{ labels.home }}</span>
+      <span v-if="hasDraw"><i class="draw" />{{ labels.draw }}</span>
+      <span><i class="away" />{{ labels.away }}</span>
       <span><i class="volume" />成交量</span>
     </div>
   </div>
