@@ -6,7 +6,11 @@ defineProps<{
   title: string
   tone: 'standard' | 'poly' | 'goals' | 'handicap'
   rows: MarketMetricRow[]
-  indexLabel: string
+  indexLabel?: string
+  /** 成交列表头文案（默认"成交"；CS 用"大注"，值取 turnover=MaxBet）。 */
+  turnoverLabel?: string
+  /** 隐藏第 4 列指数列（无第 4 指标的盘口，如 CS）。 */
+  hideIndex?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,17 +38,17 @@ function indexValue(row: MarketMetricRow, tone: string): string {
       <ChevronRight :size="16" />
     </div>
     <div class="summary-grid">
-      <div class="col-head row">
+      <div :class="['col-head', 'row', { 'no-idx': hideIndex }]">
         <span>选项</span>
-        <span>价位</span>
-        <span>成交</span>
-        <span>{{ indexLabel }}</span>
+        <span class="num">价位</span>
+        <span class="num">{{ turnoverLabel || '成交' }}</span>
+        <span v-if="!hideIndex" class="num">{{ indexLabel }}</span>
       </div>
-      <div v-for="row in rows" :key="row.key" :class="['row', 'data', rowClass(row)]">
+      <div v-for="row in rows" :key="row.key" :class="['row', 'data', rowClass(row), { 'no-idx': hideIndex }]">
         <b class="num">{{ row.selection }}</b>
         <span class="num">{{ row.price }}</span>
         <span class="num turnover">{{ row.turnover || '-' }}</span>
-        <span class="num idx">{{ indexValue(row, tone) }}</span>
+        <span v-if="!hideIndex" class="num idx">{{ indexValue(row, tone) }}</span>
       </div>
     </div>
   </button>
@@ -116,6 +120,10 @@ function indexValue(row: MarketMetricRow, tone: string): string {
   padding: 4px 9px;
   background: var(--panel);
   font-size: 0.8rem;
+}
+
+.row.no-idx {
+  grid-template-columns: 32px 54px minmax(0, 1fr);
 }
 
 .row.col-head {

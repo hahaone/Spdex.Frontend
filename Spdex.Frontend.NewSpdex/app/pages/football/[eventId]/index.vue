@@ -221,7 +221,8 @@ function jumpTo(target: SectionKey) {
                 title="比分 CS"
                 tone="goals"
                 :rows="detail.cs.slice(0, 3)"
-                index-label="大注"
+                turnover-label="大注"
+                hide-index
                 @open="jumpTo('cs')"
               />
             </template>

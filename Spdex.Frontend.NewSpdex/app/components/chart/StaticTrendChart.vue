@@ -108,11 +108,61 @@ const yTicks = computed(() => {
     return { value: val, y: pad.top + (1 - i / 3) * chartH.value }
   })
 })
+
+// ── 交互：十字准线 + 悬浮提示（鼠标 hover / 触屏拖动 scrub）──
+const svgRef = ref<SVGSVGElement | null>(null)
+const hoverIndex = ref<number | null>(null)
+
+const hover = computed(() => {
+  const i = hoverIndex.value
+  if (i == null) return null
+  const p = props.points[i]
+  if (!p) return null
+  return { i, p, x: xAt(i) }
+})
+
+const tooltip = computed(() => {
+  const h = hover.value
+  if (!h) return null
+  const frac = h.x / width
+  const anchor = frac > 0.62 ? 'right' : frac < 0.2 ? 'left' : 'mid'
+  return {
+    time: h.p.time,
+    volume: h.p.volume,
+    anchor,
+    leftPct: Math.max(0, Math.min(100, frac * 100)),
+    rows: fields.value.map(f => ({ key: f, label: labels.value[f] ?? '', value: h.p[f], missing: isMissing(h.p[f]) })),
+  }
+})
+
+function updateFromEvent(e: PointerEvent) {
+  const svg = svgRef.value
+  const n = props.points.length
+  if (!svg || n === 0) return
+  const rect = svg.getBoundingClientRect()
+  if (rect.width === 0) return
+  const vbX = ((e.clientX - rect.left) / rect.width) * width
+  const t = (vbX - pad.left) / (chartW || 1)
+  hoverIndex.value = Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))))
+}
+function onMove(e: PointerEvent) { updateFromEvent(e) }
+function onLeave() { hoverIndex.value = null }
+function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value = null }
 </script>
 
 <template>
   <div class="trend-chart">
-    <svg :viewBox="`0 0 ${width} ${height}`" role="img" aria-label="走势图">
+    <svg
+      ref="svgRef"
+      :viewBox="`0 0 ${width} ${height}`"
+      role="img"
+      aria-label="走势图"
+      @pointerdown="onMove"
+      @pointermove="onMove"
+      @pointerleave="onLeave"
+      @pointerup="onUp"
+      @pointercancel="onLeave"
+    >
       <g v-for="tick in yTicks" :key="tick.value">
         <line
           :x1="pad.left"
@@ -152,7 +202,28 @@ const yTicks = computed(() => {
       <text :x="pad.left" :y="height - 8" class="x-tick">{{ points[0]?.time }}</text>
       <text :x="(pad.left + width - pad.right) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ points[Math.floor(points.length / 2)]?.time }}</text>
       <text :x="width - pad.right" :y="height - 8" class="x-tick" text-anchor="end">{{ points[points.length - 1]?.time }}</text>
+
+      <g v-if="hover" class="cross">
+        <line class="crosshair" :x1="hover.x" :x2="hover.x" :y1="pad.top" :y2="height - pad.bottom" />
+        <template v-for="f in fields" :key="`hi-${f}`">
+          <circle v-if="!isMissing(hover.p[f])" :class="['dot-hi', f]" :cx="hover.x" :cy="yAt(hover.p[f])" r="3.4" />
+        </template>
+      </g>
     </svg>
+
+    <div v-if="tooltip" :class="['tip', `a-${tooltip.anchor}`]" :style="{ left: `${tooltip.leftPct}%` }">
+      <div class="tip-time">{{ tooltip.time }}</div>
+      <div v-for="r in tooltip.rows" :key="r.key" class="tip-row">
+        <i :class="r.key" />
+        <span class="tl">{{ r.label }}</span>
+        <b class="tv">{{ r.missing ? '-' : fmtValue(r.value) }}</b>
+      </div>
+      <div class="tip-row">
+        <i class="volume" />
+        <span class="tl">成交量</span>
+        <b class="tv">{{ fmtAmount(tooltip.volume) }}</b>
+      </div>
+    </div>
     <div class="legend">
       <span><i class="home" />{{ labels.home }}</span>
       <span v-if="hasDraw"><i class="draw" />{{ labels.draw }}</span>
@@ -164,6 +235,7 @@ const yTicks = computed(() => {
 
 <style scoped>
 .trend-chart {
+  position: relative;
   width: 100%;
   min-height: 188px;
 }
@@ -175,6 +247,106 @@ svg {
   border: 1px solid var(--line);
   border-radius: 4px;
   background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  cursor: crosshair;
+  touch-action: pan-y; /* 纵向滑动滚动页面，横向滑动 scrub 准线 */
+}
+
+.crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.dot-hi {
+  stroke: var(--panel);
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+
+.dot-hi.home {
+  fill: var(--buy);
+}
+
+.dot-hi.draw {
+  fill: var(--sell);
+}
+
+.dot-hi.away {
+  fill: var(--brand);
+}
+
+.tip {
+  position: absolute;
+  top: 4px;
+  z-index: 3;
+  transform: translateX(-50%);
+  min-width: 96px;
+  padding: 5px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow-elev);
+  font-size: 0.66rem;
+  pointer-events: none;
+}
+
+.tip.a-left {
+  transform: translateX(0);
+}
+
+.tip.a-right {
+  transform: translateX(-100%);
+}
+
+.tip-time {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.55;
+}
+
+.tip-row i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.tip-row i.home {
+  background: var(--buy);
+}
+
+.tip-row i.draw {
+  background: var(--sell);
+}
+
+.tip-row i.away {
+  background: var(--brand);
+}
+
+.tip-row i.volume {
+  background: rgba(26, 140, 211, 0.4);
+}
+
+.tip-row .tl {
+  flex: 1;
+  color: var(--muted);
+}
+
+.tip-row .tv {
+  color: var(--ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .grid {
