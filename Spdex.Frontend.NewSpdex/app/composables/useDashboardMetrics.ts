@@ -26,10 +26,15 @@ const TARGET_MAP: Record<string, string> = {
 }
 
 function decorate(raw: DashboardMetricRaw): DashboardMetric {
+  const base = TARGET_MAP[raw.id] ?? '/football'
+  // 足球类异动带上命中的 eventIds，落地页（/football）据此精确筛选这些比赛
+  const to = base.startsWith('/football')
+    ? `${base}&events=${(raw.eventIds ?? []).join(',')}`
+    : base
   return {
     ...raw,
     tone: TONE_MAP[raw.id] ?? 'bf',
-    to: TARGET_MAP[raw.id] ?? '/football',
+    to,
   }
 }
 
