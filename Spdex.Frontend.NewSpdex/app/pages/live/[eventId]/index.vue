@@ -49,9 +49,9 @@ const oddsPanel = computed(() => {
 
 // 价格比较：从富欧赔 1x2 盘口的即时赔率取（主/平/客 = cur[0..2]）
 const priceCompare = computed(() => {
-  const m = euroOdds.value?.markets?.find(x => x.key === '1x2')
-  if (!m) return []
-  return m.rows.map(r => ({
+  const line = euroOdds.value?.markets?.find(x => x.key === '1x2')?.lines?.[0]
+  if (!line) return []
+  return line.rows.map(r => ({
     book: r.name,
     home: (r.cur[0] ?? 0).toFixed(2),
     draw: (r.cur[1] ?? 0).toFixed(2),

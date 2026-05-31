@@ -1,18 +1,42 @@
 <script setup lang="ts">
-import type { EuroOddsSection } from '~/composables/useMatchDetail'
+import type { EuroOddsSection, EuroLine } from '~/composables/useMatchDetail'
 
 const props = defineProps<{ euro: EuroOddsSection }>()
 
-const active = ref(0)
-const market = computed(() => props.euro.markets[active.value] ?? props.euro.markets[0] ?? null)
+const marketIdx = ref(0)
+const lineIdx = ref(0)
 
-/** 每列的最高即时赔率（最佳，供高亮）。 */
+const market = computed(() => props.euro.markets[marketIdx.value] ?? props.euro.markets[0] ?? null)
+const lines = computed<EuroLine[]>(() => market.value?.lines ?? [])
+const showLineChips = computed(() => lines.value.length > 1)
+const line = computed<EuroLine | null>(() => lines.value[lineIdx.value] ?? lines.value[0] ?? null)
+
+/** 公司数最多的线（默认选它，最具代表性）。 */
+function densest(ls: EuroLine[]): number {
+  let idx = 0
+  let n = -1
+  ls.forEach((l, i) => {
+    if (l.rows.length > n) { n = l.rows.length; idx = i }
+  })
+  return idx
+}
+
+function selectMarket(i: number) {
+  if (i === marketIdx.value) return
+  marketIdx.value = i
+  lineIdx.value = densest(props.euro.markets[i]?.lines ?? [])
+}
+function selectLine(i: number) {
+  lineIdx.value = i
+}
+
+/** 每列最高即时赔率（最佳，供高亮）。 */
 const bestPerCol = computed<number[]>(() => {
-  const m = market.value
-  if (!m) return []
-  return m.columns.map((_, i) => {
+  const l = line.value
+  if (!l) return []
+  return l.columns.map((_, i) => {
     let best = 0
-    for (const r of m.rows) {
+    for (const r of l.rows) {
       const v = r.cur[i] ?? 0
       if (v > best) best = v
     }
@@ -38,9 +62,12 @@ function isBest(cur: number | undefined, i: number): boolean {
   return !!cur && cur > 0 && cur === bestPerCol.value[i]
 }
 
-watch(() => props.euro.markets.length, (n) => {
-  if (active.value >= n) active.value = 0
+watch(() => props.euro.markets.length, () => {
+  if (marketIdx.value >= props.euro.markets.length) marketIdx.value = 0
 })
+watch(market, (m) => {
+  if (lineIdx.value >= (m?.lines.length ?? 0)) lineIdx.value = 0
+}, { immediate: true })
 </script>
 
 <template>
@@ -52,27 +79,41 @@ watch(() => props.euro.markets.length, (n) => {
           v-for="(m, i) in euro.markets"
           :key="m.key"
           type="button"
-          :class="['mtab focus-ring', { active: i === active }]"
-          @click="active = i"
+          :class="['mtab focus-ring', { active: i === marketIdx }]"
+          @click="selectMarket(i)"
         >
           {{ m.label }}
         </button>
       </div>
     </div>
 
-    <div v-if="market" class="euro-table-wrap scrollbar-none">
+    <!-- 盘口线选择（让球 / 大小） -->
+    <div v-if="showLineChips" class="line-chips scrollbar-none">
+      <span class="line-label">盘口</span>
+      <button
+        v-for="(l, i) in lines"
+        :key="l.key"
+        type="button"
+        :class="['lchip focus-ring', { active: i === lineIdx }]"
+        @click="selectLine(i)"
+      >
+        {{ l.label || '—' }}
+      </button>
+    </div>
+
+    <div v-if="line" class="euro-table-wrap scrollbar-none">
       <table class="euro-table">
         <thead>
           <tr>
             <th class="c-name">公司</th>
-            <th v-for="c in market.columns" :key="c">{{ c }}</th>
+            <th v-for="c in line.columns" :key="c">{{ c }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in market.rows" :key="row.name">
+          <tr v-for="row in line.rows" :key="row.name">
             <td class="c-name">{{ row.name }}</td>
             <td
-              v-for="(c, i) in market.columns"
+              v-for="(c, i) in line.columns"
               :key="i"
               :class="['cell', dir(row.init[i], row.cur[i]), { best: isBest(row.cur[i], i) }]"
             >
@@ -80,15 +121,15 @@ watch(() => props.euro.markets.length, (n) => {
               <span class="init">{{ initText(row.init[i]) }}</span>
             </td>
           </tr>
-          <tr v-if="market.average" class="avg-row">
+          <tr v-if="line.average" class="avg-row">
             <td class="c-name">平均</td>
             <td
-              v-for="(c, i) in market.columns"
+              v-for="(c, i) in line.columns"
               :key="i"
-              :class="['cell', dir(market.average?.init[i], market.average?.cur[i])]"
+              :class="['cell', dir(line.average?.init[i], line.average?.cur[i])]"
             >
-              <b class="cur">{{ fmt(market.average?.cur[i]) }}</b>
-              <span class="init">{{ initText(market.average?.init[i]) }}</span>
+              <b class="cur">{{ fmt(line.average?.cur[i]) }}</b>
+              <span class="init">{{ initText(line.average?.init[i]) }}</span>
             </td>
           </tr>
         </tbody>
@@ -99,7 +140,7 @@ watch(() => props.euro.markets.length, (n) => {
       <span class="lg up">↑ 涨</span>
       <span class="lg down">↓ 跌</span>
       <span class="lg best-lg">最佳</span>
-      <span class="muted">· 上即时 / 下初赔 · {{ market?.rows.length ?? 0 }} 家</span>
+      <span class="muted">· 上即时 / 下初赔 · {{ line?.rows.length ?? 0 }} 家</span>
     </div>
   </section>
 </template>
@@ -150,6 +191,41 @@ watch(() => props.euro.markets.length, (n) => {
   color: #fff;
 }
 
+.line-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  margin-bottom: 6px;
+  padding-bottom: 1px;
+}
+
+.line-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 720;
+  margin-right: 2px;
+}
+
+.lchip {
+  flex: 0 0 auto;
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+
+.lchip.active {
+  background: var(--brand-tint);
+  border-color: var(--brand-tint-strong);
+  color: var(--brand-deep);
+}
+
 .euro-table-wrap {
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -158,6 +234,7 @@ watch(() => props.euro.markets.length, (n) => {
 }
 
 .euro-table {
+  width: 100%;
   border-collapse: collapse;
   font-size: 0.74rem;
 }

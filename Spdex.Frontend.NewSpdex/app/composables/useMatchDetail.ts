@@ -53,7 +53,8 @@ export interface EuroMarketAvg {
   cur: number[]
 }
 
-export interface EuroMarket {
+/** 一条盘口线（胜平负无线/让球某线/大小某线），≤3 列。 */
+export interface EuroLine {
   key: string
   label: string
   columns: string[]
@@ -61,7 +62,13 @@ export interface EuroMarket {
   average: EuroMarketAvg | null
 }
 
-/** 富欧赔：多盘口（胜平负/让球/大小）× 多公司，每选项初赔 + 即时。 */
+export interface EuroMarket {
+  key: string
+  label: string
+  lines: EuroLine[]
+}
+
+/** 富欧赔：盘口（胜平负/让球/大小）→ 盘口线 → 多公司初赔 + 即时。移动端每线独立成表。 */
 export interface EuroOddsSection {
   title: string
   markets: EuroMarket[]

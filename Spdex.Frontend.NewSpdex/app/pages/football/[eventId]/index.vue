@@ -287,6 +287,12 @@ function jumpTo(target: SectionKey) {
             <Lock :size="14" />
             <span>欧赔数据未对当前会籍开放</span>
           </section>
+
+          <LadderPanel v-if="access.tradeDetails" :event-id="match.eventId" />
+          <section v-else class="access-card">
+            <Lock :size="14" />
+            <span>盘口明细未对当前会籍开放</span>
+          </section>
         </aside>
       </div>
     </template>
@@ -296,6 +302,8 @@ function jumpTo(target: SectionKey) {
 <style scoped>
 .detail-page {
   display: grid;
+  /* 单列且可收缩：约束列宽为容器宽度，宽内容（表格）内部滚动而非撑大整页。 */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .loading,
@@ -341,6 +349,7 @@ function jumpTo(target: SectionKey) {
 
 .match-header {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   padding: 8px 12px 10px;
   background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
@@ -359,11 +368,13 @@ function jumpTo(target: SectionKey) {
 
 .header-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
 .header-main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
@@ -444,12 +455,14 @@ function jumpTo(target: SectionKey) {
 
 .tab-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  /* 移动端：标签隐藏，tab 占满整行（容纳 7 个 tab 不溢出）。桌面端恢复 标签+tab 双列。 */
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
 
 .band-label {
+  display: none;
   font-size: 0.86rem;
   font-weight: 800;
   color: var(--accent-deep);
@@ -457,10 +470,21 @@ function jumpTo(target: SectionKey) {
 
 .detail-grid {
   display: grid;
+  /* 移动端单列，桌面端在 @media(min-width:1024px) 改为双列。 */
+  grid-template-columns: minmax(0, 1fr);
+  /* 作为 .detail-page 的网格项，允许收缩到列宽，避免侧栏宽表格把整页撑出视口。 */
+  min-width: 0;
+}
+
+/* 主/侧两列允许收缩，避免内部宽内容把整列撑出视口。 */
+.main-col,
+.side-col {
+  min-width: 0;
 }
 
 .all-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 10px 10px;
   background: var(--surface);
@@ -569,6 +593,14 @@ function jumpTo(target: SectionKey) {
     border-bottom: 1px solid var(--line);
   }
 
+  .tab-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .band-label {
+    display: block;
+  }
+
   .detail-grid {
     grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
     gap: 14px;
@@ -578,6 +610,7 @@ function jumpTo(target: SectionKey) {
   .main-col,
   .side-col {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
