@@ -47,14 +47,15 @@ const oddsPanel = computed(() => {
   return rows
 })
 
-// 价格比较：从 euroOdds.bookMakers 取
+// 价格比较：从富欧赔 1x2 盘口的即时赔率取（主/平/客 = cur[0..2]）
 const priceCompare = computed(() => {
-  if (!euroOdds.value?.bookMakers) return []
-  return euroOdds.value.bookMakers.map(b => ({
-    book: b.name,
-    home: b.homeOdds.toFixed(2),
-    draw: b.drawOdds.toFixed(2),
-    away: b.awayOdds.toFixed(2),
+  const m = euroOdds.value?.markets?.find(x => x.key === '1x2')
+  if (!m) return []
+  return m.rows.map(r => ({
+    book: r.name,
+    home: (r.cur[0] ?? 0).toFixed(2),
+    draw: (r.cur[1] ?? 0).toFixed(2),
+    away: (r.cur[2] ?? 0).toFixed(2),
   }))
 })
 </script>

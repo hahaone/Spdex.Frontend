@@ -42,32 +42,29 @@ interface BackendDetailAccess {
   corner: boolean
 }
 
-export interface EuroBookmakerRow {
-  bid: number
+export interface EuroMarketRow {
   name: string
-  homeOdds: number
-  drawOdds: number
-  awayOdds: number
-  homeKelly: number
-  drawKelly: number
-  awayKelly: number
-  returnPro: number
+  init: number[]
+  cur: number[]
 }
 
-export interface EuroAverage {
-  homeOdds: number
-  drawOdds: number
-  awayOdds: number
-  homeKelly: number
-  drawKelly: number
-  awayKelly: number
+export interface EuroMarketAvg {
+  init: number[]
+  cur: number[]
 }
 
+export interface EuroMarket {
+  key: string
+  label: string
+  columns: string[]
+  rows: EuroMarketRow[]
+  average: EuroMarketAvg | null
+}
+
+/** 富欧赔：多盘口（胜平负/让球/大小）× 多公司，每选项初赔 + 即时。 */
 export interface EuroOddsSection {
   title: string
-  bookMakers: EuroBookmakerRow[]
-  average: EuroAverage | null
-  note: string | null
+  markets: EuroMarket[]
 }
 
 interface BackendMatchDetail {
@@ -207,7 +204,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
     handicap: result.data.value?.data?.handicap?.note ?? null,
     cs: result.data.value?.data?.cs?.note ?? null,
     corner: result.data.value?.data?.corner?.note ?? null,
-    euroOdds: result.data.value?.data?.euroOdds?.note ?? null,
+    euroOdds: null,
   }))
 
   /** 欧赔 section（独立结构，不走 MarketMetricRow）。 */

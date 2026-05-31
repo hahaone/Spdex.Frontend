@@ -20,9 +20,10 @@ function rowClass(row: MarketMetricRow): string {
   return ''
 }
 
+/** 指数（必指/P指）保留整数。 */
 function indexValue(row: MarketMetricRow, tone: string): string {
-  if (tone === 'poly') return row.polyIndex !== undefined ? String(row.polyIndex) : '-'
-  return row.bfIndex !== undefined ? String(row.bfIndex) : '-'
+  const v = tone === 'poly' ? row.polyIndex : row.bfIndex
+  return typeof v === 'number' && Number.isFinite(v) ? Math.round(v).toString() : '-'
 }
 </script>
 

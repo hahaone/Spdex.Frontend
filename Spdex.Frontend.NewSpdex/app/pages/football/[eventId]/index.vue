@@ -282,38 +282,7 @@ function jumpTo(target: SectionKey) {
             </div>
           </section>
 
-          <section v-if="access.euroOdds && euroOdds" class="euro-band">
-            <div class="euro-head">
-              <h3>欧赔</h3>
-              <span class="muted">{{ euroOdds.note }}</span>
-            </div>
-            <div class="euro-table">
-              <div class="euro-head-row">
-                <span>公司</span>
-                <span>主</span>
-                <span>平</span>
-                <span>客</span>
-              </div>
-              <div v-for="row in euroOdds.bookMakers" :key="row.bid" class="euro-row">
-                <span class="bm-name">{{ row.name }}</span>
-                <span class="num">{{ row.homeOdds.toFixed(2) }}</span>
-                <span class="num">{{ row.drawOdds.toFixed(2) }}</span>
-                <span class="num">{{ row.awayOdds.toFixed(2) }}</span>
-              </div>
-              <div v-if="euroOdds.average" class="euro-row avg-row">
-                <span class="bm-name">平均</span>
-                <span class="num">{{ euroOdds.average.homeOdds.toFixed(2) }}</span>
-                <span class="num">{{ euroOdds.average.drawOdds.toFixed(2) }}</span>
-                <span class="num">{{ euroOdds.average.awayOdds.toFixed(2) }}</span>
-              </div>
-              <div v-if="euroOdds.average" class="euro-row kelly-row">
-                <span class="bm-name">平均凯利</span>
-                <span class="num">{{ euroOdds.average.homeKelly.toFixed(3) }}</span>
-                <span class="num">{{ euroOdds.average.drawKelly.toFixed(3) }}</span>
-                <span class="num">{{ euroOdds.average.awayKelly.toFixed(3) }}</span>
-              </div>
-            </div>
-          </section>
+          <EuroOddsTable v-if="access.euroOdds && euroOdds" :euro="euroOdds" />
           <section v-else-if="!access.euroOdds" class="access-card">
             <Lock :size="14" />
             <span>欧赔数据未对当前会籍开放</span>
@@ -712,80 +681,4 @@ function jumpTo(target: SectionKey) {
   cursor: not-allowed;
 }
 
-/* ─── 欧赔 section ─── */
-.euro-band {
-  display: grid;
-  gap: 6px;
-  padding: 10px 11px 11px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel);
-}
-
-.euro-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.euro-head h3 {
-  margin: 0;
-  font-size: 0.88rem;
-  font-weight: 820;
-}
-
-.euro-head .muted {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 720;
-}
-
-.euro-table {
-  border: 1px solid var(--divider);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.euro-head-row,
-.euro-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 50px 50px 50px;
-  gap: 4px;
-  align-items: center;
-  padding: 4px 8px;
-  font-size: 0.76rem;
-  font-weight: 720;
-}
-
-.euro-head-row {
-  background: #f4f6fb;
-  color: var(--accent-deep);
-  font-weight: 800;
-  font-size: 0.7rem;
-}
-
-.euro-row {
-  border-top: 1px solid var(--divider);
-  color: var(--ink);
-}
-
-.euro-row .num {
-  text-align: right;
-}
-
-.euro-row .bm-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.euro-row.avg-row,
-.euro-row.kelly-row {
-  background: #f9fafc;
-  font-weight: 800;
-}
-
-.euro-row.kelly-row {
-  color: var(--sell);
-}
 </style>
