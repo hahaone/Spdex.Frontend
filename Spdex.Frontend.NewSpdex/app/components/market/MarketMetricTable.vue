@@ -23,13 +23,27 @@ function rowClass(row: MarketMetricRow): string {
   return ''
 }
 
+/** 指数类（必指/进球指数/让分指数/P指）保留整数 */
+function fmtInt(v: number | undefined | null): string {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.round(v).toString() : '-'
+}
+/** 冷热/欧均保留 2 位小数 */
+function fmt2(v: number | undefined | null): string {
+  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-'
+}
+/** 方差数值偏小，<0.1 时给 3 位小数，避免显示成 0.00 */
+function fmtVar(v: number | undefined | null): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '-'
+  return Math.abs(v) < 0.1 ? v.toFixed(3) : v.toFixed(2)
+}
+
 function rowPrimary(row: MarketMetricRow): string[] {
-  if (props.mode === 'poly') return [row.selection, row.price, row.turnover || '-', String(row.polyIndex ?? '-'), row.ratio ?? '-']
-  if (props.mode === 'goals') return [row.selection, row.price, row.turnover || '-', String(row.bfIndex ?? '-'), row.ratio ?? '-', row.listing ?? '-', row.balance ?? '-']
-  if (props.mode === 'handicap') return [row.selection, row.price, row.turnover || '-', String(row.bfIndex ?? '-'), row.ratio ?? '-', row.listing ?? '-']
+  if (props.mode === 'poly') return [row.selection, row.price, row.turnover || '-', fmtInt(row.polyIndex), row.ratio ?? '-']
+  if (props.mode === 'goals') return [row.selection, row.price, row.turnover || '-', fmtInt(row.bfIndex), row.ratio ?? '-', row.listing ?? '-', row.balance ?? '-']
+  if (props.mode === 'handicap') return [row.selection, row.price, row.turnover || '-', fmtInt(row.bfIndex), row.ratio ?? '-', row.listing ?? '-']
   if (props.mode === 'cs') return [row.selection, row.price, row.turnover || '-']
   if (props.mode === 'corner') return [row.selection, row.price, row.turnover || '-', row.ratio ?? '-']
-  return [row.selection, row.price, row.turnover, String(row.bfIndex ?? '-'), row.ratio ?? '-']
+  return [row.selection, row.price, row.turnover, fmtInt(row.bfIndex), row.ratio ?? '-']
 }
 
 function isNegative(value: unknown): boolean {
@@ -68,11 +82,11 @@ function isNegative(value: unknown): boolean {
       <div class="extension-grid">
         <div v-for="row in rows" :key="`${row.key}-ext`" :class="['extension-row', rowClass(row)]">
           <b class="ext-key">{{ row.selection }}</b>
-          <span :class="{ negative: isNegative(row.pnl) }">盈亏 <b class="num">{{ row.pnl }}</b></span>
-          <span>挂牌 <b class="num">{{ row.listing }}</b></span>
-          <span :class="{ negative: isNegative(row.heat) }">冷热 <b class="num">{{ row.heat }}</b></span>
-          <span>欧均 <b class="num">{{ row.euroAvg }}</b></span>
-          <span>方差 <b class="num">{{ row.variance }}</b></span>
+          <span :class="{ negative: isNegative(row.pnl) }">盈亏 <b class="num">{{ fmtInt(row.pnl) }}</b></span>
+          <span>挂牌 <b class="num">{{ row.listing ?? '-' }}</b></span>
+          <span :class="{ negative: isNegative(row.heat) }">冷热 <b class="num">{{ fmt2(row.heat) }}</b></span>
+          <span>欧均 <b class="num">{{ fmt2(row.euroAvg) }}</b></span>
+          <span>方差 <b class="num">{{ fmtVar(row.variance) }}</b></span>
         </div>
       </div>
     </div>
