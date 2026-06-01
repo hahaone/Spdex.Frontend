@@ -2,7 +2,7 @@
 import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
 
 const { user, userName, tier, logout } = useAuth()
-const { summary, orders, ordersServiceAvailable, pending, refresh } = useAccount()
+const { summary, refresh } = useAccount()
 const { start: startOnboarding } = useOnboarding()
 const { getCustomerService } = useCreateOrder()
 
@@ -48,21 +48,6 @@ const lastLogin = computed(() => {
   if (!raw) return '—'
   return raw.slice(5, 16).replace('T', ' ') // "...T17:30" → "06-01 17:30"（紧凑，适配卡片宽度）
 })
-
-const channelLabel: Record<string, string> = {
-  yft: '扫码（YFT）',
-  alipay: '支付宝',
-  silk: '锦囊扣点',
-  wechat: '微信',
-  qq: 'QQ 钱包',
-}
-
-const statusToneMap: Record<number, string> = {
-  0: 'mute',
-  1: 'positive',
-  2: 'negative',
-  3: 'mute',
-}
 
 async function handleLogout() {
   logout()
@@ -150,35 +135,6 @@ onMounted(async () => {
         <span>客服 QQ</span>
         <b class="qq-val num">{{ qqCopied ? '已复制' : customerQQ }}</b>
       </button>
-    </section>
-
-    <section class="orders-band">
-      <div class="band-head">
-        <h2>订单历史</h2>
-        <span class="muted num">{{ orders.length }} 条</span>
-      </div>
-
-      <div v-if="pending && !orders.length" class="loading">加载中…</div>
-      <div v-else-if="!ordersServiceAvailable" class="empty service-down">
-        订单查询服务暂时不可访问。如有疑问请联系客服核对支付记录。
-      </div>
-      <div v-else-if="!orders.length" class="empty">暂无订单</div>
-      <div v-else class="order-table">
-        <div class="order-head">
-          <span>时间</span>
-          <span>套餐</span>
-          <span>渠道</span>
-          <span>金额</span>
-          <span>状态</span>
-        </div>
-        <div v-for="order in orders" :key="order.orderId" class="order-row">
-          <span class="num">{{ order.createTime?.slice(0, 16) ?? '—' }}</span>
-          <span>{{ order.roleName ?? order.roleId }} · {{ order.dueMonths }}月</span>
-          <span>{{ channelLabel[order.channel] ?? order.channel }}</span>
-          <span class="num">¥{{ order.amount }}</span>
-          <span :class="['tag', `tone-${statusToneMap[order.status] ?? 'mute'}`]">{{ order.statusText ?? '—' }}</span>
-        </div>
-      </div>
     </section>
 
     <button class="logout-btn focus-ring" type="button" @click="handleLogout">
@@ -355,89 +311,6 @@ onMounted(async () => {
 .setting-row:active {
   background: var(--surface);
 }
-
-.orders-band {
-  display: grid;
-  gap: 6px;
-  padding: 10px 11px 11px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel);
-}
-
-.band-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.band-head h2 {
-  margin: 0;
-  font-size: 0.88rem;
-  font-weight: 820;
-}
-
-.muted {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 720;
-}
-
-.loading,
-.empty {
-  padding: 14px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 720;
-}
-
-.empty.service-down {
-  color: #8a6212;
-  background: var(--away-bg);
-  border: 1px solid var(--away-strong);
-  border-radius: 4px;
-}
-
-.order-table {
-  border: 1px solid var(--divider);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.order-head,
-.order-row {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 80px 64px 56px;
-  gap: 6px;
-  padding: 5px 8px;
-  font-size: 0.76rem;
-  font-weight: 720;
-}
-
-.order-head {
-  background: #f4f6fb;
-  color: var(--accent-deep);
-  font-weight: 800;
-  font-size: 0.72rem;
-}
-
-.order-row {
-  border-top: 1px solid var(--divider);
-  color: var(--ink);
-}
-
-.tag {
-  display: inline-grid;
-  place-items: center;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  font-weight: 760;
-}
-
-.tag.tone-positive { background: rgba(46, 156, 95, 0.16); color: var(--sell); }
-.tag.tone-negative { background: rgba(214, 50, 76, 0.16); color: #b1253c; }
-.tag.tone-mute { background: rgba(107, 114, 128, 0.14); color: var(--muted); }
 
 .logout-btn {
   display: inline-flex;
