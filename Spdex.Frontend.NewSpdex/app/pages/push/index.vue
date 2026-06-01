@@ -48,11 +48,26 @@ const bannerState = computed<'on' | 'off' | 'denied' | 'unsupported'>(() => {
   return 'off'
 })
 
+// iOS 上 Web Push 仅 Safari「添加到主屏幕」后可用（Chrome 等浏览器标签页一律不支持）
+const isIOS = computed(() => {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1)
+})
+const isStandalone = computed(() => {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia?.('(display-mode: standalone)')?.matches === true
+    || (window.navigator as unknown as { standalone?: boolean }).standalone === true
+})
+
 const bannerLabel = computed(() => {
   switch (bannerState.value) {
     case 'on': return '后台推送已开启 · 关页/锁屏也能收到'
     case 'denied': return '通知被拒绝，请到浏览器设置里允许'
-    case 'unsupported': return '当前浏览器不支持后台推送'
+    case 'unsupported':
+      return isIOS.value
+        ? 'iPhone 请用 Safari 打开 → 分享 →「添加到主屏幕」，再从主屏图标进入开启'
+        : '当前浏览器不支持后台推送'
     default: return '开启后台推送，关页也能收到新信号'
   }
 })

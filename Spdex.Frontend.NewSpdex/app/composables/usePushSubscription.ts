@@ -35,9 +35,11 @@ export function usePushSubscription() {
       supported.value = false
       return false
     }
-    const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+    // Web Push 真正需要的是「安全上下文 + service worker + PushManager」。
+    // 不强求 window.Notification（部分浏览器只在 SW 作用域暴露，避免误报不支持）。
+    const ok = window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window
     supported.value = ok
-    permission.value = ok ? Notification.permission : 'unsupported'
+    permission.value = ('Notification' in window) ? Notification.permission : (ok ? 'default' : 'unsupported')
     return ok
   }
 
@@ -63,9 +65,11 @@ export function usePushSubscription() {
     if (!checkSupport()) return { ok: false, reason: '当前浏览器不支持推送' }
     busy.value = true
     try {
-      const perm = await Notification.requestPermission()
-      permission.value = perm
-      if (perm !== 'granted') return { ok: false, reason: '通知权限被拒绝' }
+      if ('Notification' in window && typeof Notification.requestPermission === 'function') {
+        const perm = await Notification.requestPermission()
+        permission.value = perm
+        if (perm !== 'granted') return { ok: false, reason: '通知权限被拒绝' }
+      }
 
       const vapid = await $apiFetch<ApiResponse<VapidResult>>('/api/newspdex/push/vapid-public-key')
       const pk = vapid?.data?.publicKey
