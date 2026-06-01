@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { Bell, BellOff, ChevronRight, Flame, RefreshCw } from '@lucide/vue'
+import { Bell, BellOff, ChevronRight, Flame, RefreshCw, Smartphone } from '@lucide/vue'
 import type { ApiResponse } from '~/types/auth'
 
 const { signals, pending, refresh } = useSignals(50)
 
 // 后台 Web Push 订阅（关页/锁屏也能收到信号）
 const { supported, subscribed, busy, permission, refreshState, subscribe, unsubscribe } = usePushSubscription()
+// PWA 安装引导（充分利用主屏模式：可推送 + 全屏）
+const { isStandalone, isIOS, canInstall, promptInstall } = usePwaInstall()
 const feedback = ref('')
 
 onMounted(async () => {
@@ -48,17 +50,17 @@ const bannerState = computed<'on' | 'off' | 'denied' | 'unsupported'>(() => {
   return 'off'
 })
 
-// iOS 上 Web Push 仅 Safari「添加到主屏幕」后可用（Chrome 等浏览器标签页一律不支持）
-const isIOS = computed(() => {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent || ''
-  return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1)
+// 「添加到主屏幕」引导文案（未装成 PWA 时显示）
+const installHint = computed(() => {
+  if (isIOS.value)
+    return '用 Safari 打开 → 底部「分享」→「添加到主屏幕」，再从桌面图标进入'
+  return '浏览器菜单 →「安装应用 / 添加到主屏幕」'
 })
-const isStandalone = computed(() => {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia?.('(display-mode: standalone)')?.matches === true
-    || (window.navigator as unknown as { standalone?: boolean }).standalone === true
-})
+
+async function doInstall() {
+  feedback.value = ''
+  await promptInstall()
+}
 
 const bannerLabel = computed(() => {
   switch (bannerState.value) {
@@ -108,6 +110,15 @@ const bannerLabel = computed(() => {
           关闭
         </button>
       </template>
+    </div>
+
+    <div v-if="!isStandalone" class="install-card">
+      <Smartphone :size="18" class="ic" />
+      <div class="install-body">
+        <b>装到主屏，体验更好</b>
+        <span>{{ installHint }} —— 装好可开启信号推送、全屏快速进入</span>
+      </div>
+      <button v-if="canInstall" class="install-btn focus-ring" type="button" @click="doInstall">安装</button>
     </div>
 
     <div v-if="pending && !signals.length" class="empty">加载中…</div>
@@ -234,6 +245,53 @@ const bannerLabel = computed(() => {
   background: transparent;
   border-color: currentColor;
   color: inherit;
+}
+
+/* 「添加到主屏幕」引导卡（未装成 PWA 时显示） */
+.install-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--brand);
+  border-radius: 6px;
+  background: var(--brand-tint);
+}
+
+.install-card .ic {
+  flex: 0 0 auto;
+  color: var(--brand);
+}
+
+.install-body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.install-body b {
+  font-size: 0.84rem;
+  font-weight: 820;
+  color: var(--ink);
+}
+
+.install-body span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.install-btn {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .empty {

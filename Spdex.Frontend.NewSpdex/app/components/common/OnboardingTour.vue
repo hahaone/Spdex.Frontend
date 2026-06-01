@@ -1,18 +1,32 @@
 <script setup lang="ts">
-import { Activity, BarChart3, ChevronLeft, ChevronRight, Crown, Sparkles, Trophy, X } from '@lucide/vue'
+import type { Component } from 'vue'
+import { Activity, BarChart3, ChevronLeft, ChevronRight, Crown, Download, Smartphone, Sparkles, Trophy, X } from '@lucide/vue'
 
 const { open, dismiss } = useOnboarding()
+const { isStandalone, isIOS, canInstall, promptInstall } = usePwaInstall()
 
-const steps = [
+// 「装到主屏」一步按平台给不同引导
+const installText = computed(() => {
+  if (isStandalone.value)
+    return '已添加到主屏幕 ✓ 去「推送」页点「开启推送」，信号触发时关页 / 锁屏也能收到大额异动提醒。'
+  if (isIOS.value)
+    return 'iPhone 请用 Safari 打开本站 → 底部「分享」→「添加到主屏幕」；装好后从桌面图标进入，才能开启信号推送、全屏使用。'
+  return '安卓 / 桌面 Chrome：菜单 →「安装应用 / 添加到主屏幕」；装好后可开启信号推送、像 App 一样全屏快速进入。'
+})
+
+interface TourStep { icon: Component, title: string, text: string, action?: boolean }
+
+const steps = computed<TourStep[]>(() => [
   { icon: Sparkles, title: '今日异动指标', text: '首页实时聚合必发成交、必发指数、POLY 成交 / 指数与双红信号，点任意指标直达对应赛事筛选。' },
   { icon: Trophy, title: '赛事卡 · 中文呈现', text: '赛事卡显示中文队名、必发价位、大额成交与信号标签，点击进入完整指数详情。' },
   { icon: BarChart3, title: '走势图矩阵', text: '详情页走势图覆盖标盘 / 进球 / 让分 / 欧赔 等盘口 × 价位 / 指数 / 成交 / 凯利 等指标的完整组合。' },
   { icon: Activity, title: '实时赛事', text: '「实时赛事」只呈现 SPdex 赛程中正在进行的比赛；BSW / Poly 的数据在赛事详情里匹配呈现。' },
   { icon: Crown, title: '会员与夜间模式', text: '会员中心管理会籍与升级；右上角可一键切换日间 / 夜间模式。' },
-]
+  { icon: Smartphone, title: '装到主屏 · 收信号推送', text: installText.value, action: true },
+])
 
 const step = ref(0)
-const isLast = computed(() => step.value === steps.length - 1)
+const isLast = computed(() => step.value === steps.value.length - 1)
 
 watch(open, (v) => {
   if (v) step.value = 0
@@ -24,6 +38,10 @@ function next() {
 }
 function prev() {
   if (step.value > 0) step.value -= 1
+}
+
+async function doInstall() {
+  await promptInstall()
 }
 </script>
 
@@ -41,6 +59,10 @@ function prev() {
           </div>
           <h2 class="ob-title">{{ steps[step]!.title }}</h2>
           <p class="ob-text">{{ steps[step]!.text }}</p>
+
+          <button v-if="steps[step]!.action && canInstall" class="ob-install focus-ring" @click="doInstall">
+            <Download :size="15" /> 立即安装到主屏
+          </button>
 
           <div class="ob-dots" aria-hidden="true">
             <span v-for="(s, i) in steps" :key="i" :class="['ob-dot', { active: i === step }]" />
@@ -126,6 +148,22 @@ function prev() {
   color: var(--muted);
   font-size: 0.84rem;
   line-height: 1.55;
+}
+
+.ob-install {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--brand);
+  border-radius: 9px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .ob-dots {
