@@ -56,12 +56,18 @@ const featureCards = [
           :key="`${t.eventId}-${t.timeText}`"
           :to="`/football/${t.eventId}`"
           :class="['ticker-item', tickerSideClass(t.selection)]"
-          :title="`${t.homeTeam} vs ${t.awayTeam} ${t.attr}`"
+          :title="`${t.league ? t.league + ' · ' : ''}${t.homeTeam} vs ${t.awayTeam} ${t.attr}`"
         >
-          <span class="t-amount num">{{ t.amountText }}</span>
-          <span class="t-side">{{ t.selection }}</span>
-          <span class="t-odds num">@{{ t.odds.toFixed(2) }}</span>
-          <span class="t-time num">{{ t.timeText }}</span>
+          <span class="t-match">
+            <span v-if="t.league" class="t-league">{{ t.league }}</span>
+            <span class="t-teams">{{ t.homeTeam }} <i>vs</i> {{ t.awayTeam }}</span>
+          </span>
+          <span class="t-bet">
+            <span class="t-amount num">{{ t.amountText }}</span>
+            <span class="t-side">{{ t.selection }}</span>
+            <span class="t-odds num">@{{ t.odds.toFixed(2) }}</span>
+            <span class="t-time num">{{ t.timeText }}</span>
+          </span>
         </NuxtLink>
       </div>
     </section>
@@ -245,11 +251,12 @@ const featureCards = [
 .ticker-item {
   display: inline-flex;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 5px 9px;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 5px;
   font-size: 0.72rem;
   font-weight: 760;
   text-decoration: none;
@@ -261,8 +268,43 @@ const featureCards = [
 .ticker-item.side-draw { background: var(--canvas); color: var(--muted); border-color: var(--line); }
 .ticker-item.side-mute { background: var(--surface); color: var(--muted); border-color: var(--line); }
 
+/* 第一行：联赛 + 球队（中文，显示全） */
+.t-match {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.t-league {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.t-teams {
+  font-size: 0.75rem;
+  font-weight: 820;
+}
+
+.t-teams i {
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.5;
+  padding: 0 2px;
+}
+
+/* 第二行：金额 + 方向 + 赔率 + 时间 */
+.t-bet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .t-amount { font-weight: 820; }
-.t-side { padding: 0 4px; border-radius: 2px; background: rgba(255,255,255,0.6); font-weight: 800; }
+.t-side { padding: 0 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.6); font-weight: 800; }
 .t-odds { opacity: 0.86; }
 .t-time { opacity: 0.7; font-size: 0.68rem; }
 

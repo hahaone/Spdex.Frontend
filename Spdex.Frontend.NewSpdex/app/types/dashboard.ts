@@ -15,6 +15,7 @@ export interface DashboardMetricRaw {
 
 export interface BigTradeTickerItem {
   eventId: number
+  league: string
   homeTeam: string
   awayTeam: string
   selection: string
