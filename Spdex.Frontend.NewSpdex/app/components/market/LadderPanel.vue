@@ -106,6 +106,55 @@ const volBars = computed(() => {
 
 const hasChart = computed(() => series.value.length >= 2 && priceBounds.value !== null)
 
+// ── 交互：十字准线 + 悬浮提示（鼠标 hover / 触屏拖动 scrub）──
+const chartSvgRef = ref<SVGSVGElement | null>(null)
+const hoverIndex = ref<number | null>(null)
+
+const hover = computed(() => {
+  const i = hoverIndex.value
+  if (i == null) return null
+  const arr = series.value
+  const p = arr[i]
+  if (!p) return null
+  const x = xAt(i, arr.length)
+  const b = priceBounds.value
+  const hasPrice = typeof p.price === 'number' && p.price > 0 && b !== null
+  const y = hasPrice ? PRICE_TOP + (1 - ((p.price as number) - b!.min) / (b!.max - b!.min)) * PRICE_BAND : null
+  return { i, p, x, y }
+})
+
+const tooltip = computed(() => {
+  const h = hover.value
+  if (!h) return null
+  const frac = h.x / CHART_W
+  return {
+    time: fmtClock(h.p.time),
+    price: h.p.price,
+    volume: h.p.volume,
+    anchor: frac > 0.6 ? 'right' : frac < 0.2 ? 'left' : 'mid',
+    leftPct: Math.max(0, Math.min(100, frac * 100)),
+  }
+})
+
+function fmtClock(t: string): string {
+  if (!t) return ''
+  const i = t.indexOf('T')
+  if (i >= 0) return t.slice(i + 1, i + 6) // ISO → HH:mm
+  return t.length >= 5 ? t.slice(0, 5) : t
+}
+
+function updateHover(e: PointerEvent) {
+  const svg = chartSvgRef.value
+  const n = series.value.length
+  if (!svg || n === 0) return
+  const rect = svg.getBoundingClientRect()
+  if (rect.width === 0) return
+  const frac = (e.clientX - rect.left) / rect.width
+  hoverIndex.value = Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1))))
+}
+function onChartLeave() { hoverIndex.value = null }
+function onChartUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value = null }
+
 // 阶梯表：数据变化后自动滚动到买卖分界（最近成交价附近）
 const tableWrap = ref<HTMLElement | null>(null)
 const boundaryIndex = computed(() => {
@@ -189,7 +238,17 @@ watch(() => active.value?.key, () => {
 
         <!-- 价格 / 成交量 迷你走势 -->
         <div v-if="hasChart" class="lp-chart">
-          <svg :viewBox="`0 0 ${CHART_W} ${CHART_H}`" preserveAspectRatio="none" class="lp-svg">
+          <svg
+            ref="chartSvgRef"
+            :viewBox="`0 0 ${CHART_W} ${CHART_H}`"
+            preserveAspectRatio="none"
+            class="lp-svg"
+            @pointerdown="updateHover"
+            @pointermove="updateHover"
+            @pointerleave="onChartLeave"
+            @pointerup="onChartUp"
+            @pointercancel="onChartLeave"
+          >
             <rect
               v-for="(b, i) in volBars"
               :key="i"
@@ -199,7 +258,24 @@ watch(() => active.value?.key, () => {
             />
             <path :d="priceArea" class="price-area" />
             <path :d="pricePath" class="price-line" fill="none" />
+            <g v-if="hover">
+              <line class="lp-crosshair" :x1="hover.x" :x2="hover.x" :y1="0" :y2="CHART_H" vector-effect="non-scaling-stroke" />
+              <circle v-if="hover.y != null" class="lp-hi-dot" :cx="hover.x" :cy="hover.y" r="2.6" />
+            </g>
           </svg>
+
+          <div v-if="tooltip" :class="['lp-tip', `a-${tooltip.anchor}`]" :style="{ left: `${tooltip.leftPct}%` }">
+            <div class="lp-tip-time">{{ tooltip.time }}</div>
+            <div class="lp-tip-row">
+              <i class="price" /><span class="tl">价格</span>
+              <b class="tv">{{ tooltip.price != null && tooltip.price > 0 ? tooltip.price.toFixed(2) : '–' }}</b>
+            </div>
+            <div class="lp-tip-row">
+              <i class="vol" /><span class="tl">成交量</span>
+              <b class="tv">{{ money(tooltip.volume) }}</b>
+            </div>
+          </div>
+
           <div class="lp-chart-cap">
             <span>价格 / 成交量走势</span>
             <span class="muted">{{ priceBounds?.min.toFixed(2) }} – {{ priceBounds?.max.toFixed(2) }}</span>
@@ -364,6 +440,7 @@ watch(() => active.value?.key, () => {
 }
 
 .lp-chart {
+  position: relative;
   margin-bottom: 8px;
 }
 
@@ -374,6 +451,76 @@ watch(() => active.value?.key, () => {
   border: 1px solid var(--divider);
   border-radius: 6px;
   background: var(--surface);
+  cursor: crosshair;
+  touch-action: pan-y; /* 纵向滑动滚页，横向拖动 scrub 准线 */
+}
+
+.lp-crosshair {
+  stroke: var(--muted);
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.lp-hi-dot {
+  fill: var(--down);
+  stroke: var(--panel);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+
+.lp-tip {
+  position: absolute;
+  top: 2px;
+  z-index: 3;
+  transform: translateX(-50%);
+  min-width: 84px;
+  padding: 4px 7px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow-elev);
+  font-size: 0.64rem;
+  pointer-events: none;
+}
+
+.lp-tip.a-left { transform: translateX(0); }
+.lp-tip.a-right { transform: translateX(-100%); }
+
+.lp-tip-time {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.6;
+}
+
+.lp-tip-row i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.lp-tip-row i.price { background: var(--down); }
+.lp-tip-row i.vol { background: rgba(26, 140, 211, 0.4); }
+
+.lp-tip-row .tl {
+  flex: 1;
+  color: var(--muted);
+}
+
+.lp-tip-row .tv {
+  color: var(--ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .vol-bar {
