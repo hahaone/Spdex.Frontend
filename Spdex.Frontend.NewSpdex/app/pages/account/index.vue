@@ -1,9 +1,25 @@
 <script setup lang="ts">
-import { Activity, ArrowUpRight, ChevronRight, Coins, Compass, CreditCard, KeyRound, LogOut, Mail, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
+import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
 
 const { user, userName, tier, logout } = useAuth()
 const { summary, orders, ordersServiceAvailable, pending, refresh } = useAccount()
 const { start: startOnboarding } = useOnboarding()
+const { getCustomerService } = useCreateOrder()
+
+// 客服 QQ（优先取后端配置，回退默认）
+const customerQQ = ref('2735629769')
+const qqCopied = ref(false)
+
+async function copyQQ() {
+  try {
+    await navigator.clipboard.writeText(customerQQ.value)
+    qqCopied.value = true
+    setTimeout(() => { qqCopied.value = false }, 1500)
+  }
+  catch {
+    // 剪贴板不可用（非安全上下文等）时忽略，号码本身已可见
+  }
+}
 
 const tierLabel: Record<string, string> = {
   Free: '免费版',
@@ -27,6 +43,12 @@ const endDate = computed(() => {
 
 const silkTotal = computed(() => Math.round(summary.value?.silkBalance?.total ?? 0))
 
+const lastLogin = computed(() => {
+  const raw = summary.value?.lastActivityDate
+  if (!raw) return '—'
+  return raw.slice(5, 16).replace('T', ' ') // "...T17:30" → "06-01 17:30"（紧凑，适配卡片宽度）
+})
+
 const channelLabel: Record<string, string> = {
   yft: '扫码（YFT）',
   alipay: '支付宝',
@@ -49,6 +71,8 @@ async function handleLogout() {
 
 onMounted(async () => {
   await refresh()
+  const cs = await getCustomerService().catch(() => null)
+  if (cs?.qq) customerQQ.value = cs.qq
 })
 </script>
 
@@ -91,10 +115,10 @@ onMounted(async () => {
         </div>
       </div>
       <div class="summary-card tone-mute">
-        <Activity :size="18" />
+        <Clock :size="18" />
         <div class="sc-body">
-          <span class="sc-label">RoleId</span>
-          <b class="sc-value num">{{ summary?.roleId ?? user?.roleId ?? '-' }}</b>
+          <span class="sc-label">上次登录</span>
+          <b class="sc-value num">{{ lastLogin }}</b>
         </div>
       </div>
     </div>
@@ -120,6 +144,11 @@ onMounted(async () => {
         <Compass :size="15" />
         <span>新手引导</span>
         <ChevronRight :size="15" class="chev" />
+      </button>
+      <button type="button" class="setting-row focus-ring" @click="copyQQ">
+        <Headphones :size="15" />
+        <span>客服 QQ</span>
+        <b class="qq-val num">{{ qqCopied ? '已复制' : customerQQ }}</b>
       </button>
     </section>
 
@@ -314,6 +343,13 @@ onMounted(async () => {
 
 .setting-row .chev {
   color: var(--soft);
+}
+
+.setting-row .qq-val {
+  color: var(--brand);
+  font-weight: 800;
+  font-size: 0.84rem;
+  letter-spacing: 0.02em;
 }
 
 .setting-row:active {

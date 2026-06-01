@@ -62,3 +62,47 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(request).then((hit) => hit || caches.match('/'))),
   )
 })
+
+/* ─── Web Push（后台信号推送）───
+ * 后端用 VAPID 把 {title, body, url, tag} 推过来，这里 showNotification；
+ * 点击通知聚焦/打开对应页面。即使页面已关闭也能收到。
+ */
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  }
+  catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  const title = data.title || 'SPdex 新信号'
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: data.tag || undefined,
+    renotify: !!data.tag,
+    data: { url: data.url || '/push' },
+  }
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || '/push'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.focus()
+          if ('navigate' in client) {
+            try { client.navigate(url) }
+            catch { /* 跨源等情况忽略 */ }
+          }
+          return undefined
+        }
+      }
+      return self.clients.openWindow ? self.clients.openWindow(url) : undefined
+    }),
+  )
+})

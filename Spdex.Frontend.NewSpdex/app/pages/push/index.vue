@@ -1,52 +1,38 @@
 <script setup lang="ts">
 import { Bell, BellOff, ChevronRight, Flame, RefreshCw } from '@lucide/vue'
+import type { ApiResponse } from '~/types/auth'
 
 const { signals, pending, refresh } = useSignals(50)
 
-// 桌面通知权限
-const notifyPerm = ref<NotificationPermission | 'unsupported'>('unsupported')
-const seenSignalIds = useState<Set<string>>('push_seen_signal_ids', () => new Set())
+// 后台 Web Push 订阅（关页/锁屏也能收到信号）
+const { supported, subscribed, busy, permission, refreshState, subscribe, unsubscribe } = usePushSubscription()
+const feedback = ref('')
 
-onMounted(() => {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    notifyPerm.value = 'unsupported'
-    return
-  }
-  notifyPerm.value = Notification.permission
-
-  // 初始化 seen 集合，避免首次加载时弹通知
-  if (signals.value.length > 0 && seenSignalIds.value.size === 0) {
-    signals.value.forEach(s => seenSignalIds.value.add(s.signalId))
-  }
+onMounted(async () => {
+  await refreshState()
 })
 
-async function requestPermission() {
-  if (typeof window === 'undefined' || !('Notification' in window)) return
-  const result = await Notification.requestPermission()
-  notifyPerm.value = result
+async function enablePush() {
+  feedback.value = ''
+  const r = await subscribe()
+  if (!r.ok) feedback.value = r.reason || '开启失败'
 }
 
-// 新信号到达时弹桌面通知
-watch(signals, (current) => {
-  if (notifyPerm.value !== 'granted') {
-    // 即使没权限也要更新 seen 集合
-    current.forEach(s => seenSignalIds.value.add(s.signalId))
-    return
+async function disablePush() {
+  feedback.value = ''
+  await unsubscribe()
+}
+
+async function sendTest() {
+  feedback.value = '发送中…'
+  try {
+    const res = await $apiFetch<ApiResponse<unknown>>('/api/newspdex/push/test', { method: 'POST' })
+    feedback.value = res?.message || '已发送测试推送'
   }
-  const newcomers = current.filter(s => !seenSignalIds.value.has(s.signalId))
-  for (const s of newcomers.slice(0, 3)) {  // 一次最多 3 条
-    try {
-      new Notification(`${s.modelName}：${s.homeTeam} vs ${s.awayTeam}`, {
-        body: `状态 ${s.status}，触发 ×${s.triggerCount}`,
-        tag: `signal-${s.signalId}`,
-      })
-    }
-    catch {
-      // 浏览器可能限制，忽略
-    }
-    seenSignalIds.value.add(s.signalId)
+  catch {
+    feedback.value = '测试发送失败'
   }
-}, { deep: false })
+}
 
 function formatTime(iso: string): string {
   if (!iso) return ''
@@ -55,13 +41,19 @@ function formatTime(iso: string): string {
   return iso.slice(idx + 1, idx + 6)
 }
 
-const permLabel = computed(() => {
-  switch (notifyPerm.value) {
-    case 'granted': return '通知已开启'
-    case 'denied': return '通知已拒绝（请到浏览器设置开启）'
-    case 'default': return '未开启桌面通知'
-    case 'unsupported': return '当前浏览器不支持通知'
-    default: return ''
+const bannerState = computed<'on' | 'off' | 'denied' | 'unsupported'>(() => {
+  if (!supported.value) return 'unsupported'
+  if (subscribed.value) return 'on'
+  if (permission.value === 'denied') return 'denied'
+  return 'off'
+})
+
+const bannerLabel = computed(() => {
+  switch (bannerState.value) {
+    case 'on': return '后台推送已开启 · 关页/锁屏也能收到'
+    case 'denied': return '通知被拒绝，请到浏览器设置里允许'
+    case 'unsupported': return '当前浏览器不支持后台推送'
+    default: return '开启后台推送，关页也能收到新信号'
   }
 })
 </script>
@@ -81,12 +73,26 @@ const permLabel = computed(() => {
       </button>
     </div>
 
-    <div class="perm-banner" :class="{ active: notifyPerm === 'granted', denied: notifyPerm === 'denied' }">
-      <component :is="notifyPerm === 'granted' ? Bell : BellOff" :size="14" />
-      <span>{{ permLabel }}</span>
-      <button v-if="notifyPerm === 'default'" class="perm-btn focus-ring" type="button" @click="requestPermission">
-        开启桌面通知
+    <div class="perm-banner" :class="{ active: bannerState === 'on', denied: bannerState === 'denied' }">
+      <component :is="bannerState === 'on' ? Bell : BellOff" :size="14" />
+      <span>{{ feedback || bannerLabel }}</span>
+      <button
+        v-if="bannerState === 'off'"
+        class="perm-btn focus-ring"
+        type="button"
+        :disabled="busy"
+        @click="enablePush"
+      >
+        {{ busy ? '开启中…' : '开启推送' }}
       </button>
+      <template v-else-if="bannerState === 'on'">
+        <button class="perm-btn ghost focus-ring" type="button" :disabled="busy" @click="sendTest">
+          测试
+        </button>
+        <button class="perm-btn ghost focus-ring" type="button" :disabled="busy" @click="disablePush">
+          关闭
+        </button>
+      </template>
     </div>
 
     <div v-if="pending && !signals.length" class="empty">加载中…</div>
@@ -203,6 +209,16 @@ const permLabel = computed(() => {
   color: #fff;
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.perm-btn:disabled {
+  opacity: 0.6;
+}
+
+.perm-btn.ghost {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
 }
 
 .empty {

@@ -10,9 +10,14 @@ const { snapshot } = useLiveSnapshot(eventId)
 const match = computed(() => detail.value?.match)
 
 function eventTone(type: string): string {
-  if (type === 'goal') return 'goal'
-  if (type === 'red') return 'red'
-  return 'yellow'
+  switch (type) {
+    case 'goal':
+    case 'penalty': return 'goal'
+    case 'red': return 'red'
+    case 'yellow': return 'yellow'
+    case 'corner': return 'corner'
+    default: return 'mute'
+  }
 }
 
 const homeCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'home') ?? [])
@@ -27,18 +32,28 @@ const statusLabel = computed(() => {
 
 const liveDataPending = computed(() => snapshot.value?.dataStatus === 'pending')
 
-// 价格面板：从 useMatchDetail 的 3 个 section 提取主/平/客
+// 现场赔率头部信息：只显示对应的比分 · 分钟（不暴露庄家名）
+const liveOddsMeta = computed(() => {
+  const lo = snapshot.value?.liveOdds
+  if (!lo) return ''
+  const parts: string[] = []
+  if (lo.score) parts.push(lo.score)
+  if (lo.minute) parts.push(`${lo.minute}'`)
+  return parts.join(' · ')
+})
+
+// 赛前价格面板：从 useMatchDetail 的 3 个 section 提取主/平/客（封盘前赔率）
 const oddsPanel = computed(() => {
   const d = detail.value
   if (!d) return []
   const rows: Array<{ market: string, home: string, drawOrLine: string, away: string }> = []
   if (d.standard.length) {
     const [h, dr, a] = [d.standard[0]?.price, d.standard[1]?.price, d.standard[2]?.price]
-    rows.push({ market: '标盘 1X2', home: h ?? '-', drawOrLine: dr ?? '-', away: a ?? '-' })
+    rows.push({ market: '1X2', home: h ?? '-', drawOrLine: dr ?? '-', away: a ?? '-' })
   }
   if (d.handicap.length) {
     const note = d.handicap[1]?.price || match.value?.handicap || '-'
-    rows.push({ market: '让分', home: d.handicap[0]?.price ?? '-', drawOrLine: note, away: d.handicap[2]?.price ?? '-' })
+    rows.push({ market: '让球', home: d.handicap[0]?.price ?? '-', drawOrLine: note, away: d.handicap[2]?.price ?? '-' })
   }
   if (d.goals.length) {
     const line = d.goals[1]?.price || '2.5'
@@ -69,18 +84,18 @@ const priceCompare = computed(() => {
       </NuxtLink>
       <div class="league-line">
         <span v-if="match?.leagueCode" class="code">{{ match.leagueCode }}</span>
-        <span>{{ match?.leagueName ?? '—' }}</span>
+        <span>{{ match?.leagueName || snapshot?.leagueName || '—' }}</span>
         <span class="status-pill">{{ statusLabel }}</span>
         <span class="minute num">{{ snapshot?.minute ?? '—' }}</span>
       </div>
       <div class="score-line">
-        <span class="team home">{{ match?.homeTeam ?? '主队' }}</span>
+        <span class="team home">{{ match?.homeTeam || snapshot?.homeTeam || '主队' }}</span>
         <b class="score-block">
           <span class="num">{{ snapshot?.score[0] ?? 0 }}</span>
           <span class="colon">:</span>
           <span class="num">{{ snapshot?.score[1] ?? 0 }}</span>
         </b>
-        <span class="team away">{{ match?.awayTeam ?? '客队' }}</span>
+        <span class="team away">{{ match?.awayTeam || snapshot?.awayTeam || '客队' }}</span>
       </div>
       <div class="micro-row">
         <span class="cluster">
@@ -95,20 +110,12 @@ const priceCompare = computed(() => {
       </div>
     </section>
 
-    <section class="venue-scroll scrollbar-none">
-      <span class="venue-chip">场地 待接入</span>
-      <span class="venue-chip">主教练 待接入</span>
-      <span class="venue-chip">裁判 待接入</span>
-      <span class="venue-chip">轮次 待接入</span>
-      <span class="venue-chip">排名 待接入</span>
-    </section>
-
     <div class="content-grid">
     <section class="timeline">
       <div class="section-title">
         <span>事件时间线</span>
         <span v-if="liveDataPending" class="pending-pill">
-          <Lock :size="11" /> 待接入
+          <Lock :size="11" /> 实时获取中
         </span>
       </div>
       <div v-if="snapshot?.events.length" class="timeline-grid">
@@ -122,13 +129,13 @@ const priceCompare = computed(() => {
         </div>
       </div>
       <div v-else class="empty-section">
-        {{ liveDataPending ? '事件时间线待 stage 3.5 接入 BetsAPI 后填充' : '暂无事件' }}
+        {{ liveDataPending ? '实时事件数据获取中，稍候自动刷新…' : '本场暂无事件记录' }}
       </div>
     </section>
 
     <section class="stats">
       <div class="section-title">
-        <span>双红指标 / 轻量化 xG</span>
+        <span>实时技术统计</span>
         <NuxtLink :to="`/football/${eventId}/chart`" class="head-link focus-ring">
           <BarChart3 :size="14" />
         </NuxtLink>
@@ -141,15 +148,31 @@ const priceCompare = computed(() => {
         </div>
       </div>
       <div v-else class="empty-section">
-        {{ liveDataPending ? 'xG / 射门数据待 stage 3.5 接入 BetsAPI 后填充' : '暂无统计' }}
+        {{ liveDataPending ? '实时统计数据获取中，稍候自动刷新…' : '本场暂无统计数据' }}
       </div>
     </section>
 
     <section class="odds">
       <div class="section-title brand">
-        <span>价格面板</span>
+        <span>现场赔率 <span class="live-tag">LIVE</span></span>
+        <span v-if="liveOddsMeta" class="lo-meta num">{{ liveOddsMeta }}</span>
       </div>
-      <div class="odds-grid">
+      <div v-if="snapshot?.liveOdds?.markets?.length" class="lodds-grid">
+        <div v-for="m in snapshot.liveOdds.markets" :key="m.market" class="lodds-row">
+          <b class="lbl">{{ m.market }}<span v-if="m.line" class="ln"> {{ m.line }}</span></b>
+          <span v-for="c in m.cells" :key="c.label" class="cell">
+            <i>{{ c.label }}</i><b class="num">{{ c.odd }}</b>
+          </span>
+        </div>
+      </div>
+      <div v-else class="empty-section">本场暂无现场盘口（未开盘或已封盘）</div>
+    </section>
+
+    <section class="odds">
+      <div class="section-title brand">
+        <span>赛前赔率 <span class="seg-tag">封盘价</span></span>
+      </div>
+      <div v-if="oddsPanel.length" class="odds-grid">
         <div v-for="item in oddsPanel" :key="item.market" class="odds-row">
           <b class="lbl">{{ item.market }}</b>
           <span class="num">主 {{ item.home }}</span>
@@ -157,11 +180,12 @@ const priceCompare = computed(() => {
           <span class="num">客 {{ item.away }}</span>
         </div>
       </div>
+      <div v-else class="empty-section">暂无赛前盘口</div>
     </section>
 
     <section class="compare">
       <div class="section-title brand">
-        <span>价格比较</span>
+        <span>价格比较 <span class="seg-tag">赛前赔率</span></span>
         <span class="book-count num">{{ priceCompare.length }} 家公司</span>
       </div>
       <div class="compare-grid">
@@ -345,26 +369,6 @@ const priceCompare = computed(() => {
   color: var(--ink);
 }
 
-.venue-scroll {
-  display: flex;
-  overflow-x: auto;
-  gap: 6px;
-  padding: 7px 10px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--divider);
-}
-
-.venue-chip {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 720;
-}
-
 section.timeline,
 section.stats,
 section.odds,
@@ -391,6 +395,7 @@ section.compare {
 .timeline-grid,
 .stats-grid,
 .odds-grid,
+.lodds-grid,
 .compare-grid {
   display: grid;
   gap: 1px;
@@ -423,14 +428,23 @@ section.compare {
   background: #fffbf0;
 }
 
+/* 时间线分钟：清爽的中性时间码，不复用 header 的红底徽章（避免红底蓝字看不清） */
 .event-row .minute {
+  justify-self: start;
+  margin-left: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--muted);
   font-weight: 800;
-  color: var(--brand);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .event-row.away .minute {
   grid-column: 2;
-  color: #b08113;
+  justify-self: end;
+  color: var(--muted);
 }
 
 .event-row.away b {
@@ -448,6 +462,16 @@ section.compare {
 
 .event-row.yellow b {
   color: #b08113;
+}
+
+.event-row.corner b {
+  color: var(--brand-deep);
+  font-weight: 720;
+}
+
+.event-row.mute b {
+  color: var(--muted);
+  font-weight: 720;
 }
 
 .stat-row {
@@ -531,6 +555,83 @@ section.compare {
   opacity: 0.85;
 }
 
+/* 现场赔率面板（in-play） */
+.lodds-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--panel);
+  font-size: 0.8rem;
+}
+
+.lodds-row .lbl {
+  flex: 0 0 66px;
+  font-weight: 800;
+  color: var(--accent-deep);
+  font-size: 0.78rem;
+}
+
+.lodds-row .lbl .ln {
+  margin-left: 3px;
+  color: var(--brand-deep);
+  font-weight: 760;
+  font-size: 0.72rem;
+}
+
+.lodds-row .cell {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.lodds-row .cell i {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.lodds-row .cell b {
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.live-tag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--buy);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
+.lo-meta {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 720;
+}
+
+/* 赛前赔率标识：明确告知价格比较是封盘前赔率，非现场实时价 */
+.seg-tag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 760;
+  vertical-align: middle;
+}
+
 @media (max-width: 370px) {
   .odds-row {
     grid-template-columns: 52px repeat(3, minmax(0, 1fr));
@@ -551,8 +652,7 @@ section.compare {
     gap: 12px;
   }
 
-  .header,
-  .venue-scroll {
+  .header {
     border: 1px solid var(--line);
     border-radius: 6px;
   }

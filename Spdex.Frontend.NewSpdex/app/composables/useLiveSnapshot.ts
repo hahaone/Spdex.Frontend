@@ -15,10 +15,13 @@ export interface LiveCardBadge {
   count: number
 }
 
+export type LiveEventType =
+  | 'goal' | 'corner' | 'red' | 'yellow' | 'penalty' | 'substitution' | 'offside' | 'var' | 'other'
+
 export interface LiveEvent {
   minute: string
   side: 'home' | 'away'
-  type: 'goal' | 'red' | 'yellow' | 'substitution' | 'var'
+  type: LiveEventType
   text: string
 }
 
@@ -35,8 +38,29 @@ interface BackendLiveStats {
   xg: BackendStatPair
 }
 
+export interface LiveOddsCell {
+  label: string
+  odd: string
+}
+
+export interface LiveOddsMarket {
+  market: string
+  line: string | null
+  cells: LiveOddsCell[]
+}
+
+export interface LiveOdds {
+  bookmaker: string
+  score: string | null
+  minute: string | null
+  markets: LiveOddsMarket[]
+}
+
 interface BackendSnapshot {
   eventId: number
+  leagueName: string
+  homeTeam: string
+  awayTeam: string
   status: LiveStatus
   minute: string
   score: number[]
@@ -45,6 +69,7 @@ interface BackendSnapshot {
   cardBadges: LiveCardBadge[]
   events: LiveEvent[]
   stats: BackendLiveStats | null
+  liveOdds: LiveOdds | null
   dataStatus: LiveDataStatus
   generatedAt: string
 }
@@ -57,6 +82,9 @@ export interface LiveStatRow {
 
 export interface LiveSnapshot {
   eventId: number
+  leagueName: string
+  homeTeam: string
+  awayTeam: string
   status: LiveStatus
   minute: string
   score: [number, number]
@@ -65,6 +93,7 @@ export interface LiveSnapshot {
   cardBadges: LiveCardBadge[]
   events: LiveEvent[]
   stats: LiveStatRow[]
+  liveOdds: LiveOdds | null
   dataStatus: LiveDataStatus
 }
 
@@ -89,6 +118,9 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
   }
   return {
     eventId: data.eventId,
+    leagueName: data.leagueName ?? '',
+    homeTeam: data.homeTeam ?? '',
+    awayTeam: data.awayTeam ?? '',
     status: data.status,
     minute: data.minute,
     score: pairToTuple(data.score),
@@ -97,6 +129,7 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     cardBadges: data.cardBadges ?? [],
     events: data.events ?? [],
     stats: statsList,
+    liveOdds: data.liveOdds ?? null,
     dataStatus: data.dataStatus,
   }
 }

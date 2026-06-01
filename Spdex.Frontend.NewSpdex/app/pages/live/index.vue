@@ -25,7 +25,6 @@ function awayRed(m: typeof matches.value[number]): number {
         <span class="muted num">{{ runningCount }} 场进行中 · 30 秒自动刷新</span>
       </div>
       <div class="refresh-row">
-        <span class="hint">数据来自 BSW Living（BetsAPI v3 inplay）</span>
         <button class="refresh-btn focus-ring" :disabled="pending" @click="refresh()">
           <RefreshCw :size="14" :class="{ spinning: pending }" />
         </button>
@@ -116,20 +115,14 @@ function awayRed(m: typeof matches.value[number]): number {
 }
 
 .refresh-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px;
-  gap: 6px;
+  display: flex;
+  justify-content: flex-end;
   align-items: center;
-}
-
-.hint {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 720;
 }
 
 .refresh-btn {
   display: inline-grid;
+  width: 30px;
   min-height: 30px;
   place-items: center;
   border: 1px solid var(--line);

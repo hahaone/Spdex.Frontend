@@ -76,3 +76,10 @@ coverage/
 *.tgz
 *.tar.gz
 *.zip
+
+# =========================
+# Local-only (do not commit)
+# =========================
+.claude/
+**/.claude/
+docs/新版SPdex/

@@ -77,6 +77,7 @@ export interface AccountSummary {
   silkBalance: SilkBalance | null
   email: string | null
   mobile: string | null
+  lastActivityDate: string | null
 }
 
 export interface CustomerService {
