@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { Activity, Bell, Dumbbell, Home, Trophy, UserCircle } from '@lucide/vue'
+import { Activity, Bell, Home, UserCircle } from '@lucide/vue'
+import IconBasketball from '~/components/icons/IconBasketball.vue'
+import IconSoccer from '~/components/icons/IconSoccer.vue'
 
 const route = useRoute()
 
 const navItems = [
   { label: '首页', to: '/', icon: Home },
-  { label: '足球', to: '/football', icon: Trophy },
-  { label: '篮球', to: '/basketball', icon: Dumbbell },
+  { label: '足球', to: '/football', icon: IconSoccer },
+  { label: '篮球', to: '/basketball', icon: IconBasketball },
   { label: '实时', to: '/live', icon: Activity },
   { label: '推送', to: '/push', icon: Bell },
   { label: '会员', to: '/account', icon: UserCircle },
