@@ -2,15 +2,17 @@
 import { ChevronRight } from '@lucide/vue'
 import type { MarketMetricRow } from '~/types/market'
 
-defineProps<{
+const props = defineProps<{
   title: string
   tone: 'standard' | 'poly' | 'goals' | 'handicap'
   rows: MarketMetricRow[]
   indexLabel?: string
-  /** 成交列表头文案（默认"成交"；CS 用"大注"，值取 turnover=MaxBet）。 */
+  /** 成交列表头文案（默认"成交"）。 */
   turnoverLabel?: string
-  /** 隐藏第 4 列指数列（无第 4 指标的盘口，如 CS）。 */
+  /** 隐藏第 4 列指数列（无第 4 指标的盘口）。 */
   hideIndex?: boolean
+  /** 指数列格式：'int'(默认，必指/P指取整) | 'amount'(金额，如 CS 大注=MaxBet)。 */
+  indexFormat?: 'int' | 'amount'
 }>()
 
 const emit = defineEmits<{
@@ -24,10 +26,19 @@ function rowClass(row: MarketMetricRow): string {
   return ''
 }
 
-/** 指数（必指/P指）保留整数。 */
-function indexValue(row: MarketMetricRow, tone: string): string {
-  const v = tone === 'poly' ? row.polyIndex : row.bfIndex
-  return typeof v === 'number' && Number.isFinite(v) ? Math.round(v).toString() : '-'
+function fmtAmount(n: number): string {
+  const a = Math.abs(n)
+  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (a >= 10_000) return `${(n / 10_000).toFixed(1)}万`
+  if (a >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return Math.round(n).toString()
+}
+
+/** 指数列：默认取整（必指/P指）；indexFormat='amount' 时按金额格式化（CS 大注）。 */
+function indexValue(row: MarketMetricRow): string {
+  const v = props.tone === 'poly' ? row.polyIndex : row.bfIndex
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '-'
+  return props.indexFormat === 'amount' ? fmtAmount(v) : Math.round(v).toString()
 }
 </script>
 
@@ -48,7 +59,7 @@ function indexValue(row: MarketMetricRow, tone: string): string {
         <b class="num">{{ row.selection }}</b>
         <span class="num">{{ row.price }}</span>
         <span class="num turnover">{{ row.turnover || '-' }}</span>
-        <span v-if="!hideIndex" class="num idx">{{ indexValue(row, tone) }}</span>
+        <span v-if="!hideIndex" class="num idx">{{ indexValue(row) }}</span>
       </div>
     </div>
   </button>
@@ -62,6 +73,7 @@ function indexValue(row: MarketMetricRow, tone: string): string {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
+  color: var(--ink);
   text-align: left;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);

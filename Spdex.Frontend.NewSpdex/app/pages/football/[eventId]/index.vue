@@ -184,8 +184,7 @@ function jumpTo(target: SectionKey) {
               @open="jumpTo('poly')"
             />
             <div v-else class="access-card poly">
-              <Lock :size="14" />
-              <span>Poly 数据待 stage 3.5 接入</span>
+              <span>本场暂无 Poly 成交数据</span>
             </div>
 
             <template v-if="access.goals">
@@ -221,8 +220,8 @@ function jumpTo(target: SectionKey) {
                 title="比分 CS"
                 tone="goals"
                 :rows="detail.cs.slice(0, 3)"
-                turnover-label="大注"
-                hide-index
+                index-label="大注"
+                index-format="amount"
                 @open="jumpTo('cs')"
               />
             </template>
@@ -263,25 +262,7 @@ function jumpTo(target: SectionKey) {
             </div>
           </section>
 
-          <section class="quick-stats">
-            <h3>赛事概览</h3>
-            <div class="stat-row">
-              <span>盘口</span>
-              <b class="num">{{ match.handicap || '—' }}</b>
-            </div>
-            <div class="stat-row">
-              <span>开赛时间</span>
-              <b class="num">{{ match.matchTime.slice(11, 16) }}</b>
-            </div>
-            <div class="stat-row">
-              <span>必指</span>
-              <b class="num">{{ match.bfIndex.join(' / ') }}</b>
-            </div>
-            <div class="stat-row">
-              <span>P 指</span>
-              <b class="num">{{ match.polyIndex.join(' / ') }}</b>
-            </div>
-          </section>
+          <BigTradesSummary v-if="access.tradeDetails" :event-id="match.eventId" />
 
           <EuroOddsTable v-if="access.euroOdds && euroOdds" :euro="euroOdds" />
           <section v-else-if="!access.euroOdds" class="access-card">
@@ -423,7 +404,8 @@ function jumpTo(target: SectionKey) {
   white-space: nowrap;
 }
 
-.handicap {
+/* 限定在赛事头内，避免 scoped 样式经子组件根继承泄漏到 .summary-card.handicap 卡片。 */
+.teams .handicap {
   padding: 2px 8px;
   border-radius: 3px;
   background: var(--brand);
@@ -583,7 +565,7 @@ function jumpTo(target: SectionKey) {
     font-size: 1.24rem;
   }
 
-  .handicap {
+  .teams .handicap {
     font-size: 0.96rem;
   }
 
