@@ -54,6 +54,27 @@ function marketLabel(label: string): string {
   return label === '大小' ? '进球' : label
 }
 
+const isHandicap = computed(() => market.value?.key === 'handicap')
+
+function fmtSigned(n: number): string {
+  return (n > 0 ? '+' : '') + n.toFixed(2)
+}
+/** 让球线 chip：成对显示，如「-1.50 / +1.50」。 */
+function chipLabel(l: EuroLine): string {
+  if (!isHandicap.value) return l.label || '—'
+  const n = Number.parseFloat(l.label)
+  return Number.isFinite(n) ? `${fmtSigned(n)} / ${fmtSigned(-n)}` : (l.label || '—')
+}
+/** 让球列头把让球标记放赔率前：主 -1.50 / 客 +1.50。 */
+function colHeader(col: string): string {
+  if (!isHandicap.value || !line.value) return col
+  const n = Number.parseFloat(line.value.label)
+  if (!Number.isFinite(n)) return col
+  if (col === '主') return `主 ${fmtSigned(n)}`
+  if (col === '客') return `客 ${fmtSigned(-n)}`
+  return col
+}
+
 function fmt(v: number | undefined): string {
   return typeof v === 'number' && v > 0 ? v.toFixed(2) : '–'
 }
@@ -107,7 +128,7 @@ watch(market, (m) => {
         :class="['lchip focus-ring', { active: i === lineIdx }]"
         @click="selectLine(i)"
       >
-        {{ l.label || '—' }}
+        {{ chipLabel(l) }}
       </button>
     </div>
 
@@ -116,7 +137,7 @@ watch(market, (m) => {
         <thead>
           <tr>
             <th class="c-name">公司</th>
-            <th v-for="c in line.columns" :key="c">{{ c }}</th>
+            <th v-for="c in line.columns" :key="c">{{ colHeader(c) }}</th>
           </tr>
         </thead>
         <tbody>

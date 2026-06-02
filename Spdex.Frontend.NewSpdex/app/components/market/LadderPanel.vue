@@ -18,6 +18,11 @@ function money(n: number | undefined): string {
   if (n >= 10000) return `${(n / 10000).toFixed(n >= 100000 ? 0 : 1)}万`
   return Math.round(n).toLocaleString('en-US')
 }
+/** 原图明细用原始数据（不缩写万/K，与必发交易版一致），千分位分隔。 */
+function raw(n: number | undefined): string {
+  if (!n || n <= 0) return ''
+  return Math.round(n).toLocaleString('en-US')
+}
 function price(n: number | undefined): string {
   return typeof n === 'number' && n > 0 ? n.toFixed(2) : '–'
 }
@@ -176,7 +181,7 @@ watch(() => active.value?.key, () => {
 <template>
   <section class="ladder-panel">
     <header class="lp-head">
-      <h3>盘口明细</h3>
+      <h3>原图明细</h3>
       <button class="lp-refresh focus-ring" aria-label="刷新" @click="refresh()">
         <RefreshCw :size="14" :class="{ spin: pending }" />
       </button>
@@ -296,9 +301,9 @@ watch(() => active.value?.key, () => {
             <tbody>
               <tr v-for="(r, i) in active.rows" :key="i" :class="['lp-row', r.side]">
                 <td class="c-price">{{ r.price.toFixed(2) }}</td>
-                <td class="back">{{ r.back > 0 ? money(r.back) : '' }}</td>
-                <td class="lay">{{ r.lay > 0 ? money(r.lay) : '' }}</td>
-                <td class="traded">{{ r.traded > 0 ? money(r.traded) : '' }}</td>
+                <td class="back">{{ raw(r.back) }}</td>
+                <td class="lay">{{ raw(r.lay) }}</td>
+                <td class="traded">{{ raw(r.traded) }}</td>
               </tr>
             </tbody>
           </table>
