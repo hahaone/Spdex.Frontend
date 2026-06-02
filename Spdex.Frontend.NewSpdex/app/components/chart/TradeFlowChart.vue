@@ -51,19 +51,26 @@ const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 const hasPrice = computed(() => prices.value.length > 0)
 
 /**
- * 成交柱高用「平方根标度」：单笔大单常是普通桶的 10× 以上，
- * 线性标度会把普通柱压成贴地短条；sqrt 在「大单仍最高、顺序不变」前提下
- * 让中小柱清晰可见（成交量图常用做法）。
+ * 价 + 量分带布局（行情图常见）：价位线占上方带、成交柱占下方带，互不挤压。
+ * 成交柱在带内用「平方根标度」——单笔大单常是普通桶 10×+，线性会把普通柱压成贴地短条，
+ * sqrt 让中小柱清晰可见且大单仍最高、顺序不变。
  */
+const VOL_BAND = 0.5 // 成交柱占图高的下方比例
+const BAND_GAP = 0.06 // 上下带之间的留白
+const volBandH = computed(() => chartH.value * VOL_BAND)
+const volBase = computed(() => PAD_TOP + chartH.value) // 柱底 = 图底
+const volTop = computed(() => volBase.value - volBandH.value) // 柱区顶 = 分带线
+const priceBandH = computed(() => chartH.value * (1 - VOL_BAND - BAND_GAP)) // 价位带高（上方）
+
 function volH(v: number): number {
   if (v <= 0) return 0
-  return chartH.value * Math.sqrt(v) / Math.sqrt(maxVol.value)
+  return volBandH.value * Math.sqrt(v) / Math.sqrt(maxVol.value)
 }
 function volY(v: number): number {
-  return PAD_TOP + chartH.value - volH(v)
+  return volBase.value - volH(v)
 }
 function priceY(p: number): number {
-  return PAD_TOP + chartH.value * (1 - (p - priceMin.value) / priceRange.value)
+  return PAD_TOP + priceBandH.value * (1 - (p - priceMin.value) / priceRange.value)
 }
 
 interface Bar { x: number, y: number, w: number, h: number, color: string }
@@ -80,7 +87,7 @@ const bars = computed<Bar[]>(() => {
       const h = volH(v)
       out.push({
         x: x0 + j * barW,
-        y: PAD_TOP + chartH.value - h,
+        y: volBase.value - h,
         w: Math.max(barW - 0.6, 1),
         h,
         color: attrColor(a),
@@ -100,28 +107,23 @@ const pricePts = computed(() => {
 })
 const priceLine = computed(() => pricePts.value.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '))
 
-/** 成交（左轴）刻度：等视觉高度处的真实成交量（sqrt 标度 → 量值非线性，向下收窄）。 */
-const volTicks = computed(() => {
-  const n = 4
-  return Array.from({ length: n + 1 }, (_, i) => {
-    const frac = i / n // 0=顶部
-    return {
-      y: PAD_TOP + chartH.value * frac,
-      label: fmtVol(maxVol.value * (1 - frac) ** 2),
-    }
-  })
-})
+/** 成交（左轴，下方带）刻度：等视觉高度处的真实成交量（sqrt 标度 → 量值非线性，向下收窄）。 */
+const volTicks = computed(() =>
+  [0, 0.5, 1].map((frac) => ({ // 0=带顶
+    y: volTop.value + volBandH.value * frac,
+    label: fmtVol(maxVol.value * (1 - frac) ** 2),
+  })))
 function fmtVol(v: number): string {
   if (v >= 10000) return `${(v / 10000).toFixed(1)}万`
   if (v >= 1000) return `${(v / 1000).toFixed(1)}K`
   return Math.round(v).toString()
 }
 
-/** 价位（右轴）刻度：max / mid / min。 */
+/** 价位（右轴，上方带）刻度：max / mid / min。 */
 const priceTicks = computed(() => {
   if (!hasPrice.value) return []
   return [0, 0.5, 1].map(f => ({
-    y: PAD_TOP + chartH.value * f,
+    y: PAD_TOP + priceBandH.value * f,
     label: (priceMax.value - priceRange.value * f).toFixed(2),
   }))
 })
@@ -159,15 +161,24 @@ const totalH = computed(() => props.height)
       <!-- 中部：可横向滚动的柱状 + 价位线 -->
       <div class="tf-scroll scrollbar-thin">
         <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none">
-          <!-- 网格线 -->
+          <!-- 网格线：成交带 + 价位带 -->
           <line
             v-for="(t, i) in volTicks"
-            :key="`g${i}`"
+            :key="`gv${i}`"
             x1="0"
             :x2="svgW"
             :y1="t.y"
             :y2="t.y"
             class="tf-grid"
+          />
+          <line
+            v-for="(t, i) in priceTicks"
+            :key="`gp${i}`"
+            x1="0"
+            :x2="svgW"
+            :y1="t.y"
+            :y2="t.y"
+            class="tf-grid price"
           />
           <!-- 成交柱 -->
           <rect
@@ -251,6 +262,11 @@ const totalH = computed(() => props.height)
   stroke: var(--divider);
   stroke-width: 1;
   shape-rendering: crispEdges;
+}
+
+/* 价位带网格线：浅蓝细线，与成交带区分 */
+.tf-grid.price {
+  stroke: rgba(91, 155, 213, 0.2);
 }
 
 .tf-axis-text {
