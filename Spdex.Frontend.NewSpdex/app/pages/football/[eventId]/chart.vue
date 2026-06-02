@@ -55,13 +55,32 @@ const baseline = computed<number | null>(() => {
 // 成交变化用柱状图
 const barMode = computed(() => metric.value === 'traded')
 
+// ── E1 成交明细（原始成交走势）：单独走 tradeflow 通道 ──
+const isTradeFlow = computed(() => metric.value === 'tradeflow')
+// 成交明细必须单选项；"全部"(null) 视为主/大
+const tradeSelection = computed<'home' | 'draw' | 'away'>(() => seriesOnly.value ?? 'home')
+// 时间档 → 粒度：窗口越大粒度越粗，控制桶数
+const tfGranularity = computed(() => (timeRange.value === '2h' ? '5m' : timeRange.value === '6h' ? '15m' : '30m'))
+const { data: tradeFlow, status: tfStatus, pending: tfPending, refresh: tfRefresh } = useTradeFlow(
+  eventId, market, tradeSelection, tfGranularity,
+)
+// 进入成交明细且当前为"全部"时，回退到单选项
+watch(isTradeFlow, (on) => {
+  if (on && seriesOnly.value === null) seriesOnly.value = 'home'
+})
+const tfStatusLabel = computed(() => {
+  if (tfStatus.value === 'no-access') return '成交明细为专家版及以上专属'
+  if (tfStatus.value === 'pending') return '此场赛事暂无成交明细数据'
+  return null
+})
+
 // 只看 主/平/客 筛选项（按当前盘口的序列标签）
 const seriesOptions = computed(() => {
   const l = seriesLabels.value
-  const opts: { label: string, value: 'home' | 'draw' | 'away' | null }[] = [
-    { label: '全部', value: null },
-    { label: `只看${l.home}`, value: 'home' },
-  ]
+  // 成交明细必须单选项，不提供"全部"
+  const opts: { label: string, value: 'home' | 'draw' | 'away' | null }[] = isTradeFlow.value
+    ? [{ label: `只看${l.home}`, value: 'home' }]
+    : [{ label: '全部', value: null }, { label: `只看${l.home}`, value: 'home' }]
   if (l.draw) opts.push({ label: `只看${l.draw}`, value: 'draw' })
   opts.push({ label: `只看${l.away}`, value: 'away' })
   return opts
@@ -78,8 +97,12 @@ const statusLabel = computed(() => {
   return null
 })
 
-const currentMetricLabel = computed(() =>
-  metricLabel.value || metrics.value.find(m => m.value === metric.value)?.label || '')
+const currentMetricLabel = computed(() => {
+  // 成交明细走独立通道，标题用本地标签（避免被 timeseries 的"价位"标签污染）
+  if (isTradeFlow.value)
+    return metrics.value.find(m => m.value === 'tradeflow')?.label || '成交明细'
+  return metricLabel.value || metrics.value.find(m => m.value === metric.value)?.label || ''
+})
 const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetricLabel.value}`)
 </script>
 
@@ -130,8 +153,13 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
 
       <div class="time-row">
         <SegmentedControl v-model="timeRange" :options="timeOptions" dense tone="ink" />
-        <button class="refresh-btn focus-ring" aria-label="刷新" :disabled="pending" @click="refresh()">
-          <RefreshCw :size="15" :class="{ spinning: pending }" />
+        <button
+          class="refresh-btn focus-ring"
+          aria-label="刷新"
+          :disabled="isTradeFlow ? tfPending : pending"
+          @click="isTradeFlow ? tfRefresh() : refresh()"
+        >
+          <RefreshCw :size="15" :class="{ spinning: isTradeFlow ? tfPending : pending }" />
         </button>
       </div>
 
@@ -154,23 +182,42 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
         <span class="hint">{{ timeRange.toUpperCase() }} · 自动刷新</span>
       </div>
 
-      <div v-if="statusLabel" class="chart-placeholder">
-        <Lock :size="14" />
-        <span>{{ statusLabel }}</span>
-      </div>
-      <StaticTrendChart
-        v-else-if="displayPoints.length"
-        :points="displayPoints"
-        :series-labels="seriesLabels"
-        :unit="unit"
-        :only="seriesOnly"
-        :baseline="baseline"
-        :bar-mode="barMode"
-        :height="220"
-      />
-      <div v-else class="chart-placeholder">
-        <span>{{ pending ? '加载中…' : '暂无走势数据' }}</span>
-      </div>
+      <!-- E1 成交明细：独立 tradeflow 通道 -->
+      <template v-if="isTradeFlow">
+        <div v-if="tfStatusLabel" class="chart-placeholder">
+          <Lock :size="14" />
+          <span>{{ tfStatusLabel }}</span>
+        </div>
+        <TradeFlowChart
+          v-else-if="tradeFlow && tradeFlow.buckets.length"
+          :result="tradeFlow"
+          :height="220"
+        />
+        <div v-else class="chart-placeholder">
+          <span>{{ tfPending ? '加载中…' : '暂无成交明细数据' }}</span>
+        </div>
+      </template>
+
+      <!-- 其余指标：折线/柱状走势 -->
+      <template v-else>
+        <div v-if="statusLabel" class="chart-placeholder">
+          <Lock :size="14" />
+          <span>{{ statusLabel }}</span>
+        </div>
+        <StaticTrendChart
+          v-else-if="displayPoints.length"
+          :points="displayPoints"
+          :series-labels="seriesLabels"
+          :unit="unit"
+          :only="seriesOnly"
+          :baseline="baseline"
+          :bar-mode="barMode"
+          :height="220"
+        />
+        <div v-else class="chart-placeholder">
+          <span>{{ pending ? '加载中…' : '暂无走势数据' }}</span>
+        </div>
+      </template>
     </section>
   </div>
 </template>

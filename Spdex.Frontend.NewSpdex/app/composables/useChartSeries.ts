@@ -21,11 +21,12 @@ export interface ChartSeriesLabels {
 export interface ChartMetricDef { label: string, value: string }
 export interface ChartMarketDef { label: string, value: string, metrics: ChartMetricDef[] }
 
-/** PriceCalc 系盘口通用的 6 个指标。 */
+/** PriceCalc 系盘口通用指标（含 E1 成交明细原始成交走势）。 */
 const PRICECALC_METRICS: ChartMetricDef[] = [
   { label: '价位', value: 'odds' },
   { label: '必发指数', value: 'bfindex' },
   { label: '成交变化', value: 'traded' },
+  { label: '成交明细', value: 'tradeflow' },
   { label: '成交量', value: 'volume' },
   { label: '成交比例', value: 'ratio' },
   { label: '挂牌指数', value: 'exchange' },
