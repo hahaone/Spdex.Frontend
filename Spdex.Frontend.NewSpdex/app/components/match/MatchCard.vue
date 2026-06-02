@@ -42,10 +42,11 @@ function bigBetSideKey(side: string): string {
   return 'mute'
 }
 
+// 必发成交为英镑盘口口径，不加人民币符号（G4）
 function fmtAmount(n: number): string {
-  if (n >= 1_000_000) return `¥${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000) return `¥${(n / 1_000).toFixed(1)}K`
-  return `¥${Math.round(n)}`
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return `${Math.round(n)}`
 }
 
 const kickOff = computed(() => props.match.matchTime.slice(11, 16))

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Filter, Lock, RefreshCw } from '@lucide/vue'
+import { CalendarDays, ChevronLeft, ChevronRight, Lock, RefreshCw, RotateCcw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
 
 const day = ref('today')
-const status = ref<'upcoming' | 'started' | 'all' | 'jc'>('upcoming')
+// 状态筛选与「竞彩/胜负彩」拆成两组独立控件（G2/G3）
+const status = ref<'upcoming' | 'started' | 'all'>('upcoming')
+const lottery = ref<'all' | 'jc' | 'lottery'>('all')
 const league = ref('all')
+// 数据回查：自选日期，非空时覆盖「今日/明日/昨日」（G1）
+const customDate = ref('')
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -16,7 +20,12 @@ const statusOptions = [
   { label: '未开', value: 'upcoming' },
   { label: '已开', value: 'started' },
   { label: '全部', value: 'all' },
+]
+
+const lotteryOptions = [
+  { label: '不限', value: 'all' },
   { label: '竞彩', value: 'jc' },
+  { label: '胜负彩', value: 'lottery' },
 ]
 
 const dayToDate = (d: string): string | undefined => {
@@ -35,6 +44,28 @@ const dayToDate = (d: string): string | undefined => {
   }
   return undefined
 }
+
+/** 当前生效日期：自选日期优先，否则按快捷「今日/明日/昨日」。 */
+const effectiveDate = computed(() => customDate.value || dayToDate(day.value))
+
+/** 回查基准日历日期（把快捷项解析成真实日期，供前后翻日用）。 */
+function baseCalendarDate(): Date {
+  if (customDate.value) return new Date(`${customDate.value}T12:00:00`)
+  const now = new Date()
+  if (day.value === 'tomorrow') now.setDate(now.getDate() + 1)
+  else if (day.value === 'yesterday') now.setDate(now.getDate() - 1)
+  return now
+}
+
+/** 前/后翻一日：进入自选日期模式并落地为具体日期。 */
+function shiftDay(delta: number) {
+  const d = baseCalendarDate()
+  d.setDate(d.getDate() + delta)
+  customDate.value = d.toISOString().slice(0, 10)
+}
+
+// 选择快捷「今日/明日/昨日」时清掉自选日期
+watch(day, () => { customDate.value = '' })
 
 // ── 首页异动指标点击落地：?metric=xxx&events=1,2,3 → 只显示命中的这些比赛 ──
 const route = useRoute()
@@ -60,9 +91,11 @@ const filters = computed<MatchListFilters>(() => {
     return { date: undefined, league: 'all', status: 'all', page: 1, pageSize: 200 }
   }
   return {
-    date: dayToDate(day.value),
+    date: effectiveDate.value,
     league: league.value,
     status: status.value,
+    jc: lottery.value === 'jc',
+    lottery: lottery.value === 'lottery',
     page: 1,
     pageSize: 50,
   }
@@ -95,13 +128,23 @@ const leagueOptions = computed(() => {
       </div>
 
       <div class="date-row">
-        <button class="square-btn focus-ring" aria-label="上一日">
+        <button class="square-btn focus-ring" aria-label="上一日" @click="shiftDay(-1)">
           <ChevronLeft :size="16" />
         </button>
         <SegmentedControl v-model="day" :options="dayOptions" dense />
-        <button class="square-btn focus-ring" aria-label="下一日">
+        <button class="square-btn focus-ring" aria-label="下一日" @click="shiftDay(1)">
           <ChevronRight :size="16" />
         </button>
+      </div>
+
+      <!-- 数据回查：任选日期（G1） -->
+      <div class="replay-row">
+        <CalendarDays :size="14" class="rp-ico" />
+        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="回查日期">
+        <button v-if="customDate" class="rp-reset focus-ring" @click="customDate = ''">
+          <RotateCcw :size="13" /> 今日
+        </button>
+        <span v-else class="rp-hint">可回查历史</span>
       </div>
 
       <div class="status-row">
@@ -111,16 +154,17 @@ const leagueOptions = computed(() => {
         </button>
       </div>
 
+      <!-- 竞彩 / 胜负彩 分组（G3） -->
+      <div class="lottery-row">
+        <SegmentedControl v-model="lottery" :options="lotteryOptions" dense />
+      </div>
+
       <div class="select-row">
         <select v-model="league" class="focus-ring">
           <option v-for="option in leagueOptions" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
-        <button class="filter-btn focus-ring">
-          <Filter :size="14" />
-          <span>胜负</span>
-        </button>
       </div>
     </aside>
 
@@ -191,9 +235,63 @@ const leagueOptions = computed(() => {
 
 .select-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   align-items: center;
+}
+
+.lottery-row {
+  display: block;
+}
+
+.replay-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.rp-ico {
+  flex: 0 0 auto;
+  color: var(--brand);
+}
+
+.date-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-hint {
+  flex: 0 0 auto;
+  color: var(--soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.rp-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid var(--brand-tint-strong);
+  border-radius: 4px;
+  background: var(--brand-tint);
+  color: var(--brand-deep);
+  font-size: 0.7rem;
+  font-weight: 760;
 }
 
 .square-btn,

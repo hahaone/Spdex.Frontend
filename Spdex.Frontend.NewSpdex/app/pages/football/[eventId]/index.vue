@@ -242,8 +242,9 @@ function jumpTo(target: SectionKey) {
               <span>让分数据未对当前会籍开放</span>
             </div>
 
-            <template v-if="access.cs && detail.cs.length">
+            <template v-if="access.cs">
               <MarketSummaryCard
+                v-if="detail.cs.length"
                 title="比分 CS"
                 tone="goals"
                 :rows="detail.cs.slice(0, 3)"
@@ -252,9 +253,14 @@ function jumpTo(target: SectionKey) {
                 @open="jumpTo('cs')"
               />
             </template>
+            <div v-else class="access-card">
+              <Lock :size="14" />
+              <span>比分 · 白金会员专属</span>
+            </div>
 
-            <template v-if="access.corner && detail.corner.length">
+            <template v-if="access.corner">
               <MarketSummaryCard
+                v-if="detail.corner.length"
                 title="角球"
                 tone="goals"
                 :rows="detail.corner"
@@ -263,9 +269,22 @@ function jumpTo(target: SectionKey) {
                 @open="jumpTo('corner')"
               />
             </template>
+            <div v-else class="access-card">
+              <Lock :size="14" />
+              <span>角球 · 白金会员专属</span>
+            </div>
           </section>
 
-          <MarketMetricTable v-else-if="sectionMode" :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
+          <template v-else-if="sectionMode">
+            <div
+              v-if="(sectionMode === 'cs' && !access.cs) || (sectionMode === 'corner' && !access.corner)"
+              class="access-card"
+            >
+              <Lock :size="14" />
+              <span>{{ sectionMode === 'cs' ? '比分' : '角球' }} · 白金会员专属</span>
+            </div>
+            <MarketMetricTable v-else :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
+          </template>
         </div>
 
         <aside class="side-col">

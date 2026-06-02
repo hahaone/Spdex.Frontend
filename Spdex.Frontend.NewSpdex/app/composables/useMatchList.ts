@@ -56,6 +56,8 @@ export interface MatchListFilters {
   date?: string
   league?: string
   jc?: boolean
+  /** 仅胜负彩赛事（LotteryId>0） */
+  lottery?: boolean
   status?: 'upcoming' | 'started' | 'finished' | 'all' | 'jc'
   page?: number
   pageSize?: number
@@ -130,6 +132,7 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     if (f.date) q.date = f.date
     if (f.league && f.league !== 'all') q.league = f.league
     if (f.jc) q.jc = 1
+    if (f.lottery) q.lottery = 1
     if (f.status === 'jc') {
       q.jc = 1
     }
