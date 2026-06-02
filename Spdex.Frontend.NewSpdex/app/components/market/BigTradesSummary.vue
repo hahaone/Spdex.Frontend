@@ -163,7 +163,7 @@ function sideClass(side: string): string {
 }
 
 .attr {
-  text-align: center;
+  text-align: left;
   font-weight: 760;
 }
 

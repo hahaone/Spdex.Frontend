@@ -37,8 +37,13 @@ function fmtVar(v: number | undefined | null): string {
   return Math.abs(v) < 0.1 ? v.toFixed(3) : v.toFixed(2)
 }
 
+/** Poly 成交是美元，加 $ 前缀以区别必发（人民币口径）。 */
+function polyTurnover(t: string | undefined): string {
+  return t && t !== '-' ? `$${t}` : (t || '-')
+}
+
 function rowPrimary(row: MarketMetricRow): string[] {
-  if (props.mode === 'poly') return [row.selection, row.price, row.turnover || '-', fmtInt(row.polyIndex), row.ratio ?? '-']
+  if (props.mode === 'poly') return [row.selection, row.price, polyTurnover(row.turnover), fmtInt(row.polyIndex), row.ratio ?? '-']
   if (props.mode === 'goals') return [row.selection, row.price, row.turnover || '-', fmtInt(row.bfIndex), row.ratio ?? '-', row.listing ?? '-', row.balance ?? '-']
   if (props.mode === 'handicap') return [row.selection, row.price, row.turnover || '-', fmtInt(row.bfIndex), row.ratio ?? '-', row.listing ?? '-']
   if (props.mode === 'cs') return [row.selection, row.price, row.turnover || '-']
@@ -48,6 +53,11 @@ function rowPrimary(row: MarketMetricRow): string[] {
 
 function isNegative(value: unknown): boolean {
   return typeof value === 'number' && value < 0
+}
+
+/** 盈亏只在 ≥60（强烈盈利信号）时标红；负盈亏不再标红。 */
+function isPnlHot(value: unknown): boolean {
+  return typeof value === 'number' && value >= 60
 }
 </script>
 
@@ -82,7 +92,7 @@ function isNegative(value: unknown): boolean {
       <div class="extension-grid">
         <div v-for="row in rows" :key="`${row.key}-ext`" :class="['extension-row', rowClass(row)]">
           <b class="ext-key">{{ row.selection }}</b>
-          <span :class="{ negative: isNegative(row.pnl) }">盈亏 <b class="num">{{ fmtInt(row.pnl) }}</b></span>
+          <span :class="{ hot: isPnlHot(row.pnl) }">盈亏 <b class="num">{{ fmtInt(row.pnl) }}</b></span>
           <span>挂牌 <b class="num">{{ row.listing ?? '-' }}</b></span>
           <span :class="{ negative: isNegative(row.heat) }">冷热 <b class="num">{{ fmt2(row.heat) }}</b></span>
           <span>欧均 <b class="num">{{ fmt2(row.euroAvg) }}</b></span>
@@ -237,6 +247,11 @@ function isNegative(value: unknown): boolean {
 }
 
 .extension-row span.negative b {
+  color: var(--buy);
+}
+
+/* 盈亏 ≥60 强烈盈利才标红 */
+.extension-row span.hot b {
   color: var(--buy);
 }
 </style>

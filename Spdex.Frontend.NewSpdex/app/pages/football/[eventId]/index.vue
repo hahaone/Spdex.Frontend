@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Table2 } from '@lucide/vue'
-import type { MarketTab } from '~/types/market'
+import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw } from '@lucide/vue'
+import type { MarketMetricRow, MarketTab } from '~/types/market'
 import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
 
 const route = useRoute()
@@ -48,6 +48,30 @@ const effectiveGoals = computed(() => snapshot.value?.goals ?? detail.value?.goa
 const effectiveHandicap = computed(() => snapshot.value?.handicap ?? detail.value?.handicap ?? [])
 const isSnapshotMode = computed(() => snapshot.value !== null)
 
+// B1：进球/让分去掉独立"盘口"行，盘口线挪到卡片标题并格式化为 2 位小数（>2.50 / -1.50）
+function fmtLine(s: string): string {
+  return (s || '').replace(/-?\d+(?:\.\d+)?/g, m => Number.parseFloat(m).toFixed(2))
+}
+function dropLineRow(rows: MarketMetricRow[]): MarketMetricRow[] {
+  return rows.filter(r => r.key !== 'line')
+}
+function lineLabel(rows: MarketMetricRow[]): string {
+  return fmtLine(rows.find(r => r.key === 'line')?.price ?? '')
+}
+const goalsLine = computed(() => lineLabel(effectiveGoals.value))
+const handicapLine = computed(() => lineLabel(effectiveHandicap.value))
+const goalsRows = computed(() => dropLineRow(effectiveGoals.value))
+const handicapRows = computed(() => dropLineRow(effectiveHandicap.value))
+
+const goalsTitle = computed(() => {
+  const base = isSnapshotMode.value ? `进球（${snapshot.value?.actualHoursOffset}h 前）` : '进球'
+  return goalsLine.value ? `${base} ${goalsLine.value}` : base
+})
+const handicapTitle = computed(() => {
+  const base = isSnapshotMode.value ? `让分（${snapshot.value?.actualHoursOffset}h 前）` : '让分'
+  return handicapLine.value ? `${base} ${handicapLine.value}` : base
+})
+
 const tab = ref<MarketTab>('all')
 const options = [
   { label: '全部', value: 'all' },
@@ -66,15 +90,17 @@ const sectionMode = computed<SectionKey | null>(() =>
 
 const sectionRows = computed(() => {
   if (!sectionMode.value || !detail.value) return []
-  return detail.value[sectionMode.value]
+  const rows = detail.value[sectionMode.value]
+  // 进球/让分去掉"盘口"行（与全部页一致）
+  return (sectionMode.value === 'goals' || sectionMode.value === 'handicap') ? dropLineRow(rows) : rows
 })
 
 const sectionTitle = computed(() => {
   switch (sectionMode.value) {
     case 'standard': return '标盘核心'
     case 'poly': return 'Poly 核心'
-    case 'goals': return '进球核心'
-    case 'handicap': return '让分核心'
+    case 'goals': return goalsLine.value ? `进球核心 ${goalsLine.value}` : '进球核心'
+    case 'handicap': return handicapLine.value ? `让分核心 ${handicapLine.value}` : '让分核心'
     case 'cs': return '比分 CS Top 6'
     case 'corner': return '角球 区间分布'
     default: return ''
@@ -181,6 +207,7 @@ function jumpTo(target: SectionKey) {
               tone="poly"
               :rows="detail.poly"
               index-label="P指"
+              turnover-prefix="$"
               @open="jumpTo('poly')"
             />
             <div v-else class="access-card poly">
@@ -189,9 +216,9 @@ function jumpTo(target: SectionKey) {
 
             <template v-if="access.goals">
               <MarketSummaryCard
-                :title="isSnapshotMode ? `进球（${snapshot?.actualHoursOffset}h 前）` : '进球'"
+                :title="goalsTitle"
                 tone="goals"
-                :rows="effectiveGoals"
+                :rows="goalsRows"
                 index-label="必指"
                 @open="jumpTo('goals')"
               />
@@ -203,9 +230,9 @@ function jumpTo(target: SectionKey) {
 
             <template v-if="access.handicap">
               <MarketSummaryCard
-                :title="isSnapshotMode ? `让分（${snapshot?.actualHoursOffset}h 前）` : '让分'"
+                :title="handicapTitle"
                 tone="handicap"
-                :rows="effectiveHandicap"
+                :rows="handicapRows"
                 index-label="必指"
                 @open="jumpTo('handicap')"
               />
@@ -232,6 +259,7 @@ function jumpTo(target: SectionKey) {
                 tone="goals"
                 :rows="detail.corner"
                 index-label="区间"
+                wide-option
                 @open="jumpTo('corner')"
               />
             </template>
@@ -245,11 +273,9 @@ function jumpTo(target: SectionKey) {
             <div class="chart-title-row">
               <h2>走势图</h2>
               <div class="chart-actions">
-                <NuxtLink :to="`/football/${match.eventId}/chart`" class="icon-link focus-ring" aria-label="走势图">
-                  <BarChart3 :size="15" />
-                </NuxtLink>
-                <NuxtLink :to="`/football/${match.eventId}/trades`" class="icon-link focus-ring" aria-label="明细表">
-                  <Table2 :size="15" />
+                <NuxtLink :to="`/football/${match.eventId}/chart`" class="more-link focus-ring">
+                  <span>更多</span>
+                  <BarChart3 :size="14" />
                 </NuxtLink>
                 <button class="icon-link focus-ring" aria-label="刷新" @click="refresh(); refreshChart()">
                   <RefreshCw :size="15" />
@@ -495,7 +521,23 @@ function jumpTo(target: SectionKey) {
 
 .chart-actions {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  gap: 5px;
+}
+
+.more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--brand);
+  font-size: 0.76rem;
+  font-weight: 760;
+  text-decoration: none;
 }
 
 .icon-link {

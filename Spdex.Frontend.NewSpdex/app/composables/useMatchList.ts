@@ -143,7 +143,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   })
 
   const result = useApiFetch<ApiResponse<BackendMatchListResult>>('/api/newspdex/matches', {
-    key: 'newspdex-matches',
+    // key 带上 sport：足球/篮球独立缓存，切换频道时自动拉取对应数据（不再需要手动刷新）
+    key: () => `newspdex-matches-${unref(filters).sport ?? 'soccer'}`,
     server: false,
     query,
     watch: [query],

@@ -13,6 +13,10 @@ const props = defineProps<{
   hideIndex?: boolean
   /** 指数列格式：'int'(默认，必指/P指取整) | 'amount'(金额，如 CS 大注=MaxBet)。 */
   indexFormat?: 'int' | 'amount'
+  /** 成交列前缀（Poly 用 "$" 标美元）。 */
+  turnoverPrefix?: string
+  /** 加宽"选项"列（角球区间标签较长，6英文/3中文）。 */
+  wideOption?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -49,16 +53,16 @@ function indexValue(row: MarketMetricRow): string {
       <ChevronRight :size="16" />
     </div>
     <div class="summary-grid">
-      <div :class="['col-head', 'row', { 'no-idx': hideIndex }]">
+      <div :class="['col-head', 'row', { 'no-idx': hideIndex, 'wide-opt': wideOption }]">
         <span>选项</span>
         <span class="num">价位</span>
         <span class="num">{{ turnoverLabel || '成交' }}</span>
         <span v-if="!hideIndex" class="num">{{ indexLabel }}</span>
       </div>
-      <div v-for="row in rows" :key="row.key" :class="['row', 'data', rowClass(row), { 'no-idx': hideIndex }]">
+      <div v-for="row in rows" :key="row.key" :class="['row', 'data', rowClass(row), { 'no-idx': hideIndex, 'wide-opt': wideOption }]">
         <b class="num">{{ row.selection }}</b>
         <span class="num">{{ row.price }}</span>
-        <span class="num turnover">{{ row.turnover || '-' }}</span>
+        <span class="num turnover">{{ row.turnover ? `${turnoverPrefix || ''}${row.turnover}` : '-' }}</span>
         <span v-if="!hideIndex" class="num idx">{{ indexValue(row) }}</span>
       </div>
     </div>
@@ -136,6 +140,15 @@ function indexValue(row: MarketMetricRow): string {
 
 .row.no-idx {
   grid-template-columns: 32px 54px minmax(0, 1fr);
+}
+
+/* 角球：区间标签较长（6英文/3中文），加宽选项列 */
+.row.wide-opt {
+  grid-template-columns: 52px 50px minmax(0, 1fr) 40px;
+}
+
+.row.wide-opt.no-idx {
+  grid-template-columns: 52px 54px minmax(0, 1fr);
 }
 
 .row.col-head {

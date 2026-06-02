@@ -34,11 +34,14 @@ const scaleValues = computed(() => {
   const filtered = vals.filter(v => Number.isFinite(v) && !isMissing(v))
   return filtered.length > 0 ? filtered : [0, 1]
 })
+// 价位/成交/比例等天然非负指标：Y 轴下限不下探到负数（payout/index 可负，不限制）
+const NON_NEGATIVE_UNITS = ['odds', 'amount', 'percent']
 const minValue = computed(() => {
   const lo = Math.min(...scaleValues.value)
   const hi = Math.max(...scaleValues.value)
   const span = hi - lo || Math.abs(hi) || 1
-  return lo - span * 0.12
+  const m = lo - span * 0.12
+  return NON_NEGATIVE_UNITS.includes(unit.value) ? Math.max(0, m) : m
 })
 const maxValue = computed(() => {
   const lo = Math.min(...scaleValues.value)

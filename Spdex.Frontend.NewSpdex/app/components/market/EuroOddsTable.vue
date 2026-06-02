@@ -44,6 +44,16 @@ const bestPerCol = computed<number[]>(() => {
   })
 })
 
+/** 公司名里的 "Bet" 脱敏成 "B*t"（合规）。保留大小写：Bet→B*t / bet→b*t。 */
+function maskName(name: string): string {
+  return (name || '').replace(/bet/gi, m => (m[0] === 'B' ? 'B*t' : 'b*t'))
+}
+
+/** 市场标签：欧赔"大小"按需求改叫"进球"。 */
+function marketLabel(label: string): string {
+  return label === '大小' ? '进球' : label
+}
+
 function fmt(v: number | undefined): string {
   return typeof v === 'number' && v > 0 ? v.toFixed(2) : '–'
 }
@@ -82,7 +92,7 @@ watch(market, (m) => {
           :class="['mtab focus-ring', { active: i === marketIdx }]"
           @click="selectMarket(i)"
         >
-          {{ m.label }}
+          {{ marketLabel(m.label) }}
         </button>
       </div>
     </div>
@@ -111,7 +121,7 @@ watch(market, (m) => {
         </thead>
         <tbody>
           <tr v-for="row in line.rows" :key="row.name">
-            <td class="c-name">{{ row.name }}</td>
+            <td class="c-name">{{ maskName(row.name) }}</td>
             <td
               v-for="(c, i) in line.columns"
               :key="i"
@@ -314,8 +324,14 @@ watch(market, (m) => {
   box-shadow: inset 0 0 0 1px var(--brand-tint-strong);
 }
 
-.avg-row .c-name {
+/* 平均行：与最后一家公司拉开距离 + 双线分隔，突出区别 */
+.avg-row td {
+  border-top: 3px double var(--brand-tint-strong);
+  padding-top: 5px;
   background: var(--brand-tint);
+}
+
+.avg-row .c-name {
   color: var(--brand-deep);
   font-weight: 820;
 }

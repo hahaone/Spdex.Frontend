@@ -483,10 +483,10 @@ const featureCards = [
 
 .feature-card {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 16px;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
   align-items: center;
   gap: 10px;
-  padding: 11px 12px;
+  padding: 11px 16px 11px 12px;
   border-radius: 5px;
   color: #fff;
   box-shadow: 0 3px 10px rgba(26, 34, 51, 0.10);
