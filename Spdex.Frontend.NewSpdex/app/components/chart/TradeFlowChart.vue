@@ -50,8 +50,17 @@ const priceMax = computed(() => (prices.value.length ? Math.max(...prices.value)
 const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 const hasPrice = computed(() => prices.value.length > 0)
 
+/**
+ * 成交柱高用「平方根标度」：单笔大单常是普通桶的 10× 以上，
+ * 线性标度会把普通柱压成贴地短条；sqrt 在「大单仍最高、顺序不变」前提下
+ * 让中小柱清晰可见（成交量图常用做法）。
+ */
+function volH(v: number): number {
+  if (v <= 0) return 0
+  return chartH.value * Math.sqrt(v) / Math.sqrt(maxVol.value)
+}
 function volY(v: number): number {
-  return PAD_TOP + chartH.value * (1 - v / maxVol.value)
+  return PAD_TOP + chartH.value - volH(v)
 }
 function priceY(p: number): number {
   return PAD_TOP + chartH.value * (1 - (p - priceMin.value) / priceRange.value)
@@ -68,12 +77,12 @@ const bars = computed<Bar[]>(() => {
     attrs.value.forEach((a, j) => {
       const v = b.items[a] ?? 0
       if (v <= 0) return
-      const y = volY(v)
+      const h = volH(v)
       out.push({
         x: x0 + j * barW,
-        y,
+        y: PAD_TOP + chartH.value - h,
         w: Math.max(barW - 0.6, 1),
-        h: PAD_TOP + chartH.value - y,
+        h,
         color: attrColor(a),
       })
     })
@@ -91,13 +100,16 @@ const pricePts = computed(() => {
 })
 const priceLine = computed(() => pricePts.value.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '))
 
-/** 成交（左轴）刻度。 */
+/** 成交（左轴）刻度：等视觉高度处的真实成交量（sqrt 标度 → 量值非线性，向下收窄）。 */
 const volTicks = computed(() => {
   const n = 4
-  return Array.from({ length: n + 1 }, (_, i) => ({
-    y: PAD_TOP + chartH.value * (i / n),
-    label: fmtVol(maxVol.value * (1 - i / n)),
-  }))
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const frac = i / n // 0=顶部
+    return {
+      y: PAD_TOP + chartH.value * frac,
+      label: fmtVol(maxVol.value * (1 - frac) ** 2),
+    }
+  })
 })
 function fmtVol(v: number): string {
   if (v >= 10000) return `${(v / 10000).toFixed(1)}万`
