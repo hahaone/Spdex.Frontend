@@ -48,9 +48,8 @@ async function handleLogout() {
 <template>
   <header class="desktop-nav">
     <div class="nav-inner">
-      <NuxtLink to="/" class="brand focus-ring">
-        <span class="brand-text">SPdex</span>
-        <span class="brand-sub">超级指数系统</span>
+      <NuxtLink to="/" class="brand focus-ring" aria-label="SPdex 超级指数系统">
+        <img src="/logo-s.png" alt="SPdex 超级指数系统" :class="['brand-logo', { 'logo-dark': isDark }]">
       </NuxtLink>
 
       <nav class="nav-links" aria-label="主导航">
@@ -113,25 +112,21 @@ async function handleLogout() {
 
 .brand {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 
-.brand-text {
-  font-size: 1.4rem;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  line-height: 1;
+/* logo 黑字白底 PNG：浅色无缝；深色 invert+screen 抹底（同 AppTopBar） */
+.brand-logo {
+  height: 34px;
+  width: auto;
+  display: block;
+  mix-blend-mode: multiply;
 }
 
-.brand-sub {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 720;
+.brand-logo.logo-dark {
+  filter: invert(1);
+  mix-blend-mode: screen;
 }
 
 .nav-links {
@@ -265,8 +260,8 @@ async function handleLogout() {
     font-size: 0.86rem;
   }
 
-  .brand-sub {
-    display: none;
+  .brand-logo {
+    height: 28px;
   }
 }
 </style>

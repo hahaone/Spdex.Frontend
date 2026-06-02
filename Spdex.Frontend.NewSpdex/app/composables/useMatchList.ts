@@ -34,6 +34,9 @@ interface BackendMatchSummary {
   kellyHome?: number
   kellyDraw?: number
   kellyAway?: number
+  kellyVarHome?: number
+  kellyVarDraw?: number
+  kellyVarAway?: number
   bigBetSide?: string
   bigBetAttr?: string
   bigBetOdds?: number
@@ -94,6 +97,8 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const hasEuro = euro[0] > 0 || euro[1] > 0 || euro[2] > 0
   const kelly: [number, number, number] = [item.kellyHome ?? 0, item.kellyDraw ?? 0, item.kellyAway ?? 0]
   const hasKelly = kelly[0] > 0 || kelly[1] > 0 || kelly[2] > 0
+  const kellyVar: [number, number, number] = [item.kellyVarHome ?? 0, item.kellyVarDraw ?? 0, item.kellyVarAway ?? 0]
+  const hasKellyVar = kellyVar[0] > 0 || kellyVar[1] > 0 || kellyVar[2] > 0
 
   return {
     eventId: item.eventId,
@@ -115,6 +120,7 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     euro: hasEuro ? euro : undefined,
     euroBookmaker: hasEuro ? item.euroBookmaker : undefined,
     kelly: hasKelly ? kelly : undefined,
+    kellyVar: hasKellyVar ? kellyVar : undefined,
     bigBetSide: item.bigBetSide || undefined,
     bigBetAttr: item.bigBetAttr || undefined,
     bigBetOdds: item.bigBetOdds || undefined,

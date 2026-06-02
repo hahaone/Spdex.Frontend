@@ -112,8 +112,8 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
     <div class="meta-foot">
       <span class="m-chip total">成交 <b class="num">{{ totalTurnover }}</b></span>
       <span v-if="match.euro" class="m-chip euro">欧赔 <b class="num">{{ match.euro[0].toFixed(2) }}/{{ match.euro[1].toFixed(2) }}/{{ match.euro[2].toFixed(2) }}</b></span>
-      <span v-if="match.kelly" class="m-chip kelly">
-        凯利 <b class="num">{{ match.kelly[0].toFixed(2) }}/{{ match.kelly[1].toFixed(2) }}/{{ match.kelly[2].toFixed(2) }}</b>
+      <span v-if="match.kellyVar" class="m-chip kelly" title="跨公司凯利方差 主/平/客">
+        凯利方差 <b class="num">{{ match.kellyVar[0] }}/{{ match.kellyVar[1] }}/{{ match.kellyVar[2] }}</b>
       </span>
       <span v-if="hasPoly" class="m-chip poly">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
       <span

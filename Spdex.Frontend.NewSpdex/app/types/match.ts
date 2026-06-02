@@ -24,6 +24,8 @@ export interface MatchSummary {
   euroBookmaker?: string
   /** 首选公司凯利三值，0/0/0 = 无数据。 */
   kelly?: [number, number, number]
+  /** 凯利方差三值（跨公司凯利的总体方差×10000 取整），0/0/0 = 无数据/无分歧。 */
+  kellyVar?: [number, number, number]
   /** 标盘最大单注方向（"主"/"平"/"客"），空串=无数据。 */
   bigBetSide?: string
   /** 标盘最大单注属性（"买+"/"卖-"），空串=无数据。 */

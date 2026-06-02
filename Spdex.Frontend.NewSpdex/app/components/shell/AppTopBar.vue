@@ -18,7 +18,7 @@ const title = computed(() => {
 <template>
   <header class="app-topbar">
     <NuxtLink to="/" class="brand focus-ring" aria-label="返回首页">
-      <span class="brand-text">SPdex</span>
+      <img src="/logo-s.png" alt="SPdex 超级指数系统" :class="['brand-logo', { 'logo-dark': isDark }]">
     </NuxtLink>
 
     <div class="top-title">
@@ -64,14 +64,19 @@ const title = computed(() => {
   min-width: 0;
 }
 
-.brand-text {
-  font-size: 1.16rem;
-  font-weight: 880;
-  letter-spacing: 0.02em;
-  background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* logo 为黑字白底 PNG（无 alpha）：浅色面板纯白(#fff)无缝融合，用 multiply 抹掉白底；
+   深色模式 invert 翻成白字黑底，再用 screen 抹掉黑底 */
+.brand-logo {
+  height: 26px;
+  width: auto;
+  display: block;
+  mix-blend-mode: multiply;
+}
+
+/* 深色：invert 翻成白字黑底，screen 抹掉黑底（由 isDark 切类，避开 scoped :global 失效） */
+.brand-logo.logo-dark {
+  filter: invert(1);
+  mix-blend-mode: screen;
 }
 
 .top-title {
@@ -116,8 +121,8 @@ const title = computed(() => {
     padding-inline: 6px;
   }
 
-  .brand-text {
-    font-size: 1.04rem;
+  .brand-logo {
+    height: 22px;
   }
 
   .icon-btn {
