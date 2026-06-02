@@ -8,6 +8,7 @@ const eventId = computed(() => Number(route.params.eventId))
 const market = ref('standard')
 const metric = ref('odds')
 const timeRange = ref('6h')
+const seriesOnly = ref<'home' | 'draw' | 'away' | null>(null)
 
 const currentMarket = computed(() => CHART_MARKETS.find(m => m.value === market.value) ?? CHART_MARKETS[0]!)
 const metrics = computed(() => currentMarket.value.metrics)
@@ -22,6 +23,7 @@ watch(market, () => {
 const graphType = computed(() => `${market.value}.${metric.value}`)
 
 const timeOptions = [
+  { label: '2H', value: '2h' },
   { label: '6H', value: '6h' },
   { label: '24H', value: '24h' },
   { label: '全部', value: 'all' },
@@ -31,6 +33,44 @@ const { detail } = useMatchDetail(eventId)
 const match = computed(() => detail.value?.match)
 
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventId, graphType)
+
+// 时间范围过滤（按最后一个点往前推 N 小时；不足 2 点退回全部）
+const RANGE_HOURS: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24 }
+const displayPoints = computed(() => {
+  const all = points.value
+  const h = RANGE_HOURS[timeRange.value]
+  const lastTs = all.at(-1)?.ts
+  if (!h || all.length === 0 || !lastTs) return all
+  const cutoff = new Date(lastTs).getTime() - h * 3600_000
+  const filtered = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
+  return filtered.length >= 2 ? filtered : all
+})
+
+// 模拟盈亏固定 60 基线、冷热固定 0 基线
+const baseline = computed<number | null>(() => {
+  if (metric.value === 'payout') return 60
+  if (metric.value === 'hotcold') return 0
+  return null
+})
+// 成交变化用柱状图
+const barMode = computed(() => metric.value === 'traded')
+
+// 只看 主/平/客 筛选项（按当前盘口的序列标签）
+const seriesOptions = computed(() => {
+  const l = seriesLabels.value
+  const opts: { label: string, value: 'home' | 'draw' | 'away' | null }[] = [
+    { label: '全部', value: null },
+    { label: `只看${l.home}`, value: 'home' },
+  ]
+  if (l.draw) opts.push({ label: `只看${l.draw}`, value: 'draw' })
+  opts.push({ label: `只看${l.away}`, value: 'away' })
+  return opts
+})
+
+// 盘口切换后若当前"只看平"但新盘口无平局，回退到全部
+watch(seriesLabels, (l) => {
+  if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = null
+})
 
 const statusLabel = computed(() => {
   if (status.value === 'no-access') return '当前会籍未开放此走势'
@@ -94,6 +134,18 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
           <RefreshCw :size="15" :class="{ spinning: pending }" />
         </button>
       </div>
+
+      <div class="series-row scrollbar-none">
+        <button
+          v-for="s in seriesOptions"
+          :key="String(s.value)"
+          type="button"
+          :class="['series-btn focus-ring', { active: seriesOnly === s.value }]"
+          @click="seriesOnly = s.value"
+        >
+          {{ s.label }}
+        </button>
+      </div>
     </section>
 
     <section class="chart-band">
@@ -107,10 +159,13 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
         <span>{{ statusLabel }}</span>
       </div>
       <StaticTrendChart
-        v-else-if="points.length"
-        :points="points"
+        v-else-if="displayPoints.length"
+        :points="displayPoints"
         :series-labels="seriesLabels"
         :unit="unit"
+        :only="seriesOnly"
+        :baseline="baseline"
+        :bar-mode="barMode"
         :height="220"
       />
       <div v-else class="chart-placeholder">
@@ -252,6 +307,31 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
   border-radius: 4px;
   background: var(--panel);
   color: var(--muted);
+}
+
+.series-row {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.series-btn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.series-btn.active {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand-deep);
 }
 
 .chart-band {

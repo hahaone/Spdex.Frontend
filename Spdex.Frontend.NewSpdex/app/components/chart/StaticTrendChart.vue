@@ -9,6 +9,12 @@ const props = defineProps<{
   seriesLabels?: ChartSeriesLabels
   /** 数值单位：odds/index/amount/percent/payout。决定 Y 轴与图例数值格式。默认 odds。 */
   unit?: string
+  /** 只看某序列（主/平/客）：null=全部。 */
+  only?: 'home' | 'draw' | 'away' | null
+  /** 固定基线值（模拟盈亏=60、冷热=0），不传则不画。 */
+  baseline?: number | null
+  /** 柱状模式：序列值用柱子呈现（成交变化）。 */
+  barMode?: boolean
 }>()
 
 const width = 320
@@ -23,6 +29,16 @@ const unit = computed(() => props.unit ?? 'odds')
 type Field = 'home' | 'draw' | 'away'
 const fields = computed<Field[]>(() => hasDraw.value ? ['home', 'draw', 'away'] : ['home', 'away'])
 
+/** 只看某序列时只渲染它；否则全部。 */
+const activeFields = computed<Field[]>(() => {
+  if (props.only && fields.value.includes(props.only)) return [props.only]
+  return fields.value
+})
+function showField(f: Field): boolean {
+  if (f === 'draw' && !hasDraw.value) return false
+  return !props.only || props.only === f
+}
+
 /** 0 视为缺失（payout 例外：0/负数有意义）。 */
 function isMissing(v: number): boolean {
   return v === 0 && unit.value !== 'payout'
@@ -30,8 +46,9 @@ function isMissing(v: number): boolean {
 
 // 仅用「实际渲染的序列、去掉缺失值」来定标尺，避免被占位 0 拉扁
 const scaleValues = computed(() => {
-  const vals = props.points.flatMap(p => fields.value.map(f => p[f]))
+  const vals = props.points.flatMap(p => activeFields.value.map(f => p[f]))
   const filtered = vals.filter(v => Number.isFinite(v) && !isMissing(v))
+  if (typeof props.baseline === 'number') filtered.push(props.baseline) // 基线纳入标尺，保证可见
   return filtered.length > 0 ? filtered : [0, 1]
 })
 // 价位/成交/比例等天然非负指标：Y 轴下限不下探到负数（payout/index 可负，不限制）
@@ -85,6 +102,22 @@ function barHeight(volume: number): number {
   return Math.max(2, (volume / maxVolume.value) * 34)
 }
 
+const baselineY = computed(() => typeof props.baseline === 'number' ? yAt(props.baseline) : null)
+
+/** 柱状模式：每个可见点一根柱（从轴底到值），多序列横向错开。 */
+function barsFor(field: Field) {
+  const baseY = pad.top + chartH.value
+  const n = activeFields.value.length
+  const idx = activeFields.value.indexOf(field)
+  const slot = props.points.length > 1 ? chartW / (props.points.length - 1) : chartW
+  const bw = Math.min(6, Math.max(1.4, (slot * 0.7) / n))
+  const offset = (idx - (n - 1) / 2) * bw
+  return visibleDots(field).map((d) => {
+    const y = yAt(d.value)
+    return { x: xAt(d.index) + offset - bw / 2, y: Math.min(y, baseY), h: Math.abs(baseY - y) || 1, w: bw }
+  })
+}
+
 function fmtAmount(n: number): string {
   const a = Math.abs(n)
   if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -134,7 +167,7 @@ const tooltip = computed(() => {
     volume: h.p.volume,
     anchor,
     leftPct: Math.max(0, Math.min(100, frac * 100)),
-    rows: fields.value.map(f => ({ key: f, label: labels.value[f] ?? '', value: h.p[f], missing: isMissing(h.p[f]) })),
+    rows: activeFields.value.map(f => ({ key: f, label: labels.value[f] ?? '', value: h.p[f], missing: isMissing(h.p[f]) })),
   }
 })
 
@@ -190,17 +223,34 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         />
       </g>
 
-      <path class="line home" :d="linePath('home')" />
-      <path v-if="hasDraw" class="line draw" :d="linePath('draw')" />
-      <path class="line away" :d="linePath('away')" />
+      <!-- 基线（模拟盈亏=60 / 冷热=0） -->
+      <line v-if="baselineY != null" class="baseline" :x1="pad.left" :x2="width - pad.right" :y1="baselineY" :y2="baselineY" />
 
-      <g>
-        <circle v-for="d in visibleDots('home')" :key="`h-${d.index}`" class="dot home" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
-        <template v-if="hasDraw">
-          <circle v-for="d in visibleDots('draw')" :key="`d-${d.index}`" class="dot draw" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
+      <!-- 柱状模式（成交变化）：序列用柱子 -->
+      <template v-if="barMode">
+        <template v-for="f in activeFields" :key="`bar-${f}`">
+          <rect v-for="(b, bi) in barsFor(f)" :key="`bar-${f}-${bi}`" :class="['series-bar', f]" :x="b.x" :y="b.y" :width="b.w" :height="b.h" rx="0.6" />
         </template>
-        <circle v-for="d in visibleDots('away')" :key="`a-${d.index}`" class="dot away" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
-      </g>
+      </template>
+
+      <!-- 折线模式 -->
+      <template v-else>
+        <path v-if="showField('home')" class="line home" :d="linePath('home')" />
+        <path v-if="showField('draw')" class="line draw" :d="linePath('draw')" />
+        <path v-if="showField('away')" class="line away" :d="linePath('away')" />
+
+        <g>
+          <template v-if="showField('home')">
+            <circle v-for="d in visibleDots('home')" :key="`h-${d.index}`" class="dot home" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
+          </template>
+          <template v-if="showField('draw')">
+            <circle v-for="d in visibleDots('draw')" :key="`d-${d.index}`" class="dot draw" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
+          </template>
+          <template v-if="showField('away')">
+            <circle v-for="d in visibleDots('away')" :key="`a-${d.index}`" class="dot away" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
+          </template>
+        </g>
+      </template>
 
       <text :x="pad.left" :y="height - 8" class="x-tick">{{ points[0]?.time }}</text>
       <text :x="(pad.left + width - pad.right) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ points[Math.floor(points.length / 2)]?.time }}</text>
@@ -208,7 +258,7 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
 
       <g v-if="hover" class="cross">
         <line class="crosshair" :x1="hover.x" :x2="hover.x" :y1="pad.top" :y2="height - pad.bottom" />
-        <template v-for="f in fields" :key="`hi-${f}`">
+        <template v-for="f in activeFields" :key="`hi-${f}`">
           <circle v-if="!isMissing(hover.p[f])" :class="['dot-hi', f]" :cx="hover.x" :cy="yAt(hover.p[f])" r="3.4" />
         </template>
       </g>
@@ -374,6 +424,19 @@ svg {
 .volume-bar {
   fill: rgba(26, 140, 211, 0.16);
 }
+
+.baseline {
+  stroke: var(--down);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 3;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.series-bar { opacity: 0.85; }
+.series-bar.home { fill: var(--buy); }
+.series-bar.draw { fill: var(--sell); }
+.series-bar.away { fill: var(--brand); }
 
 .line {
   fill: none;

@@ -79,6 +79,7 @@ function isoToHM(iso: string): string {
 function mapPoint(p: BackendChartPoint): ChartPoint {
   return {
     time: isoToHM(p.time),
+    ts: p.time,
     home: p.home ?? 0,
     draw: p.draw ?? 0,
     away: p.away ?? 0,

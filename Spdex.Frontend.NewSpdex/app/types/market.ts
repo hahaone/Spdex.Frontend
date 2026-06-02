@@ -31,6 +31,8 @@ export interface MarketDetail {
 
 export interface ChartPoint {
   time: string
+  /** 原始 ISO 时间，供时间范围过滤（2H/6H/24H）。 */
+  ts?: string
   home: number
   draw: number
   away: number
