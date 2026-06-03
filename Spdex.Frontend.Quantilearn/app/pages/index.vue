@@ -193,7 +193,7 @@ watch(apiModelDetails, (details) => {
 const selectedApiModelDetail = computed(() => apiModelDetails.value.find(model => model.id === selectedModelId.value))
 const report365 = computed(() => apiStatistics.value.find(summary => summary.days === 365) ?? null)
 const halfReport365 = computed(() => apiHalfStatistics.value.find(summary => summary.days === 365 && summary.half === true) ?? null)
-const modelSourceLabel = computed(() => (hasApiModels.value ? `Mongo ${apiModelDetails.value.length} 个模型` : '静态原型模型'))
+const modelSourceLabel = computed(() => (hasApiModels.value ? `当前账号 ${apiModelDetails.value.length} 个模型` : '静态原型模型'))
 const modelLoadError = computed(() => errorMessage(modelsError.value))
 const reportLoadError = computed(() => errorMessage(reportError.value || halfReportError.value || analysisError.value))
 const reportSourceLabel = computed(() => {
@@ -289,7 +289,8 @@ const visibleHitEvents = computed(() => liveHitEvents.value.filter(item => !curr
 const visibleHallModels = computed(() => liveHallModels.value.filter(item => hallType.value === 'all' || item.type === hallType.value))
 
 const filteredModels = computed(() => liveModels.value.filter((model) => {
-  const stateMatched = modelFilter.value === 'all' || model.state === modelFilter.value
+  const stateMatched = modelFilter.value === 'all'
+    || (modelFilter.value === 'locked' ? model.isLocked : model.state === modelFilter.value)
   const text = `${model.name} ${model.objectId} ${model.description} ${model.bestSelection}`.toLowerCase()
   return stateMatched && (!searchText.value || text.includes(searchText.value.toLowerCase()))
 }))
@@ -348,7 +349,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
             <div>
               <span class="eyebrow">Legacy Flow</span>
               <h3>我的模型</h3>
-              <p>旧 WebV2 模型状态、额度、锁定和可操作性映射。</p>
+              <p>集中管理当前账号创建的模型状态、额度、锁定和可操作性。</p>
             </div>
             <button type="button" class="primary-button focus-ring" @click="openWorkspace('builder')">
               <Plus :size="16" />
@@ -358,9 +359,9 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 
           <div class="quota-grid">
             <div>
-              <span>{{ hasApiModels ? '加载模型' : '可创建模型' }}</span>
+              <span>{{ hasApiModels ? '我的模型' : '可创建模型' }}</span>
               <strong class="num">{{ hasApiModels ? liveModels.length : `${livePermissions.usedDraft} / ${livePermissions.establish}` }}</strong>
-              <em>{{ hasApiModels ? '当前账号可见模型' : '模型创建额度' }}</em>
+              <em>{{ hasApiModels ? '当前账号创建模型' : '模型创建额度' }}</em>
             </div>
             <div>
               <span>可发布模型</span>
@@ -381,7 +382,10 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
               <span>限制原因</span>
               <span>操作</span>
             </div>
-            <div v-for="model in liveModels" :key="`${model.id}-actions`" class="action-row">
+            <p v-if="!filteredModels.length" class="empty-state">
+              当前账号没有符合筛选条件的模型。
+            </p>
+            <div v-for="model in filteredModels" :key="`${model.id}-actions`" class="action-row">
               <div>
                 <strong>{{ model.name }}</strong>
                 <span class="mono">{{ model.objectId }}</span>
@@ -924,6 +928,13 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   background: var(--surface);
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.action-matrix .empty-state {
+  min-width: 620px;
+  border-width: 0;
+  border-top: 1px solid rgba(220, 227, 235, 0.72);
+  border-radius: 0;
 }
 
 .event-row,

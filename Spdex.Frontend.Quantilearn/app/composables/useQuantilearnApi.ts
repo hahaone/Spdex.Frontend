@@ -599,7 +599,7 @@ export const toQuantModel = (
     objectId: detail.id,
     description: detail.model.description || '无描述',
     state,
-    owner: `User ${detail.model.userId}`,
+    owner: detail.isOwner ? '我的模型' : '可见模型',
     ownerType: detail.isOwner ? 'self' : 'subscribed',
     createdAt: formatDate(detail.model.createTime),
     updatedAt: formatDate(detail.updateTime),
@@ -643,7 +643,7 @@ export const toHitEvent = (event: QuantilearnApiHitEventSummary): HitEvent => ({
 export const toHallModel = (model: QuantilearnApiHallModelSummary): HallModel => ({
   id: model.modelId,
   name: model.name || '(未命名模型)',
-  author: `User ${model.userId}`,
+  author: model.isOwner ? '我的模型' : `#${model.userId}`,
   type: hallTypeByMarket(model.market),
   selection: `${model.market} ${model.selection}`.trim(),
   yearReturn: model.yearReturn,

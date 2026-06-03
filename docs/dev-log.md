@@ -8,6 +8,23 @@
 
 ## 2026-06-03
 
+### Quantilearn 我的模型范围修正
+
+- “我的模型”工作区收口为当前登录账号创建的模型，不再把模型创建者 `UserId` 显示成 `User xxxx`。
+- 模型顶部归属文案改为“我的模型 / 可见模型”，避免把旧 Mongo 的内部 `UserId` 误解为当前登录用户。
+- 左侧模型筛选改为“全部、未发布、已发布、锁定”，移除不属于当前账号模型管理主流程的“订阅、临时”筛选入口。
+- 中间操作矩阵跟随左侧筛选结果，空状态明确提示“当前账号没有符合筛选条件的模型”。
+- 登录态本地测试时默认走 Nuxt BFF，由 BFF 附加 Quantilearn 可信 Header；无登录原型调试仍可直连本地 API。
+- 已通过 `npm run typecheck`、新版 Node 环境下的 `npm run lint`、`npm run build` 验证。
+
+### Quantilearn 品牌 Logo 更新
+
+- 将用户提供的 `spdex_logo_s.png` 复制到 Quantilearn Web 子项目 public 资源目录，作为新量化 Web 端独立打包资源。
+- 工作台顶栏和 `/flash` 闪Q单场分析页统一使用 SPdex 横向 logo。
+- 工作台标题调整为“Quantilearn”，避免与 logo 中的 SPdex 字样重复。
+- 已通过 `npm run typecheck`、新版 Node 环境下的 `npm run lint`、`npm run build` 验证。
+- 浏览器验证 `http://127.0.0.1:3005/` 和 `/flash?eid=35675743` 均正确加载 logo，顶栏渲染尺寸为 96x32。
+
 ### Frontend 选择性构建与部署
 
 - 优化 `.github/workflows/deploy.yml`，新增 `changes` job 通过 `git diff` 检测本次提交影响的前端子项目。

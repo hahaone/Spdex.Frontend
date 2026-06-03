@@ -1,3 +1,5 @@
+const requireAuth = process.env.NUXT_PUBLIC_REQUIRE_AUTH === 'true'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
 
@@ -18,10 +20,10 @@ export default defineNuxtConfig({
       || '',
     public: {
       quantilearnApiBase: process.env.NUXT_PUBLIC_QUANTILEARN_API_BASE
-        ?? (process.env.NODE_ENV === 'production' ? '' : 'http://127.0.0.1:5176'),
+        ?? (process.env.NODE_ENV === 'production' || requireAuth ? '' : 'http://127.0.0.1:5176'),
       quantilearnPublicBaseUrl: process.env.NUXT_PUBLIC_QUANTILEARN_PUBLIC_BASE_URL
         || (process.env.NODE_ENV === 'production' ? 'https://ql.spdex.com' : ''),
-      requireAuth: process.env.NUXT_PUBLIC_REQUIRE_AUTH === 'true',
+      requireAuth,
       newspdexLoginUrl: process.env.NUXT_PUBLIC_NEWSPDEX_LOGIN_URL || 'https://new.spdex.com/login',
       buildSha: process.env.BUILD_SHA || 'dev',
       buildTime: process.env.BUILD_TIME || '',

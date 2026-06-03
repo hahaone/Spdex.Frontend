@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   BarChart3,
-  Brain,
   CircleDot,
   Layers,
   RefreshCw,
@@ -35,11 +34,9 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
 <template>
   <header class="top-bar">
     <div class="brand-area">
-      <div class="brand-mark">
-        <Brain :size="21" stroke-width="2.2" />
-      </div>
+      <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
       <div class="brand-copy">
-        <h1>SPdex Quantilearn</h1>
+        <h1>Quantilearn</h1>
         <p>{{ selectedWorkspaceLabel }} / {{ selectedModelName }}</p>
       </div>
     </div>
@@ -97,18 +94,16 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
 }
 
 .brand-area {
-  gap: 9px;
+  gap: 10px;
 }
 
-.brand-mark {
-  display: grid;
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 8px;
-  background: #132331;
-  color: #f7fbfb;
+.brand-logo {
+  display: block;
+  flex: 0 0 96px;
+  width: 96px;
+  height: auto;
+  max-height: 32px;
+  object-fit: contain;
 }
 
 .brand-copy {
@@ -228,10 +223,10 @@ p {
     padding: 8px;
   }
 
-  .brand-mark {
-    flex-basis: 34px;
-    width: 34px;
-    height: 34px;
+  .brand-logo {
+    flex-basis: 82px;
+    width: 82px;
+    max-height: 28px;
   }
 
   .brand-copy p,

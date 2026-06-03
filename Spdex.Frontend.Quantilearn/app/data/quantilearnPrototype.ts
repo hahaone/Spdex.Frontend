@@ -2,7 +2,7 @@ export type WorkspaceId = 'models' | 'builder' | 'report' | 'events' | 'hall'
 export type WorkspaceIcon = 'layers' | 'workflow' | 'report' | 'events' | 'hall'
 export type ModelId = string
 export type ModelState = 'draft' | 'published' | 'temp' | 'subscription'
-export type ModelFilter = 'all' | ModelState
+export type ModelFilter = 'all' | 'draft' | 'published' | 'locked'
 export type LeagueScope = 'all' | 'league' | 'cup' | 'friendly'
 export type ReportView = 'final' | 'half' | 'goals'
 export type FactorGroupId = 'bf-index' | 'bf-volume' | 'ratio' | 'profit' | 'odds' | 'euro' | 'kelly' | 'goals' | 'inside'
@@ -157,7 +157,7 @@ export const permissions: PermissionProfile = {
 }
 
 export const workspaces: WorkspaceItem[] = [
-  { id: 'models', label: '我的模型', hint: '草稿、已发布、订阅和临时模型', icon: 'layers', count: '8' },
+  { id: 'models', label: '我的模型', hint: '当前账号的草稿、已发布和锁定模型', icon: 'layers', count: '8' },
   { id: 'builder', label: '建模器', hint: '因子区间、比较逻辑和权限额度', icon: 'workflow', count: `${permissions.factor}` },
   { id: 'report', label: '回测报告', hint: '7日、30日、1年和半场统计', icon: 'report', count: '365d' },
   { id: 'events', label: '模型赛事', hint: 'HitEvents 当前命中和已读状态', icon: 'events', count: '14' },
@@ -168,8 +168,7 @@ export const modelFilters: Array<{ id: ModelFilter, label: string }> = [
   { id: 'all', label: '全部' },
   { id: 'draft', label: '未发布' },
   { id: 'published', label: '已发布' },
-  { id: 'subscription', label: '订阅' },
-  { id: 'temp', label: '临时' },
+  { id: 'locked', label: '锁定' },
 ]
 
 export const leagueScopes: Array<{ id: LeagueScope, label: string }> = [

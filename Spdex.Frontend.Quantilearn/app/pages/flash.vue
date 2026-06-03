@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   Activity,
-  Calculator,
   ChevronRight,
   Clock,
   Database,
@@ -482,9 +481,7 @@ const refreshFlash = async () => {
   <div class="flash-page">
     <header class="flash-header">
       <div class="brand-block">
-        <div class="brand-mark">
-          <Calculator :size="20" />
-        </div>
+        <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
         <div>
           <span class="eyebrow">FlashQ.aspx</span>
           <h1>闪Q单场分析</h1>
@@ -961,18 +958,16 @@ const refreshFlash = async () => {
 }
 
 .brand-block {
-  gap: 9px;
+  gap: 10px;
 }
 
-.brand-mark {
-  display: grid;
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 8px;
-  background: #132331;
-  color: #f7fbfb;
+.brand-logo {
+  display: block;
+  flex: 0 0 96px;
+  width: 96px;
+  height: auto;
+  max-height: 32px;
+  object-fit: contain;
 }
 
 h1,
@@ -1722,10 +1717,10 @@ h1 {
     padding: 8px;
   }
 
-  .brand-mark {
-    flex-basis: 34px;
-    width: 34px;
-    height: 34px;
+  .brand-logo {
+    flex-basis: 82px;
+    width: 82px;
+    max-height: 28px;
   }
 
   h1 {
