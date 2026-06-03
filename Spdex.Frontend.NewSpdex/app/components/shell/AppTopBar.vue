@@ -18,7 +18,7 @@ const title = computed(() => {
 <template>
   <header class="app-topbar">
     <NuxtLink to="/" class="brand focus-ring" aria-label="返回首页">
-      <img src="/logo-s.png" alt="SPdex 超级指数系统" :class="['brand-logo', { 'logo-dark': isDark }]">
+      <img :src="isDark ? '/logo-s-dark.png' : '/logo-s.png'" alt="SPdex 超级指数系统" class="brand-logo">
     </NuxtLink>
 
     <div class="top-title">
@@ -64,16 +64,11 @@ const title = computed(() => {
   min-width: 0;
 }
 
-/* logo 为透明 PNG（紫色 SP + 深色 dex），浅色直接显示 */
+/* logo：浅色用 logo-s.png（紫 SP + 深 dex），深色切 logo-s-dark.png（白 dex），按 isDark 换图 */
 .brand-logo {
   height: 26px;
   width: auto;
   display: block;
-}
-
-/* 深色模式：深色"dex"在暗底对比低，加白色微光描边提升可见度（保留紫色） */
-.brand-logo.logo-dark {
-  filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.7));
 }
 
 .top-title {
