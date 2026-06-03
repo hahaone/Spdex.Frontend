@@ -1,86 +1,128 @@
 <script setup lang="ts">
-import { ChevronRight, RefreshCw } from '@lucide/vue'
+import { ChevronRight, Flame, RefreshCw } from '@lucide/vue'
+import type { LiveListItem, LiveOdds, LiveTabKey } from '~/composables/useLiveList'
 
-const { matches, runningCount, pending, refresh } = useLiveList()
+const tab = ref<LiveTabKey>('running')
+const tabOptions = [
+  { label: '进行中', value: 'running' },
+  { label: '未开赛', value: 'upcoming' },
+  { label: '已结束', value: 'finished' },
+  { label: '昨日', value: 'yesterday' },
+  { label: '前日', value: 'before' },
+]
 
-function homeYellow(m: typeof matches.value[number]): number {
-  return m.cardBadges.find(b => b.side === 'home' && b.color === 'yellow')?.count ?? 0
+const { grouped, count, pending, refresh } = useLiveList(tab)
+
+function badge(m: LiveListItem, side: 'home' | 'away', color: 'yellow' | 'red'): number {
+  return m.cardBadges.find(b => b.side === side && b.color === color)?.count ?? 0
 }
-function homeRed(m: typeof matches.value[number]): number {
-  return m.cardBadges.find(b => b.side === 'home' && b.color === 'red')?.count ?? 0
+/** 取某市场的赔率单元（按 label）。 */
+function odd(lo: LiveOdds | null, market: string, label: string): string {
+  return lo?.markets.find(x => x.market === market)?.cells.find(c => c.label === label)?.odd ?? '-'
 }
-function awayYellow(m: typeof matches.value[number]): number {
-  return m.cardBadges.find(b => b.side === 'away' && b.color === 'yellow')?.count ?? 0
+function line(lo: LiveOdds | null, market: string): string {
+  return lo?.markets.find(x => x.market === market)?.line ?? ''
 }
-function awayRed(m: typeof matches.value[number]): number {
-  return m.cardBadges.find(b => b.side === 'away' && b.color === 'red')?.count ?? 0
+function hasOdds(lo: LiveOdds | null): boolean {
+  return !!lo?.markets?.length
 }
 </script>
 
 <template>
   <div class="live-page">
-    <section class="live-filters">
-      <div class="filter-head">
+    <section class="live-head">
+      <div class="head-top">
         <h2>实时赛事</h2>
-        <span class="muted num">{{ runningCount }} 场进行中 · 30 秒自动刷新</span>
-      </div>
-      <div class="refresh-row">
         <button class="refresh-btn focus-ring" :disabled="pending" @click="refresh()">
           <RefreshCw :size="14" :class="{ spinning: pending }" />
         </button>
       </div>
+      <SegmentedControl v-model="tab" :options="tabOptions" dense tone="ink" />
+      <span class="muted num">{{ count }} 场</span>
     </section>
 
-    <section class="live-list">
-      <div v-if="pending && !matches.length" class="empty">加载中…</div>
-      <div v-else-if="!matches.length" class="empty">当前无进行中赛事</div>
+    <section class="live-body">
+      <div v-if="pending && !grouped.length" class="empty">加载中…</div>
+      <div v-else-if="!grouped.length" class="empty">本范围暂无赛事</div>
 
-      <NuxtLink
-        v-for="m in matches"
-        :key="m.eventId"
-        :to="`/live/${m.eventId}`"
-        class="live-card focus-ring"
-      >
-        <div class="card-head">
-          <span class="league">{{ m.leagueName }}</span>
-          <span class="minute num">{{ m.minute }}</span>
-        </div>
+      <div v-for="g in grouped" v-else :key="g.league" class="league-group">
+        <div class="league-bar">{{ g.league }}</div>
 
-        <div class="card-body">
-          <div class="row team home">
-            <span class="name">{{ m.homeTeam }}</span>
-            <span class="indicators">
-              <span v-if="homeYellow(m) > 0" class="card-badge yellow num">Y{{ homeYellow(m) }}</span>
-              <span v-if="homeRed(m) > 0" class="card-badge red num">R{{ homeRed(m) }}</span>
-            </span>
-            <b class="score num">{{ m.score[0] }}</b>
+        <NuxtLink
+          v-for="m in g.items"
+          :key="m.eventId"
+          :to="`/live/${m.eventId}`"
+          class="live-card focus-ring"
+        >
+          <!-- 头：开赛时间 / 进行分钟 / 状态 / 双红 -->
+          <div class="c-head">
+            <span class="kick num">{{ m.kickoffTime }}</span>
+            <span v-if="m.status === 'running'" class="minute num">{{ m.minute }}</span>
+            <span v-else-if="m.status === 'finished'" class="st-pill done">完场</span>
+            <span v-else class="st-pill up">未开</span>
+            <span v-if="m.doubleRed" class="dr-tag">双红</span>
+            <ChevronRight :size="14" class="chev" />
           </div>
-          <div class="row team away">
-            <span class="name">{{ m.awayTeam }}</span>
-            <span class="indicators">
-              <span v-if="awayYellow(m) > 0" class="card-badge yellow num">Y{{ awayYellow(m) }}</span>
-              <span v-if="awayRed(m) > 0" class="card-badge red num">R{{ awayRed(m) }}</span>
-            </span>
-            <b class="score num">{{ m.score[1] }}</b>
-          </div>
-        </div>
 
-        <div class="card-stats">
-          <span class="stat">
-            <span class="stat-label">角球</span>
-            <span class="stat-val num">{{ m.corners[0] }}-{{ m.corners[1] }}</span>
-          </span>
-          <span v-if="m.stats" class="stat">
-            <span class="stat-label">射门</span>
-            <span class="stat-val num">{{ m.stats.shots.home }}-{{ m.stats.shots.away }}</span>
-          </span>
-          <span v-if="m.stats" class="stat">
-            <span class="stat-label">控球%</span>
-            <span class="stat-val num">{{ m.stats.xg.home }}-{{ m.stats.xg.away }}</span>
-          </span>
-          <ChevronRight :size="14" class="chevron" />
-        </div>
-      </NuxtLink>
+          <!-- 比分 + 红黄牌 -->
+          <div class="c-teams">
+            <div class="trow">
+              <span class="tname">{{ m.homeTeam }}</span>
+              <span class="tbadges">
+                <i v-if="badge(m, 'home', 'yellow')" class="bdg y num">{{ badge(m, 'home', 'yellow') }}</i>
+                <i v-if="badge(m, 'home', 'red')" class="bdg r num">{{ badge(m, 'home', 'red') }}</i>
+              </span>
+              <b v-if="m.status !== 'upcoming'" class="tscore num">{{ m.score[0] }}</b>
+            </div>
+            <div class="trow">
+              <span class="tname">{{ m.awayTeam }}</span>
+              <span class="tbadges">
+                <i v-if="badge(m, 'away', 'yellow')" class="bdg y num">{{ badge(m, 'away', 'yellow') }}</i>
+                <i v-if="badge(m, 'away', 'red')" class="bdg r num">{{ badge(m, 'away', 'red') }}</i>
+              </span>
+              <b v-if="m.status !== 'upcoming'" class="tscore num">{{ m.score[1] }}</b>
+            </div>
+          </div>
+
+          <!-- 半场 + 角球（进行中/完场） -->
+          <div v-if="m.status !== 'upcoming'" class="c-micro">
+            <span>半 <b class="num">{{ m.halfScore }}</b></span>
+            <span>角 <b class="num">{{ m.corners[0] }}-{{ m.corners[1] }}</b></span>
+          </div>
+
+          <!-- 滚球赔率（进行中，bet365） -->
+          <div v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="c-odds">
+            <div class="orow">
+              <span class="om">1X2</span>
+              <span class="num">{{ odd(m.liveOdds, '1X2', '主') }}</span>
+              <span class="num">{{ odd(m.liveOdds, '1X2', '平') }}</span>
+              <span class="num">{{ odd(m.liveOdds, '1X2', '客') }}</span>
+            </div>
+            <div class="orow">
+              <span class="om">让 <i class="ln num">{{ line(m.liveOdds, '让球') }}</i></span>
+              <span class="num">{{ odd(m.liveOdds, '让球', '主') }}</span>
+              <span class="num dim">—</span>
+              <span class="num">{{ odd(m.liveOdds, '让球', '客') }}</span>
+            </div>
+            <div class="orow">
+              <span class="om">大小 <i class="ln num">{{ line(m.liveOdds, '大小') }}</i></span>
+              <span class="num">{{ odd(m.liveOdds, '大小', '大') }}</span>
+              <span class="num dim">—</span>
+              <span class="num">{{ odd(m.liveOdds, '大小', '小') }}</span>
+            </div>
+          </div>
+          <div v-else-if="m.status === 'running'" class="c-odds-empty">本场暂无现场盘口</div>
+
+          <!-- 最大现场单 -->
+          <div v-if="m.bigBet" class="c-bigbet">
+            <Flame :size="12" />
+            <span>现场单 <b class="num">{{ m.bigBet.amountText }}</b></span>
+            <span class="bb-side">{{ m.bigBet.side }}</span>
+            <span v-if="m.bigBet.odd" class="num">@{{ m.bigBet.odd.toFixed(2) }}</span>
+            <span v-if="m.bigBet.attr" class="bb-attr">{{ m.bigBet.attr }}</span>
+          </div>
+        </NuxtLink>
+      </div>
     </section>
   </div>
 </template>
@@ -88,7 +130,7 @@ function awayRed(m: typeof matches.value[number]): number {
 <style scoped>
 .live-page { display: grid; }
 
-.live-filters {
+.live-head {
   display: grid;
   gap: 6px;
   padding: 9px 10px;
@@ -96,29 +138,13 @@ function awayRed(m: typeof matches.value[number]): number {
   border-bottom: 1px solid var(--divider);
 }
 
-.filter-head {
+.head-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
 }
 
-.filter-head h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 820;
-}
-
-.muted {
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 720;
-}
-
-.refresh-row {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-}
+.head-top h2 { margin: 0; font-size: 1rem; font-weight: 820; }
 
 .refresh-btn {
   display: inline-grid;
@@ -131,14 +157,12 @@ function awayRed(m: typeof matches.value[number]): number {
   color: var(--muted);
 }
 
+.muted { color: var(--muted); font-size: 0.72rem; font-weight: 720; }
+
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.live-list {
-  display: grid;
-  gap: 7px;
-  padding: 9px 10px 16px;
-}
+.live-body { display: grid; gap: 9px; padding: 9px 10px 16px; }
 
 .empty {
   padding: 30px 0;
@@ -146,6 +170,18 @@ function awayRed(m: typeof matches.value[number]): number {
   text-align: center;
   font-size: 0.84rem;
   font-weight: 720;
+}
+
+.league-group { display: grid; gap: 6px; }
+
+.league-bar {
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--surface), var(--panel));
+  border-left: 3px solid var(--brand);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .live-card {
@@ -159,33 +195,44 @@ function awayRed(m: typeof matches.value[number]): number {
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
 }
 
-.card-head {
+.c-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 7px;
 }
 
-.card-head .league {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 740;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 70%;
-}
+.kick { color: var(--muted); font-size: 0.76rem; font-weight: 760; }
 
-.card-head .minute {
+.minute {
   padding: 1px 6px;
   border-radius: 2px;
   background: var(--buy);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 820;
-  letter-spacing: 0.02em;
 }
 
-.card-body {
+.st-pill {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+.st-pill.done { background: var(--surface); color: var(--muted); }
+.st-pill.up { background: #e6f2ff; color: var(--brand-deep); }
+
+.dr-tag {
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #fde0e7;
+  color: #b1253c;
+  font-size: 0.7rem;
+  font-weight: 820;
+}
+
+.chev { margin-left: auto; color: var(--brand); flex: 0 0 auto; }
+
+.c-teams {
   display: grid;
   gap: 2px;
   padding: 3px 0;
@@ -193,99 +240,90 @@ function awayRed(m: typeof matches.value[number]): number {
   border-bottom: 1px solid var(--divider);
 }
 
-.row {
+.trow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
-  font-size: 0.92rem;
+  padding: 3px 0;
+  font-size: 0.9rem;
   font-weight: 760;
 }
 
-.name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.tname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.indicators {
-  display: inline-flex;
-  gap: 3px;
-}
+.tbadges { display: inline-flex; gap: 3px; }
 
-.card-badge {
-  padding: 1px 5px;
+.bdg {
+  display: inline-grid;
+  min-width: 15px;
+  height: 15px;
+  place-items: center;
   border-radius: 2px;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
+  font-style: normal;
+  color: #fff;
 }
+.bdg.y { background: #d5b300; color: var(--ink); }
+.bdg.r { background: var(--buy); }
 
-.card-badge.yellow { background: var(--away-bg); color: #8a6212; }
-.card-badge.red { background: #fde0e7; color: #b1253c; }
+.tscore { min-width: 20px; text-align: right; font-size: 1rem; font-weight: 860; }
 
-.score {
-  min-width: 24px;
-  text-align: right;
-  font-size: 1rem;
-  font-weight: 860;
-}
-
-.card-stats {
+.c-micro {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 3px;
+  gap: 12px;
   color: var(--muted);
   font-size: 0.74rem;
   font-weight: 720;
 }
+.c-micro b { color: var(--ink); }
 
-.stat {
-  display: inline-flex;
+.c-odds {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0 1px;
+  border-top: 1px dashed var(--divider);
+}
+
+.orow {
+  display: grid;
+  grid-template-columns: 64px repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  font-size: 0.78rem;
 }
 
-.stat-label { color: var(--muted); }
-.stat-val { color: var(--ink); font-weight: 780; }
+.orow .om { color: var(--accent-deep); font-weight: 760; font-size: 0.72rem; }
+.orow .om .ln { color: var(--brand-deep); margin-left: 2px; font-size: 0.68rem; }
+.orow .num { text-align: center; font-weight: 740; color: var(--ink); }
+.orow .num.dim { color: var(--soft); }
 
-.chevron {
-  margin-left: auto;
-  color: var(--brand);
+.c-odds-empty {
+  padding: 4px 0;
+  color: var(--soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-top: 1px dashed var(--divider);
 }
 
-@media (min-width: 1024px) {
-  .live-page {
-    gap: 14px;
-    padding: 16px 0;
-  }
-
-  .live-filters {
-    gap: 10px;
-    padding: 14px 16px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(26, 34, 51, 0.05);
-  }
-
-  .live-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    padding: 0;
-  }
+.c-bigbet {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--away-bg);
+  color: #8a6212;
+  font-size: 0.74rem;
+  font-weight: 740;
 }
+.c-bigbet b { color: #8a6212; font-weight: 860; }
+.c-bigbet .bb-side { font-weight: 820; }
+.c-bigbet .bb-attr { padding: 0 4px; border-radius: 2px; background: rgba(138, 98, 18, 0.14); font-size: 0.68rem; }
 
-@media (min-width: 1280px) {
-  .live-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-  .live-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+@media (min-width: 768px) {
+  .live-body { grid-template-columns: 1fr; }
+  .league-group { gap: 6px; }
 }
 </style>

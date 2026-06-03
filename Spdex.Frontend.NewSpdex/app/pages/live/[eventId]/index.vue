@@ -62,6 +62,22 @@ const oddsPanel = computed(() => {
   return rows
 })
 
+// 赛中统计模型（后端自算近似版）
+const model = computed(() => snapshot.value?.model ?? null)
+const leanClass = computed(() => {
+  const l = model.value?.lean
+  return l === '大球价值' ? 'over' : l === '小球价值' ? 'under' : 'neutral'
+})
+const edgeText = computed(() => {
+  const e = model.value?.edgePct
+  if (e == null) return '-'
+  return `${e > 0 ? '+' : ''}${e}%`
+})
+const edgeClass = computed(() => {
+  const e = model.value?.edgePct ?? 0
+  return e > 3 ? 'pos' : e < -3 ? 'neg' : ''
+})
+
 // 价格比较：从富欧赔 1x2 盘口的即时赔率取（主/平/客 = cur[0..2]）
 const priceCompare = computed(() => {
   const line = euroOdds.value?.markets?.find(x => x.key === '1x2')?.lines?.[0]
@@ -111,6 +127,41 @@ const priceCompare = computed(() => {
     </section>
 
     <div class="content-grid">
+    <!-- 赛中统计模型（xG 外推 + 大小球 edge） -->
+    <section v-if="model" class="model-card">
+      <div class="section-title brand">
+        <span>赛中统计 <span class="model-tag">模型估算</span></span>
+        <span :class="['lean', leanClass]">{{ model.lean }}</span>
+      </div>
+      <div class="model-twin">
+        <div class="m-pair">
+          <span class="num hv">{{ model.xgHome.toFixed(2) }}</span>
+          <b class="m-lbl">xG</b>
+          <span class="num av">{{ model.xgAway.toFixed(2) }}</span>
+        </div>
+        <div class="m-pair">
+          <span class="num hv">{{ model.control[0] }}%</span>
+          <b class="m-lbl">控场</b>
+          <span class="num av">{{ model.control[1] }}%</span>
+        </div>
+      </div>
+      <div class="m-goals">
+        <span>当前 <b class="num">{{ model.currentGoals }}</b></span>
+        <span>剩余估 <b class="num">{{ model.remainingGoals.toFixed(2) }}</b></span>
+        <span>模型总进球 <b class="num">{{ model.modelTotalGoals.toFixed(2) }}</b></span>
+        <span v-if="model.redCards" class="rd">红牌 {{ model.redCards }}（产能衰减）</span>
+      </div>
+      <div v-if="model.goalLine" class="m-edge">
+        <div class="edge-title">大小 <b class="num">{{ model.goalLine }}</b> · 模型 vs 庄家</div>
+        <div class="edge-bars">
+          <span class="eb">模型大球 <b class="num">{{ model.modelOverPct }}%</b></span>
+          <span class="eb">庄家隐含 <b class="num">{{ model.bookOverPct }}%</b></span>
+          <span class="eb hi">Edge <b :class="['num', edgeClass]">{{ edgeText }}</b></span>
+        </div>
+      </div>
+      <div v-else class="m-edge-empty">无 Goal Line 盘口，仅展示 xG / 剩余进球估计</div>
+    </section>
+
     <section class="timeline">
       <div class="section-title">
         <span>事件时间线</span>
@@ -630,6 +681,102 @@ section.compare {
   font-size: 0.62rem;
   font-weight: 760;
   vertical-align: middle;
+}
+
+/* ── 赛中统计模型卡 ── */
+.model-card {
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #f5f8ff 0%, var(--panel) 60%);
+  border-bottom: 1px solid var(--divider);
+}
+
+.model-card .section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 820;
+}
+
+.model-tag {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(26, 140, 211, 0.14);
+  color: var(--brand-deep);
+  font-size: 0.62rem;
+  font-weight: 760;
+}
+
+.lean {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 820;
+}
+.lean.over { background: var(--brand-tint); color: var(--brand-deep); }
+.lean.under { background: var(--away-bg); color: #8a6212; }
+.lean.neutral { background: var(--surface); color: var(--muted); }
+
+.model-twin {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 7px 0;
+}
+
+.m-pair {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.m-pair .m-lbl { color: var(--muted); font-size: 0.74rem; font-weight: 780; }
+.m-pair .hv { text-align: right; font-weight: 860; font-size: 0.96rem; color: var(--brand); }
+.m-pair .av { text-align: left; font-weight: 860; font-size: 0.96rem; color: var(--buy); }
+
+.m-goals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 5px 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+.m-goals b { color: var(--ink); font-weight: 820; }
+.m-goals .rd { color: #b1253c; font-weight: 760; }
+
+.m-edge {
+  margin-top: 4px;
+  padding: 7px 9px;
+  border: 1px solid var(--brand-tint-strong);
+  border-radius: 5px;
+  background: var(--brand-tint);
+}
+
+.edge-title { color: var(--brand-deep); font-size: 0.76rem; font-weight: 780; margin-bottom: 5px; }
+.edge-title b { color: var(--brand-deep); }
+
+.edge-bars { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.eb { font-size: 0.78rem; color: var(--muted); font-weight: 720; }
+.eb b { color: var(--ink); font-weight: 820; margin-left: 3px; }
+.eb.hi b { font-size: 0.92rem; }
+.eb .pos { color: var(--sell); }
+.eb .neg { color: var(--buy); }
+
+.m-edge-empty {
+  margin-top: 4px;
+  padding: 6px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 @media (max-width: 370px) {

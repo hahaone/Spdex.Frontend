@@ -116,17 +116,15 @@ async function handleLogout() {
   gap: 8px;
 }
 
-/* logo 黑字白底 PNG：浅色无缝；深色 invert+screen 抹底（同 AppTopBar） */
+/* 透明 PNG logo：浅色直接显示；深色给深色"dex"加白色微光描边（同 AppTopBar） */
 .brand-logo {
   height: 34px;
   width: auto;
   display: block;
-  mix-blend-mode: multiply;
 }
 
 .brand-logo.logo-dark {
-  filter: invert(1);
-  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.7));
 }
 
 .nav-links {

@@ -5,6 +5,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
+import type { LiveModel } from '~/composables/useLiveList'
 
 export type LiveStatus = 'upcoming' | 'running' | 'finished'
 export type LiveDataStatus = 'ok' | 'pending' | 'no-access' | 'not-running'
@@ -34,6 +35,7 @@ interface BackendStatPair {
 interface BackendLiveStats {
   shots: BackendStatPair
   shotsOnTarget: BackendStatPair
+  attacks: BackendStatPair
   dangerousAttacks: BackendStatPair
   xg: BackendStatPair
 }
@@ -70,6 +72,7 @@ interface BackendSnapshot {
   events: LiveEvent[]
   stats: BackendLiveStats | null
   liveOdds: LiveOdds | null
+  model: LiveModel | null
   dataStatus: LiveDataStatus
   generatedAt: string
 }
@@ -94,6 +97,7 @@ export interface LiveSnapshot {
   events: LiveEvent[]
   stats: LiveStatRow[]
   liveOdds: LiveOdds | null
+  model: LiveModel | null
   dataStatus: LiveDataStatus
 }
 
@@ -113,8 +117,9 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
   if (data.stats) {
     statsList.push(statPair('射门', data.stats.shots))
     statsList.push(statPair('射正', data.stats.shotsOnTarget))
+    statsList.push(statPair('进攻', data.stats.attacks))
     statsList.push(statPair('危险进攻', data.stats.dangerousAttacks))
-    statsList.push(statPair('xG', data.stats.xg))
+    statsList.push(statPair('控球率%', data.stats.xg))
   }
   return {
     eventId: data.eventId,
@@ -130,6 +135,7 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     events: data.events ?? [],
     stats: statsList,
     liveOdds: data.liveOdds ?? null,
+    model: data.model ?? null,
     dataStatus: data.dataStatus,
   }
 }

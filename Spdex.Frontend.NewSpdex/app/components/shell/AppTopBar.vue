@@ -64,19 +64,16 @@ const title = computed(() => {
   min-width: 0;
 }
 
-/* logo 为黑字白底 PNG（无 alpha）：浅色面板纯白(#fff)无缝融合，用 multiply 抹掉白底；
-   深色模式 invert 翻成白字黑底，再用 screen 抹掉黑底 */
+/* logo 为透明 PNG（紫色 SP + 深色 dex），浅色直接显示 */
 .brand-logo {
   height: 26px;
   width: auto;
   display: block;
-  mix-blend-mode: multiply;
 }
 
-/* 深色：invert 翻成白字黑底，screen 抹掉黑底（由 isDark 切类，避开 scoped :global 失效） */
+/* 深色模式：深色"dex"在暗底对比低，加白色微光描边提升可见度（保留紫色） */
 .brand-logo.logo-dark {
-  filter: invert(1);
-  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.7));
 }
 
 .top-title {
