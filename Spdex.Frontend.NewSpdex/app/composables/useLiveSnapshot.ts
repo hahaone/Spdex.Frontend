@@ -108,6 +108,21 @@ export interface LiveAnalysis {
   signalTimeline: LiveSignalPoint[]
 }
 
+/** 单条伤停记录。 */
+export interface LiveInjuryItem {
+  player: string
+  position: string
+  status: string
+  reason: string
+  expectedReturn: string
+}
+
+/** 赛前伤停情报（主客两队，BSW 网关 Kinetel）。 */
+export interface LiveInjuryInfo {
+  home: LiveInjuryItem[]
+  away: LiveInjuryItem[]
+}
+
 interface BackendSnapshot {
   eventId: number
   leagueName: string
@@ -124,6 +139,7 @@ interface BackendSnapshot {
   liveOdds: LiveOdds | null
   model: LiveModel | null
   analysis: LiveAnalysis | null
+  injuries: LiveInjuryInfo | null
   dataStatus: LiveDataStatus
   generatedAt: string
 }
@@ -150,6 +166,7 @@ export interface LiveSnapshot {
   liveOdds: LiveOdds | null
   model: LiveModel | null
   analysis: LiveAnalysis | null
+  injuries: LiveInjuryInfo | null
   dataStatus: LiveDataStatus
 }
 
@@ -191,6 +208,7 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     liveOdds: data.liveOdds ?? null,
     model: data.model ?? null,
     analysis: data.analysis ?? null,
+    injuries: data.injuries ?? null,
     dataStatus: data.dataStatus,
   }
 }

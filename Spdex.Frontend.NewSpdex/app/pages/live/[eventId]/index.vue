@@ -166,6 +166,17 @@ const signalSpark = computed(() => {
   }).join(' ')
   return { path, w: W, h: H, max }
 })
+
+// ── 赛前伤停情报 ──
+const injuries = computed(() => snapshot.value?.injuries ?? null)
+const hasInjuries = computed(() => (injuries.value?.home.length ?? 0) + (injuries.value?.away.length ?? 0) > 0)
+function injStatus(s: string): { text: string, cls: string } {
+  const u = (s || '').toUpperCase()
+  if (u.includes('INJUR')) return { text: '伤', cls: 'out' }
+  if (u.includes('DOUBT') || u.includes('QUESTION')) return { text: '疑', cls: 'doubt' }
+  if (u.includes('SUSPEND') || u.includes('BAN')) return { text: '停', cls: 'susp' }
+  return { text: '缺', cls: 'out' }
+}
 </script>
 
 <template>
@@ -286,6 +297,39 @@ const signalSpark = computed(() => {
         <svg class="sig-spark" :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`" preserveAspectRatio="none">
           <path :d="signalSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
         </svg>
+      </div>
+    </section>
+
+    <!-- 赛前伤停情报（BSW 网关 Kinetel）-->
+    <section v-if="hasInjuries && injuries" class="injury-card">
+      <div class="section-title brand">
+        <span>伤停情报 <span class="model-tag">Kinetel</span></span>
+      </div>
+      <div class="inj-twin">
+        <div class="inj-col">
+          <div class="inj-team"><span class="ellip">{{ snapshot?.homeTeam }}</span><span class="inj-n">{{ injuries.home.length }}</span></div>
+          <div v-if="injuries.home.length" class="inj-list">
+            <div v-for="(p, i) in injuries.home" :key="`h${i}`" class="inj-row">
+              <span :class="['inj-st', injStatus(p.status).cls]">{{ injStatus(p.status).text }}</span>
+              <b class="inj-name">{{ p.player }}</b>
+              <i v-if="p.position" class="inj-pos">{{ p.position }}</i>
+              <span v-if="p.reason" class="inj-reason">{{ p.reason }}</span>
+            </div>
+          </div>
+          <div v-else class="inj-empty">无伤停</div>
+        </div>
+        <div class="inj-col">
+          <div class="inj-team"><span class="ellip">{{ snapshot?.awayTeam }}</span><span class="inj-n">{{ injuries.away.length }}</span></div>
+          <div v-if="injuries.away.length" class="inj-list">
+            <div v-for="(p, i) in injuries.away" :key="`a${i}`" class="inj-row">
+              <span :class="['inj-st', injStatus(p.status).cls]">{{ injStatus(p.status).text }}</span>
+              <b class="inj-name">{{ p.player }}</b>
+              <i v-if="p.position" class="inj-pos">{{ p.position }}</i>
+              <span v-if="p.reason" class="inj-reason">{{ p.reason }}</span>
+            </div>
+          </div>
+          <div v-else class="inj-empty">无伤停</div>
+        </div>
       </div>
     </section>
 
@@ -1099,4 +1143,37 @@ section.compare {
 .an-probs .p em.down { color: var(--buy); }
 
 .sig-spark { display: block; width: 100%; height: 30px; margin-top: 6px; color: #b1253c; }
+
+/* ── 赛前伤停情报 ── */
+.injury-card {
+  padding: 9px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--divider);
+}
+.injury-card .section-title { font-weight: 820; }
+.inj-twin { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 7px; }
+.inj-col { min-width: 0; }
+.inj-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 0.8rem;
+  font-weight: 820;
+  color: var(--ink);
+}
+.inj-team .ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.inj-n { flex: 0 0 auto; padding: 0 6px; border-radius: 999px; background: var(--away-bg); color: #8a6212; font-size: 0.66rem; font-weight: 820; }
+.inj-list { display: grid; gap: 6px; }
+.inj-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; font-size: 0.77rem; }
+.inj-st { flex: 0 0 auto; padding: 0 5px; border-radius: 3px; font-size: 0.64rem; font-weight: 820; }
+.inj-st.out { background: #fde0e7; color: #b1253c; }
+.inj-st.doubt { background: #fff2d6; color: #8a6212; }
+.inj-st.susp { background: var(--surface); color: var(--muted); }
+.inj-name { color: var(--ink); font-weight: 760; }
+.inj-pos { color: var(--soft); font-size: 0.66rem; font-style: normal; }
+.inj-reason { width: 100%; color: var(--muted); font-size: 0.68rem; font-weight: 600; }
+.inj-empty { color: var(--soft); font-size: 0.72rem; font-weight: 700; padding: 3px 0; }
 </style>
