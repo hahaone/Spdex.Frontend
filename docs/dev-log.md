@@ -8,6 +8,13 @@
 
 ## 2026-06-03
 
+### Quantilearn ql.spdex.com 公开域名配置
+
+- Quantilearn Web 新公开域名调整为 `https://ql.spdex.com`。
+- `nuxt.config.ts` 新增 `NUXT_PUBLIC_QUANTILEARN_PUBLIC_BASE_URL`，生产默认值为 `https://ql.spdex.com`。
+- 全局认证 middleware 的服务端回跳地址不再硬编码 `q.spdex.com`，改为使用 `NUXT_PUBLIC_QUANTILEARN_PUBLIC_BASE_URL`。
+- `.env.example` 增加新变量示例，便于生产部署和本地复核。
+
 ### Quantilearn 闪Q单场分析页
 
 - 新增 `Spdex.Frontend.Quantilearn/app/pages/flash.vue`，实现 `/flash?eid={eventId}` 单场分析工作台。
