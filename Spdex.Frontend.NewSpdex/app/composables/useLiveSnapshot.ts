@@ -69,6 +69,45 @@ export interface LiveOdds {
   markets: LiveOddsMarket[]
 }
 
+/** 网关赛中 xG 模型。 */
+export interface LiveInPlayXg {
+  homeXg: number
+  awayXg: number
+  totalXg: number
+  projectedTotalGoals: number
+  expectedRemainingGoals: number
+  homeDominance: number
+  awayDominance: number
+  performanceLabel: string
+  goalLineEdgePct?: number | null
+}
+
+/** 盘口资金流向（当前 1X2 概率 + 开盘→当前漂移 + 蒸汽/反向盘）。 */
+export interface LiveOddsMove {
+  driftDirection: string
+  homeProb: number
+  drawProb: number
+  awayProb: number
+  homeDriftPct: number
+  drawDriftPct: number
+  awayDriftPct: number
+  steamDetected: boolean
+  steamText?: string | null
+  reverseLine: boolean
+}
+
+export interface LiveSignalPoint {
+  minute: number
+  strength: number
+}
+
+/** 赛中深度分析（BSW 网关）。各部分可独立为 null。 */
+export interface LiveAnalysis {
+  inPlay: LiveInPlayXg | null
+  oddsMove: LiveOddsMove | null
+  signalTimeline: LiveSignalPoint[]
+}
+
 interface BackendSnapshot {
   eventId: number
   leagueName: string
@@ -84,6 +123,7 @@ interface BackendSnapshot {
   stats: BackendLiveStats | null
   liveOdds: LiveOdds | null
   model: LiveModel | null
+  analysis: LiveAnalysis | null
   dataStatus: LiveDataStatus
   generatedAt: string
 }
@@ -109,6 +149,7 @@ export interface LiveSnapshot {
   stats: LiveStatRow[]
   liveOdds: LiveOdds | null
   model: LiveModel | null
+  analysis: LiveAnalysis | null
   dataStatus: LiveDataStatus
 }
 
@@ -149,6 +190,7 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     stats: statsList,
     liveOdds: data.liveOdds ?? null,
     model: data.model ?? null,
+    analysis: data.analysis ?? null,
     dataStatus: data.dataStatus,
   }
 }

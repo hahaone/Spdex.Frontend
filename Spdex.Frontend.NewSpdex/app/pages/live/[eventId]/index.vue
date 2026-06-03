@@ -126,6 +126,46 @@ const sparkMap = computed<Record<string, Spark>>(() => {
   }
   return out
 })
+
+// ── 赛中分析（BSW 网关：xG 模型 / 盘口资金流向 / 双红信号走势）──
+const analysis = computed(() => snapshot.value?.analysis ?? null)
+
+const perfMap: Record<string, { text: string, cls: string }> = {
+  over_performing: { text: '超出预期', cls: 'over' },
+  under_performing: { text: '低于预期', cls: 'under' },
+  on_track: { text: '符合预期', cls: 'neutral' },
+}
+function perfText(label: string): string { return perfMap[label]?.text ?? label }
+function perfCls(label: string): string { return perfMap[label]?.cls ?? 'neutral' }
+
+function driftText(dir: string): string {
+  switch (dir) {
+    case 'home_up': return '主胜走热'
+    case 'away_up': return '客胜走热'
+    case 'draw_up': return '平局走热'
+    default: return '盘面平稳'
+  }
+}
+function signed(n: number): string { return n > 0 ? `+${n}` : `${n}` }
+function driftCls(n: number): string { return n > 1 ? 'up' : n < -1 ? 'down' : '' }
+
+// 双红信号强度走势 sparkline
+const signalSpark = computed(() => {
+  const pts = analysis.value?.signalTimeline ?? []
+  if (pts.length < 3) return null
+  const vals = pts.map(p => p.strength)
+  const W = 200, H = 30, pad = 3
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  const span = max - min || 1
+  const step = (W - pad * 2) / (vals.length - 1)
+  const path = vals.map((v, i) => {
+    const x = pad + i * step
+    const y = pad + (H - pad * 2) * (1 - (v - min) / span)
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  return { path, w: W, h: H, max }
+})
 </script>
 
 <template>
@@ -197,6 +237,56 @@ const sparkMap = computed<Record<string, Spark>>(() => {
         </div>
       </div>
       <div v-else class="m-edge-empty">无 Goal Line 盘口，仅展示 xG / 剩余进球估计</div>
+    </section>
+
+    <!-- 赛中分析（BSW 网关：xG 模型 / 盘口资金流向 / 双红信号走势）-->
+    <section
+      v-if="analysis && (analysis.inPlay || analysis.oddsMove || signalSpark)"
+      class="analysis-card"
+    >
+      <div class="section-title brand">
+        <span>赛中分析 <span class="model-tag">BSW 网关</span></span>
+      </div>
+
+      <!-- 网关 xG 模型 -->
+      <div v-if="analysis.inPlay" class="an-block">
+        <div class="m-pair">
+          <span class="num hv">{{ analysis.inPlay.homeXg.toFixed(2) }}</span>
+          <b class="m-lbl">网关 xG</b>
+          <span class="num av">{{ analysis.inPlay.awayXg.toFixed(2) }}</span>
+        </div>
+        <div class="an-meta">
+          <span>投影总进球 <b class="num">{{ analysis.inPlay.projectedTotalGoals.toFixed(1) }}</b></span>
+          <span>支配 <b class="num">{{ analysis.inPlay.homeDominance }}%-{{ analysis.inPlay.awayDominance }}%</b></span>
+          <span :class="['perf', perfCls(analysis.inPlay.performanceLabel)]">{{ perfText(analysis.inPlay.performanceLabel) }}</span>
+          <span v-if="analysis.inPlay.goalLineEdgePct != null" class="eb hi">大球 Edge
+            <b :class="['num', analysis.inPlay.goalLineEdgePct > 3 ? 'pos' : analysis.inPlay.goalLineEdgePct < -3 ? 'neg' : '']">{{ signed(analysis.inPlay.goalLineEdgePct) }}%</b>
+          </span>
+        </div>
+      </div>
+
+      <!-- 盘口资金流向 -->
+      <div v-if="analysis.oddsMove" class="an-block">
+        <div class="an-sub">
+          <span>盘口资金流向</span>
+          <span :class="['drift', analysis.oddsMove.driftDirection]">{{ driftText(analysis.oddsMove.driftDirection) }}</span>
+          <span v-if="analysis.oddsMove.steamDetected" class="steam">蒸汽走势</span>
+          <span v-if="analysis.oddsMove.reverseLine" class="steam rev">反向盘</span>
+        </div>
+        <div class="an-probs">
+          <span class="p"><i>主</i><b class="num">{{ analysis.oddsMove.homeProb }}%</b><em :class="driftCls(analysis.oddsMove.homeDriftPct)">{{ signed(analysis.oddsMove.homeDriftPct) }}</em></span>
+          <span class="p"><i>平</i><b class="num">{{ analysis.oddsMove.drawProb }}%</b><em :class="driftCls(analysis.oddsMove.drawDriftPct)">{{ signed(analysis.oddsMove.drawDriftPct) }}</em></span>
+          <span class="p"><i>客</i><b class="num">{{ analysis.oddsMove.awayProb }}%</b><em :class="driftCls(analysis.oddsMove.awayDriftPct)">{{ signed(analysis.oddsMove.awayDriftPct) }}</em></span>
+        </div>
+      </div>
+
+      <!-- 双红信号走势 -->
+      <div v-if="signalSpark" class="an-block">
+        <div class="an-sub"><span>双红信号走势</span><span class="muted">峰值 {{ signalSpark.max }}</span></div>
+        <svg class="sig-spark" :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`" preserveAspectRatio="none">
+          <path :d="signalSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </div>
     </section>
 
     <section class="timeline">
@@ -938,4 +1028,75 @@ section.compare {
     grid-row: span 2;
   }
 }
+
+/* ── 赛中分析（BSW 网关）── */
+.analysis-card {
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #f5f8ff 0%, var(--panel) 60%);
+  border-bottom: 1px solid var(--divider);
+}
+.analysis-card .section-title { font-weight: 820; }
+
+.an-block {
+  margin-top: 7px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.an-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+.an-meta b { color: var(--ink); font-weight: 820; }
+
+.perf { padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; }
+.perf.over { background: var(--away-bg); color: #8a6212; }
+.perf.under { background: var(--brand-tint); color: var(--brand-deep); }
+.perf.neutral { background: var(--surface); color: var(--muted); }
+
+.an-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.an-sub .muted { color: var(--muted); font-weight: 700; font-size: 0.72rem; }
+
+.drift { padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; background: var(--surface); color: var(--muted); }
+.drift.home_up { background: var(--brand-tint); color: var(--brand-deep); }
+.drift.away_up { background: var(--away-bg); color: #8a6212; }
+.drift.draw_up { background: var(--surface); color: var(--ink); }
+
+.steam { padding: 1px 7px; border-radius: 999px; background: #fde0e7; color: #b1253c; font-size: 0.68rem; font-weight: 820; }
+.steam.rev { background: #fff2d6; color: #8a6212; }
+
+.an-probs { display: flex; gap: 6px; margin-top: 7px; }
+.an-probs .p {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 4px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.an-probs .p i { color: var(--muted); font-size: 0.7rem; font-weight: 760; font-style: normal; }
+.an-probs .p b { color: var(--ink); font-size: 0.92rem; font-weight: 860; }
+.an-probs .p em { font-size: 0.68rem; font-weight: 800; font-style: normal; color: var(--soft); }
+.an-probs .p em.up { color: var(--sell); }
+.an-probs .p em.down { color: var(--buy); }
+
+.sig-spark { display: block; width: 100%; height: 30px; margin-top: 6px; color: #b1253c; }
 </style>
