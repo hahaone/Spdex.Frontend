@@ -10,13 +10,118 @@ on:
         type: boolean
         default: true
 
+env:
+  ACR_REGISTRY: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com
+  IMAGE_FJC: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend
+  IMAGE_2026: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026
+  IMAGE_NEWSPDEX: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex
+  IMAGE_QUANTILEARN: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn
+
 jobs:
-  build:
+  changes:
+    name: Detect changed frontends
     # push 时需要 commit message 含 [build] 或 [deploy]；手动触发时直接运行
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.head_commit.message, '[build]') ||
-      contains(github.event.head_commit.message, '[deploy]')
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[deploy]')))
+    runs-on: ubuntu-latest
+    outputs:
+      fjc: ${{ steps.detect.outputs.fjc }}
+      frontend2026: ${{ steps.detect.outputs.frontend2026 }}
+      newspdex: ${{ steps.detect.outputs.newspdex }}
+      quantilearn: ${{ steps.detect.outputs.quantilearn }}
+      any: ${{ steps.detect.outputs.any }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed frontend projects
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fjc=false
+          frontend2026=false
+          newspdex=false
+          quantilearn=false
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手动触发保留原来的全量构建语义。
+            fjc=true
+            frontend2026=true
+            newspdex=true
+            quantilearn=true
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+
+            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              mapfile -t files < <(git diff-tree --no-commit-id --name-only -r "$after")
+            else
+              mapfile -t files < <(git diff --name-only "$before" "$after")
+            fi
+
+            if [ "${#files[@]}" -eq 0 ]; then
+              mapfile -t files < <(git show --pretty='' --name-only "$after")
+            fi
+
+            printf 'Changed files:\n'
+            printf '  %s\n' "${files[@]}"
+
+            for file in "${files[@]}"; do
+              case "$file" in
+                Spdex.Frontend.Fjc/*)
+                  fjc=true
+                  ;;
+                Spdex.Frontend.2026/*)
+                  frontend2026=true
+                  ;;
+                Spdex.Frontend.NewSpdex/*)
+                  newspdex=true
+                  ;;
+                Spdex.Frontend.Quantilearn/*)
+                  quantilearn=true
+                  ;;
+                .github/workflows/deploy.yml)
+                  # 部署流水线自身变化影响所有服务，构建一次全量镜像验证新流程。
+                  fjc=true
+                  frontend2026=true
+                  newspdex=true
+                  quantilearn=true
+                  ;;
+              esac
+            done
+          fi
+
+          any=false
+          if [ "$fjc" = "true" ] || [ "$frontend2026" = "true" ] || [ "$newspdex" = "true" ] || [ "$quantilearn" = "true" ]; then
+            any=true
+          fi
+
+          {
+            echo "fjc=$fjc"
+            echo "frontend2026=$frontend2026"
+            echo "newspdex=$newspdex"
+            echo "quantilearn=$quantilearn"
+            echo "any=$any"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Frontend change detection"
+            echo "- FJCX: $fjc"
+            echo "- 2026: $frontend2026"
+            echo "- NewSpdex: $newspdex"
+            echo "- Quantilearn: $quantilearn"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build changed frontend images
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -26,11 +131,12 @@ jobs:
       - name: Login to Aliyun ACR
         uses: docker/login-action@v3
         with:
-          registry: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com
+          registry: ${{ env.ACR_REGISTRY }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push FJCX Docker image
+        if: needs.changes.outputs.fjc == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./Spdex.Frontend.Fjc
@@ -39,10 +145,11 @@ jobs:
             BUILD_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
           tags: |
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:latest
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend:${{ github.sha }}
+            ${{ env.IMAGE_FJC }}:latest
+            ${{ env.IMAGE_FJC }}:${{ github.sha }}
 
       - name: Build and push 2026 Docker image
+        if: needs.changes.outputs.frontend2026 == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./Spdex.Frontend.2026
@@ -51,10 +158,11 @@ jobs:
             BUILD_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
           tags: |
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026:latest
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026:${{ github.sha }}
+            ${{ env.IMAGE_2026 }}:latest
+            ${{ env.IMAGE_2026 }}:${{ github.sha }}
 
       - name: Build and push NewSpdex Docker image
+        if: needs.changes.outputs.newspdex == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./Spdex.Frontend.NewSpdex
@@ -63,10 +171,11 @@ jobs:
             BUILD_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
           tags: |
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex:latest
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex:${{ github.sha }}
+            ${{ env.IMAGE_NEWSPDEX }}:latest
+            ${{ env.IMAGE_NEWSPDEX }}:${{ github.sha }}
 
       - name: Build and push Quantilearn Docker image
+        if: needs.changes.outputs.quantilearn == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./Spdex.Frontend.Quantilearn
@@ -76,15 +185,17 @@ jobs:
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
             API_INTERNAL_URL=http://127.0.0.1:5015
           tags: |
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn:latest
-            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn:${{ github.sha }}
+            ${{ env.IMAGE_QUANTILEARN }}:latest
+            ${{ env.IMAGE_QUANTILEARN }}:${{ github.sha }}
 
   deploy:
-    needs: build
+    name: Deploy changed frontend services
+    needs: [changes, build]
     # push 含 [deploy] 时自动部署；手动触发时根据 deploy 参数决定
     if: >-
-      contains(github.event.head_commit.message, '[deploy]') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+      needs.changes.outputs.any == 'true' &&
+      ((github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy]')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'))
     runs-on: ubuntu-latest
 
     steps:
@@ -94,87 +205,82 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: ACR_USERNAME,ACR_PASSWORD
+          envs: ACR_USERNAME,ACR_PASSWORD,DEPLOY_FJC,DEPLOY_2026,DEPLOY_NEWSPDEX,DEPLOY_QUANTILEARN
           script: |
+            set -eu
+
             echo "$ACR_PASSWORD" | docker login crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com -u "$ACR_USERNAME" --password-stdin
             cd /home/spdex/core
-            docker compose pull frontend
-            docker compose up -d frontend
-            for attempt in $(seq 1 30); do
-              if docker compose config --services | grep -qx frontend2026; then
-                break
+
+            wait_for_compose_service() {
+              service="$1"
+              for attempt in $(seq 1 30); do
+                if docker compose config --services | grep -qx "$service"; then
+                  return 0
+                fi
+                echo "Waiting for $service service in docker-compose.yml... ($attempt/30)"
+                sleep 10
+              done
+              echo "$service service not found in docker-compose.yml; deploy Spdex.Core first."
+              exit 1
+            }
+
+            deploy_compose_service() {
+              service="$1"
+              container_name="$2"
+              port="${3:-}"
+              health_url="${4:-}"
+
+              wait_for_compose_service "$service"
+              docker compose pull "$service"
+              docker compose up -d "$service"
+              sleep 3
+
+              docker ps --filter "name=$container_name"
+              if [ -n "$port" ]; then
+                command -v ss >/dev/null 2>&1 && ss -ltnp | grep ":$port" || true
               fi
-              echo "Waiting for frontend2026 service in docker-compose.yml... ($attempt/30)"
-              sleep 10
-            done
-            if ! docker compose config --services | grep -qx frontend2026; then
-              echo "frontend2026 service not found in docker-compose.yml; deploy Spdex.Core first."
-              exit 1
-            fi
-            docker compose pull frontend2026
-            docker compose up -d frontend2026
-            sleep 3
-            docker ps --filter "name=spdex-frontend-2026"
-            command -v ss >/dev/null 2>&1 && ss -ltnp | grep ':3001' || true
-            if ! curl -fsS --max-time 10 http://127.0.0.1:3001/login >/dev/null; then
-              echo "frontend2026 health check failed; recent container logs:"
-              docker logs --tail 200 spdex-frontend-2026 || true
-              exit 1
-            fi
-            if ! curl -fsS --max-time 10 http://127.0.0.1:3001/tc26-9xq4v7 >/dev/null; then
-              echo "frontend2026 management page health check failed; recent container logs:"
-              docker logs --tail 200 spdex-frontend-2026 || true
-              exit 1
-            fi
-            api_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:3001/api/admin/teaching2026/opened || true)
-            if [ -z "$api_status" ] || [ "$api_status" = "000" ] || [ "$api_status" -ge 500 ]; then
-              echo "frontend2026 API proxy health check failed with status $api_status; recent container logs:"
-              docker logs --tail 200 spdex-frontend-2026 || true
-              exit 1
-            fi
-            for attempt in $(seq 1 30); do
-              if docker compose config --services | grep -qx frontend-newspdex; then
-                break
+              if [ -n "$health_url" ] && ! curl -fsS --max-time 10 "$health_url" >/dev/null; then
+                echo "$service health check failed; recent container logs:"
+                docker logs --tail 200 "$container_name" || true
+                exit 1
               fi
-              echo "Waiting for frontend-newspdex service in docker-compose.yml... ($attempt/30)"
-              sleep 10
-            done
-            if ! docker compose config --services | grep -qx frontend-newspdex; then
-              echo "frontend-newspdex service not found in docker-compose.yml; deploy Spdex.Core first."
-              exit 1
+            }
+
+            if [ "$DEPLOY_FJC" = "true" ]; then
+              deploy_compose_service frontend spdex-frontend
             fi
-            docker compose pull frontend-newspdex
-            docker compose up -d frontend-newspdex
-            sleep 3
-            docker ps --filter "name=spdex-frontend-newspdex"
-            command -v ss >/dev/null 2>&1 && ss -ltnp | grep ':3002' || true
-            if ! curl -fsS --max-time 10 http://127.0.0.1:3002/login >/dev/null; then
-              echo "frontend-newspdex health check failed; recent container logs:"
-              docker logs --tail 200 spdex-frontend-newspdex || true
-              exit 1
-            fi
-            for attempt in $(seq 1 30); do
-              if docker compose config --services | grep -qx frontend-quantilearn; then
-                break
+
+            if [ "$DEPLOY_2026" = "true" ]; then
+              deploy_compose_service frontend2026 spdex-frontend-2026 3001 http://127.0.0.1:3001/login
+
+              if ! curl -fsS --max-time 10 http://127.0.0.1:3001/tc26-9xq4v7 >/dev/null; then
+                echo "frontend2026 management page health check failed; recent container logs:"
+                docker logs --tail 200 spdex-frontend-2026 || true
+                exit 1
               fi
-              echo "Waiting for frontend-quantilearn service in docker-compose.yml... ($attempt/30)"
-              sleep 10
-            done
-            if ! docker compose config --services | grep -qx frontend-quantilearn; then
-              echo "frontend-quantilearn service not found in docker-compose.yml; deploy Spdex.Core first."
-              exit 1
+
+              api_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:3001/api/admin/teaching2026/opened || true)
+              if [ -z "$api_status" ] || [ "$api_status" = "000" ] || [ "$api_status" -ge 500 ]; then
+                echo "frontend2026 API proxy health check failed with status $api_status; recent container logs:"
+                docker logs --tail 200 spdex-frontend-2026 || true
+                exit 1
+              fi
             fi
-            docker compose pull frontend-quantilearn
-            docker compose up -d frontend-quantilearn
-            sleep 3
-            docker ps --filter "name=spdex-frontend-quantilearn"
-            command -v ss >/dev/null 2>&1 && ss -ltnp | grep ':3004' || true
-            if ! curl -fsS --max-time 10 http://127.0.0.1:3004/ >/dev/null; then
-              echo "frontend-quantilearn health check failed; recent container logs:"
-              docker logs --tail 200 spdex-frontend-quantilearn || true
-              exit 1
+
+            if [ "$DEPLOY_NEWSPDEX" = "true" ]; then
+              deploy_compose_service frontend-newspdex spdex-frontend-newspdex 3002 http://127.0.0.1:3002/login
             fi
+
+            if [ "$DEPLOY_QUANTILEARN" = "true" ]; then
+              deploy_compose_service frontend-quantilearn spdex-frontend-quantilearn 3004 http://127.0.0.1:3004/
+            fi
+
             docker image prune -f
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          DEPLOY_FJC: ${{ needs.changes.outputs.fjc }}
+          DEPLOY_2026: ${{ needs.changes.outputs.frontend2026 }}
+          DEPLOY_NEWSPDEX: ${{ needs.changes.outputs.newspdex }}
+          DEPLOY_QUANTILEARN: ${{ needs.changes.outputs.quantilearn }}

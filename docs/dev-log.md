@@ -8,6 +8,19 @@
 
 ## 2026-06-03
 
+### Frontend 选择性构建与部署
+
+- 优化 `.github/workflows/deploy.yml`，新增 `changes` job 通过 `git diff` 检测本次提交影响的前端子项目。
+- Push 触发时按路径选择构建和部署：
+  - `Spdex.Frontend.Fjc/**` -> `frontend`
+  - `Spdex.Frontend.2026/**` -> `frontend2026`
+  - `Spdex.Frontend.NewSpdex/**` -> `frontend-newspdex`
+  - `Spdex.Frontend.Quantilearn/**` -> `frontend-quantilearn`
+- `.github/workflows/deploy.yml` 自身变更按全量构建处理，用于验证新流水线。
+- 手动触发 `workflow_dispatch` 保留原来的全量构建语义。
+- Deploy 阶段按变更结果只 `docker compose pull/up` 对应服务，未变更的服务不再重启。
+- 已通过本地 YAML 解析校验，并用脚本模拟验证 Quantilearn、NewSpdex、docs、workflow 四类路径的选择结果。
+
 ### Quantilearn SSR 登录态与诊断入口收口
 
 - 修复 Quantilearn 工作台 SSR 数据加载时没有向前端 BFF 转发 `newspdex_token` Cookie 的问题：
