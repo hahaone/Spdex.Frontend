@@ -20,7 +20,6 @@ const props = defineProps<{
 const width = 320
 const height = computed(() => props.height ?? 188)
 const pad = { left: 30, right: 8, top: 16, bottom: 32 }
-const chartW = width - pad.left - pad.right
 
 const labels = computed<ChartSeriesLabels>(() => props.seriesLabels ?? { home: '主', draw: '平', away: '客' })
 const hasDraw = computed(() => labels.value.draw != null)
@@ -69,9 +68,59 @@ const maxValue = computed(() => {
 const maxVolume = computed(() => Math.max(...props.points.map(p => p.volume), 1))
 const chartH = computed(() => height.value - pad.top - pad.bottom)
 
+// ── 价位叠加（成交变化柱图）：跟随 only 取单选项价位，画在上方带，柱压到下方带 ──
+const PRICE_BAND = 0.4 // 价位带占图高的上方比例
+function priceVal(p: ChartPoint): number {
+  const f = props.only && fields.value.includes(props.only) ? props.only : 'home'
+  const v = f === 'home' ? p.priceHome : f === 'draw' ? p.priceDraw : p.priceAway
+  return v ?? 0
+}
+const priceField = computed<Field>(() => (props.only && fields.value.includes(props.only)) ? props.only : 'home')
+const showPrice = computed(() => !!props.barMode && props.points.some(p => priceVal(p) > 0))
+const priceScaleVals = computed(() => props.points.map(priceVal).filter(v => v > 0))
+const priceMin = computed(() => (priceScaleVals.value.length ? Math.min(...priceScaleVals.value) : 0))
+const priceMax = computed(() => (priceScaleVals.value.length ? Math.max(...priceScaleVals.value) : 1))
+const priceRange = computed(() => priceMax.value - priceMin.value || 1)
+
+const padRight = computed(() => (showPrice.value ? 30 : pad.right))
+const chartW = computed(() => width - pad.left - padRight.value)
+
+// 柱顶可达的最高 y：叠加价位线时压到下方带，给上方价位带让位
+const barCeilY = computed(() => (showPrice.value ? pad.top + chartH.value * (PRICE_BAND + 0.06) : pad.top))
+function barTopY(value: number): number {
+  const span = maxValue.value - minValue.value || 1
+  const frac = Math.max(0, Math.min(1, (value - minValue.value) / span))
+  const baseY = pad.top + chartH.value
+  return baseY - frac * (baseY - barCeilY.value)
+}
+function priceYAt(p: number): number {
+  const bandH = chartH.value * PRICE_BAND
+  return pad.top + bandH * (1 - (p - priceMin.value) / priceRange.value)
+}
+const pricePath = computed(() => {
+  let d = ''
+  let pen = false
+  props.points.forEach((point, index) => {
+    const v = priceVal(point)
+    if (!(v > 0)) { pen = false; return }
+    d += `${pen ? 'L' : 'M'} ${xAt(index).toFixed(2)} ${priceYAt(v).toFixed(2)} `
+    pen = true
+  })
+  return d.trim()
+})
+const priceDots = computed(() =>
+  props.points.map((point, index) => ({ index, v: priceVal(point) })).filter(d => d.v > 0))
+const priceTicks = computed(() => {
+  if (!showPrice.value) return []
+  return [0, 0.5, 1].map(f => ({
+    y: pad.top + chartH.value * PRICE_BAND * f,
+    label: (priceMax.value - priceRange.value * f).toFixed(2),
+  }))
+})
+
 function xAt(index: number): number {
   if (props.points.length <= 1) return pad.left
-  return pad.left + (index / (props.points.length - 1)) * chartW
+  return pad.left + (index / (props.points.length - 1)) * chartW.value
 }
 
 function yAt(value: number): number {
@@ -109,11 +158,11 @@ function barsFor(field: Field) {
   const baseY = pad.top + chartH.value
   const n = activeFields.value.length
   const idx = activeFields.value.indexOf(field)
-  const slot = props.points.length > 1 ? chartW / (props.points.length - 1) : chartW
+  const slot = props.points.length > 1 ? chartW.value / (props.points.length - 1) : chartW.value
   const bw = Math.min(6, Math.max(1.4, (slot * 0.7) / n))
   const offset = (idx - (n - 1) / 2) * bw
   return visibleDots(field).map((d) => {
-    const y = yAt(d.value)
+    const y = barTopY(d.value)
     return { x: xAt(d.index) + offset - bw / 2, y: Math.min(y, baseY), h: Math.abs(baseY - y) || 1, w: bw }
   })
 }
@@ -165,6 +214,7 @@ const tooltip = computed(() => {
   return {
     time: h.p.time,
     volume: h.p.volume,
+    price: priceVal(h.p),
     anchor,
     leftPct: Math.max(0, Math.min(100, frac * 100)),
     rows: activeFields.value.map(f => ({ key: f, label: labels.value[f] ?? '', value: h.p[f], missing: isMissing(h.p[f]) })),
@@ -178,7 +228,7 @@ function updateFromEvent(e: PointerEvent) {
   const rect = svg.getBoundingClientRect()
   if (rect.width === 0) return
   const vbX = ((e.clientX - rect.left) / rect.width) * width
-  const t = (vbX - pad.left) / (chartW || 1)
+  const t = (vbX - pad.left) / (chartW.value || 1)
   hoverIndex.value = Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))))
 }
 function onMove(e: PointerEvent) { updateFromEvent(e) }
@@ -202,7 +252,7 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
       <g v-for="tick in yTicks" :key="tick.value">
         <line
           :x1="pad.left"
-          :x2="width - pad.right"
+          :x2="width - padRight"
           :y1="tick.y"
           :y2="tick.y"
           class="grid"
@@ -210,7 +260,7 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         <text :x="pad.left - 4" :y="tick.y + 3" class="y-tick" text-anchor="end">{{ fmtValue(tick.value) }}</text>
       </g>
 
-      <line :x1="pad.left" :x2="width - pad.right" :y1="height - pad.bottom" :y2="height - pad.bottom" class="axis" />
+      <line :x1="pad.left" :x2="width - padRight" :y1="height - pad.bottom" :y2="height - pad.bottom" class="axis" />
 
       <g v-for="(point, index) in points" :key="point.time">
         <rect
@@ -223,14 +273,32 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         />
       </g>
 
-      <!-- 基线（模拟盈亏=60 / 冷热=0） -->
-      <line v-if="baselineY != null" class="baseline" :x1="pad.left" :x2="width - pad.right" :y1="baselineY" :y2="baselineY" />
+      <!-- 基线（模拟盈亏=60 / 冷热=0）+ 数值标记 -->
+      <g v-if="baselineY != null">
+        <line class="baseline" :x1="pad.left" :x2="width - padRight" :y1="baselineY" :y2="baselineY" />
+        <rect class="bl-badge" :x="width - padRight - 22" :y="baselineY - 7" width="22" height="13" rx="3" />
+        <text class="bl-text" :x="width - padRight - 11" :y="baselineY + 2.6" text-anchor="middle">{{ baseline }}</text>
+      </g>
 
       <!-- 柱状模式（成交变化）：序列用柱子 -->
       <template v-if="barMode">
         <template v-for="f in activeFields" :key="`bar-${f}`">
           <rect v-for="(b, bi) in barsFor(f)" :key="`bar-${f}-${bi}`" :class="['series-bar', f]" :x="b.x" :y="b.y" :width="b.w" :height="b.h" rx="0.6" />
         </template>
+      </template>
+
+      <!-- 成交变化叠加价位线（上方带，跟随 only 单选项；右轴标价位）-->
+      <template v-if="showPrice">
+        <path class="price-line" :d="pricePath" />
+        <circle v-for="(d, i) in priceDots" :key="`pd-${i}`" class="price-dot" :cx="xAt(d.index)" :cy="priceYAt(d.v)" r="1.8" />
+        <text
+          v-for="(t, i) in priceTicks"
+          :key="`pt-${i}`"
+          :x="width - padRight + 3"
+          :y="t.y + 3"
+          class="price-tick"
+          text-anchor="start"
+        >{{ t.label }}</text>
       </template>
 
       <!-- 折线模式 -->
@@ -253,13 +321,13 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
       </template>
 
       <text :x="pad.left" :y="height - 8" class="x-tick">{{ points[0]?.time }}</text>
-      <text :x="(pad.left + width - pad.right) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ points[Math.floor(points.length / 2)]?.time }}</text>
-      <text :x="width - pad.right" :y="height - 8" class="x-tick" text-anchor="end">{{ points[points.length - 1]?.time }}</text>
+      <text :x="(pad.left + width - padRight) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ points[Math.floor(points.length / 2)]?.time }}</text>
+      <text :x="width - padRight" :y="height - 8" class="x-tick" text-anchor="end">{{ points[points.length - 1]?.time }}</text>
 
       <g v-if="hover" class="cross">
         <line class="crosshair" :x1="hover.x" :x2="hover.x" :y1="pad.top" :y2="height - pad.bottom" />
         <template v-for="f in activeFields" :key="`hi-${f}`">
-          <circle v-if="!isMissing(hover.p[f])" :class="['dot-hi', f]" :cx="hover.x" :cy="yAt(hover.p[f])" r="3.4" />
+          <circle v-if="!isMissing(hover.p[f])" :class="['dot-hi', f]" :cx="hover.x" :cy="barMode ? barTopY(hover.p[f]) : yAt(hover.p[f])" r="3.4" />
         </template>
       </g>
     </svg>
@@ -276,12 +344,18 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         <span class="tl">成交量</span>
         <b class="tv">{{ fmtAmount(tooltip.volume) }}</b>
       </div>
+      <div v-if="showPrice" class="tip-row">
+        <i class="price" />
+        <span class="tl">{{ labels[priceField] }}价位</span>
+        <b class="tv">{{ tooltip.price > 0 ? tooltip.price.toFixed(2) : '-' }}</b>
+      </div>
     </div>
     <div class="legend">
       <span><i class="home" />{{ labels.home }}</span>
       <span v-if="hasDraw"><i class="draw" />{{ labels.draw }}</span>
       <span><i class="away" />{{ labels.away }}</span>
       <span><i class="volume" />成交量</span>
+      <span v-if="showPrice"><i class="price" />{{ labels[priceField] }}价位</span>
     </div>
   </div>
 </template>
@@ -433,10 +507,49 @@ svg {
   pointer-events: none;
 }
 
+/* 基线数值标记（模拟盈亏 60 / 冷热 0） */
+.bl-badge {
+  fill: var(--down);
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.bl-text {
+  fill: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  pointer-events: none;
+}
+
 .series-bar { opacity: 0.85; }
 .series-bar.home { fill: var(--buy); }
 .series-bar.draw { fill: var(--sell); }
 .series-bar.away { fill: var(--brand); }
+
+/* 价位线（成交变化叠加，金色与三序列区分） */
+.price-line {
+  fill: none;
+  stroke: #c79320;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.price-dot {
+  fill: #c79320;
+}
+
+.price-tick {
+  fill: #c79320;
+  font-size: 9px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+.tip-row i.price,
+.legend .price {
+  background: #c79320;
+}
 
 .line {
   fill: none;

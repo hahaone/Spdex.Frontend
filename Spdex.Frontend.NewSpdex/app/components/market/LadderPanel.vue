@@ -12,10 +12,9 @@ const active = computed(() => data.value?.active ?? null)
 const selections = computed(() => data.value?.selections ?? [])
 const locked = computed(() => data.value?.accessLocked === true)
 
-/** 金额：≥1万 用「万」，否则千分位。 */
+/** 金额：显示完整金额（千分位，不缩写 万/K）。 */
 function money(n: number | undefined): string {
   if (!n || n <= 0) return '–'
-  if (n >= 10000) return `${(n / 10000).toFixed(n >= 100000 ? 0 : 1)}万`
   return Math.round(n).toLocaleString('en-US')
 }
 /** 原图明细用原始数据（不缩写万/K，与必发交易版一致），千分位分隔。 */

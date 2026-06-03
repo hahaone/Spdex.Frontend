@@ -30,12 +30,9 @@ function rowClass(row: MarketMetricRow): string {
   return ''
 }
 
+// 显示完整金额（千分位，不缩写 K/M/万），如 464600 -> "464,600"
 function fmtAmount(n: number): string {
-  const a = Math.abs(n)
-  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (a >= 10_000) return `${(n / 10_000).toFixed(1)}万`
-  if (a >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return Math.round(n).toString()
+  return Math.round(n).toLocaleString('en-US')
 }
 
 /** 指数列：默认取整（必指/P指）；indexFormat='amount' 时按金额格式化（CS 大注）。 */

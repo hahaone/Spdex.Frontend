@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CalendarDays, ChevronLeft, ChevronRight, Lock, RefreshCw, RotateCcw } from '@lucide/vue'
+import { Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
 
 const day = ref('today')
@@ -7,12 +7,11 @@ const day = ref('today')
 const status = ref<'upcoming' | 'started' | 'all'>('upcoming')
 const lottery = ref<'all' | 'jc' | 'lottery'>('all')
 const league = ref('all')
-// 数据回查：自选日期，非空时覆盖「今日/明日/昨日」（G1）
+// 数据回查：自选日期，非空时覆盖「今日/昨日」
 const customDate = ref('')
 
 const dayOptions = [
   { label: '今日', value: 'today' },
-  { label: '明日', value: 'tomorrow' },
   { label: '昨日', value: 'yesterday' },
 ]
 
@@ -30,13 +29,8 @@ const lotteryOptions = [
 
 const dayToDate = (d: string): string | undefined => {
   const now = new Date()
-  // "today" 走特殊时间窗：过去 4 小时 ~ 明天中午 12:00（NewSpdex 移动端定义）
-  if (d === 'today') return 'today-window'
-  if (d === 'tomorrow') {
-    const next = new Date(now)
-    next.setDate(now.getDate() + 1)
-    return next.toISOString().slice(0, 10)
-  }
+  // "today" = 今日及所有未来赛事（后端 today-onward 窗口：过去 4h ~ +14 天）
+  if (d === 'today') return 'today-onward'
   if (d === 'yesterday') {
     const prev = new Date(now)
     prev.setDate(now.getDate() - 1)
@@ -45,27 +39,14 @@ const dayToDate = (d: string): string | undefined => {
   return undefined
 }
 
-/** 当前生效日期：自选日期优先，否则按快捷「今日/明日/昨日」。 */
+/** 当前生效日期：自选日期优先，否则按快捷「今日/昨日」。 */
 const effectiveDate = computed(() => customDate.value || dayToDate(day.value))
 
-/** 回查基准日历日期（把快捷项解析成真实日期，供前后翻日用）。 */
-function baseCalendarDate(): Date {
-  if (customDate.value) return new Date(`${customDate.value}T12:00:00`)
-  const now = new Date()
-  if (day.value === 'tomorrow') now.setDate(now.getDate() + 1)
-  else if (day.value === 'yesterday') now.setDate(now.getDate() - 1)
-  return now
-}
-
-/** 前/后翻一日：进入自选日期模式并落地为具体日期。 */
-function shiftDay(delta: number) {
-  const d = baseCalendarDate()
-  d.setDate(d.getDate() + delta)
-  customDate.value = d.toISOString().slice(0, 10)
-}
-
-// 选择快捷「今日/明日/昨日」时清掉自选日期
-watch(day, () => { customDate.value = '' })
+/** 快捷段控件：选了自选日期时不高亮今日/昨日；点今日/昨日则清空自选日期（今日即回到默认）。 */
+const daySeg = computed({
+  get: () => (customDate.value ? '' : day.value),
+  set: (v: string) => { customDate.value = ''; day.value = v },
+})
 
 // ── 首页异动指标点击落地：?metric=xxx&events=1,2,3 → 只显示命中的这些比赛 ──
 const route = useRoute()
@@ -127,36 +108,19 @@ const leagueOptions = computed(() => {
         <span class="muted num">{{ displayMatches.length }} 场</span>
       </div>
 
+      <!-- 日期：今日/昨日 快捷 + 任选日期回查，合并一行（今日含所有未来；前日直接选日期） -->
       <div class="date-row">
-        <button class="square-btn focus-ring" aria-label="上一日" @click="shiftDay(-1)">
-          <ChevronLeft :size="16" />
-        </button>
-        <SegmentedControl v-model="day" :options="dayOptions" dense />
-        <button class="square-btn focus-ring" aria-label="下一日" @click="shiftDay(1)">
-          <ChevronRight :size="16" />
-        </button>
+        <SegmentedControl v-model="daySeg" :options="dayOptions" dense />
+        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="选择日期">
       </div>
 
-      <!-- 数据回查：任选日期（G1） -->
-      <div class="replay-row">
-        <CalendarDays :size="14" class="rp-ico" />
-        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="回查日期">
-        <button v-if="customDate" class="rp-reset focus-ring" @click="customDate = ''">
-          <RotateCcw :size="13" /> 今日
-        </button>
-        <span v-else class="rp-hint">可回查历史</span>
-      </div>
-
-      <div class="status-row">
+      <!-- 状态 + 竞彩/胜负彩 + 刷新 合并一行，按钮铺满横向 -->
+      <div class="filters-row">
         <SegmentedControl v-model="status" :options="statusOptions" dense />
+        <SegmentedControl v-model="lottery" :options="lotteryOptions" dense />
         <button class="square-btn focus-ring" aria-label="刷新" :disabled="pending" @click="refresh()">
           <RefreshCw :size="15" :class="{ spinning: pending }" />
         </button>
-      </div>
-
-      <!-- 竞彩 / 胜负彩 分组（G3） -->
-      <div class="lottery-row">
-        <SegmentedControl v-model="lottery" :options="lotteryOptions" dense />
       </div>
 
       <div class="select-row">
@@ -221,16 +185,27 @@ const leagueOptions = computed(() => {
 
 .date-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 6px;
   align-items: center;
 }
 
-.status-row {
+/* 状态(0.9fr) + 彩种(1.1fr，"胜负彩"略宽) + 刷新；段控件按钮 flex:1 铺满，消除右侧留白 */
+.filters-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: 0.9fr 1.1fr 32px;
   gap: 6px;
   align-items: center;
+}
+
+.filters-row :deep(.segmented) {
+  width: 100%;
+}
+
+.filters-row :deep(.segmented-item) {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 4px;
 }
 
 .select-row {
@@ -240,58 +215,18 @@ const leagueOptions = computed(() => {
   align-items: center;
 }
 
-.lottery-row {
-  display: block;
-}
-
-.replay-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 7px;
-  border: 1px dashed var(--line);
-  border-radius: 4px;
-  background: var(--surface);
-}
-
-.rp-ico {
-  flex: 0 0 auto;
-  color: var(--brand);
-}
-
 .date-input {
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
-  min-height: 26px;
-  padding: 0 6px;
+  min-height: 30px;
+  padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--panel);
   color: var(--ink);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 720;
   font-variant-numeric: tabular-nums;
-}
-
-.rp-hint {
-  flex: 0 0 auto;
-  color: var(--soft);
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
-.rp-reset {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  flex: 0 0 auto;
-  padding: 3px 8px;
-  border: 1px solid var(--brand-tint-strong);
-  border-radius: 4px;
-  background: var(--brand-tint);
-  color: var(--brand-deep);
-  font-size: 0.7rem;
-  font-weight: 760;
 }
 
 .square-btn,

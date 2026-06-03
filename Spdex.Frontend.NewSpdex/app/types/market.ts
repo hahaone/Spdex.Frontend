@@ -37,6 +37,10 @@ export interface ChartPoint {
   draw: number
   away: number
   volume: number
+  /** 各选项当桶价位（LastOdds），供成交变化柱图叠加价位线。0=无。 */
+  priceHome?: number
+  priceDraw?: number
+  priceAway?: number
 }
 
 export interface TradeRow {

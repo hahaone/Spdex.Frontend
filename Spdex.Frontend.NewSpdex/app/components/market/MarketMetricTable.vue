@@ -31,10 +31,10 @@ function fmtInt(v: number | undefined | null): string {
 function fmt2(v: number | undefined | null): string {
   return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-'
 }
-/** 方差数值偏小，<0.1 时给 3 位小数，避免显示成 0.00 */
+/** 凯利方差：后端已按旧站口径 ×10000 取整，直接整数显示 */
 function fmtVar(v: number | undefined | null): string {
   if (typeof v !== 'number' || !Number.isFinite(v)) return '-'
-  return Math.abs(v) < 0.1 ? v.toFixed(3) : v.toFixed(2)
+  return Math.round(v).toString()
 }
 
 /** Poly 成交是美元，加 $ 前缀以区别必发（人民币口径）。 */

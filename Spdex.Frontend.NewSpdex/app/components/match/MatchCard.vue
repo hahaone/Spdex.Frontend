@@ -42,11 +42,9 @@ function bigBetSideKey(side: string): string {
   return 'mute'
 }
 
-// 必发成交为英镑盘口口径，不加人民币符号（G4）
+// 必发成交为英镑盘口口径，不加人民币符号（G4）；显示完整金额（千分位，不缩成 K/M）
 function fmtAmount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return `${Math.round(n)}`
+  return Math.round(n).toLocaleString('en-US')
 }
 
 const kickOff = computed(() => props.match.matchTime.slice(11, 16))
@@ -93,19 +91,19 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
     <div :class="['market-grid', { 'two-way': twoWay }]">
       <span class="cell selection home">{{ match.homeTeam }}</span>
       <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[0]) }}</span>
-      <span class="cell bfidx"><i :style="{ width: `${bfPct(0)}%` }" /><b class="num">{{ bfPct(0) }}%</b></span>
+      <span class="cell bfidx"><i :style="{ width: `${bfPct(0)}%` }" /><b class="num">{{ bfPct(0) }}</b></span>
       <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[0]) }" /><b class="num">{{ match.turnovers[0] }}</b></span>
 
       <template v-if="!twoWay">
         <span class="cell selection handicap">{{ match.handicap || '平' }}</span>
         <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[1]) }}</span>
-        <span class="cell bfidx"><i :style="{ width: `${bfPct(1)}%` }" /><b class="num">{{ bfPct(1) }}%</b></span>
+        <span class="cell bfidx"><i :style="{ width: `${bfPct(1)}%` }" /><b class="num">{{ bfPct(1) }}</b></span>
         <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[1]) }" /><b class="num">{{ match.turnovers[1] }}</b></span>
       </template>
 
       <span class="cell selection away">{{ match.awayTeam }}</span>
       <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[2]) }}</span>
-      <span class="cell bfidx"><i :style="{ width: `${bfPct(2)}%` }" /><b class="num">{{ bfPct(2) }}%</b></span>
+      <span class="cell bfidx"><i :style="{ width: `${bfPct(2)}%` }" /><b class="num">{{ bfPct(2) }}</b></span>
       <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[2]) }" /><b class="num">{{ match.turnovers[2] }}</b></span>
     </div>
 

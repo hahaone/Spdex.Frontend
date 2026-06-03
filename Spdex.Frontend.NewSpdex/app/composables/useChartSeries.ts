@@ -55,6 +55,9 @@ interface BackendChartPoint {
   draw: number | null
   away: number | null
   volume: number
+  priceHome?: number | null
+  priceDraw?: number | null
+  priceAway?: number | null
 }
 
 interface BackendChartResult {
@@ -85,6 +88,9 @@ function mapPoint(p: BackendChartPoint): ChartPoint {
     draw: p.draw ?? 0,
     away: p.away ?? 0,
     volume: p.volume,
+    priceHome: p.priceHome ?? 0,
+    priceDraw: p.priceDraw ?? 0,
+    priceAway: p.priceAway ?? 0,
   }
 }
 

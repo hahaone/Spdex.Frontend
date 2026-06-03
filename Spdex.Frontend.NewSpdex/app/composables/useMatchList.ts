@@ -73,17 +73,12 @@ function toTriple(arr: number[] | undefined): [number, number, number] {
   return [arr[0] ?? 0, arr[1] ?? 0, arr[2] ?? 0]
 }
 
-/** 把总成交按指数权重分摊到三个选项，估算 turnover 字符串 */
+/** 把总成交按指数权重分摊到三个选项，显示完整金额（千分位，不缩成 K/M） */
 function distributeTurnover(total: number, indexes: [number, number, number]): [string, string, string] {
   const sum = indexes[0] + indexes[1] + indexes[2]
   if (total <= 0 || sum <= 0) return ['-', '-', '-']
 
-  const calc = (idx: number) => {
-    const share = total * (idx / sum)
-    if (share >= 1_000_000) return (share / 1_000_000).toFixed(2) + 'M'
-    if (share >= 1_000) return (share / 1_000).toFixed(1) + 'K'
-    return Math.round(share).toString()
-  }
+  const calc = (idx: number) => Math.round(total * (idx / sum)).toLocaleString('en-US')
 
   return [calc(indexes[0]), calc(indexes[1]), calc(indexes[2])]
 }
