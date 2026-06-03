@@ -8,6 +8,23 @@
 
 ## 2026-06-03
 
+### Quantilearn SSR 登录态与诊断入口收口
+
+- 修复 Quantilearn 工作台 SSR 数据加载时没有向前端 BFF 转发 `newspdex_token` Cookie 的问题：
+  - `useQuantilearnApi` 在服务端请求 `/api/quantilearn/**` 时转发原始 `cookie` 和 `authorization` 请求头。
+  - 避免已登录用户进入 `ql.spdex.com` 后，模型、因子、权限等 SSR 首屏请求被 BFF 误判为未登录并返回 401。
+- 移除用户侧“数据诊断”工作区：
+  - 顶部导航不再展示“数据诊断”。
+  - 首页不再请求 `/api/quantilearn/diagnostics/mongo`。
+  - 页面不再展示 API 地址、接口清单、Mongo 集合名和内部缓存键。
+- 用户可见错误文案统一脱敏，模型、因子、闪Q等页面不再把 `$fetch` 的原始 `/api/quantilearn/**` 路径展示给终端用户。
+- Quantilearn 前端 BFF 对 `/api/quantilearn/diagnostics/*` 返回 404，保留私网后端诊断接口给部署脚本和运维使用，不通过 `ql.spdex.com` 对终端用户暴露。
+- 已通过 `npm run typecheck`、新版 Node 环境下的 `npm run lint`、`npm run build` 验证。
+- 本地浏览器验证 `http://127.0.0.1:3005/`：
+  - 顶部工作区仅保留“我的模型、建模器、回测报告、模型赛事、模型广场”。
+  - 可见文本不包含“数据诊断”、`/api/quantilearn`、Mongo 集合名或内部缓存键。
+  - `GET /api/quantilearn/diagnostics/mongo` 经前端 BFF 返回 HTTP 404。
+
 ### Quantilearn ql.spdex.com 公开域名配置
 
 - Quantilearn Web 新公开域名调整为 `https://ql.spdex.com`。

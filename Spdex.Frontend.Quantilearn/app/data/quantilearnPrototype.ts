@@ -1,5 +1,5 @@
-export type WorkspaceId = 'models' | 'builder' | 'report' | 'events' | 'hall' | 'data'
-export type WorkspaceIcon = 'layers' | 'workflow' | 'report' | 'events' | 'hall' | 'data'
+export type WorkspaceId = 'models' | 'builder' | 'report' | 'events' | 'hall'
+export type WorkspaceIcon = 'layers' | 'workflow' | 'report' | 'events' | 'hall'
 export type ModelId = string
 export type ModelState = 'draft' | 'published' | 'temp' | 'subscription'
 export type ModelFilter = 'all' | ModelState
@@ -162,7 +162,6 @@ export const workspaces: WorkspaceItem[] = [
   { id: 'report', label: '回测报告', hint: '7日、30日、1年和半场统计', icon: 'report', count: '365d' },
   { id: 'events', label: '模型赛事', hint: 'HitEvents 当前命中和已读状态', icon: 'events', count: '14' },
   { id: 'hall', label: '模型广场', hint: '发布、订阅、定价和相似性门槛', icon: 'hall', count: '500' },
-  { id: 'data', label: '数据诊断', hint: 'Mongo 集合、样本和 API 运行态', icon: 'data', count: '6' },
 ]
 
 export const modelFilters: Array<{ id: ModelFilter, label: string }> = [

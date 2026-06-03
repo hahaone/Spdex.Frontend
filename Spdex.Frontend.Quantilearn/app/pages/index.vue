@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import {
-  Activity,
   CheckCircle2,
-  Database,
-  FileText,
   Filter,
   Flag,
   Layers,
   Pencil,
   Plus,
-  ServerCog,
   ShoppingCart,
   Star,
-  TableProperties,
   Target,
   TrendingUp,
   XCircle,
@@ -23,6 +18,7 @@ import ModelHero from '~/components/quantilearn/ModelHero.vue'
 import ModelScopePanel from '~/components/quantilearn/ModelScopePanel.vue'
 import ReportWorkspace from '~/components/quantilearn/ReportWorkspace.vue'
 import WorkbenchTopBar from '~/components/quantilearn/WorkbenchTopBar.vue'
+import { toQuantilearnUserError } from '~/utils/quantilearnErrors'
 import {
   statisticToGoalRows,
   statisticToMarketRows,
@@ -78,12 +74,7 @@ const currentOnly = ref(true)
 
 const apiBase = quantilearnApi.apiBase
 
-const errorMessage = (error: unknown) => {
-  if (!error) return ''
-  if (error instanceof Error) return error.message
-  if (typeof error === 'object' && 'message' in error) return String((error as { message?: unknown }).message ?? '')
-  return String(error)
-}
+const errorMessage = (error: unknown) => toQuantilearnUserError(error)
 
 const {
   data: apiModelDetails,
@@ -170,15 +161,6 @@ const {
 )
 
 const {
-  data: diagnostics,
-  pending: diagnosticsPending,
-  error: diagnosticsError,
-  refresh: refreshDiagnostics,
-} = await useAsyncData('quantilearn-diagnostics', () => quantilearnApi.getDiagnostics(), {
-  default: () => null,
-})
-
-const {
   data: apiHitEvents,
   pending: eventsPending,
   error: eventsError,
@@ -224,7 +206,6 @@ const reportSourceLabel = computed(() => {
   return '等待回测统计'
 })
 const factorSourceLabel = computed(() => (apiFactors.value.length ? `Mongo 因子 ${apiFactors.value.length}` : '静态因子原型'))
-const diagnosticsSourceLabel = computed(() => diagnostics.value?.canConnect ? 'Mongo Connected' : 'Mongo Pending')
 const livePermissions = computed(() => (apiPermissions.value ? toPermissionProfile(apiPermissions.value) : prototypePermissions))
 const publishSlotsUsed = computed(() => livePermissions.value.usedPublish + livePermissions.value.extraPublish)
 const publishLimit = computed(() => livePermissions.value.publish + livePermissions.value.extraPublish)
@@ -291,7 +272,6 @@ const liveHallModels = computed(() => {
 const liveWorkspaces = computed(() => workspaces.map((workspace) => {
   if (workspace.id === 'models') return { ...workspace, count: String(liveModels.value.length) }
   if (workspace.id === 'builder') return { ...workspace, count: String(livePermissions.value.factor) }
-  if (workspace.id === 'data') return { ...workspace, count: String(diagnostics.value?.collections.length ?? workspace.count) }
   if (workspace.id === 'report' && report365.value) return { ...workspace, count: `${report365.value.days}d` }
   if (workspace.id === 'events') return { ...workspace, count: String(liveHitEvents.value.length) }
   if (workspace.id === 'hall') return { ...workspace, count: String(liveHallModels.value.length) }
@@ -314,15 +294,8 @@ const filteredModels = computed(() => liveModels.value.filter((model) => {
   return stateMatched && (!searchText.value || text.includes(searchText.value.toLowerCase()))
 }))
 
-const collectionCount = (name: string) => (
-  diagnostics.value?.collections.find(collection => collection.name === name)?.estimatedDocumentCount ?? 0
-)
-const shortCount = (count: number) => {
-  if (count >= 10000) return `${Math.round(count / 10000)}w+`
-  return String(count)
-}
 const refreshLiveData = async () => {
-  await Promise.all([refreshModels(), refreshReport(), refreshHalfReport(), refreshAnalysis(), refreshDiagnostics(), refreshEvents(), refreshHall(), refreshPermissions()])
+  await Promise.all([refreshModels(), refreshReport(), refreshHalfReport(), refreshAnalysis(), refreshEvents(), refreshHall(), refreshPermissions()])
 }
 
 const openWorkspace = (workspace: WorkspaceId) => {
@@ -386,8 +359,8 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
           <div class="quota-grid">
             <div>
               <span>{{ hasApiModels ? '加载模型' : '可创建模型' }}</span>
-              <strong class="num">{{ hasApiModels ? `${liveModels.length} / ${collectionCount('ColQuantiModel') || '-'}` : `${livePermissions.usedDraft} / ${livePermissions.establish}` }}</strong>
-              <em>{{ hasApiModels ? 'Mongo ColQuantiModel' : 'MyPermission.Establish' }}</em>
+              <strong class="num">{{ hasApiModels ? liveModels.length : `${livePermissions.usedDraft} / ${livePermissions.establish}` }}</strong>
+              <em>{{ hasApiModels ? '当前账号可见模型' : '模型创建额度' }}</em>
             </div>
             <div>
               <span>可发布模型</span>
@@ -607,53 +580,6 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
           </div>
         </section>
 
-        <section v-else class="workspace-panel">
-          <div class="panel-title workspace-title">
-            <div>
-              <span class="eyebrow">Runtime</span>
-              <h3>数据诊断</h3>
-              <p>本地 Nuxt 前端通过私网 API 或 SSH 隧道访问 Quantilearn Mongo 服务。</p>
-            </div>
-            <div :class="['status-chip', diagnostics?.canConnect ? 'good' : diagnosticsError ? 'danger' : 'plain']">
-              <ServerCog :size="14" />
-              <span>{{ diagnosticsError ? errorMessage(diagnosticsError) : diagnosticsPending ? 'Mongo Checking' : diagnosticsSourceLabel }}</span>
-            </div>
-          </div>
-
-          <div class="diagnostic-grid">
-            <div>
-              <Database :size="17" />
-              <span>Database</span>
-              <strong>{{ diagnostics?.databaseName ?? 'SpdexQuantilearn' }}</strong>
-            </div>
-            <div>
-              <TableProperties :size="17" />
-              <span>ColQuantiModel</span>
-              <strong class="num">{{ collectionCount('ColQuantiModel') || liveModels.length }}</strong>
-            </div>
-            <div>
-              <FileText :size="17" />
-              <span>ColFundament</span>
-              <strong class="num">{{ shortCount(collectionCount('ColFundament')) }}</strong>
-            </div>
-            <div>
-              <Activity :size="17" />
-              <span>API</span>
-              <strong>{{ apiBase }}</strong>
-            </div>
-          </div>
-
-          <div class="endpoint-list">
-            <div><span>GET</span><code>/api/quantilearn/health</code><em>健康检查</em></div>
-            <div><span>GET</span><code>/api/quantilearn/factors?set=spdex_v1</code><em>因子定义</em></div>
-            <div><span>GET</span><code>/api/quantilearn/models</code><em>模型集合</em></div>
-            <div><span>GET</span><code>/api/quantilearn/me/permissions</code><em>身份权限</em></div>
-            <div><span>GET</span><code>/api/quantilearn/analysis/models/{{ selectedModel.objectId }}/fundaments/summary</code><em>模型样本</em></div>
-            <div><span>GET</span><code>/api/quantilearn/analysis/models/{{ selectedModel.objectId }}/statistics/summary</code><em>统计摘要</em></div>
-            <div><span>GET</span><code>/api/quantilearn/events/current</code><em>当前命中</em></div>
-            <div><span>GET</span><code>/api/quantilearn/hall</code><em>模型广场</em></div>
-          </div>
-        </section>
       </section>
 
       <ContextRail :model="selectedModel" :workspace="selectedWorkspace" :permissions="livePermissions" />
@@ -726,8 +652,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 }
 
 .quota-grid div,
-.selected-factor-card,
-.diagnostic-grid div {
+.selected-factor-card {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -756,8 +681,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 }
 
 .action-matrix,
-.factor-catalog,
-.endpoint-list {
+.factor-catalog {
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1088,77 +1012,6 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   gap: 2px;
 }
 
-.diagnostic-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.diagnostic-grid div {
-  display: grid;
-  gap: 4px;
-  min-height: 72px;
-  padding: 10px;
-}
-
-.diagnostic-grid svg {
-  color: var(--teal);
-}
-
-.diagnostic-grid span {
-  color: var(--muted);
-  font-size: 0.74rem;
-}
-
-.diagnostic-grid strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.endpoint-list {
-  display: grid;
-}
-
-.endpoint-list div {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) minmax(90px, 0.4fr);
-  gap: 8px;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 9px;
-  border-top: 1px solid rgba(220, 227, 235, 0.72);
-}
-
-.endpoint-list div:first-child {
-  border-top: 0;
-}
-
-.endpoint-list span {
-  color: var(--teal);
-  font-size: 0.72rem;
-  font-weight: 820;
-}
-
-.endpoint-list code {
-  overflow: hidden;
-  color: var(--ink);
-  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
-  font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.endpoint-list em {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-style: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 @media (max-width: 1240px) {
   .workbench {
     grid-template-columns: 276px minmax(0, 1fr);
@@ -1189,8 +1042,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   }
 
   .quota-grid,
-  .selected-factor-grid,
-  .diagnostic-grid {
+  .selected-factor-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1239,8 +1091,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 
 @media (max-width: 430px) {
   .quota-grid,
-  .selected-factor-grid,
-  .diagnostic-grid {
+  .selected-factor-grid {
     grid-template-columns: 1fr;
   }
 

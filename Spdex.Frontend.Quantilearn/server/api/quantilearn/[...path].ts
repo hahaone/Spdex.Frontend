@@ -66,6 +66,15 @@ const runtimeValue = (...values: unknown[]) => {
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
+  const rawPath = event.context.params?.path
+  const path = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath || '')
+
+  if (path === 'diagnostics' || path.startsWith('diagnostics/')) {
+    const error = apiError(404, 'Not found.')
+    setResponseStatus(event, error.status)
+    return error.body
+  }
+
   const token = bearerFromRequest(event)
 
   if (!token) {
@@ -112,8 +121,6 @@ export default defineEventHandler(async (event) => {
     return error.body
   }
 
-  const rawPath = event.context.params?.path
-  const path = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath || '')
   const targetUrl = new URL(
     `/api/quantilearn/${path}`,
     runtimeValue(

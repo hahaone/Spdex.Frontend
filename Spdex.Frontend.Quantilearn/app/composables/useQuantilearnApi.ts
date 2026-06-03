@@ -695,12 +695,14 @@ export const useQuantilearnApi = () => {
     query?: Record<string, string | number | boolean | undefined | null>,
     options: { method?: 'GET' | 'POST', body?: unknown } = {},
   ) => {
+    const headers = import.meta.server ? useRequestHeaders(['authorization', 'cookie']) : undefined
     let response: QuantilearnApiResponse<T>
     try {
       response = await $fetch<QuantilearnApiResponse<T>>(`${apiBase.value}${path}`, {
         method: options.method,
         body: options.body as Record<string, unknown> | BodyInit | null | undefined,
         query,
+        headers,
       })
     }
     catch (error) {
@@ -727,7 +729,6 @@ export const useQuantilearnApi = () => {
     getFactors: (set = 'spdex_v1') => request<QuantilearnApiFactorDefinition[]>('/api/quantilearn/factors', { set }),
     getFundamentSummary: (id: string) => request<QuantilearnApiAnalysisSummary>(`/api/quantilearn/analysis/models/${id}/fundaments/summary`),
     getStatisticSummary: (id: string, days = 365, half = false) => request<QuantilearnApiStatisticSummary>(`/api/quantilearn/analysis/models/${id}/statistics/summary`, { days, half }),
-    getDiagnostics: () => request<QuantilearnMongoDiagnostics>('/api/quantilearn/diagnostics/mongo'),
     getPermissions: () => request<QuantilearnApiPermissionProfile>('/api/quantilearn/me/permissions'),
     getCurrentEvents: (hours = 24 * 30, limit = 80) => request<QuantilearnApiHitEventSummary[]>('/api/quantilearn/events/current', { hours, limit }),
     getFlashEventSnapshot: (eventId: string, query: QuantilearnFlashSnapshotRequest = {}) => request<QuantilearnApiFlashEventSnapshot>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}`, {

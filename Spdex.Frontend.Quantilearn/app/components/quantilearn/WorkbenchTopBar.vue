@@ -3,7 +3,6 @@ import {
   BarChart3,
   Brain,
   CircleDot,
-  Database,
   Layers,
   RefreshCw,
   Trophy,
@@ -30,7 +29,6 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
   report: BarChart3,
   events: Zap,
   hall: Trophy,
-  data: Database,
 }
 </script>
 

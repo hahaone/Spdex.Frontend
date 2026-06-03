@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   BarChart3,
   Clock,
-  Database,
   Flag,
   Layers,
   Pencil,
@@ -28,7 +27,6 @@ const iconMap: Record<WorkspaceIcon, Component> = {
   report: BarChart3,
   events: Zap,
   hall: Trophy,
-  data: Database,
 }
 </script>
 
@@ -86,16 +84,16 @@ const iconMap: Record<WorkspaceIcon, Component> = {
     <section class="context-panel">
       <div class="panel-title">
         <div>
-          <span class="eyebrow">Cache & Data</span>
-          <h3>旧站口径</h3>
+          <span class="eyebrow">Runtime</span>
+          <h3>数据时效</h3>
         </div>
         <Clock :size="17" />
       </div>
       <div class="cache-stack">
-        <div><span>UserAllModelsCache</span><strong>30s</strong></div>
-        <div><span>ColFundamentList</span><strong>1h</strong></div>
-        <div><span>Q_TodayFundaments</span><strong>10s</strong></div>
-        <div><span>QuantiHall_All</span><strong>10m</strong></div>
+        <div><span>我的模型</span><strong>30s</strong></div>
+        <div><span>回测样本</span><strong>1h</strong></div>
+        <div><span>当前赛事</span><strong>10s</strong></div>
+        <div><span>模型广场</span><strong>10m</strong></div>
       </div>
     </section>
   </aside>

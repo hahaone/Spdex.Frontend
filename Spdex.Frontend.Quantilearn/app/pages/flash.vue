@@ -25,6 +25,7 @@ import type {
   QuantilearnApiStatisticSummary,
   QuantilearnFlashAnalysisLogic,
 } from '~/composables/useQuantilearnApi'
+import { toQuantilearnUserError } from '~/utils/quantilearnErrors'
 
 type FlashSnapshotId = 'current' | '1' | '2' | '3' | '6'
 type FlashLogic = 'none' | 'max' | 'min' | 'gt-home' | 'gt-away' | 'lt-home' | 'lt-away'
@@ -97,12 +98,7 @@ const matchesError = ref('')
 
 const eventId = computed(() => String(route.query.eid || route.query.eventId || eventIdInput.value || '').trim())
 
-const errorMessage = (error: unknown) => {
-  if (!error) return ''
-  if (error instanceof Error) return error.message
-  if (typeof error === 'object' && 'message' in error) return String((error as { message?: unknown }).message ?? '')
-  return String(error)
-}
+const errorMessage = (error: unknown) => toQuantilearnUserError(error)
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-'
