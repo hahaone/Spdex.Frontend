@@ -9,17 +9,20 @@ export default defineNuxtConfig({
   ],
 
   runtimeConfig: {
+    quantilearnApiInternalUrl: process.env.QUANTILEARN_API_INTERNAL_URL
+      || process.env.API_INTERNAL_URL
+      || 'http://127.0.0.1:5015',
+    spdexApiInternalUrl: process.env.SPDEX_API_INTERNAL_URL || 'http://127.0.0.1:5000',
+    quantilearnAuthSharedSecret: process.env.QUANTILEARN_AUTH_SHARED_SECRET
+      || process.env.QuantilearnAuth__SharedSecret
+      || '',
     public: {
       quantilearnApiBase: process.env.NUXT_PUBLIC_QUANTILEARN_API_BASE
         ?? (process.env.NODE_ENV === 'production' ? '' : 'http://127.0.0.1:5176'),
+      requireAuth: process.env.NUXT_PUBLIC_REQUIRE_AUTH === 'true',
+      newspdexLoginUrl: process.env.NUXT_PUBLIC_NEWSPDEX_LOGIN_URL || 'https://new.spdex.com/login',
       buildSha: process.env.BUILD_SHA || 'dev',
       buildTime: process.env.BUILD_TIME || '',
-    },
-  },
-
-  routeRules: {
-    '/api/quantilearn/**': {
-      proxy: { to: `${process.env.API_INTERNAL_URL || 'http://127.0.0.1:5015'}/api/quantilearn/**` },
     },
   },
 

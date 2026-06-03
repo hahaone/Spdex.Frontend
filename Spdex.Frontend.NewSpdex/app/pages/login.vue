@@ -5,6 +5,7 @@ definePageMeta({ layout: false })
 
 const { login } = useAuth()
 const { enabled: captchaEnabled, setup: setupCaptcha } = useCaptcha()
+const route = useRoute()
 
 const form = reactive({
   userName: '',
@@ -12,6 +13,27 @@ const form = reactive({
 })
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
+const registerTarget = computed(() => ({
+  path: '/register',
+  query: typeof route.query.redirect === 'string' ? { redirect: route.query.redirect } : {},
+}))
+
+function postAuthTarget() {
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  if (!redirect) return '/'
+
+  try {
+    const target = new URL(redirect, window.location.origin)
+    if (target.origin === window.location.origin || target.hostname.endsWith('.spdex.com')) {
+      return target.href
+    }
+  }
+  catch {
+    return '/'
+  }
+
+  return '/'
+}
 
 function validate(): boolean {
   if (!form.userName.trim() || !form.password) {
@@ -28,7 +50,7 @@ async function submitDirect() {
   loading.value = true
   const r = await login(form.userName.trim(), form.password)
   loading.value = false
-  if (r.ok) { await navigateTo('/'); return }
+  if (r.ok) { await navigateTo(postAuthTarget(), { external: true }); return }
   errorMessage.value = r.error
 }
 
@@ -44,7 +66,7 @@ async function captchaVerify(captchaVerifyParam: string) {
 }
 
 function onBizResult(bizResult: boolean) {
-  if (bizResult) navigateTo('/')
+  if (bizResult) navigateTo(postAuthTarget(), { external: true })
 }
 
 // 验证码开启时由 SDK 接管 #login-submit 的点击（弹滑块）；关闭时直接提交
@@ -99,7 +121,7 @@ onMounted(() => {
       </form>
 
       <div class="login-links">
-        <NuxtLink to="/register">免费注册</NuxtLink>
+        <NuxtLink :to="registerTarget">免费注册</NuxtLink>
         <span class="divider">·</span>
         <NuxtLink to="/forgot-password">忘记密码</NuxtLink>
         <span class="divider">·</span>

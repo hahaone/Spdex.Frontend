@@ -19,6 +19,7 @@ export default defineNuxtConfig({
       captchaSceneId: process.env.NUXT_PUBLIC_CAPTCHA_SCENE_ID || '',
       captchaPrefix: process.env.NUXT_PUBLIC_CAPTCHA_PREFIX || '',
       captchaRegion: process.env.NUXT_PUBLIC_CAPTCHA_REGION || 'cn',
+      authCookieDomain: process.env.NUXT_PUBLIC_AUTH_COOKIE_DOMAIN || '',
     },
   },
 

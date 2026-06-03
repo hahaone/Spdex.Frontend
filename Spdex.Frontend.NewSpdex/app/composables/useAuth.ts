@@ -10,8 +10,6 @@
 
 import type { ApiResponse, AuthUser, LoginResponseData } from '~/types/auth'
 
-const TOKEN_COOKIE = 'newspdex_token'
-
 export interface AuthSubmitResult {
   /** 业务是否成功（已登录/已注册，token 已存）。 */
   ok: boolean
@@ -35,10 +33,7 @@ function getTokenExp(jwt: string): number | null {
 
 export function useAuth() {
   const config = useRuntimeConfig()
-  const token = useCookie<string | null>(TOKEN_COOKIE, {
-    maxAge: 60 * 60 * 24,
-    sameSite: 'lax',
-  })
+  const token = useNewSpdexTokenCookie()
   const user = useState<AuthUser | null>('newspdex_auth_user', () => null)
   const refreshTimer = useState<ReturnType<typeof setTimeout> | null>('newspdex_refresh_timer', () => null)
   const visibilityBound = useState('newspdex_visibility_bound', () => false)

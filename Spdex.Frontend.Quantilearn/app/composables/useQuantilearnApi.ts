@@ -536,12 +536,32 @@ export const useQuantilearnApi = () => {
   const config = useRuntimeConfig()
   const apiBase = computed(() => trimSlash(String(config.public.quantilearnApiBase ?? 'http://127.0.0.1:5176')))
 
+  const redirectToLogin = () => {
+    if (!config.public.requireAuth || import.meta.server) return
+
+    const loginUrl = String(config.public.newspdexLoginUrl || 'https://new.spdex.com/login')
+    window.location.href = `${loginUrl}?redirect=${encodeURIComponent(window.location.href)}`
+  }
+
   const request = async <T>(path: string, query?: Record<string, string | number | boolean | undefined | null>) => {
-    const response = await $fetch<QuantilearnApiResponse<T>>(`${apiBase.value}${path}`, {
-      query,
-    })
+    let response: QuantilearnApiResponse<T>
+    try {
+      response = await $fetch<QuantilearnApiResponse<T>>(`${apiBase.value}${path}`, {
+        query,
+      })
+    }
+    catch (error) {
+      const fetchError = error as { statusCode?: number, status?: number }
+      if ((fetchError.statusCode === 401 || fetchError.status === 401) && config.public.requireAuth) {
+        redirectToLogin()
+      }
+      throw error
+    }
 
     if (response.code !== 0) {
+      if (response.code === 401 && config.public.requireAuth) {
+        redirectToLogin()
+      }
       throw new Error(response.message || `Quantilearn API returned code ${response.code}`)
     }
 

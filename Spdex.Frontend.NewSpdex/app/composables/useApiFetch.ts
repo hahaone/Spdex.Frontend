@@ -6,14 +6,12 @@
  * 4. 单点登录被踢出（"已在其他设备登录"）提示后再跳
  */
 
-const TOKEN_COOKIE = 'newspdex_token'
-
 export function useApiFetch<T>(
   path: string | Ref<string> | (() => string),
   opts: Record<string, unknown> = {},
 ) {
   const config = useRuntimeConfig()
-  const token = useCookie<string | null>(TOKEN_COOKIE)
+  const token = useNewSpdexTokenCookie()
 
   return useFetch<T>(path as never, {
     baseURL: config.public.apiBase as string,
@@ -45,7 +43,7 @@ export function useApiFetch<T>(
  */
 export function $apiFetch<T>(path: string, opts: Record<string, unknown> = {}): Promise<T> {
   const config = useRuntimeConfig()
-  const token = useCookie<string | null>(TOKEN_COOKIE)
+  const token = useNewSpdexTokenCookie()
 
   return $fetch<T>(path, {
     baseURL: config.public.apiBase as string,
