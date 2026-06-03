@@ -89,6 +89,43 @@ const priceCompare = computed(() => {
     away: (r.cur[2] ?? 0).toFixed(2),
   }))
 })
+
+// 滚球赔率走势：把每个市场的 series 主线(A=主/大)转成 sparkline path + Δ
+const SPARK_W = 140
+const SPARK_H = 28
+function sparkLabel(market: string): string {
+  return market === '大小' ? '大球' : '主胜'
+}
+interface Spark { path: string, last: number, delta: number, dir: 'up' | 'down' | 'flat' }
+const sparkMap = computed<Record<string, Spark>>(() => {
+  const out: Record<string, Spark> = {}
+  for (const m of snapshot.value?.liveOdds?.markets ?? []) {
+    const vals = (m.series ?? [])
+      .map(t => t.a)
+      .filter((v): v is number => typeof v === 'number' && v > 0)
+    if (vals.length < 3) continue
+    const pad = 3
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    const span = max - min || 1
+    const step = (SPARK_W - pad * 2) / (vals.length - 1)
+    const path = vals.map((v, i) => {
+      const x = pad + i * step
+      const y = pad + (SPARK_H - pad * 2) * (1 - (v - min) / span)
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+    }).join(' ')
+    const first = vals[0]!
+    const last = vals[vals.length - 1]!
+    const delta = Math.round((last - first) * 100) / 100
+    out[m.market] = {
+      path,
+      last,
+      delta,
+      dir: delta > 0.01 ? 'up' : delta < -0.01 ? 'down' : 'flat',
+    }
+  }
+  return out
+})
 </script>
 
 <template>
@@ -210,10 +247,26 @@ const priceCompare = computed(() => {
       </div>
       <div v-if="snapshot?.liveOdds?.markets?.length" class="lodds-grid">
         <div v-for="m in snapshot.liveOdds.markets" :key="m.market" class="lodds-row">
-          <b class="lbl">{{ m.market }}<span v-if="m.line" class="ln"> {{ m.line }}</span></b>
-          <span v-for="c in m.cells" :key="c.label" class="cell">
-            <i>{{ c.label }}</i><b class="num">{{ c.odd }}</b>
-          </span>
+          <div class="lodds-main">
+            <b class="lbl">{{ m.market }}<span v-if="m.line" class="ln"> {{ m.line }}</span></b>
+            <span v-for="c in m.cells" :key="c.label" class="cell">
+              <i>{{ c.label }}</i><b class="num">{{ c.odd }}</b>
+            </span>
+          </div>
+          <div v-if="sparkMap[m.market]" class="spark">
+            <span class="spark-lbl">{{ sparkLabel(m.market) }}走势</span>
+            <svg
+              class="spark-svg"
+              :viewBox="`0 0 ${SPARK_W} ${SPARK_H}`"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path :d="sparkMap[m.market]!.path" :class="['spark-line', sparkMap[m.market]!.dir]" fill="none" />
+            </svg>
+            <span :class="['spark-delta', sparkMap[m.market]!.dir]">
+              {{ sparkMap[m.market]!.delta > 0 ? '+' : '' }}{{ sparkMap[m.market]!.delta.toFixed(2) }}
+            </span>
+          </div>
         </div>
       </div>
       <div v-else class="empty-section">本场暂无现场盘口（未开盘或已封盘）</div>
@@ -282,7 +335,7 @@ const priceCompare = computed(() => {
   padding: 20px 12px;
   border: 1px dashed var(--line);
   border-radius: 4px;
-  background: #f9fafc;
+  background: var(--surface);
   color: var(--muted);
   text-align: center;
   font-size: 0.78rem;
@@ -472,11 +525,11 @@ section.compare {
 }
 
 .event-row.home {
-  background: #f3f9ff;
+  background: var(--brand-tint);
 }
 
 .event-row.away {
-  background: #fffbf0;
+  background: var(--away-bg);
 }
 
 /* 时间线分钟：清爽的中性时间码，不复用 header 的红底徽章（避免红底蓝字看不清） */
@@ -609,11 +662,17 @@ section.compare {
 /* 现场赔率面板（in-play） */
 .lodds-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 5px;
   padding: 8px 10px;
   background: var(--panel);
   font-size: 0.8rem;
+}
+
+.lodds-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .lodds-row .lbl {
@@ -622,6 +681,50 @@ section.compare {
   color: var(--accent-deep);
   font-size: 0.78rem;
 }
+
+/* 赔率走势 sparkline */
+.spark {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.spark-lbl {
+  flex: 0 0 66px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 720;
+}
+
+.spark-svg {
+  flex: 1 1 auto;
+  height: 26px;
+  min-width: 0;
+}
+
+.spark-line {
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-line.up { stroke: var(--up); }
+.spark-line.down { stroke: var(--down); }
+.spark-line.flat { stroke: var(--soft); }
+
+.spark-delta {
+  flex: 0 0 auto;
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.spark-delta.up { color: var(--up); }
+.spark-delta.down { color: var(--down); }
+.spark-delta.flat { color: var(--muted); }
 
 .lodds-row .lbl .ln {
   margin-left: 3px;

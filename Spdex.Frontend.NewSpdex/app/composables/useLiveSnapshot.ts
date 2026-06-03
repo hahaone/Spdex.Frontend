@@ -38,6 +38,8 @@ interface BackendLiveStats {
   attacks: BackendStatPair
   dangerousAttacks: BackendStatPair
   xg: BackendStatPair
+  substitutions?: BackendStatPair
+  penalties?: BackendStatPair | null
 }
 
 export interface LiveOddsCell {
@@ -45,10 +47,19 @@ export interface LiveOddsCell {
   odd: string
 }
 
+/** 赔率走势采样点：A=主/大，B=客/小。 */
+export interface LiveOddsTick {
+  minute?: string | null
+  score?: string | null
+  a?: number | null
+  b?: number | null
+}
+
 export interface LiveOddsMarket {
   market: string
   line: string | null
   cells: LiveOddsCell[]
+  series?: LiveOddsTick[]
 }
 
 export interface LiveOdds {
@@ -120,6 +131,8 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     statsList.push(statPair('进攻', data.stats.attacks))
     statsList.push(statPair('危险进攻', data.stats.dangerousAttacks))
     statsList.push(statPair('控球率%', data.stats.xg))
+    if (data.stats.penalties) statsList.push(statPair('点球', data.stats.penalties))
+    if (data.stats.substitutions) statsList.push(statPair('换人', data.stats.substitutions))
   }
   return {
     eventId: data.eventId,
