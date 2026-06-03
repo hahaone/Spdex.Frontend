@@ -46,8 +46,11 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 
 <template>
   <div class="detail-page">
-    <div v-if="pending && !detail" class="loading">加载赛事中…</div>
-    <div v-else-if="!detail" class="empty">赛事不存在或暂无可用数据</div>
+    <div v-if="pending && !detail" class="loading" role="status">加载赛事中…</div>
+    <div v-else-if="!detail" class="empty" role="status">
+      <p>赛事不存在或暂无可用数据</p>
+      <button class="retry-btn focus-ring" type="button" @click="refresh(); refreshChart()">重试</button>
+    </div>
 
     <template v-else-if="match">
       <section class="match-header">
@@ -150,7 +153,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
                 </button>
               </div>
             </div>
-            <StaticTrendChart v-if="chartPoints.length" :points="chartPoints" :height="180" />
+            <LazyStaticTrendChart v-if="chartPoints.length" :points="chartPoints" :height="180" />
             <div v-else class="chart-empty">
               {{ chartStatus === 'pending' ? '走势图待接入' : '暂无走势' }}
             </div>
@@ -185,6 +188,16 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 720;
+}
+.retry-btn {
+  margin-top: 10px;
+  padding: 6px 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--brand-deep);
+  font-size: 0.82rem;
+  font-weight: 760;
 }
 .access-card {
   display: inline-flex;

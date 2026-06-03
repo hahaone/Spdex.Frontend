@@ -52,8 +52,8 @@ function fmtEdge(e: number): string {
     </section>
 
     <section class="live-body">
-      <div v-if="pending && !grouped.length" class="empty">加载中…</div>
-      <div v-else-if="!grouped.length" class="empty">本范围暂无赛事</div>
+      <div v-if="pending && !grouped.length" class="empty" role="status">加载中…</div>
+      <div v-else-if="!grouped.length" class="empty" role="status">本范围暂无赛事</div>
 
       <div v-for="g in grouped" v-else :key="g.league" class="league-group">
         <div class="league-bar">{{ g.league }}</div>

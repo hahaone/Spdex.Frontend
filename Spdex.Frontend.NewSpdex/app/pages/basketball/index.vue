@@ -110,7 +110,7 @@ const leagueOptions = computed(() => {
         :two-way="true"
         :to="`/basketball/${match.eventId}`"
       />
-      <div v-if="!pending && !matches.length" class="empty">
+      <div v-if="!pending && !matches.length" class="empty" role="status">
         暂无赛事
       </div>
     </section>

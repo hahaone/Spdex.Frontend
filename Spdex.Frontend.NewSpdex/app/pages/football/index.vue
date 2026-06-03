@@ -151,7 +151,7 @@ const leagueOptions = computed(() => {
         <div v-for="i in 4" :key="i" class="skeleton-card" />
       </div>
       <MatchCard v-for="match in displayMatches" v-else :key="match.eventId" :match="match" />
-      <div v-if="!pending && !displayMatches.length" class="empty">
+      <div v-if="!pending && !displayMatches.length" class="empty" role="status">
         {{ isMetricFiltered ? '该指标暂无命中赛事（可能已开赛或不在当前窗口）' : '暂无赛事' }}
       </div>
     </section>

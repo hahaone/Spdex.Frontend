@@ -56,7 +56,7 @@ export function useTradeTicks(
     },
   )
 
-  usePolling(() => result.refresh(), 30_000)
+  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
 
   const rows = computed(() => result.data.value?.data?.rows ?? [])
   const status = computed<TradeStatus>(() => result.data.value?.data?.status ?? 'pending')

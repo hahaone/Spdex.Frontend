@@ -50,7 +50,7 @@ export function useTradeFlow(
   )
 
   // 60s 自动刷新
-  usePolling(() => result.refresh(), 60_000)
+  usePolling(() => result.refresh(), 60_000, { errorRef: result.error })
 
   const data = computed<TradeFlowResult | null>(() => result.data.value?.data ?? null)
   const status = computed<'ok' | 'pending' | 'no-access'>(() => data.value?.status ?? 'pending')

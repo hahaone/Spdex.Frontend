@@ -62,8 +62,8 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
       </span>
     </div>
 
-    <div v-if="pending && !plans.length" class="loading">加载套餐中…</div>
-    <div v-else-if="error" class="empty">套餐加载失败：{{ error.message ?? '网关无响应' }}</div>
+    <div v-if="pending && !plans.length" class="loading" role="status">加载套餐中…</div>
+    <div v-else-if="error" class="empty" role="status">套餐加载失败：{{ error.message ?? '网关无响应' }}</div>
 
     <template v-else>
       <!-- 顶部 3 张大卡（推荐区） -->

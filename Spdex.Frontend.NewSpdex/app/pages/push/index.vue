@@ -121,8 +121,8 @@ const bannerLabel = computed(() => {
       <button v-if="canInstall" class="install-btn focus-ring" type="button" @click="doInstall">安装</button>
     </div>
 
-    <div v-if="pending && !signals.length" class="empty">加载中…</div>
-    <div v-else-if="!signals.length" class="empty">
+    <div v-if="pending && !signals.length" class="empty" role="status">加载中…</div>
+    <div v-else-if="!signals.length" class="empty" role="status">
       <Flame :size="20" />
       <p>暂无活跃信号</p>
       <span class="muted">信号系统每 30s 扫描一次，新触发将自动推送到这里</span>

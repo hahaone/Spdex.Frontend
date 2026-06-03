@@ -176,7 +176,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
   )
 
   // 30s 自动刷新（赔率/成交实时变化）
-  usePolling(() => result.refresh(), 30_000)
+  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
 
   const detail = computed(() => {
     const data = result.data.value?.data

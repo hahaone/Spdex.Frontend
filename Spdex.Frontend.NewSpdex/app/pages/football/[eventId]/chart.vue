@@ -188,7 +188,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
           <Lock :size="14" />
           <span>{{ tfStatusLabel }}</span>
         </div>
-        <TradeFlowChart
+        <LazyTradeFlowChart
           v-else-if="tradeFlow && tradeFlow.buckets.length"
           :result="tradeFlow"
           :height="220"
@@ -204,7 +204,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
           <Lock :size="14" />
           <span>{{ statusLabel }}</span>
         </div>
-        <StaticTrendChart
+        <LazyStaticTrendChart
           v-else-if="displayPoints.length"
           :points="displayPoints"
           :series-labels="seriesLabels"

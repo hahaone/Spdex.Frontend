@@ -21,6 +21,12 @@ export interface PollingOptions {
   enabled?: Ref<boolean> | ComputedRef<boolean>
   /** 切回前台时是否立即刷新一次（默认 true） */
   refreshOnVisible?: boolean
+  /**
+   * 上次请求的 error ref（如 useApiFetch().error）。提供后启用「弱网/连错指数退避」：
+   * 连续失败 → 跳过 N 个 tick 拉长有效间隔（1/3/7 tick ⇒ 2×/4×/8× 封顶），成功即复位。
+   * 不提供则永不退避（行为同原版）。
+   */
+  errorRef?: Ref<unknown>
 }
 
 export function usePolling(
@@ -32,6 +38,9 @@ export function usePolling(
   const visibilityHandler = ref<(() => void) | null>(null)
   const enabled = options.enabled ?? ref(true)
   const refreshOnVisible = options.refreshOnVisible ?? true
+  const errorRef = options.errorRef
+  let failCount = 0   // 连续失败数（弱网退避）
+  let skipTicks = 0   // 退避中待跳过的 tick 数
 
   function start() {
     if (import.meta.server) return
@@ -39,8 +48,16 @@ export function usePolling(
     if (!enabled.value) return
 
     handle.value = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refresh()
+      if (document.visibilityState !== 'visible') return
+      if (skipTicks > 0) { skipTicks--; return }   // 弱网退避中：跳过本 tick
+
+      const r = refresh()
+      if (errorRef) {
+        // refresh 完成后据 error 计连错：连错 → 跳过 1/3/7 个 tick（有效间隔 2×/4×/8× 封顶）
+        Promise.resolve(r).then(() => {
+          if (errorRef.value) { failCount = Math.min(failCount + 1, 3); skipTicks = (1 << failCount) - 1 }
+          else { failCount = 0 }
+        }).catch(() => {})
       }
     }, intervalMs)
   }
@@ -59,6 +76,7 @@ export function usePolling(
     visibilityHandler.value = () => {
       if (document.visibilityState !== 'visible') return
       if (!enabled.value) return
+      failCount = 0; skipTicks = 0   // 回前台清退避，立即恢复正常节奏
       if (refreshOnVisible) refresh()
     }
     document.addEventListener('visibilitychange', visibilityHandler.value)

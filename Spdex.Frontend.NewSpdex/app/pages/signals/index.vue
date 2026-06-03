@@ -48,10 +48,10 @@ function matchKick(iso: string): string {
       </button>
     </div>
 
-    <div v-if="pending && !signals.length" class="loading">
+    <div v-if="pending && !signals.length" class="loading" role="status">
       加载中…
     </div>
-    <div v-else-if="!signals.length" class="empty">
+    <div v-else-if="!signals.length" class="empty" role="status">
       <Activity :size="20" />
       <p>当前无活跃信号</p>
       <span class="muted">信号系统每 30s 扫描一次未开赛比赛</span>

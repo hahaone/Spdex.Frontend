@@ -74,7 +74,7 @@ export function useLiveList(tab: MaybeRef<LiveTabKey> = ref('running')) {
   )
 
   // 30s 自动刷新（进行中/未开赛需要；其余 tab 也无妨）
-  usePolling(() => result.refresh(), 30_000)
+  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
 
   const matches = computed<LiveListItem[]>(() => result.data.value?.data?.matches ?? [])
   const count = computed(() => matches.value.length)
