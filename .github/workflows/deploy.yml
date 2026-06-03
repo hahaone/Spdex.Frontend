@@ -66,6 +66,19 @@ jobs:
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex:latest
             crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex:${{ github.sha }}
 
+      - name: Build and push Quantilearn Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Spdex.Frontend.Quantilearn
+          push: true
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+            API_INTERNAL_URL=http://127.0.0.1:5015
+          tags: |
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn:latest
+            crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn:${{ github.sha }}
+
   deploy:
     needs: build
     # push 含 [deploy] 时自动部署；手动触发时根据 deploy 参数决定
@@ -138,6 +151,27 @@ jobs:
             if ! curl -fsS --max-time 10 http://127.0.0.1:3002/login >/dev/null; then
               echo "frontend-newspdex health check failed; recent container logs:"
               docker logs --tail 200 spdex-frontend-newspdex || true
+              exit 1
+            fi
+            for attempt in $(seq 1 30); do
+              if docker compose config --services | grep -qx frontend-quantilearn; then
+                break
+              fi
+              echo "Waiting for frontend-quantilearn service in docker-compose.yml... ($attempt/30)"
+              sleep 10
+            done
+            if ! docker compose config --services | grep -qx frontend-quantilearn; then
+              echo "frontend-quantilearn service not found in docker-compose.yml; deploy Spdex.Core first."
+              exit 1
+            fi
+            docker compose pull frontend-quantilearn
+            docker compose up -d frontend-quantilearn
+            sleep 3
+            docker ps --filter "name=spdex-frontend-quantilearn"
+            command -v ss >/dev/null 2>&1 && ss -ltnp | grep ':3004' || true
+            if ! curl -fsS --max-time 10 http://127.0.0.1:3004/ >/dev/null; then
+              echo "frontend-quantilearn health check failed; recent container logs:"
+              docker logs --tail 200 spdex-frontend-quantilearn || true
               exit 1
             fi
             docker image prune -f
