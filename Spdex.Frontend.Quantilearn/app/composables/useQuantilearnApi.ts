@@ -319,6 +319,54 @@ export interface QuantilearnApiFlashAnalysisResult {
   periods: QuantilearnApiFlashAnalysisPeriod[]
 }
 
+export interface QuantilearnFlashMatchesRequest {
+  factorSetName?: string
+  snapshot?: 'current' | '1' | '2' | '3' | '6' | string
+  leagueType?: number
+  days?: number
+  anchorUtc?: string
+  half?: boolean
+  limit?: number
+  factors: QuantilearnFlashAnalysisFactor[]
+  logics?: QuantilearnFlashAnalysisLogic[]
+}
+
+export interface QuantilearnApiFlashMatchedEvent {
+  eventId: string
+  eventTimeUtc: string
+  league: string
+  home: string
+  away: string
+  score: string
+  halfScore: string
+  oddsSelection: string
+  asianSelection: string
+  goalSelection: string
+  homeOdds: number
+  drawOdds: number
+  awayOdds: number
+  over25Odds: number
+  under25Odds: number
+}
+
+export interface QuantilearnApiFlashMatchesResult {
+  eventId: string
+  factorSetName: string
+  snapshot: string
+  vendorBasePath: string
+  leagueType: number
+  days: number
+  half: boolean
+  limit: number
+  anchorUtc: string
+  canAnalyze: boolean
+  errors: string[]
+  warnings: string[]
+  finalMatchedCount: number
+  windowMatchedCount: number
+  matches: QuantilearnApiFlashMatchedEvent[]
+}
+
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
 
 const formatDate = (value?: string) => {
@@ -687,6 +735,10 @@ export const useQuantilearnApi = () => {
       factorSet: query.factorSet ?? 'spdex_v1',
     }),
     analyzeFlashEvent: (eventId: string, body: QuantilearnFlashAnalysisRequest) => request<QuantilearnApiFlashAnalysisResult>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}/analysis`, undefined, {
+      method: 'POST',
+      body,
+    }),
+    getFlashEventMatches: (eventId: string, body: QuantilearnFlashMatchesRequest) => request<QuantilearnApiFlashMatchesResult>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}/matches`, undefined, {
       method: 'POST',
       body,
     }),

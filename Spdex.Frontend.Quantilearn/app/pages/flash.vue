@@ -21,6 +21,7 @@ import type {
   QuantilearnApiFlashAnalysisResult,
   QuantilearnApiFlashEventSnapshot,
   QuantilearnApiFlashFactorCell,
+  QuantilearnApiFlashMatchesResult,
   QuantilearnApiStatisticSummary,
   QuantilearnFlashAnalysisLogic,
 } from '~/composables/useQuantilearnApi'
@@ -90,6 +91,9 @@ const activeReportDays = ref(365)
 const analysisState = ref<'idle' | 'running' | 'done'>('idle')
 const analysisResult = ref<QuantilearnApiFlashAnalysisResult | null>(null)
 const analysisError = ref('')
+const matchesState = ref<'idle' | 'running' | 'done'>('idle')
+const matchesResult = ref<QuantilearnApiFlashMatchesResult | null>(null)
+const matchesError = ref('')
 
 const eventId = computed(() => String(route.query.eid || route.query.eventId || eventIdInput.value || '').trim())
 
@@ -118,6 +122,10 @@ const factorOrder = (factorId: string) => {
   const match = /^f(\d+)$/i.exec(factorId)
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER
 }
+
+const factorName = (factor: Pick<QuantilearnApiFlashFactorCell, 'factorId' | 'description'>) => (
+  factor.description?.trim() || `指标${factorOrder(factor.factorId)}`
+)
 
 const numberText = (value?: number) => {
   if (value === undefined || Number.isNaN(value)) return '-'
@@ -193,11 +201,11 @@ const factorPeerGroups = [
 ]
 
 const sectionDefinitions = [
-  { id: 'bf-core', title: '必发标准盘', shortTitle: '标准盘', subtitle: 'f01-f18', ids: ['f01', 'f02', 'f03', 'f04', 'f05', 'f06', 'f07', 'f08', 'f09', 'f10', 'f11', 'f12', 'f13', 'f14', 'f15', 'f16', 'f17', 'f18'] },
-  { id: 'market-index', title: '市场指数', shortTitle: '市场', subtitle: 'f19-f27', ids: ['f19', 'f20', 'f21', 'f22', 'f23', 'f24', 'f25', 'f26', 'f27'] },
-  { id: 'goals', title: '进球盘', shortTitle: '进球', subtitle: 'f28-f40', ids: ['f28', 'f29', 'f30', 'f31', 'f32', 'f33', 'f34', 'f35', 'f36', 'f37', 'f38', 'f39', 'f40'] },
-  { id: 'inner-outer-sfp', title: '标准盘内外盘', shortTitle: '标盘内外', subtitle: 'f41-f52', ids: ['f41', 'f42', 'f43', 'f44', 'f45', 'f46', 'f47', 'f48', 'f49', 'f50', 'f51', 'f52'] },
-  { id: 'inner-outer-goals', title: '进球盘内外盘', shortTitle: '进球内外', subtitle: 'f53-f60', ids: ['f53', 'f54', 'f55', 'f56', 'f57', 'f58', 'f59', 'f60'] },
+  { id: 'bf-core', title: '必发标准盘', shortTitle: '标准盘', subtitle: '成交 / 指数 / 价位', ids: ['f01', 'f02', 'f03', 'f04', 'f05', 'f06', 'f07', 'f08', 'f09', 'f10', 'f11', 'f12', 'f13', 'f14', 'f15', 'f16', 'f17', 'f18'] },
+  { id: 'market-index', title: '市场指数', shortTitle: '市场', subtitle: '冷热 / 欧赔 / 凯利', ids: ['f19', 'f20', 'f21', 'f22', 'f23', 'f24', 'f25', 'f26', 'f27'] },
+  { id: 'goals', title: '进球盘', shortTitle: '进球', subtitle: '大小球 / 均衡 / 仓位', ids: ['f28', 'f29', 'f30', 'f31', 'f32', 'f33', 'f34', 'f35', 'f36', 'f37', 'f38', 'f39', 'f40'] },
+  { id: 'inner-outer-sfp', title: '标准盘内外盘', shortTitle: '标盘内外', subtitle: '成交拆分 / 盈亏拆分', ids: ['f41', 'f42', 'f43', 'f44', 'f45', 'f46', 'f47', 'f48', 'f49', 'f50', 'f51', 'f52'] },
+  { id: 'inner-outer-goals', title: '进球盘内外盘', shortTitle: '进球内外', subtitle: '进球成交 / 进球盈亏', ids: ['f53', 'f54', 'f55', 'f56', 'f57', 'f58', 'f59', 'f60'] },
 ]
 
 const factorSections = computed<FlashFactorSection[]>(() => {
@@ -223,18 +231,22 @@ const activeSection = computed(() => (
 
 const selectedSummary = computed(() => {
   if (!selectedFactors.value.length) return '未选择'
-  return selectedFactors.value.map(factor => factor.factorId).join(' / ')
+  const names = selectedFactors.value.map(factor => factor.name)
+  return names.length > 2 ? `${names.slice(0, 2).join(' / ')} 等 ${names.length} 项` : names.join(' / ')
 })
 
 const resetAnalysis = () => {
   analysisState.value = 'idle'
   analysisResult.value = null
   analysisError.value = ''
+  matchesState.value = 'idle'
+  matchesResult.value = null
+  matchesError.value = ''
 }
 
 const createSelectedFactor = (factor: QuantilearnApiFlashFactorCell): SelectedFlashFactor => ({
   factorId: factor.factorId,
-  name: factor.description || factor.factorId,
+  name: factorName(factor),
   min: factor.suggestedMin ?? factor.minLimit,
   max: factor.suggestedMax ?? factor.maxLimit,
   minLimit: factor.minLimit,
@@ -367,11 +379,45 @@ const buildAnalysisLogics = () => {
   return logics
 }
 
+const buildFlashRequestFactors = () => selectedFactors.value.map(factor => ({
+  factorId: factor.factorId,
+  min: factor.min,
+  max: factor.max,
+}))
+
+const loadMatches = async () => {
+  if (!analysisResult.value || !eventId.value || !selectedFactors.value.length) return
+
+  matchesState.value = 'running'
+  matchesError.value = ''
+
+  try {
+    matchesResult.value = await quantilearnApi.getFlashEventMatches(eventId.value, {
+      factorSetName: 'spdex_v1',
+      snapshot: activeSnapshot.value,
+      leagueType: activeLeagueType.value,
+      days: activeReportDays.value,
+      half: activeReportMode.value === 'half',
+      limit: 24,
+      factors: buildFlashRequestFactors(),
+      logics: buildAnalysisLogics(),
+    })
+    matchesState.value = 'done'
+  }
+  catch (error) {
+    matchesError.value = errorMessage(error)
+    matchesState.value = 'idle'
+  }
+}
+
 const runAnalysis = async () => {
   if (!matrixReady.value || !selectedFactors.value.length || !eventId.value) return
 
   analysisState.value = 'running'
   analysisError.value = ''
+  matchesState.value = 'idle'
+  matchesResult.value = null
+  matchesError.value = ''
 
   try {
     analysisResult.value = await quantilearnApi.analyzeFlashEvent(eventId.value, {
@@ -380,14 +426,11 @@ const runAnalysis = async () => {
       leagueType: activeLeagueType.value,
       days: [7, 30, 365],
       includeHalf: true,
-      factors: selectedFactors.value.map(factor => ({
-        factorId: factor.factorId,
-        min: factor.min,
-        max: factor.max,
-      })),
+      factors: buildFlashRequestFactors(),
       logics: buildAnalysisLogics(),
     })
     analysisState.value = 'done'
+    await loadMatches()
   }
   catch (error) {
     analysisError.value = errorMessage(error)
@@ -415,11 +458,22 @@ const bestMarket = computed(() => (
 const reportDaysOptions = computed(() => (
   [...new Set(analysisPeriods.value.map(period => period.days))].sort((left, right) => left - right)
 ))
+const matchStateLabel = computed(() => {
+  if (matchesState.value === 'running') return '读取样本'
+  if (matchesResult.value) return `${numberText(matchesResult.value.windowMatchedCount)} 场内取 ${matchesResult.value.matches.length} 场`
+  return '等待分析'
+})
 
 const analysisStateLabel = computed(() => {
   if (analysisState.value === 'running') return '正在回测'
   if (analysisState.value === 'done') return '分析完成'
   return '参数就绪'
+})
+
+watch([activeReportDays, activeReportMode], () => {
+  if (analysisState.value === 'done' && analysisResult.value) {
+    void loadMatches()
+  }
 })
 
 const refreshFlash = async () => {
@@ -534,7 +588,7 @@ const refreshFlash = async () => {
           <div class="factor-matrix">
             <div class="matrix-title">
               <div>
-                <span class="eyebrow">{{ activeSection?.subtitle }}</span>
+                <span class="eyebrow">{{ activeSection?.factors.length ?? 0 }} 个可选指标</span>
                 <h3>{{ activeSection?.title }}</h3>
               </div>
               <span class="status-chip plain">{{ selectedSummary }}</span>
@@ -557,8 +611,8 @@ const refreshFlash = async () => {
               @click="toggleFactor(factor)"
             >
               <span class="factor-name">
-                <strong>{{ factor.description }}</strong>
-                <em class="mono">{{ factor.factorId }}</em>
+                <strong>{{ factorName(factor) }}</strong>
+                <em>{{ factor.rangeStrategy }}</em>
               </span>
               <strong class="num value-cell">{{ factor.displayValue || '-' }}</strong>
               <span class="range-cell">
@@ -683,6 +737,47 @@ const refreshFlash = async () => {
                 </div>
               </section>
             </div>
+
+            <section class="match-board">
+              <div class="report-table-title">
+                <strong>最近匹配赛事</strong>
+                <span>{{ matchStateLabel }}</span>
+              </div>
+              <div v-if="matchesError" class="state-panel danger inline-state">
+                <Database :size="16" />
+                <span>{{ matchesError }}</span>
+              </div>
+              <div v-else-if="matchesState === 'running'" class="state-panel inline-state">
+                <Activity :size="16" />
+                <span>正在读取匹配赛事</span>
+              </div>
+              <div v-else-if="!matchesResult?.matches.length" class="empty-match">
+                当前参数下暂无可展示样本。
+              </div>
+              <div v-else class="match-list">
+                <div class="match-row table-head">
+                  <span>时间</span>
+                  <span>赛事</span>
+                  <span>比分</span>
+                  <span>胜平负</span>
+                  <span>让球</span>
+                  <span>进球</span>
+                  <span>赔率</span>
+                </div>
+                <div v-for="match in matchesResult.matches" :key="match.eventId" class="match-row">
+                  <span>{{ formatDateTime(match.eventTimeUtc) }}</span>
+                  <div>
+                    <strong>{{ match.home }} vs {{ match.away }}</strong>
+                    <span>{{ match.league || match.eventId }}</span>
+                  </div>
+                  <strong class="num">{{ activeReportMode === 'half' && match.halfScore ? match.halfScore : match.score }}</strong>
+                  <span>{{ match.oddsSelection }}</span>
+                  <span>{{ match.asianSelection }}</span>
+                  <span>{{ match.goalSelection }}</span>
+                  <span class="num">{{ numberText(match.homeOdds) }} / {{ numberText(match.drawOdds) }} / {{ numberText(match.awayOdds) }}</span>
+                </div>
+              </div>
+            </section>
           </template>
         </section>
       </section>
@@ -704,7 +799,7 @@ const refreshFlash = async () => {
               <div class="selected-head">
                 <div>
                   <strong>{{ factor.name }}</strong>
-                  <span class="mono">{{ factor.factorId }} · 当前 {{ factor.displayValue || numberText(factor.value) }}</span>
+                  <span>当前 {{ factor.displayValue || numberText(factor.value) }}</span>
                 </div>
                 <button type="button" class="icon-button compact focus-ring" title="移除因子" @click="removeSelectedFactor(factor.factorId)">
                   <MinusCircle :size="15" />
@@ -810,6 +905,17 @@ const refreshFlash = async () => {
         </section>
       </aside>
     </main>
+
+    <div class="mobile-run-bar">
+      <div>
+        <span>已选 {{ selectedFactors.length }} / {{ selectedLimit }}</span>
+        <strong>{{ analysisStateLabel }}</strong>
+      </div>
+      <button type="button" class="primary-button focus-ring" :disabled="!matrixReady || !selectedFactors.length || analysisState === 'running'" @click="runAnalysis">
+        <PlayCircle :size="17" />
+        <span>{{ analysisState === 'running' ? '分析中' : '分析' }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -817,6 +923,10 @@ const refreshFlash = async () => {
 .flash-page {
   min-height: 100vh;
   color: var(--ink);
+}
+
+.mobile-run-bar {
+  display: none;
 }
 
 .flash-header {
@@ -1287,7 +1397,8 @@ h1 {
 }
 
 .report-table,
-.goal-board {
+.goal-board,
+.match-board {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1322,10 +1433,49 @@ h1 {
 }
 
 .market-row span,
-.market-row strong {
+.market-row strong,
+.match-row span,
+.match-row strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.match-board,
+.match-list {
+  display: grid;
+}
+
+.match-row {
+  display: grid;
+  grid-template-columns: 80px minmax(180px, 1.35fr) 52px 58px 68px 72px minmax(118px, 0.85fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.74rem;
+}
+
+.match-row:last-child {
+  border-bottom: 0;
+}
+
+.match-row div {
+  display: grid;
+  min-width: 0;
+}
+
+.match-row div span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.empty-match {
+  min-height: 42px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .goal-bars {
@@ -1563,6 +1713,10 @@ h1 {
 }
 
 @media (max-width: 760px) {
+  .flash-page {
+    padding-bottom: 74px;
+  }
+
   .flash-layout {
     padding: 8px;
   }
@@ -1747,6 +1901,62 @@ h1 {
     display: none;
   }
 
+  .match-row.table-head {
+    display: none;
+  }
+
+  .match-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "teams score"
+      "time time"
+      "markets markets";
+    gap: 4px 8px;
+    min-height: 72px;
+    padding: 9px 10px;
+    font-size: 0.74rem;
+  }
+
+  .match-row > span:first-child {
+    grid-area: time;
+    color: var(--muted);
+  }
+
+  .match-row > div {
+    grid-area: teams;
+  }
+
+  .match-row > .num {
+    grid-area: score;
+    align-self: start;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .match-row > span:nth-child(4),
+  .match-row > span:nth-child(5),
+  .match-row > span:nth-child(6) {
+    grid-row: 3;
+    color: var(--muted);
+  }
+
+  .match-row > span:nth-child(4)::before {
+    content: '胜平负 ';
+  }
+
+  .match-row > span:nth-child(5)::before {
+    content: '让球 ';
+  }
+
+  .match-row > span:nth-child(6)::before {
+    content: '进球 ';
+  }
+
+  .match-row > span:nth-child(7) {
+    display: none;
+  }
+
   .range-editor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1758,6 +1968,48 @@ h1 {
   .analyze-button {
     min-height: 54px;
     border-radius: 8px;
+  }
+
+  .mobile-run-bar {
+    position: fixed;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 56px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-run-bar div {
+    display: grid;
+    min-width: 0;
+  }
+
+  .mobile-run-bar span {
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 760;
+  }
+
+  .mobile-run-bar strong {
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 0.82rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-run-bar .primary-button {
+    min-height: 40px;
   }
 }
 
