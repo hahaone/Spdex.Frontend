@@ -514,7 +514,7 @@ watch(() => active.value?.key, () => {
 }
 
 .lp-tip-row i.price { background: var(--down); }
-.lp-tip-row i.vol { background: rgba(26, 140, 211, 0.4); }
+.lp-tip-row i.vol { background: rgba(124, 92, 250, 0.4); }
 
 .lp-tip-row .tl {
   flex: 1;

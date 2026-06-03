@@ -280,7 +280,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 
 .odds {
   justify-content: center;
-  background: #f3f9fe;
+  background: var(--brand-tint);
   color: var(--brand-deep);
   font-weight: 800;
 }
@@ -297,7 +297,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   top: 0;
   bottom: 0;
   left: 0;
-  background: rgba(26, 140, 211, 0.16);
+  background: rgba(124, 92, 250, 0.16);
 }
 
 .bfidx b { position: relative; color: var(--brand-deep); font-weight: 760; }

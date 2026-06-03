@@ -399,4 +399,9 @@ const bannerLabel = computed(() => {
   margin-left: auto;
   color: var(--brand);
 }
+
+/* 桌面：推送流居中限宽 */
+@media (min-width: 1024px) {
+  .push-page { max-width: 820px; margin-inline: auto; }
+}
 </style>

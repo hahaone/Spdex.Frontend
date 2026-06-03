@@ -21,6 +21,7 @@ onMounted(() => {
       <BottomNav class="mobile-only" />
     </div>
     <OnboardingTour />
+    <CommandPalette />
   </div>
 </template>
 

@@ -4,6 +4,7 @@ import { Bell, Moon, Search, Sun, UserCircle } from '@lucide/vue'
 const route = useRoute()
 const { isLoggedIn, userName, tier, logout } = useAuth()
 const { isDark, toggle } = useTheme()
+const { show: showCommand } = useCommandPalette()
 
 const tierLabel: Record<string, string> = {
   Free: '免费版',
@@ -64,12 +65,12 @@ async function handleLogout() {
       </nav>
 
       <div class="nav-actions">
-        <button class="action-btn focus-ring" aria-label="搜索">
+        <button class="action-btn focus-ring" aria-label="搜索 (⌘K)" @click="showCommand()">
           <Search :size="16" />
         </button>
-        <button class="action-btn focus-ring" aria-label="消息">
+        <NuxtLink to="/push" class="action-btn focus-ring" aria-label="消息推送">
           <Bell :size="16" />
-        </button>
+        </NuxtLink>
         <button class="action-btn focus-ring" :aria-label="isDark ? '日间模式' : '夜间模式'" @click="toggle()">
           <Sun v-if="isDark" :size="16" />
           <Moon v-else :size="16" />

@@ -155,7 +155,7 @@ input {
 
 input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(26, 140, 211, 0.14);
+  box-shadow: 0 0 0 3px rgba(124, 92, 250, 0.14);
 }
 
 .primary-btn {

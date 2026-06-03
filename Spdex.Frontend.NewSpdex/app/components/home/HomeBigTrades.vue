@@ -79,7 +79,7 @@ function tickerSideClass(selection: string): string {
   white-space: nowrap;
 }
 
-.ticker-item.side-home { background: var(--brand-tint); color: var(--brand-deep); border-color: #b8d8eb; }
+.ticker-item.side-home { background: var(--brand-tint); color: var(--brand-deep); border-color: var(--brand-tint-strong); }
 .ticker-item.side-away { background: var(--away-bg); color: var(--warn); border-color: var(--away-strong); }
 .ticker-item.side-draw { background: var(--canvas); color: var(--muted); border-color: var(--line); }
 .ticker-item.side-mute { background: var(--surface); color: var(--muted); border-color: var(--line); }

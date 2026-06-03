@@ -156,7 +156,7 @@ onMounted(() => {
   place-items: center;
   padding: 16px;
   background:
-    radial-gradient(circle at 15% 10%, rgba(26, 140, 211, 0.12) 0, transparent 45%),
+    radial-gradient(circle at 15% 10%, rgba(124, 92, 250, 0.12) 0, transparent 45%),
     radial-gradient(circle at 90% 85%, rgba(110, 90, 175, 0.12) 0, transparent 45%),
     linear-gradient(180deg, var(--canvas) 0%, #e2e7f1 100%);
 }
@@ -233,7 +233,7 @@ input {
 
 input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(26, 140, 211, 0.14);
+  box-shadow: 0 0 0 3px rgba(124, 92, 250, 0.14);
 }
 
 .login-btn {
@@ -250,7 +250,7 @@ input:focus {
   font-weight: 820;
   font-size: 0.96rem;
   letter-spacing: 0.02em;
-  box-shadow: 0 4px 12px rgba(26, 140, 211, 0.28);
+  box-shadow: 0 4px 12px rgba(124, 92, 250, 0.28);
 }
 
 .login-btn:disabled {

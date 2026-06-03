@@ -43,7 +43,7 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
 
     <HomeCustomizer v-if="editMode" />
     <div v-else class="module-stack">
-      <component :is="MODULE_COMPONENT[id]" v-for="id in orderedSections" :key="id" />
+      <component :is="MODULE_COMPONENT[id]" v-for="id in orderedSections" :key="id" :class="{ 'mod-wide': id === 'metrics' }" />
       <HomeMembership />
     </div>
   </div>
@@ -134,11 +134,31 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
     font-size: 0.86rem;
   }
 
+  /* 桌面仪表盘：2 列瀑布流；KPI 指标行占满整宽置顶 */
   .module-stack {
+    display: block;
     width: 100%;
-    max-width: 720px;
+    max-width: 1120px;
     margin: 0 auto;
     padding: 16px 0 32px;
+    column-count: 2;
+    column-gap: 16px;
+  }
+
+  .module-stack > * {
+    break-inside: avoid;
+    margin: 0 0 16px;
+  }
+
+  .module-stack > .mod-wide {
+    column-span: all;
+  }
+}
+
+@media (min-width: 1440px) {
+  .module-stack {
+    max-width: 1280px;
+    column-gap: 20px;
   }
 }
 </style>

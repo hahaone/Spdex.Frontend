@@ -626,7 +626,7 @@ section.compare {
   height: 24px;
   place-items: center;
   border-radius: 3px;
-  background: rgba(26, 140, 211, 0.14);
+  background: rgba(124, 92, 250, 0.14);
   color: var(--brand-deep);
 }
 
@@ -923,7 +923,7 @@ section.compare {
 /* ── 赛中统计模型卡 ── */
 .model-card {
   padding: 9px 10px;
-  background: linear-gradient(180deg, #f5f8ff 0%, var(--panel) 60%);
+  background: linear-gradient(180deg, #f6f3fe 0%, var(--panel) 60%);
   border-bottom: 1px solid var(--divider);
 }
 
@@ -938,7 +938,7 @@ section.compare {
   margin-left: 5px;
   padding: 0 5px;
   border-radius: 3px;
-  background: rgba(26, 140, 211, 0.14);
+  background: rgba(124, 92, 250, 0.14);
   color: var(--brand-deep);
   font-size: 0.62rem;
   font-weight: 760;
@@ -1073,10 +1073,17 @@ section.compare {
   }
 }
 
+/* 超宽屏：分析区三列 */
+@media (min-width: 1440px) {
+  .content-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* ── 赛中分析（BSW 网关）── */
 .analysis-card {
   padding: 9px 10px;
-  background: linear-gradient(180deg, #f5f8ff 0%, var(--panel) 60%);
+  background: linear-gradient(180deg, #f6f3fe 0%, var(--panel) 60%);
   border-bottom: 1px solid var(--divider);
 }
 .analysis-card .section-title { font-weight: 820; }

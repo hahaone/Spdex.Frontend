@@ -462,7 +462,7 @@ svg {
 }
 
 .tip-row i.volume {
-  background: rgba(26, 140, 211, 0.4);
+  background: rgba(124, 92, 250, 0.4);
 }
 
 .tip-row .tl {
@@ -496,7 +496,7 @@ svg {
 }
 
 .volume-bar {
-  fill: rgba(26, 140, 211, 0.16);
+  fill: rgba(124, 92, 250, 0.16);
 }
 
 .baseline {
@@ -604,6 +604,6 @@ svg {
 }
 
 .legend .volume {
-  background: rgba(26, 140, 211, 0.24);
+  background: rgba(124, 92, 250, 0.24);
 }
 </style>

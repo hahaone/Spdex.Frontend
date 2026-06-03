@@ -649,6 +649,10 @@ function jumpTo(target: SectionKey) {
     padding: 12px 16px;
     border: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
+    /* 桌面：盘口 tab 子导航吸顶(贴在顶部主导航下方) */
+    position: sticky;
+    top: 56px;
+    z-index: 6;
   }
 
   .tab-row {
@@ -672,6 +676,13 @@ function jumpTo(target: SectionKey) {
     gap: 12px;
   }
 
+  /* 桌面：右侧信息栏(走势/成交/欧赔/盘口)吸顶，主栏滚动时保持可见(让开 sticky tab-band) */
+  .side-col {
+    position: sticky;
+    top: 120px;
+    align-self: start;
+  }
+
   .all-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
@@ -683,6 +694,18 @@ function jumpTo(target: SectionKey) {
     border-radius: 6px;
     border: 1px solid var(--line);
     border-top: 1px solid var(--line);
+  }
+}
+
+/* 超宽屏：盘口卡三列，密度更高 */
+@media (min-width: 1440px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.6fr);
+    gap: 18px;
+  }
+
+  .all-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

@@ -403,9 +403,25 @@ h1 {
 .hint {
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(26, 140, 211, 0.14);
+  background: rgba(124, 92, 250, 0.14);
   color: var(--brand-deep);
   font-size: 0.7rem;
   font-weight: 760;
+}
+
+/* 桌面：图表工作区居中，避免全宽拉伸；区块卡片化 */
+@media (min-width: 1024px) {
+  .chart-page {
+    max-width: 1040px;
+    margin: 16px auto 24px;
+    gap: 10px;
+  }
+
+  .header,
+  .controls,
+  .chart-band {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
 }
 </style>

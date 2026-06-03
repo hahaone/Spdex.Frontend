@@ -391,6 +391,10 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
     border-radius: 6px;
     padding: 12px 16px;
     border: 1px solid var(--line);
+    /* 桌面：盘口 tab 子导航吸顶 */
+    position: sticky;
+    top: 56px;
+    z-index: 6;
   }
   .detail-grid {
     grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
@@ -398,6 +402,8 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
     align-items: start;
   }
   .main-col, .side-col { display: grid; gap: 12px; }
+  /* 桌面：右侧信息栏吸顶(让开 sticky tab-band) */
+  .side-col { position: sticky; top: 120px; align-self: start; }
   .all-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
@@ -407,6 +413,12 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
     border-radius: 6px;
     border: 1px solid var(--line);
   }
+}
+
+/* 超宽屏：盘口卡三列 */
+@media (min-width: 1440px) {
+  .detail-grid { grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.6fr); gap: 18px; }
+  .all-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {

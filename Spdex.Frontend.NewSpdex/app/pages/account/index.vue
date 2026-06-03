@@ -160,7 +160,7 @@ onMounted(async () => {
   border-radius: 6px;
   background: linear-gradient(120deg, var(--brand) 0%, var(--accent) 100%);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(26, 140, 211, 0.25);
+  box-shadow: 0 4px 14px rgba(124, 92, 250, 0.25);
 }
 
 .avatar {
@@ -332,5 +332,10 @@ onMounted(async () => {
   .summary-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* 桌面：内容居中限宽，避免单列拉伸到整屏 */
+@media (min-width: 1024px) {
+  .account-page { max-width: 880px; margin-inline: auto; }
 }
 </style>

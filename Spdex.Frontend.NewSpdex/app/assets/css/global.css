@@ -20,10 +20,10 @@
   --divider: #eaeef4;
   --surface: #f3f6fb;
   --canvas: #eef1f6;
-  --brand: #1a8cd3;
-  --brand-deep: #1672b3;
-  --brand-tint: #e2f1fa;
-  --brand-tint-strong: #c9e5f5;
+  --brand: #7c5cfa;
+  --brand-deep: #5b34d6;
+  --brand-tint: #ece8fe;
+  --brand-tint-strong: #d8cdfd;
   --accent: #6e5aaf;
   --accent-deep: #4f3f86;
   --lavender: #ece5f4;
@@ -78,10 +78,10 @@
   --divider: #242a36;
   --surface: #161b24;
   --canvas: #0f131a;
-  --brand: #3aa3e3;
-  --brand-deep: #5bb6ec;
-  --brand-tint: #16303f;
-  --brand-tint-strong: #1d3a4d;
+  --brand: #9d86fb;
+  --brand-deep: #b6a6fd;
+  --brand-tint: #241c3e;
+  --brand-tint-strong: #30264f;
   --accent: #9b88d6;
   --accent-deep: #b8a8e8;
   --lavender: #272135;
@@ -317,4 +317,18 @@ img {
   font-size: 0.72rem;
   font-weight: 740;
   letter-spacing: 0.02em;
+}
+
+/* 桌面指针设备：主卡片 hover 抬升，增强可点反馈（移动端无 hover，不受影响） */
+@media (hover: hover) and (min-width: 1024px) {
+  .match-card,
+  .live-card {
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .match-card:hover,
+  .live-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(26, 34, 51, 0.13);
+  }
 }

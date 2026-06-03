@@ -240,7 +240,7 @@ function fmtEdge(e: number): string {
   font-weight: 760;
 }
 .st-pill.done { background: var(--surface); color: var(--muted); }
-.st-pill.up { background: #e6f2ff; color: var(--brand-deep); }
+.st-pill.up { background: var(--brand-tint); color: var(--brand-deep); }
 
 .dr-tag {
   padding: 1px 6px;
@@ -319,7 +319,7 @@ function fmtEdge(e: number): string {
   font-weight: 820;
 }
 .c-model .lean.over { background: #ffe9d6; color: #b4541a; }
-.c-model .lean.under { background: #e6f2ff; color: var(--brand-deep); }
+.c-model .lean.under { background: var(--brand-tint); color: var(--brand-deep); }
 .c-model .lean.neutral { background: var(--surface); color: var(--muted); }
 .c-model .lean .edge { font-style: normal; }
 
@@ -369,5 +369,24 @@ function fmtEdge(e: number): string {
 @media (min-width: 768px) {
   .live-body { grid-template-columns: 1fr; }
   .league-group { gap: 6px; }
+}
+
+/* 桌面：联赛分组多列瀑布流，一屏看更多赛事 */
+@media (min-width: 1024px) {
+  .live-body {
+    display: block;
+    column-count: 2;
+    column-gap: 12px;
+    padding: 12px 0 24px;
+  }
+
+  .league-group {
+    break-inside: avoid;
+    margin-bottom: 12px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .live-body { column-count: 3; }
 }
 </style>

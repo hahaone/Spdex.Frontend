@@ -111,7 +111,7 @@ onMounted(() => {
   place-items: center;
   padding: 16px;
   background:
-    radial-gradient(circle at 15% 10%, rgba(26, 140, 211, 0.12) 0, transparent 45%),
+    radial-gradient(circle at 15% 10%, rgba(124, 92, 250, 0.12) 0, transparent 45%),
     radial-gradient(circle at 90% 85%, rgba(110, 90, 175, 0.12) 0, transparent 45%),
     var(--app-bg);
 }
@@ -195,7 +195,7 @@ input {
 
 input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(26, 140, 211, 0.14);
+  box-shadow: 0 0 0 3px rgba(124, 92, 250, 0.14);
 }
 
 .primary-btn {
@@ -211,7 +211,7 @@ input:focus {
   color: #fff;
   font-weight: 820;
   font-size: 0.96rem;
-  box-shadow: 0 4px 12px rgba(26, 140, 211, 0.28);
+  box-shadow: 0 4px 12px rgba(124, 92, 250, 0.28);
 }
 
 .primary-btn:disabled {

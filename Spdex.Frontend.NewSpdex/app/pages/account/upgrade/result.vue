@@ -404,5 +404,5 @@ function goBack() {
   cursor: pointer;
 }
 
-.action-btn:active { background: #1672a8; }
+.action-btn:active { background: var(--brand-deep); }
 </style>

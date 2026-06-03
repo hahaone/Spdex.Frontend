@@ -257,4 +257,9 @@ function matchKick(iso: string): string {
 .status-tag.tone-positive { background: var(--draw-bg); color: var(--sell); }
 .status-tag.tone-warm { background: var(--away-bg); color: #8a6212; }
 .status-tag.tone-mute { background: var(--canvas); color: var(--muted); }
+
+/* 桌面：信号流居中限宽，便于阅读 */
+@media (min-width: 1024px) {
+  .signals-page { max-width: 860px; margin-inline: auto; }
+}
 </style>

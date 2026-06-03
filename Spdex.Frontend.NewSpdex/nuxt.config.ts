@@ -62,7 +62,7 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'description', content: 'SPdex 超级指数系统 — 必发指数、走势图、实时赛况' },
-        { name: 'theme-color', content: '#1a8cd3' },
+        { name: 'theme-color', content: '#7c5cfa' },
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
