@@ -39,9 +39,19 @@ function decorate(raw: DashboardMetricRaw): DashboardMetric {
 }
 
 export function useDashboardMetrics() {
+  // 用户自定义阈值（来自首页布局偏好）→ 作为 query 透传给后端，改阈值即重算 count/文案
+  const { layout } = useHomeLayout()
+  const query = computed(() => ({
+    bfVolume: layout.value.thresholds.bfVolume,
+    polyVolume: layout.value.thresholds.polyVolume,
+    bfIndex: layout.value.thresholds.bfIndex,
+    polyIndex: layout.value.thresholds.polyIndex,
+  }))
+
   const result = useApiFetch<ApiResponse<DashboardMetricsResultRaw>>('/api/newspdex/dashboard/metrics', {
     key: 'newspdex-dashboard-metrics',
     server: false,
+    query,
   })
 
   // 60s 自动刷新（与后端 cache TTL 一致）
