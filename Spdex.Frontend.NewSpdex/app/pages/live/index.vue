@@ -26,6 +26,16 @@ function line(lo: LiveOdds | null, market: string): string {
 function hasOdds(lo: LiveOdds | null): boolean {
   return !!lo?.markets?.length
 }
+/** 模型价值倾向 → 配色类（大球价值 / 小球价值 / 中性）。 */
+function leanCls(lean: string): string {
+  if (lean.includes('大')) return 'over'
+  if (lean.includes('小')) return 'under'
+  return 'neutral'
+}
+/** 模型 vs 盘口的价值差，带符号整百分比。 */
+function fmtEdge(e: number): string {
+  return `${e > 0 ? '+' : ''}${e.toFixed(0)}%`
+}
 </script>
 
 <template>
@@ -88,6 +98,17 @@ function hasOdds(lo: LiveOdds | null): boolean {
           <div v-if="m.status !== 'upcoming'" class="c-micro">
             <span>半 <b class="num">{{ m.halfScore }}</b></span>
             <span>角 <b class="num">{{ m.corners[0] }}-{{ m.corners[1] }}</b></span>
+          </div>
+
+          <!-- 赛中模型分析（进行中）：价值倾向 + xG + 控球 + 射正 + 预测总进球 -->
+          <div v-if="m.status === 'running' && m.model" class="c-model">
+            <span class="lean" :class="leanCls(m.model.lean)">
+              {{ m.model.lean }}<i v-if="m.model.goalLine && m.model.edgePct != null" class="edge num"> {{ fmtEdge(m.model.edgePct) }}</i>
+            </span>
+            <span class="ms">xG <b class="num">{{ m.model.xgHome.toFixed(1) }}-{{ m.model.xgAway.toFixed(1) }}</b></span>
+            <span class="ms">控 <b class="num">{{ m.model.control[0] }}-{{ m.model.control[1] }}%</b></span>
+            <span v-if="m.stats" class="ms">射正 <b class="num">{{ m.stats.shotsOnTarget.home }}-{{ m.stats.shotsOnTarget.away }}</b></span>
+            <span class="ms">预测Σ <b class="num">{{ m.model.modelTotalGoals.toFixed(1) }}</b></span>
           </div>
 
           <!-- 滚球赔率（进行中，bet365） -->
@@ -278,6 +299,29 @@ function hasOdds(lo: LiveOdds | null): boolean {
   font-weight: 720;
 }
 .c-micro b { color: var(--ink); }
+
+.c-model {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
+  padding: 4px 0 1px;
+  border-top: 1px dashed var(--divider);
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 720;
+}
+.c-model .ms b { color: var(--ink); }
+.c-model .lean {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: 820;
+}
+.c-model .lean.over { background: #ffe9d6; color: #b4541a; }
+.c-model .lean.under { background: #e6f2ff; color: var(--brand-deep); }
+.c-model .lean.neutral { background: var(--surface); color: var(--muted); }
+.c-model .lean .edge { font-style: normal; }
 
 .c-odds {
   display: grid;
