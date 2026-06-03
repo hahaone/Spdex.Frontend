@@ -220,6 +220,105 @@ export interface QuantilearnApiPermissionProfile {
   warnings: string[]
 }
 
+export interface QuantilearnApiFlashFactorCell {
+  factorId: string
+  fieldName: string
+  description: string
+  group: string
+  value?: number
+  displayValue: string
+  hasValue: boolean
+  valueSource: string
+  minLimit: number
+  maxLimit: number
+  suggestedMin?: number
+  suggestedMax?: number
+  suggestedDecimals: number
+  rangeStrategy: string
+  isDefaultSelected: boolean
+}
+
+export interface QuantilearnApiFlashEventSnapshot {
+  eventId: string
+  factorSetName: string
+  requestedSnapshot: string
+  snapshot: string
+  vendorBasePath: string
+  usedLiveSnapshot: boolean
+  vendorBaseAvailable: boolean
+  eventTimeUtc?: string
+  updateTimeUtc?: string
+  league: string
+  home: string
+  away: string
+  score: string
+  hasResult: boolean
+  factors: QuantilearnApiFlashFactorCell[]
+  defaultSelectedFactorIds: string[]
+  vendorBase: Record<string, unknown>
+  warnings: string[]
+}
+
+export interface QuantilearnFlashSnapshotRequest {
+  snapshot?: 'current' | '1' | '2' | '3' | '6' | string
+  factorSet?: string
+}
+
+export interface QuantilearnFlashAnalysisFactor {
+  factorId: string
+  min: number
+  max: number
+}
+
+export interface QuantilearnFlashAnalysisLogic {
+  comp: number
+  compType: number
+  x: string
+  y: string
+}
+
+export interface QuantilearnFlashAnalysisRequest {
+  factorSetName?: string
+  snapshot?: 'current' | '1' | '2' | '3' | '6' | string
+  leagueType?: number
+  days?: number[]
+  anchorUtc?: string
+  includeHalf?: boolean
+  factors: QuantilearnFlashAnalysisFactor[]
+  logics?: QuantilearnFlashAnalysisLogic[]
+}
+
+export interface QuantilearnApiFlashAnalysisPeriod {
+  days: number
+  half: boolean
+  windowDocumentCount: number
+  validResultCount: number
+  computed: QuantilearnApiStatisticCoreReport
+}
+
+export interface QuantilearnApiFlashAnalysisResult {
+  eventId: string
+  factorSetName: string
+  snapshot: string
+  vendorBasePath: string
+  leagueType: number
+  anchorUtc: string
+  canAnalyze: boolean
+  errors: string[]
+  warnings: string[]
+  modelFactorCount: number
+  regularFactorCount: number
+  extraFactorCount: number
+  appliedExtraFactorCount: number
+  unsupportedExtraFactorCount: number
+  logicCount: number
+  appliedLogicCount: number
+  regularFactorMatchedCount: number
+  logicMatchedCount: number
+  finalMatchedCount: number
+  periods: QuantilearnApiFlashAnalysisPeriod[]
+}
+
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
 
 const formatDate = (value?: string) => {
@@ -543,10 +642,16 @@ export const useQuantilearnApi = () => {
     window.location.href = `${loginUrl}?redirect=${encodeURIComponent(window.location.href)}`
   }
 
-  const request = async <T>(path: string, query?: Record<string, string | number | boolean | undefined | null>) => {
+  const request = async <T>(
+    path: string,
+    query?: Record<string, string | number | boolean | undefined | null>,
+    options: { method?: 'GET' | 'POST', body?: unknown } = {},
+  ) => {
     let response: QuantilearnApiResponse<T>
     try {
       response = await $fetch<QuantilearnApiResponse<T>>(`${apiBase.value}${path}`, {
+        method: options.method,
+        body: options.body as Record<string, unknown> | BodyInit | null | undefined,
         query,
       })
     }
@@ -577,6 +682,14 @@ export const useQuantilearnApi = () => {
     getDiagnostics: () => request<QuantilearnMongoDiagnostics>('/api/quantilearn/diagnostics/mongo'),
     getPermissions: () => request<QuantilearnApiPermissionProfile>('/api/quantilearn/me/permissions'),
     getCurrentEvents: (hours = 24 * 30, limit = 80) => request<QuantilearnApiHitEventSummary[]>('/api/quantilearn/events/current', { hours, limit }),
+    getFlashEventSnapshot: (eventId: string, query: QuantilearnFlashSnapshotRequest = {}) => request<QuantilearnApiFlashEventSnapshot>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}`, {
+      snapshot: query.snapshot ?? 'current',
+      factorSet: query.factorSet ?? 'spdex_v1',
+    }),
+    analyzeFlashEvent: (eventId: string, body: QuantilearnFlashAnalysisRequest) => request<QuantilearnApiFlashAnalysisResult>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}/analysis`, undefined, {
+      method: 'POST',
+      body,
+    }),
     getHallModels: (query: QuantilearnHallRequest = {}) => request<QuantilearnApiHallModelSummary[]>('/api/quantilearn/hall', {
       type: query.type ?? 'all',
       order: query.order ?? 'return',

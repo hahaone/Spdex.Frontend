@@ -466,7 +466,6 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
             <div class="factor-catalog">
               <div class="factor-head table-head">
                 <span>因子</span>
-                <span>字段</span>
                 <span>默认范围</span>
                 <span>权限</span>
               </div>
@@ -475,7 +474,6 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
                   <strong>{{ factor.name }}</strong>
                   <span class="mono">{{ factor.id }}</span>
                 </div>
-                <span class="mono field-cell">{{ factor.field }}</span>
                 <span>{{ factor.range }}</span>
                 <span :class="['status-chip', factor.role === 'premium' ? 'warn' : 'plain']">{{ factor.role }}</span>
               </div>
@@ -818,22 +816,23 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 
 .builder-layout {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
 .factor-groups {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
   gap: 6px;
 }
 
 .factor-group-button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 4px 8px;
   align-items: center;
-  min-height: 34px;
-  padding: 0 9px;
+  min-height: 46px;
+  padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
@@ -849,22 +848,38 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 
 .factor-group-button span {
   overflow: hidden;
+  grid-column: 1 / -1;
   font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .factor-group-button em {
+  grid-column: 1 / 2;
   color: inherit;
   font-size: 0.68rem;
   font-style: normal;
   opacity: 0.7;
 }
 
+.factor-group-button::after {
+  justify-self: end;
+  color: inherit;
+  font-size: 0.74rem;
+  font-weight: 820;
+  content: '选择';
+  opacity: 0.58;
+}
+
+.factor-group-button.active::after {
+  content: '当前';
+  opacity: 0.9;
+}
+
 .factor-head,
 .factor-row {
-  grid-template-columns: minmax(160px, 1.2fr) minmax(180px, 1.2fr) 94px 76px;
-  min-width: 600px;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(120px, 0.7fr) 86px;
+  min-width: 480px;
   column-gap: 8px;
   padding: 0 9px;
 }
@@ -1179,12 +1194,37 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .builder-layout {
-    grid-template-columns: 1fr;
-  }
-
   .factor-groups {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .factor-group-button {
+    min-height: 42px;
+    padding: 6px 7px;
+  }
+
+  .factor-group-button span {
+    font-size: 0.76rem;
+  }
+
+  .factor-group-button em,
+  .factor-group-button::after {
+    font-size: 0.64rem;
+  }
+
+  .factor-head,
+  .factor-row {
+    grid-template-columns: minmax(0, 1fr) 82px 66px;
+    min-width: 0;
+    padding: 0 8px;
+  }
+
+  .factor-row {
+    min-height: 48px;
+  }
+
+  .factor-row strong {
+    white-space: normal;
   }
 
   .event-row,
