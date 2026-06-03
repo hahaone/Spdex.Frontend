@@ -3,6 +3,7 @@
  * 返回 6 个 tier 的 plans 数组，按 V3 展示顺序：翡翠 / 白金 / 黄金 / 红宝石 / 专家 / 免费。
  */
 
+import type { NuxtApp } from '#app'
 import type { ApiResponse } from '~/types/auth'
 import type { PaymentPlan } from '~/types/billing'
 
@@ -13,7 +14,14 @@ interface BackendPlans {
 export function useBillingPlans() {
   const { data, pending, error, refresh } = useApiFetch<ApiResponse<BackendPlans>>(
     '/api/newspdex/billing/plans',
-    { server: false, lazy: true },
+    {
+      key: 'newspdex-billing-plans',
+      server: false,
+      lazy: true,
+      // 慢变接口 SWR：同会话内再次进页直接复用上次结果(不重拉)，硬刷新才重新请求
+      getCachedData: (key: string, nuxtApp: NuxtApp) =>
+        (nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]) as ApiResponse<BackendPlans> | undefined,
+    },
   )
 
   const plans = computed<PaymentPlan[]>(() => data.value?.data?.plans ?? [])

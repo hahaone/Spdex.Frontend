@@ -67,7 +67,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
       </span>
       <span class="head-right">
         <span :class="['status', `st-${match.status}`]">
-          <i v-if="match.status === 'started'" class="live-dot" />{{ statusLabel }}
+          <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
         </span>
         <span class="num kick-off">{{ kickOff }}</span>
         <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
@@ -374,6 +374,29 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   .cell {
     padding-inline: 6px;
     font-size: 0.82rem;
+  }
+}
+
+/* 极小屏(<=340px)兜底：再收紧网格列与字号，确保 4 列不溢出/裁切 */
+@media (max-width: 340px) {
+  .market-grid,
+  .grid-legend {
+    grid-template-columns: minmax(44px, 1fr) 38px 40px minmax(44px, 0.8fr);
+  }
+
+  .cell {
+    padding-inline: 4px;
+    font-size: 0.78rem;
+  }
+
+  .odds,
+  .selection.handicap {
+    font-size: 0.76rem;
+  }
+
+  .meta-foot {
+    gap: 4px;
+    font-size: 0.66rem;
   }
 }
 </style>

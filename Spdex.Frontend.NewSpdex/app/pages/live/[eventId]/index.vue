@@ -192,7 +192,7 @@ function injStatus(s: string): { text: string, cls: string } {
         <span class="status-pill">{{ statusLabel }}</span>
         <span class="minute num">{{ snapshot?.minute ?? '—' }}</span>
       </div>
-      <div class="score-line">
+      <div class="score-line" aria-live="polite" aria-atomic="true">
         <span class="team home">{{ match?.homeTeam || snapshot?.homeTeam || '主队' }}</span>
         <b class="score-block">
           <span class="num">{{ snapshot?.score[0] ?? 0 }}</span>
@@ -203,13 +203,13 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
       <div class="micro-row">
         <span class="cluster">
-          <span v-for="c in homeCards" :key="`h-${c.color}`" :class="['card-badge', c.color]">{{ c.count }}</span>
+          <span v-for="c in homeCards" :key="`h-${c.color}`" :class="['card-badge', c.color]" role="img" :aria-label="`主队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
           <span class="num">角 {{ snapshot?.corners[0] ?? 0 }}</span>
         </span>
         <span class="half num">{{ snapshot?.halfScore ?? '-' }}</span>
         <span class="cluster">
           <span class="num">{{ snapshot?.corners[1] ?? 0 }} 角</span>
-          <span v-for="c in awayCards" :key="`a-${c.color}`" :class="['card-badge', c.color]">{{ c.count }}</span>
+          <span v-for="c in awayCards" :key="`a-${c.color}`" :class="['card-badge', c.color]" role="img" :aria-label="`客队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
         </span>
       </div>
     </section>

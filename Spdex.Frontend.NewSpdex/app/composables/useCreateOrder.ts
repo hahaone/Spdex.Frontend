@@ -16,6 +16,10 @@ import type {
   YftOrderResult,
 } from '~/types/billing'
 
+// 客服配置 10 分钟 SWR 缓存（慢变，避免每次进个人中心重拉）
+let csCache: { ts: number, value: CustomerService | null } | null = null
+const CS_TTL_MS = 10 * 60_000
+
 export function useCreateOrder() {
   async function createYftOrder(roleId: number, stageId: number): Promise<YftOrderResult | null> {
     const body: CreateOrderRequest = { roleId, stageId }
@@ -76,8 +80,11 @@ export function useCreateOrder() {
   }
 
   async function getCustomerService(): Promise<CustomerService | null> {
+    if (csCache && Date.now() - csCache.ts < CS_TTL_MS) return csCache.value
     const res = await $apiFetch<ApiResponse<CustomerService>>('/api/newspdex/billing/customer-service')
-    return res.code === 0 ? (res.data ?? null) : null
+    const value = res.code === 0 ? (res.data ?? null) : null
+    csCache = { ts: Date.now(), value }
+    return value
   }
 
   return {

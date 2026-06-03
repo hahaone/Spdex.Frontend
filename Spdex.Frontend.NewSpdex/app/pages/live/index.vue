@@ -79,16 +79,16 @@ function fmtEdge(e: number): string {
             <div class="trow">
               <span class="tname">{{ m.homeTeam }}</span>
               <span class="tbadges">
-                <i v-if="badge(m, 'home', 'yellow')" class="bdg y num">{{ badge(m, 'home', 'yellow') }}</i>
-                <i v-if="badge(m, 'home', 'red')" class="bdg r num">{{ badge(m, 'home', 'red') }}</i>
+                <i v-if="badge(m, 'home', 'yellow')" class="bdg y num" role="img" :aria-label="`主队黄牌${badge(m, 'home', 'yellow')}`">{{ badge(m, 'home', 'yellow') }}</i>
+                <i v-if="badge(m, 'home', 'red')" class="bdg r num" role="img" :aria-label="`主队红牌${badge(m, 'home', 'red')}`">{{ badge(m, 'home', 'red') }}</i>
               </span>
               <b v-if="m.status !== 'upcoming'" class="tscore num">{{ m.score[0] }}</b>
             </div>
             <div class="trow">
               <span class="tname">{{ m.awayTeam }}</span>
               <span class="tbadges">
-                <i v-if="badge(m, 'away', 'yellow')" class="bdg y num">{{ badge(m, 'away', 'yellow') }}</i>
-                <i v-if="badge(m, 'away', 'red')" class="bdg r num">{{ badge(m, 'away', 'red') }}</i>
+                <i v-if="badge(m, 'away', 'yellow')" class="bdg y num" role="img" :aria-label="`客队黄牌${badge(m, 'away', 'yellow')}`">{{ badge(m, 'away', 'yellow') }}</i>
+                <i v-if="badge(m, 'away', 'red')" class="bdg r num" role="img" :aria-label="`客队红牌${badge(m, 'away', 'red')}`">{{ badge(m, 'away', 'red') }}</i>
               </span>
               <b v-if="m.status !== 'upcoming'" class="tscore num">{{ m.score[1] }}</b>
             </div>
