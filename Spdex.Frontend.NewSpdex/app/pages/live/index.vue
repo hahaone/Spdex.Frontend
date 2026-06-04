@@ -11,7 +11,7 @@ const tabOptions = [
   { label: '前日', value: 'before' },
 ]
 
-const { grouped, count, pending, refresh } = useLiveList(tab)
+const { grouped, matches, count, pending, refresh } = useLiveList(tab)
 
 function badge(m: LiveListItem, side: 'home' | 'away', color: 'yellow' | 'red'): number {
   return m.cardBadges.find(b => b.side === side && b.color === color)?.count ?? 0
@@ -36,6 +36,29 @@ function leanCls(lean: string): string {
 function fmtEdge(e: number): string {
   return `${e > 0 ? '+' : ''}${e.toFixed(0)}%`
 }
+
+// ── 桌面主从视图:选中赛事在右侧预览，不跳转(移动端仍跳转) ──
+const isDesktop = useIsDesktop()
+const selectedId = ref<number | null>(null)
+
+watch([matches, isDesktop], () => {
+  if (!isDesktop.value)
+    return
+  const list = matches.value
+  if (!list.length) {
+    selectedId.value = null
+    return
+  }
+  if (selectedId.value == null || !list.some(m => m.eventId === selectedId.value))
+    selectedId.value = list[0]!.eventId
+}, { immediate: true })
+
+function onCardClick(m: LiveListItem, e: MouseEvent) {
+  if (isDesktop.value) {
+    e.preventDefault()
+    selectedId.value = m.eventId
+  }
+}
 </script>
 
 <template>
@@ -52,6 +75,7 @@ function fmtEdge(e: number): string {
     </section>
 
     <section class="live-body">
+      <div class="live-master">
       <div v-if="pending && !grouped.length" class="empty" role="status">加载中…</div>
       <div v-else-if="!grouped.length" class="empty" role="status">本范围暂无赛事</div>
 
@@ -62,7 +86,8 @@ function fmtEdge(e: number): string {
           v-for="m in g.items"
           :key="m.eventId"
           :to="`/live/${m.eventId}`"
-          class="live-card focus-ring"
+          :class="['live-card focus-ring', { selected: m.eventId === selectedId }]"
+          @click="onCardClick(m, $event)"
         >
           <!-- 头：开赛时间 / 进行分钟 / 状态 / 双红 -->
           <div class="c-head">
@@ -144,6 +169,12 @@ function fmtEdge(e: number): string {
           </div>
         </NuxtLink>
       </div>
+      </div>
+
+      <aside class="live-detail-pane">
+        <LiveListPreview v-if="selectedId" :key="selectedId" :event-id="selectedId" />
+        <div v-else class="pane-empty">选择左侧赛事查看赛况</div>
+      </aside>
     </section>
   </div>
 </template>
@@ -183,7 +214,19 @@ function fmtEdge(e: number): string {
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.live-body { display: grid; gap: 9px; padding: 9px 10px 16px; }
+.live-body { padding: 9px 10px 16px; }
+.live-master { display: grid; gap: 9px; }
+.live-detail-pane { display: none; }
+.live-card.selected { box-shadow: 0 0 0 2px var(--brand); }
+.pane-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 720;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
 
 .empty {
   padding: 30px 0;
@@ -371,22 +414,26 @@ function fmtEdge(e: number): string {
   .league-group { gap: 6px; }
 }
 
-/* 桌面：联赛分组多列瀑布流，一屏看更多赛事 */
+/* 桌面：主从视图 — 左联赛列表 + 右赛况预览(sticky) */
 @media (min-width: 1024px) {
   .live-body {
-    display: block;
-    column-count: 2;
-    column-gap: 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
     padding: 12px 0 24px;
   }
 
-  .league-group {
-    break-inside: avoid;
-    margin-bottom: 12px;
+  .live-detail-pane {
+    display: block;
+    position: sticky;
+    top: 72px;
   }
 }
 
 @media (min-width: 1440px) {
-  .live-body { column-count: 3; }
+  .live-body {
+    grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  }
 }
 </style>

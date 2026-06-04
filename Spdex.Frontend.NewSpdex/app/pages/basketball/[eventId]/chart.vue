@@ -31,6 +31,10 @@ const match = computed(() => detail.value?.match)
 
 const { points, status, pending, refresh } = useChartSeries(eventId, graphType)
 
+// 桌面加高图表画布(移动端保持 220)
+const isDesktop = useIsDesktop()
+const chartHeight = computed(() => (isDesktop.value ? 360 : 220))
+
 const statusLabel = computed(() => {
   if (status.value === 'no-access') return '当前会籍未开放此走势'
   if (status.value === 'pending') return '此场赛事暂无该市场数据'
@@ -86,7 +90,7 @@ const statusLabel = computed(() => {
         <Lock :size="14" />
         <span>{{ statusLabel }}</span>
       </div>
-      <StaticTrendChart v-else-if="points.length" :points="points" :height="220" />
+      <StaticTrendChart v-else-if="points.length" :points="points" :height="chartHeight" />
       <div v-else class="chart-placeholder">
         <span>{{ pending ? '加载中…' : '暂无走势数据' }}</span>
       </div>

@@ -34,6 +34,10 @@ const match = computed(() => detail.value?.match)
 
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventId, graphType)
 
+// 桌面加高图表画布(移动端保持 220)
+const isDesktop = useIsDesktop()
+const chartHeight = computed(() => (isDesktop.value ? 360 : 220))
+
 // 时间范围过滤（按最后一个点往前推 N 小时；不足 2 点退回全部）
 const RANGE_HOURS: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24 }
 const displayPoints = computed(() => {
@@ -191,7 +195,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
         <LazyTradeFlowChart
           v-else-if="tradeFlow && tradeFlow.buckets.length"
           :result="tradeFlow"
-          :height="220"
+          :height="chartHeight"
         />
         <div v-else class="chart-placeholder">
           <span>{{ tfPending ? '加载中…' : '暂无成交明细数据' }}</span>
@@ -212,7 +216,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
           :only="seriesOnly"
           :baseline="baseline"
           :bar-mode="barMode"
-          :height="220"
+          :height="chartHeight"
         />
         <div v-else class="chart-placeholder">
           <span>{{ pending ? '加载中…' : '暂无走势数据' }}</span>
