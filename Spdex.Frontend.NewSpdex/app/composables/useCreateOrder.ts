@@ -27,29 +27,44 @@ const CS_TTL_MS = 10 * 60_000
 export function useCreateOrder() {
   async function createYftOrder(roleId: number, stageId: number): Promise<YftOrderResult | null> {
     const body: CreateOrderRequest = { roleId, stageId }
-    const res = await $apiFetch<ApiResponse<YftOrderResult>>('/api/newspdex/billing/order/yft', {
-      method: 'POST',
-      body,
-    })
-    return res.code === 0 ? (res.data ?? null) : null
+    try {
+      const res = await $apiFetch<ApiResponse<YftOrderResult>>('/api/newspdex/billing/order/yft', {
+        method: 'POST',
+        body,
+      })
+      return res.code === 0 ? (res.data ?? null) : null
+    }
+    catch {
+      return null
+    }
   }
 
   async function createWxCodeOrder(roleId: number, stageId: number): Promise<WxCodeOrderResult | null> {
     const body: CreateOrderRequest = { roleId, stageId }
-    const res = await $apiFetch<ApiResponse<WxCodeOrderResult>>('/api/newspdex/billing/order/wxcode', {
-      method: 'POST',
-      body,
-    })
-    return res.code === 0 ? (res.data ?? null) : null
+    try {
+      const res = await $apiFetch<ApiResponse<WxCodeOrderResult>>('/api/newspdex/billing/order/wxcode', {
+        method: 'POST',
+        body,
+      })
+      return res.code === 0 ? (res.data ?? null) : null
+    }
+    catch {
+      return null
+    }
   }
 
   async function createAlipayOrder(roleId: number, stageId: number): Promise<AlipayOrderResult | null> {
     const body: CreateOrderRequest = { roleId, stageId }
-    const res = await $apiFetch<ApiResponse<AlipayOrderResult>>('/api/newspdex/billing/order/alipay', {
-      method: 'POST',
-      body,
-    })
-    return res.code === 0 ? (res.data ?? null) : null
+    try {
+      const res = await $apiFetch<ApiResponse<AlipayOrderResult>>('/api/newspdex/billing/order/alipay', {
+        method: 'POST',
+        body,
+      })
+      return res.code === 0 ? (res.data ?? null) : null
+    }
+    catch {
+      return null
+    }
   }
 
   async function createSilkOrder(roleId: number, stageId: number): Promise<SilkOrderResult> {
