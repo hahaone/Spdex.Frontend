@@ -23,7 +23,6 @@ const emit = defineEmits<{
       <h2>{{ model.name }}</h2>
       <p>{{ model.description }}</p>
       <div class="model-meta">
-        <span class="mono">{{ model.objectId }}</span>
         <span>创建 {{ model.createdAt }}</span>
         <span>更新 {{ model.updatedAt }}</span>
       </div>

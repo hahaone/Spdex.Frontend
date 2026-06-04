@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Filter,
   Flag,
   Layers,
   Pencil,
   Plus,
+  Search,
   ShoppingCart,
   Star,
   Target,
@@ -31,13 +34,16 @@ import {
   toSelectedFactors,
 } from '~/composables/useQuantilearnApi'
 import type {
+  FactorDefinition,
   FactorGroupId,
+  HallModel,
   HallType,
   LeagueScope,
   ModelFilter,
   ModelId,
   QuantModel,
   ReportView,
+  SelectedFactor,
   WorkspaceId,
 } from '~/data/quantilearnPrototype'
 import {
@@ -69,10 +75,35 @@ const searchText = ref('')
 const leagueScope = ref<LeagueScope>('all')
 const reportView = ref<ReportView>('final')
 const activeFactorGroup = ref<FactorGroupId>('bf-index')
+const expandedBuilderFactorId = ref<string | null>(null)
 const hallType = ref<HallType>('all')
+const hallOrder = ref<'return' | 'hit' | 'distribution' | 'price' | 'updated'>('return')
+const hallKeyword = ref('')
+const hallStrict = ref(false)
+const hallPageSize = ref(50)
 const currentOnly = ref(true)
 
 const apiBase = quantilearnApi.apiBase
+const hitEventSnapshots = ref<Record<string, { league: string, home: string, away: string, score: string }>>({})
+const pendingHitEventSnapshotIds = new Set<string>()
+const subscriptionBusyModelId = ref('')
+const subscriptionNotice = ref('')
+const subscriptionError = ref('')
+
+const hallTypeOptions: Array<{ id: HallType, label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'sfp', label: '胜平负' },
+  { id: 'asian', label: '让球' },
+  { id: 'ou', label: '大小' },
+]
+
+const hallOrderOptions: Array<{ id: 'return' | 'hit' | 'distribution' | 'price' | 'updated', label: string }> = [
+  { id: 'return', label: '年化' },
+  { id: 'distribution', label: '分布' },
+  { id: 'hit', label: '样本' },
+  { id: 'price', label: '价格' },
+  { id: 'updated', label: '最新' },
+]
 
 const errorMessage = (error: unknown) => toQuantilearnUserError(error)
 
@@ -176,9 +207,15 @@ const {
   refresh: refreshHall,
 } = await useAsyncData(
   'quantilearn-hall-models',
-  () => quantilearnApi.getHallModels({ type: hallType.value, order: 'return', pageSize: 50, strict: false }),
+  () => quantilearnApi.getHallModels({
+    type: hallType.value,
+    order: hallOrder.value,
+    keyword: hallKeyword.value.trim() || undefined,
+    pageSize: hallPageSize.value,
+    strict: hallStrict.value,
+  }),
   {
-    watch: [hallType],
+    watch: [hallType, hallOrder, hallKeyword, hallPageSize, hallStrict],
     default: () => [],
   },
 )
@@ -224,15 +261,65 @@ const eventsSourceLabel = computed(() => {
   return '静态赛事原型'
 })
 const hallSourceLabel = computed(() => {
-  if (apiHallModels.value.length) return `Mongo 模型广场 ${apiHallModels.value.length}`
   if (hallError.value) return '等待广场 API 部署'
-  return '静态广场原型'
+  return `Mongo 模型广场 ${apiHallModels.value.length}`
 })
+const hallSubscriptionAvailable = computed(() => !hallError.value && !hallPending.value)
+
+const hitEventNeedsSnapshot = (event: { eventId: string, league?: string, home?: string, away?: string }) => (
+  Boolean(event.eventId)
+  && (!event.league?.trim() || !event.home?.trim() || !event.away?.trim())
+)
+
+const enrichHitEvents = async () => {
+  const eventIds = apiHitEvents.value
+    .filter(hitEventNeedsSnapshot)
+    .map(event => event.eventId)
+    .filter((eventId, index, source) => source.indexOf(eventId) === index)
+    .filter(eventId => !hitEventSnapshots.value[eventId] && !pendingHitEventSnapshotIds.has(eventId))
+    .slice(0, 40)
+
+  if (!eventIds.length) return
+
+  for (const eventId of eventIds) {
+    pendingHitEventSnapshotIds.add(eventId)
+  }
+
+  const snapshots = await Promise.allSettled(eventIds.map(async (eventId) => {
+    const snapshot = await quantilearnApi.getFlashEventSnapshot(eventId)
+    return {
+      eventId,
+      league: snapshot.league,
+      home: snapshot.home,
+      away: snapshot.away,
+      score: snapshot.score,
+    }
+  }))
+
+  const nextSnapshots = { ...hitEventSnapshots.value }
+  snapshots.forEach((result) => {
+    if (result.status === 'fulfilled') {
+      nextSnapshots[result.value.eventId] = result.value
+    }
+  })
+  hitEventSnapshots.value = nextSnapshots
+
+  for (const eventId of eventIds) {
+    pendingHitEventSnapshotIds.delete(eventId)
+  }
+}
+
+if (import.meta.client) {
+  watch(apiHitEvents, () => {
+    void enrichHitEvents()
+  }, { immediate: true })
+}
 
 const liveFactorDefinitions = computed(() => {
   const factors = apiFactors.value.map(toFactorDefinition)
   return factors.length ? factors : prototypeFactorDefinitions
 })
+const factorDefinitionMap = computed(() => new Map(liveFactorDefinitions.value.map(factor => [factor.id, factor])))
 const liveReportPeriods = computed(() => {
   const periods = statisticsToReportPeriods(apiStatistics.value)
   return periods.length ? periods : prototypeReportPeriods
@@ -262,12 +349,26 @@ const liveModels = computed(() => {
   ))
 })
 const liveHitEvents = computed(() => {
-  const events = apiHitEvents.value.map(toHitEvent)
+  const events = apiHitEvents.value.map((event) => {
+    const hitEvent = toHitEvent(event)
+    const snapshot = hitEventSnapshots.value[event.eventId]
+    if (!snapshot) return hitEvent
+
+    const teams = snapshot.home && snapshot.away ? `${snapshot.home} vs ${snapshot.away}` : hitEvent.teams
+    return {
+      ...hitEvent,
+      league: hitEvent.league === '未知赛事' && snapshot.league ? snapshot.league : hitEvent.league,
+      teams: hitEvent.teams === '赛事资料待同步' ? teams : hitEvent.teams,
+      score: (!hitEvent.score || hitEvent.score === '-' || hitEvent.score === '未赛') && snapshot.score ? snapshot.score : hitEvent.score,
+    }
+  })
   return events.length ? events : hitEvents
 })
 const liveHallModels = computed(() => {
   const models = apiHallModels.value.map(toHallModel)
-  return models.length ? models : hallModels
+  if (models.length) return models
+  if (hallPending.value || !hallError.value) return []
+  return hallModels
 })
 const liveWorkspaces = computed(() => workspaces.map((workspace) => {
   if (workspace.id === 'models') return { ...workspace, count: String(liveModels.value.length) }
@@ -284,9 +385,74 @@ const selectedModel = computed(() => (
 ))
 const selectedWorkspace = computed(() => liveWorkspaces.value.find(item => item.id === activeWorkspace.value) ?? liveWorkspaces.value[0]!)
 const visibleFactors = computed(() => liveFactorDefinitions.value.filter(item => item.group === activeFactorGroup.value))
+const activeFactorGroupInfo = computed(() => factorGroups.find(group => group.id === activeFactorGroup.value) ?? factorGroups[0]!)
+const selectedModelFactorIds = computed(() => new Set(selectedModelFactors.value.map(factor => factor.id)))
+const selectedFactorGroups = computed<Array<{ id: string, label: string, summary: string, factors: SelectedFactor[] }>>(() => {
+  const used = new Set<string>()
+  const groups: Array<{ id: string, label: string, summary: string, factors: SelectedFactor[] }> = []
+
+  factorGroups.forEach((group) => {
+    const factors = selectedModelFactors.value.filter((factor) => {
+      const definition = factorDefinitionMap.value.get(factor.id)
+      return definition?.group === group.id
+    })
+
+    if (!factors.length) return
+    factors.forEach(factor => used.add(factor.id))
+    groups.push({
+      id: group.id,
+      label: group.label,
+      summary: group.summary,
+      factors,
+    })
+  })
+
+  const leftovers = selectedModelFactors.value.filter(factor => !used.has(factor.id))
+  if (leftovers.length) {
+    groups.push({
+      id: 'other',
+      label: '其他条件',
+      summary: '模型扩展因子',
+      factors: leftovers,
+    })
+  }
+
+  return groups
+})
 const visibleMarketRows = computed(() => (reportView.value === 'half' ? liveHalfMarketRows.value : liveFinalMarketRows.value))
 const visibleHitEvents = computed(() => liveHitEvents.value.filter(item => !currentOnly.value || item.state !== 'settled'))
-const visibleHallModels = computed(() => liveHallModels.value.filter(item => hallType.value === 'all' || item.type === hallType.value))
+const visibleHallModels = computed(() => {
+  const keyword = hallKeyword.value.trim().toLowerCase()
+  const models = liveHallModels.value
+    .filter(item => hallType.value === 'all' || item.type === hallType.value)
+    .filter(item => !hallStrict.value || item.meetsRules !== false)
+    .filter(item => !keyword || `${item.name} ${item.selection} ${item.author}`.toLowerCase().includes(keyword))
+
+  return [...models].sort((left, right) => {
+    if (hallOrder.value === 'hit') return right.hit - left.hit
+    if (hallOrder.value === 'distribution') return right.distribution - left.distribution
+    if (hallOrder.value === 'price') return left.price - right.price
+    if (hallOrder.value === 'updated') return 0
+    return right.yearReturn - left.yearReturn
+  })
+})
+
+const hallSubscriptionLabel = (model: { subscription: 'none' | 'active' | 'mine', expires?: string }) => {
+  if (model.subscription === 'mine') return '我的模型'
+  if (model.subscription === 'active') return model.expires ? `已订阅至 ${model.expires}` : '已订阅'
+  return '未订阅'
+}
+
+const hallSubscriptionActionLabel = (model: { subscription: 'none' | 'active' | 'mine' }) => {
+  if (model.subscription === 'mine') return '我的模型'
+  if (model.subscription === 'active') return '续订'
+  return '订阅'
+}
+
+const clearSubscriptionMessage = () => {
+  subscriptionNotice.value = ''
+  subscriptionError.value = ''
+}
 
 const filteredModels = computed(() => liveModels.value.filter((model) => {
   const stateMatched = modelFilter.value === 'all'
@@ -295,8 +461,139 @@ const filteredModels = computed(() => liveModels.value.filter((model) => {
   return stateMatched && (!searchText.value || text.includes(searchText.value.toLowerCase()))
 }))
 
+const selectedCountForGroup = (groupId: FactorGroupId) => selectedModelFactors.value.filter((factor) => {
+  const definition = factorDefinitionMap.value.get(factor.id)
+  return definition?.group === groupId
+}).length
+
+const builderRoleLabel = (role?: FactorDefinition['role']) => {
+  if (role === 'premium') return '高级'
+  if (role === 'logic') return '逻辑'
+  return '基础'
+}
+
+const builderRoleTone = (role?: FactorDefinition['role']) => {
+  if (role === 'premium') return 'warn'
+  if (role === 'logic') return 'good'
+  return 'plain'
+}
+
+const builderFactorAxis = (name: string, index: number, total: number) => {
+  if (/主队|主胜|标准盘主|主$/u.test(name)) return '主'
+  if (/平局|标准盘平|平$/u.test(name)) return '平'
+  if (/客队|客胜|标准盘客|客$/u.test(name)) return '客'
+  if (/大于|大球|进球盘大|大$/u.test(name)) return '大'
+  if (/小于|小球|进球盘小|小$/u.test(name)) return '小'
+  if (/均衡/u.test(name)) return '均'
+  if (total === 3) return ['主', '平', '客'][index] ?? String(index + 1)
+  if (total === 2) return ['大', '小'][index] ?? String(index + 1)
+  return String(index + 1)
+}
+
+const compactBuilderFactorName = (name: string) => (
+  name
+    .replace(/^(必发指数|成交量|比例|盈亏|冷热|价位|欧洲平均|凯利方差)[，,、\s]*/u, '')
+    .replace(/^进球盘/u, '')
+    .replace(/^内外盘/u, '')
+    .trim() || name
+)
+
+const catalogFactorAxis = (factor: FactorDefinition) => {
+  const index = visibleFactors.value.findIndex(item => item.id === factor.id)
+  return builderFactorAxis(factor.name, index, visibleFactors.value.length)
+}
+
+const selectedFactorName = (factor: SelectedFactor) => factorDefinitionMap.value.get(factor.id)?.name ?? factor.name
+
+const selectedFactorField = (factor: SelectedFactor) => factorDefinitionMap.value.get(factor.id)?.field ?? factor.id
+
+const selectedFactorLimit = (factor: SelectedFactor) => factorDefinitionMap.value.get(factor.id)?.range ?? '自定义范围'
+
+const selectedFactorRole = (factor: SelectedFactor) => factorDefinitionMap.value.get(factor.id)?.role
+
+const selectedFactorAxis = (factor: SelectedFactor, groupFactors: SelectedFactor[]) => {
+  const index = groupFactors.findIndex(item => item.id === factor.id)
+  return builderFactorAxis(selectedFactorName(factor), index, groupFactors.length)
+}
+
+const selectedFactorRangeText = (factor: SelectedFactor) => `${factor.min} - ${factor.max}`
+
+const toggleBuilderFactor = (factorId: string) => {
+  expandedBuilderFactorId.value = expandedBuilderFactorId.value === factorId ? null : factorId
+}
+
+const rangeBounds = (factor: { id: string, min: number, max: number }) => {
+  const range = factorDefinitionMap.value.get(factor.id)?.range
+  const values = range?.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+  const minLimit = Number.isFinite(values[0]) ? values[0]! : Math.min(0, factor.min)
+  const maxLimit = Number.isFinite(values[1]) ? values[1]! : Math.max(100, factor.max)
+
+  if (maxLimit <= minLimit) {
+    return { minLimit: 0, maxLimit: 100 }
+  }
+
+  return { minLimit, maxLimit }
+}
+
+const rangeTrackStyle = (factor: { id: string, min: number, max: number }) => {
+  const { minLimit, maxLimit } = rangeBounds(factor)
+  const span = maxLimit - minLimit
+  const start = Math.max(0, Math.min(100, ((Math.min(factor.min, factor.max) - minLimit) / span) * 100))
+  const end = Math.max(0, Math.min(100, ((Math.max(factor.min, factor.max) - minLimit) / span) * 100))
+  const width = Math.max(3, end - start)
+  const left = Math.min(start, 100 - width)
+
+  return {
+    left: `${left}%`,
+    width: `${width}%`,
+  }
+}
+
+watch(selectedModelId, () => {
+  expandedBuilderFactorId.value = null
+})
+
 const refreshLiveData = async () => {
   await Promise.all([refreshModels(), refreshReport(), refreshHalfReport(), refreshAnalysis(), refreshEvents(), refreshHall(), refreshPermissions()])
+}
+
+const subscribeHallModel = async (model: HallModel) => {
+  if (model.subscription === 'mine' || !hallSubscriptionAvailable.value || subscriptionBusyModelId.value) return
+
+  clearSubscriptionMessage()
+  subscriptionBusyModelId.value = model.id
+  try {
+    const subscription = model.subscription === 'active'
+      ? await quantilearnApi.renewSubscription(model.id, { months: 1 })
+      : await quantilearnApi.subscribeModel({ modelId: model.id, months: 1 })
+    subscriptionNotice.value = `${model.name} ${model.subscription === 'active' ? '续订' : '订阅'}成功，到期 ${new Date(subscription.expiresAtUtc).toLocaleDateString('zh-CN')}。`
+    await refreshHall()
+  }
+  catch (error) {
+    subscriptionError.value = errorMessage(error)
+  }
+  finally {
+    subscriptionBusyModelId.value = ''
+  }
+}
+
+const cancelHallSubscription = async (model: HallModel) => {
+  if (model.subscription !== 'active' || !hallSubscriptionAvailable.value || subscriptionBusyModelId.value) return
+  if (import.meta.client && !window.confirm(`确认取消订阅「${model.name}」？`)) return
+
+  clearSubscriptionMessage()
+  subscriptionBusyModelId.value = model.id
+  try {
+    await quantilearnApi.cancelSubscription(model.id)
+    subscriptionNotice.value = `${model.name} 已取消订阅。`
+    await refreshHall()
+  }
+  catch (error) {
+    subscriptionError.value = errorMessage(error)
+  }
+  finally {
+    subscriptionBusyModelId.value = ''
+  }
 }
 
 const openWorkspace = (workspace: WorkspaceId) => {
@@ -388,7 +685,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
             <div v-for="model in filteredModels" :key="`${model.id}-actions`" class="action-row">
               <div>
                 <strong>{{ model.name }}</strong>
-                <span class="mono">{{ model.objectId }}</span>
+                <span>创建 {{ model.createdAt }} / 更新 {{ model.updatedAt }}</span>
               </div>
               <span :class="['status-chip', stateTone(model.state)]">{{ stateLabel(model.state) }}</span>
               <span class="reason">{{ model.note }}</span>
@@ -437,40 +734,118 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
               >
                 <span>{{ group.label }}</span>
                 <em>{{ group.summary }}</em>
+                <strong v-if="selectedCountForGroup(group.id)">{{ selectedCountForGroup(group.id) }}</strong>
               </button>
             </div>
 
             <div class="factor-catalog">
-              <div class="factor-head table-head">
-                <span>因子</span>
-                <span>默认范围</span>
-                <span>权限</span>
-              </div>
-              <div v-for="factor in visibleFactors" :key="factor.id" class="factor-row">
+              <div class="builder-catalog-head">
                 <div>
-                  <strong>{{ factor.name }}</strong>
-                  <span class="mono">{{ factor.id }}</span>
+                  <strong>{{ activeFactorGroupInfo.label }}</strong>
+                  <span>{{ activeFactorGroupInfo.summary }}</span>
                 </div>
-                <span>{{ factor.range }}</span>
-                <span :class="['status-chip', factor.role === 'premium' ? 'warn' : 'plain']">{{ factor.role }}</span>
+                <span class="status-chip plain">{{ visibleFactors.length }} 因子</span>
+              </div>
+
+              <div class="builder-factor-grid">
+                <article
+                  v-for="factor in visibleFactors"
+                  :key="factor.id"
+                  :class="['builder-factor-card', { selected: selectedModelFactorIds.has(factor.id) }]"
+                >
+                  <div class="builder-factor-main">
+                    <span class="builder-factor-axis">{{ catalogFactorAxis(factor) }}</span>
+                    <div>
+                      <strong>{{ compactBuilderFactorName(factor.name) }}</strong>
+                      <span>{{ factor.field }}</span>
+                    </div>
+                    <CheckCircle2 v-if="selectedModelFactorIds.has(factor.id)" :size="15" />
+                  </div>
+                  <div class="builder-factor-meta">
+                    <span>{{ factor.range }}</span>
+                    <span :class="['status-chip', builderRoleTone(factor.role)]">{{ builderRoleLabel(factor.role) }}</span>
+                  </div>
+                </article>
               </div>
             </div>
           </div>
 
-          <div class="selected-factor-grid">
-            <div v-for="factor in selectedModelFactors" :key="factor.id" class="selected-factor-card">
+          <section class="builder-selected-panel">
+            <div class="builder-selected-head">
               <div>
-                <strong>{{ factor.name }}</strong>
-                <span class="mono">{{ factor.id }}</span>
+                <span class="eyebrow">Selected Factors</span>
+                <h4>模型条件</h4>
               </div>
-              <div class="range-line">
-                <span class="num">{{ factor.min }}</span>
-                <span class="range-track"><i :style="{ left: `${Math.min(factor.min, 100)}%`, right: `${Math.max(0, 100 - Math.min(factor.max, 100))}%` }" /></span>
-                <span class="num">{{ factor.max }}</span>
-              </div>
-              <em>{{ factor.logic }}</em>
+              <span :class="['status-chip', selectedModelFactors.length >= livePermissions.factor ? 'warn' : 'good']">
+                {{ selectedModelFactors.length }} / {{ livePermissions.factor }}
+              </span>
             </div>
-          </div>
+
+            <div v-if="selectedFactorGroups.length" class="builder-selected-groups">
+              <article v-for="group in selectedFactorGroups" :key="group.id" class="builder-selected-group">
+                <div class="builder-selected-group-head">
+                  <div>
+                    <strong>{{ group.label }}</strong>
+                    <span>{{ group.summary }}</span>
+                  </div>
+                  <em>{{ group.factors.length }}</em>
+                </div>
+
+                <div class="builder-selected-grid">
+                  <button
+                    v-for="factor in group.factors"
+                    :key="factor.id"
+                    type="button"
+                    :class="['builder-selected-chip', 'focus-ring', { expanded: expandedBuilderFactorId === factor.id }]"
+                    :title="selectedFactorName(factor)"
+                    @click="toggleBuilderFactor(factor.id)"
+                  >
+                    <span class="builder-factor-axis">{{ selectedFactorAxis(factor, group.factors) }}</span>
+                    <span class="builder-selected-main">
+                      <strong>{{ selectedFactorRangeText(factor) }}</strong>
+                      <em>{{ compactBuilderFactorName(selectedFactorName(factor)) }}</em>
+                    </span>
+                    <span class="builder-selected-logic">{{ factor.logic }}</span>
+                    <ChevronUp v-if="expandedBuilderFactorId === factor.id" class="builder-selected-caret" :size="14" />
+                    <ChevronDown v-else class="builder-selected-caret" :size="14" />
+                  </button>
+                </div>
+
+                <template v-for="factor in group.factors" :key="`builder-editor-${factor.id}`">
+                  <div v-if="expandedBuilderFactorId === factor.id" class="builder-selected-detail">
+                    <div class="builder-detail-title">
+                      <div>
+                        <strong>{{ selectedFactorName(factor) }}</strong>
+                        <span>{{ selectedFactorField(factor) }}</span>
+                      </div>
+                      <span :class="['status-chip', builderRoleTone(selectedFactorRole(factor))]">
+                        {{ builderRoleLabel(selectedFactorRole(factor)) }}
+                      </span>
+                    </div>
+                    <div class="range-line">
+                      <span class="num">{{ factor.min }}</span>
+                      <span class="range-track"><i :style="rangeTrackStyle(factor)" /></span>
+                      <span class="num">{{ factor.max }}</span>
+                    </div>
+                    <div class="builder-detail-facts">
+                      <div>
+                        <span>默认范围</span>
+                        <strong>{{ selectedFactorLimit(factor) }}</strong>
+                      </div>
+                      <div>
+                        <span>比较逻辑</span>
+                        <strong>{{ factor.logic }}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </article>
+            </div>
+
+            <p v-else class="empty-state">
+              当前模型还没有配置因子。
+            </p>
+          </section>
         </section>
 
         <ReportWorkspace
@@ -518,12 +893,13 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
               class="event-row focus-ring"
               @click="selectModelById(event.model, 'events')"
             >
-              <div>
+              <div class="event-main">
                 <strong>{{ event.teams }}</strong>
-                <span>{{ event.league }} / {{ event.time }} / {{ event.update }}</span>
+                <span>{{ event.league }} / {{ event.time }}</span>
+                <em>赛事ID {{ event.eventId || event.id }} / 更新 {{ event.update }}</em>
               </div>
-              <span class="status-chip plain">{{ liveModels.find(model => model.id === event.model)?.name ?? '旧站命中模型' }}</span>
-              <span class="num">{{ event.score }}</span>
+              <span class="status-chip plain">{{ event.modelName || liveModels.find(model => model.id === event.model)?.name || '旧站命中模型' }}</span>
+              <span class="event-score num">{{ event.score }}</span>
               <span :class="['status-chip', event.state === 'new' ? 'good' : event.state === 'used' ? 'warn' : 'plain']">
                 {{ event.state === 'new' ? '未读命中' : event.state === 'used' ? '已处理' : '已完场' }}
               </span>
@@ -539,16 +915,62 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
               <h3>模型广场</h3>
               <p>上架规则、订阅状态、定价和相似性门槛。</p>
             </div>
-            <div class="toolbar">
-              <button type="button" :class="['tab-button focus-ring', { active: hallType === 'all' }]" @click="hallType = 'all'">全部</button>
-              <button type="button" :class="['tab-button focus-ring', { active: hallType === 'sfp' }]" @click="hallType = 'sfp'">胜平负</button>
-              <button type="button" :class="['tab-button focus-ring', { active: hallType === 'asian' }]" @click="hallType = 'asian'">让球</button>
-              <button type="button" :class="['tab-button focus-ring', { active: hallType === 'ou' }]" @click="hallType = 'ou'">大小</button>
-            </div>
             <div :class="['status-chip', hallError ? 'warn' : 'plain']">
               <span>{{ hallPending ? '读取广场...' : hallSourceLabel }}</span>
             </div>
           </div>
+
+          <section class="hall-filter-panel" aria-label="模型广场筛选">
+            <div class="hall-filter-group">
+              <span>玩法</span>
+              <div class="toolbar">
+                <button
+                  v-for="option in hallTypeOptions"
+                  :key="option.id"
+                  type="button"
+                  :class="['tab-button focus-ring', { active: hallType === option.id }]"
+                  @click="hallType = option.id"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="hall-filter-group">
+              <span>排序</span>
+              <div class="toolbar">
+                <button
+                  v-for="option in hallOrderOptions"
+                  :key="option.id"
+                  type="button"
+                  :class="['tab-button focus-ring', { active: hallOrder === option.id }]"
+                  @click="hallOrder = option.id"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+            </div>
+
+            <label class="hall-search">
+              <Search :size="15" />
+              <input v-model="hallKeyword" type="search" placeholder="搜索模型、作者、方向">
+            </label>
+
+            <label class="switch-row hall-strict">
+              <input v-model="hallStrict" type="checkbox">
+              <span class="switch-track" />
+              <span>只看达标</span>
+            </label>
+
+            <label class="hall-page-size">
+              <span>数量</span>
+              <select v-model.number="hallPageSize">
+                <option :value="30">30</option>
+                <option :value="50">50</option>
+                <option :value="100">100</option>
+              </select>
+            </label>
+          </section>
 
           <div class="hall-rules">
             <div><Star :size="15" /><span>已发布</span></div>
@@ -556,6 +978,10 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
             <div><Target :size="15" /><span>1年分布 >= 62%</span></div>
             <div><Layers :size="15" /><span>3年分布 >= 55%</span></div>
             <div><Filter :size="15" /><span>排除相似性模型</span></div>
+          </div>
+
+          <div v-if="subscriptionNotice || subscriptionError" :class="['subscription-message', subscriptionError ? 'warn' : 'good']">
+            {{ subscriptionError || subscriptionNotice }}
           </div>
 
           <div class="hall-list">
@@ -576,10 +1002,34 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
                 <div><span>分布</span><strong class="num">{{ Math.round(model.distribution * 100) }}%</strong></div>
                 <div><span>价格/月</span><strong class="num">{{ model.price }}</strong></div>
               </div>
-              <button type="button" class="primary-button focus-ring" :disabled="model.subscription === 'mine'">
-                <ShoppingCart :size="15" />
-                <span>{{ model.subscription === 'active' ? `续订至 ${model.expires}` : model.subscription === 'mine' ? '我的模型' : '订阅' }}</span>
-              </button>
+              <div class="hall-action-group">
+                <span :class="['hall-subscription-state', model.subscription === 'active' ? 'good' : model.subscription === 'mine' ? 'plain' : 'warn']">
+                  {{ hallSubscriptionLabel(model) }}
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    class="primary-button focus-ring"
+                    :disabled="model.subscription === 'mine' || !hallSubscriptionAvailable || subscriptionBusyModelId === model.id"
+                    :title="hallSubscriptionAvailable ? '' : '等待模型广场 API 可用后操作'"
+                    @click="subscribeHallModel(model)"
+                  >
+                    <ShoppingCart :size="15" />
+                    <span>{{ subscriptionBusyModelId === model.id ? '处理中' : hallSubscriptionActionLabel(model) }}</span>
+                  </button>
+                  <button
+                    v-if="model.subscription === 'active'"
+                    type="button"
+                    class="ghost-button compact focus-ring"
+                    :disabled="!hallSubscriptionAvailable || subscriptionBusyModelId === model.id"
+                    :title="hallSubscriptionAvailable ? '' : '等待模型广场 API 可用后操作'"
+                    @click="cancelHallSubscription(model)"
+                  >
+                    <XCircle :size="15" />
+                    <span>取消</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -684,11 +1134,17 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   font-size: 1rem;
 }
 
-.action-matrix,
-.factor-catalog {
+.action-matrix {
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.factor-catalog {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
 }
 
 .action-head,
@@ -757,6 +1213,9 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 .factor-group-button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label count"
+    "summary state";
   gap: 4px 8px;
   align-items: center;
   min-height: 46px;
@@ -775,22 +1234,41 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 }
 
 .factor-group-button span {
+  grid-area: label;
   overflow: hidden;
-  grid-column: 1 / -1;
   font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .factor-group-button em {
-  grid-column: 1 / 2;
+  grid-area: summary;
   color: inherit;
   font-size: 0.68rem;
   font-style: normal;
   opacity: 0.7;
 }
 
+.factor-group-button strong {
+  display: inline-flex;
+  grid-area: count;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: #dff4f1;
+  color: var(--teal);
+  font-size: 0.72rem;
+}
+
+.factor-group-button.active strong {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
 .factor-group-button::after {
+  grid-area: state;
   justify-self: end;
   color: inherit;
   font-size: 0.74rem;
@@ -819,34 +1297,329 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   border-top: 1px solid rgba(220, 227, 235, 0.72);
 }
 
-.selected-factor-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.builder-catalog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #f7fafc;
 }
 
-.selected-factor-card {
+.builder-catalog-head div {
   display: grid;
-  gap: 7px;
-  padding: 9px;
+  gap: 2px;
+  min-width: 0;
 }
 
-.selected-factor-card div:first-child {
-  display: grid;
-}
-
-.selected-factor-card strong {
+.builder-catalog-head strong,
+.builder-catalog-head span {
   overflow: hidden;
-  font-size: 0.82rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.selected-factor-card em {
+.builder-catalog-head strong {
+  font-size: 0.86rem;
+}
+
+.builder-catalog-head div span {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.builder-factor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  padding: 8px;
+  background: #f7fafc;
+}
+
+.builder-factor-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 94px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.builder-factor-card.selected {
+  background: #eaf8f6;
+  box-shadow: inset 0 3px 0 #22a39b;
+}
+
+.builder-factor-main {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  gap: 7px;
+  align-items: start;
+  min-width: 0;
+}
+
+.builder-factor-axis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eef7f6;
+  color: #476b6c;
+  font-weight: 900;
+}
+
+.builder-factor-main div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-factor-main strong,
+.builder-factor-main span,
+.builder-factor-meta > span:first-child,
+.builder-selected-main strong,
+.builder-selected-main em,
+.builder-selected-logic,
+.builder-detail-title strong,
+.builder-detail-title span,
+.builder-detail-facts strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-factor-main strong {
+  font-size: 0.84rem;
+}
+
+.builder-factor-main span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 720;
+}
+
+.builder-factor-main svg {
+  color: var(--teal);
+}
+
+.builder-factor-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.builder-factor-meta > span:first-child {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 780;
+}
+
+.builder-selected-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.builder-selected-head,
+.builder-selected-group-head,
+.builder-detail-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.builder-selected-head h4 {
+  margin: 1px 0 0;
+  font-size: 0.95rem;
+}
+
+.builder-selected-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.builder-selected-group {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.builder-selected-group-head {
+  min-height: 38px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f7fafc;
+}
+
+.builder-selected-group-head div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.builder-selected-group-head strong,
+.builder-selected-group-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-selected-group-head strong {
+  font-size: 0.8rem;
+}
+
+.builder-selected-group-head span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 760;
+}
+
+.builder-selected-group-head em {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #dff4f1;
+  color: var(--teal);
+  font-size: 0.72rem;
   font-style: normal;
+  font-weight: 860;
+}
+
+.builder-selected-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+  gap: 6px;
+  padding: 6px;
+  background: #f7fafc;
+}
+
+.builder-selected-chip {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 14px;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  min-height: 62px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.builder-selected-chip:hover,
+.builder-selected-chip.expanded {
+  background: #eaf8f6;
+}
+
+.builder-selected-chip.expanded {
+  box-shadow: inset 0 3px 0 #22a39b;
+}
+
+.builder-selected-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-selected-main strong {
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.builder-selected-main em {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.builder-selected-logic {
+  max-width: 78px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 780;
+}
+
+.builder-selected-caret {
+  color: var(--muted);
+}
+
+.builder-selected-detail {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  background: #fbfefd;
+}
+
+.builder-detail-title > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-detail-title strong {
+  font-size: 0.84rem;
+}
+
+.builder-detail-title span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 720;
+}
+
+.builder-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.builder-detail-facts div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.builder-detail-facts span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 760;
+}
+
+.builder-detail-facts strong {
+  font-size: 0.76rem;
 }
 
 .range-line {
@@ -858,6 +1631,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 
 .range-track {
   position: relative;
+  overflow: hidden;
   height: 6px;
   border-radius: 999px;
   background: #d9e2ec;
@@ -869,6 +1643,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   bottom: 0;
   border-radius: inherit;
   background: var(--teal);
+  min-width: 3px;
 }
 
 .switch-row {
@@ -949,17 +1724,21 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 }
 
 .event-row {
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 0.9fr) 72px 92px 54px;
-  min-height: 46px;
+  grid-template-columns: minmax(260px, 1.55fr) minmax(130px, 0.82fr) 70px 88px 52px;
+  min-height: 64px;
   padding: 8px 10px;
   color: inherit;
   text-align: left;
 }
 
-.event-row div:first-child,
+.event-main,
 .hall-row > div:first-child {
   display: grid;
   min-width: 0;
+}
+
+.event-main {
+  gap: 2px;
 }
 
 .event-row span,
@@ -969,6 +1748,117 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   font-size: 0.74rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.event-main strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 860;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-main em {
+  overflow: hidden;
+  color: var(--subtle);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border-radius: 6px;
+  background: #edf3f7;
+  color: var(--ink) !important;
+  font-weight: 860;
+}
+
+.hall-filter-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.1fr) minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.hall-filter-group,
+.hall-search,
+.hall-page-size {
+  min-width: 0;
+}
+
+.hall-filter-group {
+  display: grid;
+  gap: 5px;
+}
+
+.hall-filter-group > span,
+.hall-page-size > span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.hall-filter-panel .tab-button {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 0.72rem;
+}
+
+.hall-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.hall-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.hall-strict {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  white-space: nowrap;
+}
+
+.hall-page-size {
+  display: grid;
+  gap: 4px;
+}
+
+.hall-page-size select {
+  min-height: 34px;
+  padding: 0 28px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 780;
 }
 
 .hall-rules {
@@ -999,6 +1889,27 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   white-space: nowrap;
 }
 
+.subscription-message {
+  min-height: 34px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 780;
+}
+
+.subscription-message.good {
+  border: 1px solid rgba(17, 137, 126, 0.22);
+  background: #e7f5f2;
+  color: #116e68;
+}
+
+.subscription-message.warn {
+  border: 1px solid rgba(200, 66, 94, 0.18);
+  background: #fce7eb;
+  color: #c8425e;
+}
+
 .hall-row {
   grid-template-columns: minmax(220px, 1.3fr) minmax(250px, 1fr) auto;
   min-height: 58px;
@@ -1023,6 +1934,45 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
   gap: 2px;
 }
 
+.hall-action-group {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  min-width: 190px;
+}
+
+.hall-action-group > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.hall-subscription-state {
+  max-width: 190px;
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hall-subscription-state.good {
+  color: #11897e;
+}
+
+.hall-subscription-state.warn {
+  color: #c0892f;
+}
+
+.hall-subscription-state.plain {
+  color: var(--muted);
+}
+
+.ghost-button.compact {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
 @media (max-width: 1240px) {
   .workbench {
     grid-template-columns: 276px minmax(0, 1fr);
@@ -1032,10 +1982,6 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
 @media (max-width: 1180px) {
   .workbench {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .main-stage {
-    order: 2;
   }
 }
 
@@ -1052,8 +1998,7 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
     display: grid;
   }
 
-  .quota-grid,
-  .selected-factor-grid {
+  .quota-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1075,6 +2020,20 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
     font-size: 0.64rem;
   }
 
+  .hall-filter-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .hall-filter-panel .toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 1px;
+  }
+
+  .hall-filter-panel .tab-button {
+    flex: 0 0 auto;
+  }
+
   .factor-head,
   .factor-row {
     grid-template-columns: minmax(0, 1fr) 82px 66px;
@@ -1090,24 +2049,95 @@ const selectModelById = (modelId: ModelId, workspace?: WorkspaceId) => {
     white-space: normal;
   }
 
+  .builder-factor-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .builder-factor-card {
+    min-height: 88px;
+  }
+
+  .builder-factor-main {
+    grid-template-columns: 26px minmax(0, 1fr) 15px;
+  }
+
+  .builder-factor-axis {
+    width: 26px;
+    height: 26px;
+  }
+
+  .builder-selected-grid {
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  }
+
+  .builder-selected-chip {
+    grid-template-columns: 26px minmax(0, 1fr) 14px;
+    grid-template-areas:
+      "axis main caret"
+      "axis logic caret";
+    min-height: 64px;
+  }
+
+  .builder-selected-chip .builder-factor-axis {
+    grid-area: axis;
+  }
+
+  .builder-selected-main {
+    grid-area: main;
+  }
+
+  .builder-selected-logic {
+    grid-area: logic;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .builder-selected-caret {
+    grid-area: caret;
+  }
+
   .event-row,
   .hall-row {
     grid-template-columns: 1fr;
   }
 
+  .event-row {
+    gap: 7px;
+  }
+
+  .event-row > .status-chip,
+  .event-score,
+  .event-row > strong {
+    justify-self: start;
+  }
+
   .hall-rules {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hall-action-group {
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .hall-action-group > div {
+    justify-content: flex-start;
   }
 }
 
 @media (max-width: 430px) {
   .quota-grid,
-  .selected-factor-grid {
+  .builder-detail-facts {
     grid-template-columns: 1fr;
   }
 
   .factor-groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .builder-factor-grid,
+  .builder-selected-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

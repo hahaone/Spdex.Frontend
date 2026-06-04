@@ -54,11 +54,11 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'SPdex Quantilearn',
+      title: 'SPdex 量化模型',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-        { name: 'description', content: 'SPdex Quantilearn sports quantitative analysis workstation' },
+        { name: 'description', content: 'SPdex 量化模型体育数据分析工作台' },
         { name: 'theme-color', content: '#10202b' },
       ],
     },

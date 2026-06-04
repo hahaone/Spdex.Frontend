@@ -2,7 +2,10 @@
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   Database,
   Lock,
@@ -59,6 +62,21 @@ interface FlashFactorSection {
   factors: QuantilearnApiFlashFactorCell[]
 }
 
+interface FlashFactorCard {
+  id: string
+  title: string
+  subtitle: string
+  factors: QuantilearnApiFlashFactorCell[]
+}
+
+interface SelectedFactorGroup {
+  id: string
+  title: string
+  subtitle: string
+  ids: string[]
+  factors: SelectedFlashFactor[]
+}
+
 const route = useRoute()
 const router = useRouter()
 const quantilearnApi = useQuantilearnApi()
@@ -96,6 +114,9 @@ const activeSectionId = ref('bf-core')
 const activeLeagueType = ref(0)
 const activeReportMode = ref<FlashReportMode>('full')
 const activeReportDays = ref(365)
+const parametersCollapsed = ref(false)
+const expandedSelectedFactorId = ref<string | null>(null)
+const reportPanel = ref<HTMLElement | null>(null)
 const analysisState = ref<'idle' | 'running' | 'done'>('idle')
 const analysisResult = ref<QuantilearnApiFlashAnalysisResult | null>(null)
 const analysisError = ref('')
@@ -279,6 +300,31 @@ const sectionDefinitions = [
   { id: 'inner-outer-goals', title: '进球盘内外盘', shortTitle: '进球内外', subtitle: '进球成交 / 进球盈亏', ids: ['f53', 'f54', 'f55', 'f56', 'f57', 'f58', 'f59', 'f60'] },
 ]
 
+const factorCardDefinitions: Array<{ id: string, title: string, subtitle: string, ids: string[] }> = [
+  { id: 'bf-index', title: '必发指数', subtitle: '标准盘 主 / 平 / 客', ids: ['f01', 'f02', 'f03'] },
+  { id: 'bf-volume', title: '成交量', subtitle: '标准盘 主 / 平 / 客', ids: ['f04', 'f05', 'f06'] },
+  { id: 'bf-ratio', title: '比例', subtitle: '标准盘 主 / 平 / 客', ids: ['f07', 'f08', 'f09'] },
+  { id: 'bf-profit', title: '模拟盈亏', subtitle: '标准盘 主 / 平 / 客', ids: ['f10', 'f11', 'f12'] },
+  { id: 'bf-odds', title: '价位', subtitle: '标准盘 主 / 平 / 客', ids: ['f13', 'f14', 'f15'] },
+  { id: 'bf-hot', title: '冷热/盈亏', subtitle: '标准盘 主 / 平 / 客', ids: ['f16', 'f17', 'f18'] },
+  { id: 'market-hot', title: '市场冷热', subtitle: '指数 主 / 平 / 客', ids: ['f19', 'f20', 'f21'] },
+  { id: 'euro-average', title: '欧洲平均', subtitle: '欧赔 主 / 平 / 客', ids: ['f22', 'f23', 'f24'] },
+  { id: 'kelly', title: '凯利方差', subtitle: '凯利 主 / 平 / 客', ids: ['f25', 'f26', 'f27'] },
+  { id: 'goal-index', title: '进球指数', subtitle: '大 / 小', ids: ['f28', 'f29'] },
+  { id: 'goal-volume', title: '进球成交', subtitle: '大 / 小', ids: ['f30', 'f31'] },
+  { id: 'goal-ratio', title: '进球占比', subtitle: '大 / 小', ids: ['f32', 'f33'] },
+  { id: 'goal-profit', title: '进球盈亏', subtitle: '大 / 小', ids: ['f34', 'f35'] },
+  { id: 'goal-main', title: '进球盘必发', subtitle: '指数 / 成交 / 均衡', ids: ['f36', 'f37', 'f38', 'f39', 'f40'] },
+  { id: 'sfp-io-volume', title: '标准盘成交拆分', subtitle: '主 / 平 / 客', ids: ['f41', 'f42', 'f43'] },
+  { id: 'sfp-io-profit', title: '标准盘盈亏拆分', subtitle: '主 / 平 / 客', ids: ['f44', 'f45', 'f46'] },
+  { id: 'sfp-io-hot', title: '标准盘冷热拆分', subtitle: '主 / 平 / 客', ids: ['f47', 'f48', 'f49'] },
+  { id: 'sfp-io-index', title: '标准盘指数拆分', subtitle: '主 / 平 / 客', ids: ['f50', 'f51', 'f52'] },
+  { id: 'goal-io-volume', title: '进球成交拆分', subtitle: '大 / 小', ids: ['f53', 'f54'] },
+  { id: 'goal-io-profit', title: '进球盈亏拆分', subtitle: '大 / 小', ids: ['f55', 'f56'] },
+  { id: 'goal-io-hot', title: '进球冷热拆分', subtitle: '大 / 小', ids: ['f57', 'f58'] },
+  { id: 'goal-io-index', title: '进球指数拆分', subtitle: '大 / 小', ids: ['f59', 'f60'] },
+]
+
 const factorSections = computed<FlashFactorSection[]>(() => {
   const map = factorsById.value
   return sectionDefinitions
@@ -321,11 +367,199 @@ const activeSection = computed(() => (
   ?? factorSections.value[0]
 ))
 
+const activeFactorCards = computed<FlashFactorCard[]>(() => {
+  const section = activeSection.value
+  if (!section) return []
+
+  const map = new Map(section.factors.map(factor => [factor.factorId, factor]))
+  const used = new Set<string>()
+  const cards = factorCardDefinitions
+    .map((card) => {
+      const factors = card.ids
+        .map(id => map.get(id))
+        .filter((factor): factor is QuantilearnApiFlashFactorCell => Boolean(factor))
+        .sort((left, right) => factorOrder(left.factorId) - factorOrder(right.factorId))
+
+      factors.forEach(factor => used.add(factor.factorId))
+      return { id: card.id, title: card.title, subtitle: card.subtitle, factors }
+    })
+    .filter(card => card.factors.length)
+
+  const leftovers = section.factors.filter(factor => !used.has(factor.factorId))
+  leftovers.forEach((factor) => {
+    cards.push({
+      id: factor.factorId,
+      title: factorName(factor),
+      subtitle: factor.factorId.toUpperCase(),
+      factors: [factor],
+    })
+  })
+
+  return cards
+})
+
+const activeFactorRowCount = computed(() => Math.max(0, ...activeFactorCards.value.map(card => card.factors.length)))
+
+const factorBoardStyle = computed(() => {
+  const columns = Math.max(activeFactorCards.value.length, 1)
+  return {
+    gridTemplateColumns: `58px repeat(${columns}, minmax(136px, 1fr))`,
+    minWidth: `${58 + columns * 136}px`,
+  }
+})
+
+const factorAt = (card: FlashFactorCard, rowNumber: number) => card.factors[rowNumber - 1]
+
+const factorAxisLabel = (factor: QuantilearnApiFlashFactorCell, siblings: QuantilearnApiFlashFactorCell[]) => {
+  const name = factorName(factor)
+  if (/主队|主胜|标准盘主|主$/u.test(name)) return '主'
+  if (/平局|标准盘平|平$/u.test(name)) return '平'
+  if (/客队|客胜|标准盘客|客$/u.test(name)) return '客'
+  if (/大球|大于|进球盘大|大$/u.test(name)) return '大'
+  if (/小球|小于|进球盘小|小$/u.test(name)) return '小'
+  if (/均衡/u.test(name)) return '均'
+
+  const index = siblings.findIndex(item => item.factorId === factor.factorId)
+  if (siblings.length === 3) return ['主', '平', '客'][index] ?? factor.factorId.toUpperCase()
+  if (siblings.length === 2) return ['大', '小'][index] ?? factor.factorId.toUpperCase()
+  return factor.factorId.toUpperCase()
+}
+
+const compactFactorName = (factor: QuantilearnApiFlashFactorCell, cardTitle: string) => {
+  const name = factorName(factor)
+  const compact = name
+    .replace(cardTitle, '')
+    .replace(/^[，,、\s]+/u, '')
+    .trim()
+
+  return compact || factor.factorId.toUpperCase()
+}
+
+const activeFactorRowLabel = (rowNumber: number) => {
+  const card = activeFactorCards.value.find(item => factorAt(item, rowNumber))
+  const factor = card ? factorAt(card, rowNumber) : undefined
+  return factor && card ? factorAxisLabel(factor, card.factors) : String(rowNumber)
+}
+
+const factorValueText = (factor?: QuantilearnApiFlashFactorCell) => (
+  factor ? factor.displayValue || numberText(factor.value) : '-'
+)
+
+const factorSuggestionText = (factor?: QuantilearnApiFlashFactorCell) => {
+  if (!factor) return '-'
+  const min = factor.suggestedMin === undefined ? '-' : numberText(factor.suggestedMin)
+  const max = factor.suggestedMax === undefined ? '-' : numberText(factor.suggestedMax)
+  return `${min} > ${max}`
+}
+
+const factorCellName = (factor: QuantilearnApiFlashFactorCell | undefined, card: FlashFactorCard) => (
+  factor ? compactFactorName(factor, card.title) : ''
+)
+
+const factorCellHint = (factor?: QuantilearnApiFlashFactorCell) => (
+  factor ? factorPermissionMessage(factor.factorId) || factor.rangeStrategy : ''
+)
+
+const factorCellSelected = (factor?: QuantilearnApiFlashFactorCell) => (
+  Boolean(factor && selectedFactorIds.value.has(factor.factorId))
+)
+
+const factorCellDisabled = (factor?: QuantilearnApiFlashFactorCell) => (
+  !factor || !factor.hasValue || !isFactorAllowed(factor.factorId)
+)
+
+const factorCellLocked = (factor?: QuantilearnApiFlashFactorCell) => (
+  Boolean(factor && !isFactorAllowed(factor.factorId))
+)
+
+const toggleFactorCell = (factor?: QuantilearnApiFlashFactorCell) => {
+  if (factor) toggleFactor(factor)
+}
+
 const selectedSummary = computed(() => {
   if (!selectedFactors.value.length) return '未选择'
   const names = selectedFactors.value.map(factor => factor.name)
   return names.length > 2 ? `${names.slice(0, 2).join(' / ')} 等 ${names.length} 项` : names.join(' / ')
 })
+
+const selectedFactorBrief = computed(() => selectedFactors.value.slice(0, 6).map(factor => ({
+  id: factor.factorId,
+  label: factor.name,
+  range: `${numberText(factor.min)} - ${numberText(factor.max)}`,
+  logic: logicOptions.find(option => option.id === factor.logic)?.label ?? '不比较',
+})))
+
+const hiddenSelectedFactorCount = computed(() => Math.max(0, selectedFactors.value.length - selectedFactorBrief.value.length))
+
+const selectedFactorGroups = computed<SelectedFactorGroup[]>(() => {
+  const selected = new Map(selectedFactors.value.map(factor => [factor.factorId, factor]))
+  const used = new Set<string>()
+
+  const groups = factorCardDefinitions
+    .map((card) => {
+      const factors = card.ids
+        .map(id => selected.get(id))
+        .filter((factor): factor is SelectedFlashFactor => Boolean(factor))
+
+      if (!factors.length) return null
+      factors.forEach(factor => used.add(factor.factorId))
+      return {
+        id: card.id,
+        title: card.title,
+        subtitle: card.subtitle,
+        ids: card.ids,
+        factors,
+      }
+    })
+    .filter((group): group is SelectedFactorGroup => Boolean(group))
+
+  const leftovers = selectedFactors.value.filter(factor => !used.has(factor.factorId))
+  if (leftovers.length) {
+    groups.push({
+      id: 'other',
+      title: '其他指标',
+      subtitle: '自定义选择',
+      ids: leftovers.map(factor => factor.factorId),
+      factors: leftovers,
+    })
+  }
+
+  return groups
+})
+
+const selectedFactorAxisLabel = (factor: SelectedFlashFactor, group: SelectedFactorGroup) => {
+  const source = factorsById.value.get(factor.factorId)
+  const siblings = group.ids
+    .map(id => factorsById.value.get(id))
+    .filter((item): item is QuantilearnApiFlashFactorCell => Boolean(item))
+
+  if (source) return factorAxisLabel(source, siblings.length ? siblings : [source])
+
+  const index = group.ids.findIndex(id => id === factor.factorId)
+  if (group.ids.length === 3) return ['主', '平', '客'][index] ?? factor.factorId.toUpperCase()
+  if (group.ids.length === 2) return ['大', '小'][index] ?? factor.factorId.toUpperCase()
+  return factor.factorId.toUpperCase()
+}
+
+const selectedFactorValueText = (factor: SelectedFlashFactor) => (
+  factor.displayValue || numberText(factor.value)
+)
+
+const selectedFactorRangeText = (factor: SelectedFlashFactor) => (
+  `${numberText(factor.min)} - ${numberText(factor.max)}`
+)
+
+const selectedFactorLogicText = (factor: SelectedFlashFactor) => (
+  logicOptions.find(option => option.id === factor.logic)?.label ?? '不比较'
+)
+
+const toggleSelectedEditor = (factorId: string) => {
+  expandedSelectedFactorId.value = expandedSelectedFactorId.value === factorId ? null : factorId
+}
+
+const activeLeagueLabel = computed(() => (
+  leagueOptions.find(option => option.id === activeLeagueType.value)?.label ?? '全部'
+))
 
 const resetAnalysis = () => {
   analysisState.value = 'idle'
@@ -337,6 +571,7 @@ const resetAnalysis = () => {
   bigTradesState.value = 'idle'
   bigTradesResult.value = null
   bigTradesError.value = ''
+  parametersCollapsed.value = false
 }
 
 const createSelectedFactor = (factor: QuantilearnApiFlashFactorCell): SelectedFlashFactor => ({
@@ -394,15 +629,22 @@ const toggleFactor = (factor: QuantilearnApiFlashFactorCell) => {
 
   if (existing) {
     selectedFactors.value = selectedFactors.value.filter(item => item.factorId !== factor.factorId)
+    if (expandedSelectedFactorId.value === factor.factorId) {
+      expandedSelectedFactorId.value = null
+    }
     return
   }
 
   if (!canAddFactor.value) return
   selectedFactors.value = [...selectedFactors.value, createSelectedFactor(factor)]
+  expandedSelectedFactorId.value = factor.factorId
 }
 
 const removeSelectedFactor = (factorId: string) => {
   selectedFactors.value = selectedFactors.value.filter(factor => factor.factorId !== factorId)
+  if (expandedSelectedFactorId.value === factorId) {
+    expandedSelectedFactorId.value = null
+  }
   resetAnalysis()
 }
 
@@ -550,9 +792,12 @@ const runAnalysis = async () => {
       logics: buildAnalysisLogics(),
     })
     analysisState.value = 'done'
+    parametersCollapsed.value = true
     await refreshAccess()
     await loadMatches()
     await loadBigTrades()
+    await nextTick()
+    reportPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
   catch (error) {
     analysisError.value = errorMessage(error)
@@ -587,6 +832,7 @@ const activeAnalysisPeriod = computed(() => (
   analysisPeriods.value.find(period => period.days === activeReportDays.value && period.half === (activeReportMode.value === 'half'))
   ?? analysisPeriods.value[0]
 ))
+const hasAnalysisReport = computed(() => Boolean(analysisResult.value && activeAnalysisPeriod.value))
 const activeStatisticSummary = computed(() => (
   activeAnalysisPeriod.value
     ? ({ computed: activeAnalysisPeriod.value.computed } as QuantilearnApiStatisticSummary)
@@ -611,6 +857,26 @@ const bestMarket = computed(() => (
     ? [...analysisMarketRows.value].sort((left, right) => right.yearReturn - left.yearReturn)[0]
     : undefined
 ))
+const rankedMarketRows = computed(() => [...analysisMarketRows.value].sort((left, right) => right.yearReturn - left.yearReturn))
+const reportPeriodLabel = computed(() => {
+  if (!activeAnalysisPeriod.value) return '等待分析'
+  const days = activeAnalysisPeriod.value.days === 365 ? '近1年' : `近${activeAnalysisPeriod.value.days}日`
+  return `${days} / ${activeAnalysisPeriod.value.half ? '半场' : '全场'}`
+})
+const reportKpis = computed(() => [
+  { label: '总匹配', value: numberText(analysisResult.value?.finalMatchedCount) },
+  { label: '周期样本', value: numberText(activeAnalysisPeriod.value?.windowDocumentCount) },
+  { label: '有效赛果', value: numberText(activeAnalysisPeriod.value?.validResultCount) },
+  { label: '命中分布', value: percentText(bestMarket.value?.distribution) },
+  { label: '均赔', value: numberText(bestMarket.value?.average) },
+  { label: '模型条件', value: `${selectedFactors.value.length} 因子 / ${buildAnalysisLogics().length} 逻辑` },
+])
+const returnTone = (value?: number) => {
+  if (value === undefined || Number.isNaN(value)) return 'plain'
+  if (value > 0.18) return 'good'
+  if (value < 0) return 'danger'
+  return 'warn'
+}
 const reportDaysOptions = computed(() => (
   [...new Set(analysisPeriods.value.map(period => period.days))].sort((left, right) => left - right)
 ))
@@ -650,6 +916,12 @@ watch([selectedLimit, canUseGoalBalance, canUseInnerOuter, canUseLogics, canUseI
   if (next.length !== selectedFactors.value.length || next.some((factor, index) => factor !== selectedFactors.value[index])) {
     selectedFactors.value = next
     resetAnalysis()
+  }
+})
+
+watch(() => selectedFactors.value.map(factor => factor.factorId).join('|'), () => {
+  if (expandedSelectedFactorId.value && !selectedFactors.value.some(factor => factor.factorId === expandedSelectedFactorId.value)) {
+    expandedSelectedFactorId.value = null
   }
 })
 
@@ -698,7 +970,7 @@ const refreshFlash = async () => {
       </button>
     </header>
 
-    <main class="flash-layout">
+    <main :class="['flash-layout', { 'report-focus': parametersCollapsed && hasAnalysisReport }]">
       <section class="flash-stage">
         <section class="event-strip">
           <div class="event-title">
@@ -742,77 +1014,154 @@ const refreshFlash = async () => {
           <span>正在读取单场快照</span>
         </section>
 
-        <section v-else class="matrix-shell">
-          <aside class="section-tabs" aria-label="FlashQ factors">
-            <button
-              v-for="section in factorSections"
-              :key="section.id"
-              type="button"
-              :class="['section-tab focus-ring', { active: activeSection?.id === section.id }]"
-              @click="activeSectionId = section.id"
-            >
-              <strong>
-                <span class="section-title-full">{{ section.title }}</span>
-                <span class="section-title-compact">{{ section.shortTitle }}</span>
-              </strong>
-              <span>{{ section.subtitle }}</span>
-              <em>{{ section.factors.length }}</em>
-            </button>
-          </aside>
-
-          <div class="factor-matrix">
-            <div class="matrix-title">
+        <section v-else class="parameter-region">
+          <section v-if="parametersCollapsed" class="parameter-collapsed">
+            <div class="parameter-collapsed-head">
               <div>
-                <span class="eyebrow">{{ activeSection?.factors.length ?? 0 }} 个可选指标</span>
-                <h3>{{ activeSection?.title }}</h3>
+                <span class="eyebrow">Parameters</span>
+                <h3>{{ selectedSummary }}</h3>
               </div>
-              <span class="status-chip plain">{{ selectedSummary }}</span>
+              <button type="button" class="ghost-button focus-ring" @click="parametersCollapsed = false">
+                <ChevronDown :size="15" />
+                <span>展开参数</span>
+              </button>
             </div>
-
-            <div class="factor-grid table-head">
-              <span>因子</span>
-              <span>当前值</span>
-              <span>建议区间</span>
-              <span>范围</span>
-              <span />
+            <div class="condition-chips">
+              <span v-for="factor in selectedFactorBrief" :key="factor.id" class="condition-chip">
+                <strong>{{ factor.label }}</strong>
+                <em>{{ factor.range }}</em>
+              </span>
+              <span v-if="hiddenSelectedFactorCount" class="condition-chip muted-chip">
+                +{{ hiddenSelectedFactorCount }}
+              </span>
             </div>
+          </section>
 
-            <button
-              v-for="factor in activeSection?.factors ?? []"
-              :key="factor.factorId"
-              type="button"
-              :class="['factor-grid', 'factor-row', 'focus-ring', { selected: selectedFactorIds.has(factor.factorId), disabled: !factor.hasValue, locked: !isFactorAllowed(factor.factorId) }]"
-              :disabled="!factor.hasValue || !isFactorAllowed(factor.factorId)"
-              :title="factorPermissionMessage(factor.factorId)"
-              @click="toggleFactor(factor)"
-            >
-              <span class="factor-name">
-                <strong>{{ factorName(factor) }}</strong>
-                <em>{{ factorPermissionMessage(factor.factorId) || factor.rangeStrategy }}</em>
-              </span>
-              <strong class="num value-cell">{{ factor.displayValue || '-' }}</strong>
-              <span class="range-cell">
-                <b class="num">{{ factor.suggestedMin === undefined ? '-' : numberText(factor.suggestedMin) }}</b>
-                <ChevronRight :size="13" />
-                <b class="num">{{ factor.suggestedMax === undefined ? '-' : numberText(factor.suggestedMax) }}</b>
-              </span>
-              <span class="limit-cell num">{{ numberText(factor.minLimit) }} - {{ numberText(factor.maxLimit) }}</span>
-              <span class="select-mark">
-                <Lock v-if="!isFactorAllowed(factor.factorId)" :size="15" />
-                <MinusCircle v-else-if="selectedFactorIds.has(factor.factorId)" :size="16" />
-                <PlusCircle v-else :size="16" />
-              </span>
-            </button>
-          </div>
+          <section v-show="!parametersCollapsed" class="matrix-shell">
+            <aside class="section-tabs" aria-label="FlashQ factors">
+              <button
+                v-for="section in factorSections"
+                :key="section.id"
+                type="button"
+                :class="['section-tab focus-ring', { active: activeSection?.id === section.id }]"
+                @click="activeSectionId = section.id"
+              >
+                <strong>
+                  <span class="section-title-full">{{ section.title }}</span>
+                  <span class="section-title-compact">{{ section.shortTitle }}</span>
+                </strong>
+                <span>{{ section.subtitle }}</span>
+                <em>{{ section.factors.length }}</em>
+              </button>
+            </aside>
+
+            <div class="factor-matrix">
+              <div class="matrix-title">
+                <div>
+                  <span class="eyebrow">{{ activeSection?.factors.length ?? 0 }} 个可选指标</span>
+                  <h3>{{ activeSection?.title }}</h3>
+                </div>
+                <div class="matrix-actions">
+                  <span class="status-chip plain">{{ selectedSummary }}</span>
+                  <button type="button" class="ghost-button focus-ring" :disabled="!selectedFactors.length" @click="parametersCollapsed = true">
+                    <ChevronUp :size="15" />
+                    <span>收起参数</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="factor-board-shell">
+                <div class="factor-board" :style="factorBoardStyle">
+                  <div class="factor-board-title corner-cell">
+                    类型
+                  </div>
+                  <div v-for="card in activeFactorCards" :key="card.id" class="factor-board-title">
+                    <strong>{{ card.title }}</strong>
+                    <span>{{ card.subtitle }}</span>
+                  </div>
+
+                  <template v-for="rowIndex in activeFactorRowCount" :key="`row-${rowIndex}`">
+                    <div class="factor-row-label">
+                      {{ activeFactorRowLabel(rowIndex) }}
+                    </div>
+                    <template v-for="card in activeFactorCards" :key="`${card.id}-${rowIndex}`">
+                      <button
+                        v-if="factorAt(card, rowIndex)"
+                        type="button"
+                        :class="['factor-cell', 'focus-ring', { selected: factorCellSelected(factorAt(card, rowIndex)), disabled: factorCellDisabled(factorAt(card, rowIndex)), locked: factorCellLocked(factorAt(card, rowIndex)) }]"
+                        :disabled="factorCellDisabled(factorAt(card, rowIndex))"
+                        :title="factorCellHint(factorAt(card, rowIndex))"
+                        @click="toggleFactorCell(factorAt(card, rowIndex))"
+                      >
+                        <span class="factor-cell-name">
+                          <strong>{{ factorCellName(factorAt(card, rowIndex), card) }}</strong>
+                          <em>{{ factorCellHint(factorAt(card, rowIndex)) }}</em>
+                        </span>
+                        <strong class="num factor-cell-value">{{ factorValueText(factorAt(card, rowIndex)) }}</strong>
+                        <span class="factor-cell-range">{{ factorSuggestionText(factorAt(card, rowIndex)) }}</span>
+                        <span class="select-mark">
+                          <Lock v-if="factorCellLocked(factorAt(card, rowIndex))" :size="15" />
+                          <MinusCircle v-else-if="factorCellSelected(factorAt(card, rowIndex))" :size="16" />
+                          <PlusCircle v-else :size="16" />
+                        </span>
+                      </button>
+                      <div v-else class="factor-cell empty-cell">
+                        -
+                      </div>
+                    </template>
+                  </template>
+                </div>
+              </div>
+
+              <div class="factor-mobile-groups">
+                <article v-for="card in activeFactorCards" :key="`mobile-${card.id}`" class="factor-mobile-card">
+                  <div class="factor-mobile-head">
+                    <div>
+                      <strong>{{ card.title }}</strong>
+                      <span>{{ card.subtitle }}</span>
+                    </div>
+                    <em>{{ card.factors.length }}</em>
+                  </div>
+
+                  <div class="factor-mobile-grid">
+                    <button
+                      v-for="factor in card.factors"
+                      :key="factor.factorId"
+                      type="button"
+                      :class="['mobile-factor-row', 'focus-ring', { selected: factorCellSelected(factor), disabled: factorCellDisabled(factor), locked: factorCellLocked(factor) }]"
+                      :disabled="factorCellDisabled(factor)"
+                      :title="`${factorCellName(factor, card)} / ${factorCellHint(factor)}`"
+                      @click="toggleFactorCell(factor)"
+                    >
+                      <span class="mobile-factor-axis">{{ factorAxisLabel(factor, card.factors) }}</span>
+                      <span class="mobile-factor-body">
+                        <strong>{{ factorValueText(factor) }}</strong>
+                        <small>{{ factorSuggestionText(factor) }}</small>
+                      </span>
+                      <span class="select-mark">
+                        <Lock v-if="factorCellLocked(factor)" :size="15" />
+                        <MinusCircle v-else-if="factorCellSelected(factor)" :size="16" />
+                        <PlusCircle v-else :size="16" />
+                      </span>
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
         </section>
 
-        <section v-if="analysisResult || analysisError" class="report-shell">
+        <section v-if="analysisResult || analysisError" ref="reportPanel" :class="['report-shell', { focused: parametersCollapsed && hasAnalysisReport }]">
           <div class="report-head">
             <div>
               <span class="eyebrow">FlashQ Report</span>
               <h3>临时模型回测</h3>
             </div>
             <div v-if="analysisResult" class="report-controls">
+              <button type="button" class="ghost-button focus-ring" @click="parametersCollapsed = !parametersCollapsed">
+                <component :is="parametersCollapsed ? ChevronDown : ChevronUp" :size="15" />
+                <span>{{ parametersCollapsed ? '展开参数' : '收起参数' }}</span>
+              </button>
               <div class="snapshot-tabs compact-tabs">
                 <button
                   v-for="days in reportDaysOptions"
@@ -849,28 +1198,38 @@ const refreshFlash = async () => {
           </div>
 
           <template v-else-if="analysisResult && activeAnalysisPeriod">
-            <div class="report-summary">
-              <div>
-                <span>总匹配</span>
-                <strong class="num">{{ numberText(analysisResult.finalMatchedCount) }}</strong>
+            <section class="report-overview">
+              <div class="primary-signal">
+                <span class="eyebrow">Best Signal</span>
+                <div>
+                  <strong>{{ bestMarket?.selection ?? '-' }}</strong>
+                  <em :class="['num', returnTone(bestMarket?.yearReturn)]">{{ returnText(bestMarket?.yearReturn) }}</em>
+                </div>
+                <p>{{ reportPeriodLabel }} / {{ activeLeagueLabel }} / {{ snapshotSourceLabel }}</p>
               </div>
-              <div>
-                <span>周期样本</span>
-                <strong class="num">{{ numberText(activeAnalysisPeriod.windowDocumentCount) }}</strong>
+              <div class="report-kpi-grid">
+                <div v-for="item in reportKpis" :key="item.label">
+                  <span>{{ item.label }}</span>
+                  <strong class="num">{{ item.value }}</strong>
+                </div>
               </div>
-              <div>
-                <span>有效赛果</span>
-                <strong class="num">{{ numberText(activeAnalysisPeriod.validResultCount) }}</strong>
+            </section>
+
+            <section class="report-condition-strip">
+              <div class="condition-strip-title">
+                <BarChart3 :size="16" />
+                <strong>当前模型条件</strong>
               </div>
-              <div>
-                <span>最佳方向</span>
-                <strong>{{ bestMarket?.selection ?? '-' }}</strong>
+              <div class="condition-chips">
+                <span v-for="factor in selectedFactorBrief" :key="factor.id" class="condition-chip">
+                  <strong>{{ factor.label }}</strong>
+                  <em>{{ factor.range }} / {{ factor.logic }}</em>
+                </span>
+                <span v-if="hiddenSelectedFactorCount" class="condition-chip muted-chip">
+                  +{{ hiddenSelectedFactorCount }}
+                </span>
               </div>
-              <div>
-                <span>年化估算</span>
-                <strong class="num">{{ returnText(bestMarket?.yearReturn) }}</strong>
-              </div>
-            </div>
+            </section>
 
             <div class="report-grid">
               <section class="report-table">
@@ -887,7 +1246,11 @@ const refreshFlash = async () => {
                   <span>概率</span>
                   <span>年化</span>
                 </div>
-                <div v-for="row in analysisMarketRows" :key="`${row.market}-${row.selection}`" class="market-row">
+                <div
+                  v-for="row in rankedMarketRows"
+                  :key="`${row.market}-${row.selection}`"
+                  :class="['market-row', { leader: row === bestMarket }, returnTone(row.yearReturn)]"
+                >
                   <span>{{ row.market }}</span>
                   <strong>{{ row.selection }}</strong>
                   <span class="num">{{ numberText(row.count) }}</span>
@@ -1022,65 +1385,120 @@ const refreshFlash = async () => {
       </section>
 
       <aside class="flash-sidebar">
-        <section class="side-panel">
+        <section :class="['side-panel', 'parameter-side-panel', { collapsed: parametersCollapsed && hasAnalysisReport }]">
           <div class="panel-title">
             <div>
               <span class="eyebrow">Parameters</span>
               <h3>多因子参数</h3>
             </div>
-            <span :class="['status-chip', selectedFactors.length >= selectedLimit ? 'warn' : 'good']">
-              {{ selectedFactors.length }} / {{ selectedLimit }}
-            </span>
+            <div class="panel-actions">
+              <span :class="['status-chip', selectedFactors.length >= selectedLimit ? 'warn' : 'good']">
+                {{ selectedFactors.length }} / {{ selectedLimit }}
+              </span>
+              <button
+                v-if="hasAnalysisReport"
+                type="button"
+                class="icon-button compact focus-ring"
+                :title="parametersCollapsed ? '展开参数' : '收起参数'"
+                @click="parametersCollapsed = !parametersCollapsed"
+              >
+                <ChevronDown v-if="parametersCollapsed" :size="15" />
+                <ChevronUp v-else :size="15" />
+              </button>
+            </div>
           </div>
 
-          <div class="selected-stack">
-            <div v-for="factor in selectedFactors" :key="factor.factorId" class="selected-factor">
-              <div class="selected-head">
+          <div v-if="parametersCollapsed && hasAnalysisReport" class="selected-compact">
+            <span v-for="factor in selectedFactorBrief.slice(0, 4)" :key="factor.id">
+              {{ factor.label }}
+            </span>
+            <strong v-if="hiddenSelectedFactorCount">+{{ hiddenSelectedFactorCount }}</strong>
+          </div>
+
+          <div v-else-if="selectedFactorGroups.length" class="selected-group-stack">
+            <article v-for="group in selectedFactorGroups" :key="group.id" class="selected-param-group">
+              <div class="selected-param-group-head">
                 <div>
-                  <strong>{{ factor.name }}</strong>
-                  <span>当前 {{ factor.displayValue || numberText(factor.value) }}</span>
+                  <strong>{{ group.title }}</strong>
+                  <span>{{ group.subtitle }}</span>
                 </div>
-                <button type="button" class="icon-button compact focus-ring" title="移除因子" @click="removeSelectedFactor(factor.factorId)">
-                  <MinusCircle :size="15" />
+                <em>{{ group.factors.length }}</em>
+              </div>
+
+              <div class="selected-param-grid">
+                <button
+                  v-for="factor in group.factors"
+                  :key="factor.factorId"
+                  type="button"
+                  :class="['selected-param-chip', { expanded: expandedSelectedFactorId === factor.factorId }]"
+                  :title="factor.name"
+                  @click="toggleSelectedEditor(factor.factorId)"
+                >
+                  <span class="selected-param-axis">{{ selectedFactorAxisLabel(factor, group) }}</span>
+                  <span class="selected-param-main">
+                    <strong>{{ selectedFactorValueText(factor) }}</strong>
+                    <em>{{ selectedFactorRangeText(factor) }}</em>
+                  </span>
+                  <span class="selected-param-logic">{{ selectedFactorLogicText(factor) }}</span>
+                  <ChevronUp v-if="expandedSelectedFactorId === factor.factorId" class="selected-param-caret" :size="14" />
+                  <ChevronDown v-else class="selected-param-caret" :size="14" />
                 </button>
               </div>
-              <div class="range-editor">
-                <label>
-                  <span>最小</span>
-                  <input
-                    :value="factor.min"
-                    type="number"
-                    :min="factor.minLimit"
-                    :max="factor.maxLimit"
-                    step="0.01"
-                    @input="updateRange(factor.factorId, 'min', $event)"
-                  >
-                </label>
-                <label>
-                  <span>最大</span>
-                  <input
-                    :value="factor.max"
-                    type="number"
-                    :min="factor.minLimit"
-                    :max="factor.maxLimit"
-                    step="0.01"
-                    @input="updateRange(factor.factorId, 'max', $event)"
-                  >
-                </label>
-                <label>
-                  <span>逻辑</span>
-                  <select :value="factor.logic" @change="updateLogic(factor.factorId, $event)">
-                    <option v-for="option in logicOptionsForFactor(factor.factorId)" :key="option.id" :value="option.id">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                </label>
-              </div>
-              <div class="factor-foot">
-                <span>当前 {{ factor.displayValue || numberText(factor.value) }}</span>
-                <span>{{ factor.rangeStrategy }}</span>
-              </div>
-            </div>
+
+              <template v-for="factor in group.factors" :key="`editor-${factor.factorId}`">
+                <div v-if="expandedSelectedFactorId === factor.factorId" class="selected-factor selected-factor-editor">
+                  <div class="selected-head">
+                    <div>
+                      <strong>{{ factor.name }}</strong>
+                      <span>当前 {{ selectedFactorValueText(factor) }}</span>
+                    </div>
+                    <button type="button" class="icon-button compact focus-ring" title="移除因子" @click="removeSelectedFactor(factor.factorId)">
+                      <MinusCircle :size="15" />
+                    </button>
+                  </div>
+                  <div class="range-editor">
+                    <label>
+                      <span>最小</span>
+                      <input
+                        :value="factor.min"
+                        type="number"
+                        :min="factor.minLimit"
+                        :max="factor.maxLimit"
+                        step="0.01"
+                        @input="updateRange(factor.factorId, 'min', $event)"
+                      >
+                    </label>
+                    <label>
+                      <span>最大</span>
+                      <input
+                        :value="factor.max"
+                        type="number"
+                        :min="factor.minLimit"
+                        :max="factor.maxLimit"
+                        step="0.01"
+                        @input="updateRange(factor.factorId, 'max', $event)"
+                      >
+                    </label>
+                    <label>
+                      <span>逻辑</span>
+                      <select :value="factor.logic" @change="updateLogic(factor.factorId, $event)">
+                        <option v-for="option in logicOptionsForFactor(factor.factorId)" :key="option.id" :value="option.id">
+                          {{ option.label }}
+                        </option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="factor-foot">
+                    <span>{{ selectedFactorRangeText(factor) }}</span>
+                    <span>{{ factor.rangeStrategy }}</span>
+                  </div>
+                </div>
+              </template>
+            </article>
+          </div>
+
+          <div v-else class="empty-match">
+            请选择因子。
           </div>
         </section>
 
@@ -1245,6 +1663,10 @@ const refreshFlash = async () => {
 .report-head,
 .report-controls,
 .report-table-title,
+.parameter-collapsed-head,
+.matrix-actions,
+.panel-actions,
+.condition-strip-title,
 .goal-bar,
 .range-cell,
 .selected-head,
@@ -1336,8 +1758,13 @@ h1 {
   padding: 12px;
 }
 
+.flash-layout.report-focus {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
 .flash-stage,
 .flash-sidebar,
+.selected-group-stack,
 .selected-stack,
 .runtime-list {
   display: grid;
@@ -1465,6 +1892,80 @@ h1 {
   overflow: hidden;
 }
 
+.parameter-region {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.parameter-collapsed {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
+  box-shadow: var(--shadow);
+}
+
+.parameter-collapsed-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.parameter-collapsed-head h3 {
+  overflow: hidden;
+  max-width: 68vw;
+  font-size: 0.92rem;
+  font-weight: 840;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.condition-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.condition-chip {
+  display: inline-grid;
+  gap: 1px;
+  max-width: 220px;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 1px solid #d7e6e4;
+  border-radius: 7px;
+  background: #f7fbfa;
+}
+
+.condition-chip strong,
+.condition-chip em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.condition-chip strong {
+  color: var(--ink);
+  font-size: 0.74rem;
+}
+
+.condition-chip em {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-style: normal;
+}
+
+.muted-chip {
+  place-items: center;
+  min-width: 42px;
+  color: var(--muted);
+  font-weight: 820;
+}
+
 .section-tabs {
   display: grid;
   align-content: start;
@@ -1534,6 +2035,331 @@ h1 {
 .matrix-title h3 {
   font-size: 0.98rem;
   font-weight: 840;
+}
+
+.matrix-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.factor-board-shell {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.factor-board {
+  display: grid;
+  min-width: 0;
+}
+
+.factor-board-title,
+.factor-row-label,
+.factor-cell {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.factor-board-title {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 8px 10px;
+  background: #8ccfd0;
+  color: #ffffff;
+  text-align: center;
+}
+
+.factor-board-title strong,
+.factor-board-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factor-board-title strong {
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.factor-board-title span {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.64rem;
+  font-weight: 760;
+}
+
+.corner-cell {
+  background: #68b8ba;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.factor-row-label {
+  display: grid;
+  place-items: center;
+  min-height: 78px;
+  background: #f7fbfb;
+  color: #557378;
+  font-size: 0.82rem;
+  font-weight: 860;
+}
+
+.factor-cell {
+  display: grid;
+  grid-template-areas:
+    "value mark"
+    "name mark"
+    "range mark";
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 3px 6px;
+  align-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 78px;
+  padding: 9px 8px;
+  border-top: 0;
+  border-left: 0;
+  background: #ffffff;
+  color: var(--ink);
+  text-align: left;
+}
+
+.factor-cell:hover {
+  background: #f6fbfa;
+}
+
+.factor-cell.selected {
+  background: #e7f6f5;
+  box-shadow: inset 0 3px 0 #58aaa5;
+}
+
+.factor-cell.disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.factor-cell.locked {
+  background: #fbf7f1;
+}
+
+.factor-cell.empty-cell {
+  display: grid;
+  place-items: center;
+  color: var(--subtle);
+  background: #fbfcfd;
+  font-weight: 760;
+}
+
+.factor-cell-name {
+  grid-area: name;
+  display: grid;
+  min-width: 0;
+}
+
+.factor-cell-name strong,
+.factor-cell-name em,
+.factor-cell-value,
+.factor-cell-range {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factor-cell-name strong {
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.factor-cell-name em {
+  color: var(--subtle);
+  font-size: 0.62rem;
+  font-style: normal;
+}
+
+.factor-cell-value {
+  grid-area: value;
+  font-size: 0.96rem;
+  font-weight: 850;
+}
+
+.factor-cell-range {
+  grid-area: range;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 760;
+}
+
+.factor-cell .select-mark {
+  grid-area: mark;
+  align-self: center;
+}
+
+.factor-mobile-groups {
+  display: none;
+}
+
+.factor-mobile-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.factor-mobile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: #8ccfd0;
+  color: #ffffff;
+}
+
+.factor-mobile-head div {
+  display: grid;
+  min-width: 0;
+}
+
+.factor-mobile-head strong,
+.factor-mobile-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factor-mobile-head strong {
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.factor-mobile-head span {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.62rem;
+  font-weight: 760;
+}
+
+.factor-mobile-head em {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.factor-mobile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
+  gap: 0;
+}
+
+.mobile-factor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  grid-template-areas:
+    "axis mark"
+    "body mark";
+  gap: 3px 4px;
+  align-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 68px;
+  padding: 7px 7px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  text-align: left;
+}
+
+.mobile-factor-row:last-child {
+  border-bottom: 0;
+}
+
+.mobile-factor-row.selected {
+  background: #e7f6f5;
+  box-shadow: inset 0 3px 0 #58aaa5;
+}
+
+.mobile-factor-row.disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.mobile-factor-row.locked {
+  background: #fbf7f1;
+}
+
+.mobile-factor-axis {
+  grid-area: axis;
+  width: fit-content;
+  min-width: 22px;
+  min-height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f1f7f7;
+  color: #557378;
+  font-size: 0.68rem;
+  font-weight: 860;
+  line-height: 20px;
+}
+
+.mobile-factor-body {
+  grid-area: body;
+  display: grid;
+  min-width: 0;
+}
+
+.mobile-factor-body strong,
+.mobile-factor-body em,
+.mobile-factor-body small,
+.mobile-factor-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-factor-body strong {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.mobile-factor-body em {
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.mobile-factor-body small,
+.mobile-factor-hint {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 760;
+}
+
+.mobile-factor-hint {
+  text-align: right;
+}
+
+.mobile-factor-row .select-mark {
+  grid-area: mark;
+  align-self: center;
+  justify-self: end;
 }
 
 .factor-grid {
@@ -1624,6 +2450,12 @@ h1 {
   display: grid;
   gap: 10px;
   padding: 10px;
+  scroll-margin-top: 150px;
+}
+
+.report-shell.focused {
+  border-color: #9fd8d3;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.11);
 }
 
 .report-head {
@@ -1651,6 +2483,144 @@ h1 {
 .inline-state {
   min-height: 40px;
   box-shadow: none;
+}
+
+.report-overview {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.8fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.primary-signal {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid #bedbd8;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(234, 248, 246, 0.96) 100%);
+}
+
+.primary-signal div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.primary-signal strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1.42rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary-signal em {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.primary-signal p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.report-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.report-kpi-grid div {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.report-kpi-grid span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-kpi-grid strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-condition-strip {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.condition-strip-title {
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.condition-strip-title strong {
+  color: var(--ink);
+}
+
+.good {
+  color: #0b6f67;
+}
+
+.warn {
+  color: #9a5d00;
+}
+
+.danger {
+  color: var(--rose);
+}
+
+.primary-signal .good,
+.market-row.good span:last-child {
+  background: var(--teal-soft);
+  color: #0b6f67;
+}
+
+.primary-signal .warn,
+.market-row.warn span:last-child {
+  background: var(--amber-soft);
+  color: #9a5d00;
+}
+
+.primary-signal .danger,
+.market-row.danger span:last-child {
+  background: var(--rose-soft);
+  color: var(--rose);
 }
 
 .report-summary {
@@ -1730,6 +2700,24 @@ h1 {
 
 .market-row:last-child {
   border-bottom: 0;
+}
+
+.market-row.leader {
+  background: #f2fbfa;
+}
+
+.market-row.leader strong {
+  color: #0b6f67;
+}
+
+.market-row.good span:last-child,
+.market-row.warn span:last-child,
+.market-row.danger span:last-child {
+  justify-self: start;
+  min-width: 52px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 840;
 }
 
 .market-row span,
@@ -1907,6 +2895,193 @@ h1 {
   align-items: start;
 }
 
+.panel-actions {
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.parameter-side-panel.collapsed {
+  gap: 8px;
+}
+
+.selected-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.selected-compact span,
+.selected-compact strong {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+
+.selected-compact span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-group-stack {
+  gap: 8px;
+}
+
+.selected-param-group {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.selected-param-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f6faf9;
+}
+
+.selected-param-group-head div {
+  min-width: 0;
+}
+
+.selected-param-group-head strong,
+.selected-param-group-head span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-param-group-head strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.selected-param-group-head span {
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 740;
+}
+
+.selected-param-group-head em {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #dff4f1;
+  color: var(--teal);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 860;
+}
+
+.selected-param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  background: var(--line);
+  gap: 1px;
+}
+
+.selected-param-chip {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto 14px;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  min-height: 58px;
+  padding: 7px;
+  border: 0;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.selected-param-chip:hover,
+.selected-param-chip.expanded {
+  background: #eaf8f6;
+}
+
+.selected-param-chip.expanded {
+  box-shadow: inset 0 3px 0 #22a39b;
+}
+
+.selected-param-axis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: #eef7f6;
+  color: #476b6c;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.selected-param-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.selected-param-main strong,
+.selected-param-main em,
+.selected-param-logic {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-param-main strong {
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.selected-param-main em {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.selected-param-logic {
+  max-width: 56px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 780;
+}
+
+.selected-param-caret {
+  color: var(--muted);
+}
+
 .selected-factor {
   display: grid;
   gap: 8px;
@@ -1914,6 +3089,13 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.selected-factor-editor {
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: #fbfefd;
+  box-shadow: none;
 }
 
 .selected-head {
@@ -2171,9 +3353,24 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .flash-layout.report-focus {
+    grid-template-columns: 1fr;
+  }
+
   .flash-sidebar {
     position: static;
     max-height: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .factor-board-shell {
+    display: none;
+  }
+
+  .factor-mobile-groups {
+    display: grid;
+    gap: 8px;
   }
 }
 
@@ -2214,6 +3411,7 @@ h1 {
 
   .event-strip,
   .matrix-shell,
+  .report-overview,
   .report-grid {
     grid-template-columns: 1fr;
   }
@@ -2223,8 +3421,24 @@ h1 {
   }
 
   .event-metrics,
-  .report-summary {
+  .report-summary,
+  .report-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .parameter-collapsed-head,
+  .report-head {
+    display: grid;
+    align-items: start;
+  }
+
+  .parameter-collapsed-head h3 {
+    max-width: none;
+    white-space: normal;
+  }
+
+  .condition-chip {
+    max-width: 100%;
   }
 
   .section-tabs {
@@ -2279,6 +3493,22 @@ h1 {
 
   .factor-grid {
     min-width: 0;
+  }
+
+  .factor-mobile-groups {
+    gap: 7px;
+  }
+
+  .factor-mobile-grid {
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  }
+
+  .mobile-factor-row {
+    grid-template-columns: minmax(0, 1fr) 22px;
+    grid-template-areas:
+      "axis mark"
+      "body mark";
+    min-height: 64px;
   }
 
   .factor-row {
@@ -2426,6 +3656,38 @@ h1 {
     display: none;
   }
 
+  .selected-param-grid {
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  }
+
+  .selected-param-chip {
+    grid-template-columns: 24px minmax(0, 1fr) 14px;
+    grid-template-areas:
+      "axis main caret"
+      "axis logic caret";
+    min-height: 62px;
+  }
+
+  .selected-param-axis {
+    grid-area: axis;
+    width: 24px;
+    height: 24px;
+  }
+
+  .selected-param-main {
+    grid-area: main;
+  }
+
+  .selected-param-logic {
+    grid-area: logic;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .selected-param-caret {
+    grid-area: caret;
+  }
+
   .range-editor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2485,6 +3747,18 @@ h1 {
 @media (max-width: 430px) {
   .section-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .selected-param-grid {
+    grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+  }
+
+  .selected-param-main strong {
+    font-size: 0.84rem;
+  }
+
+  .selected-param-logic {
+    max-width: 76px;
   }
 }
 </style>

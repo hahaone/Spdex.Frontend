@@ -12,17 +12,17 @@ defineProps<{
     <div class="metric-tile">
       <div class="metric-icon teal"><TrendingUp :size="17" /></div>
       <span>年化收益</span>
-      <strong class="num">{{ Math.round(model.yearReturn * 100) }}%</strong>
+      <strong :class="['num', { muted: !model.hasStatistics }]">{{ model.hasStatistics ? `${Math.round(model.yearReturn * 100)}%` : '待回测' }}</strong>
     </div>
     <div class="metric-tile">
       <div class="metric-icon blue"><Target :size="17" /></div>
       <span>分布</span>
-      <strong class="num">{{ Math.round(model.distribution * 100) }}%</strong>
+      <strong :class="['num', { muted: !model.hasStatistics }]">{{ model.hasStatistics ? `${Math.round(model.distribution * 100)}%` : '-' }}</strong>
     </div>
     <div class="metric-tile">
       <div class="metric-icon amber"><Gauge :size="17" /></div>
       <span>命中样本</span>
-      <strong class="num">{{ model.hit }}</strong>
+      <strong :class="['num', { muted: !model.hasStatistics }]">{{ model.hasStatistics ? model.hit : '-' }}</strong>
     </div>
     <div class="metric-tile">
       <div class="metric-icon rose"><CalendarClock :size="17" /></div>
@@ -97,6 +97,11 @@ defineProps<{
   font-size: 1.04rem;
   font-weight: 850;
   line-height: 1.1;
+}
+
+.metric-tile strong.muted {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 @media (max-width: 580px) {

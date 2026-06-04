@@ -121,6 +121,21 @@
   - 390px 移动端视口无横向溢出，底部分析条可触发回测。
   - 页面可见文本无“字段”、`Bf...` 字段名和 `fxx` 内部因子编号。
 
+### Quantilearn 模型广场订阅闭环 MVP
+
+- `useQuantilearnApi` 新增订阅接口封装：
+  - `getMySubscriptions`
+  - `subscribeModel`
+  - `renewSubscription`
+  - `cancelSubscription`
+- 模型广场接入真实订阅动作：
+  - 未订阅模型展示“订阅”。
+  - 已订阅模型展示到期日，并提供“续订”和“取消”。
+  - 自己的模型展示“我的模型”，禁止订阅。
+- 广场列表读取后端 `subscriptionExpiresAtUtc` 并格式化为用户可读日期。
+- 操作完成后自动刷新模型广场，失败时展示用户友好的接口错误。
+- 已通过 `npm run typecheck`、新版 Node 环境下的 `npm run lint`、`npm run build` 验证。
+
 ## 2026-02-09
 
 ### 项目初始化

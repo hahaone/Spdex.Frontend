@@ -187,6 +187,7 @@ export interface QuantilearnApiHallModelSummary {
   subscribers: number
   price: number
   subscriptionState: 'none' | 'active' | 'mine' | string
+  subscriptionExpiresAtUtc?: string
   isOwner: boolean
   isLocked: boolean
   meetsRules: boolean
@@ -223,6 +224,37 @@ export interface QuantilearnApiPermissionProfile {
   flashQ: QuantilearnApiFlashAccessStatus
   disabledFactors: string[]
   warnings: string[]
+}
+
+export interface QuantilearnSubscriptionRequest {
+  modelId: string
+  months?: number
+}
+
+export interface QuantilearnSubscriptionPeriodRequest {
+  months?: number
+}
+
+export interface QuantilearnApiSubscriptionSummary {
+  subscriptionId: string
+  orderId: string
+  modelId: string
+  modelName: string
+  modelOwnerUserId: number
+  userId: number
+  userName: string
+  state: 'active' | 'canceled' | 'expired' | string
+  price: number
+  months: number
+  amount: number
+  paymentProvider: string
+  paymentState: string
+  startedAtUtc: string
+  expiresAtUtc: string
+  createdAtUtc: string
+  updatedAtUtc: string
+  canceledAtUtc?: string
+  isActive: boolean
 }
 
 export interface QuantilearnApiFlashFactorCell {
@@ -495,6 +527,18 @@ const formatShortDate = (value?: string) => {
   }).format(date)
 }
 
+const formatDateOnly = (value?: string) => {
+  if (!value) return undefined
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
 const hallTypeByMarket = (market: string): HallType => {
   if (market === '胜平负') return 'sfp'
   if (market === '让球') return 'asian'
@@ -529,7 +573,7 @@ export const toSelectedFactors = (
 
     return {
       id: factor.factorId,
-      name: definition?.name ?? factor.factorId,
+      name: definition?.name ?? '未命名因子',
       min: factor.min,
       max: factor.max,
       logic: '区间过滤',
@@ -652,6 +696,7 @@ export const toQuantModel = (
 ): QuantModel => {
   const rows = statisticToMarketRows(statistic)
   const best = bestMarketRow(rows)
+  const hasStatistics = Boolean(statistic?.canAnalyze && statistic.computed.hit > 0 && best)
   const state = toModelState(detail.model.isPublished)
 
   return {
@@ -672,11 +717,12 @@ export const toQuantModel = (
     logicCount: detail.model.logics.length,
     hitEvents: 0,
     subscriptions: 0,
-    bestSelection: best?.selection ?? (statistic ? '-' : '待分析'),
-    yearReturn: best?.yearReturn ?? 0,
-    distribution: best?.distribution ?? 0,
-    hit: statistic?.computed.hit ?? 0,
-    avgOdds: best?.average ?? 0,
+    bestSelection: hasStatistics ? best!.selection : '待回测',
+    hasStatistics,
+    yearReturn: hasStatistics ? best!.yearReturn : 0,
+    distribution: hasStatistics ? best!.distribution : 0,
+    hit: hasStatistics ? statistic!.computed.hit : 0,
+    avgOdds: hasStatistics ? best!.average : 0,
     price: 0,
     sample365: statistic?.finalMatchedCount ?? 0,
     note: detail.isLocked
@@ -692,8 +738,10 @@ export const toQuantModel = (
 export const toHitEvent = (event: QuantilearnApiHitEventSummary): HitEvent => ({
   id: `${event.modelId}-${event.eventId}`,
   model: event.modelId,
+  modelName: event.modelName,
+  eventId: event.eventId,
   league: event.league || '未知赛事',
-  teams: event.home && event.away ? `${event.home} vs ${event.away}` : event.eventId,
+  teams: event.home && event.away ? `${event.home} vs ${event.away}` : '赛事资料待同步',
   time: formatShortDate(event.eventTime),
   score: event.score || (event.hasResult ? '-' : '未赛'),
   state: eventState(event.status),
@@ -718,6 +766,7 @@ export const toHallModel = (model: QuantilearnApiHallModelSummary): HallModel =>
     : model.subscriptionState === 'active'
       ? 'active'
       : 'none',
+  expires: formatDateOnly(model.subscriptionExpiresAtUtc),
   meetsRules: model.meetsRules,
   ruleWarnings: model.ruleWarnings,
 })
@@ -726,7 +775,7 @@ export const toPermissionProfile = (profile: QuantilearnApiPermissionProfile): P
   isAuthenticated: profile.isAuthenticated,
   userId: profile.userId,
   roleId: profile.roleId,
-  role: profile.role || 'Quantilearn',
+  role: profile.role || '量化模型',
   source: profile.source,
   isDevelopmentFallback: profile.isDevelopmentFallback,
   establish: profile.establish,
@@ -782,7 +831,7 @@ export const useQuantilearnApi = () => {
       if (response.code === 401 && config.public.requireAuth) {
         redirectToLogin()
       }
-      throw new Error(response.message || `Quantilearn API returned code ${response.code}`)
+      throw new Error(response.message || `量化模型接口返回错误码 ${response.code}`)
     }
 
     return response.data
@@ -838,6 +887,23 @@ export const useQuantilearnApi = () => {
       page: query.page ?? 1,
       pageSize: query.pageSize ?? 30,
       strict: query.strict ?? false,
+    }),
+    getMySubscriptions: (includeInactive = false) => request<QuantilearnApiSubscriptionSummary[]>('/api/quantilearn/subscriptions/me', { includeInactive }),
+    subscribeModel: (body: QuantilearnSubscriptionRequest) => request<QuantilearnApiSubscriptionSummary>('/api/quantilearn/subscriptions', undefined, {
+      method: 'POST',
+      body: {
+        modelId: body.modelId,
+        months: body.months ?? 1,
+      },
+    }),
+    renewSubscription: (modelId: string, body: QuantilearnSubscriptionPeriodRequest = {}) => request<QuantilearnApiSubscriptionSummary>(`/api/quantilearn/subscriptions/${encodeURIComponent(modelId)}/renew`, undefined, {
+      method: 'POST',
+      body: {
+        months: body.months ?? 1,
+      },
+    }),
+    cancelSubscription: (modelId: string) => request<QuantilearnApiSubscriptionSummary>(`/api/quantilearn/subscriptions/${encodeURIComponent(modelId)}/cancel`, undefined, {
+      method: 'POST',
     }),
   }
 }

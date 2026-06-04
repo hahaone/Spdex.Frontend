@@ -59,6 +59,7 @@ export interface QuantModel {
   hitEvents: number
   subscriptions: number
   bestSelection: string
+  hasStatistics: boolean
   yearReturn: number
   distribution: number
   hit: number
@@ -123,6 +124,8 @@ export interface TimelinePoint {
 export interface HitEvent {
   id: string
   model: ModelId
+  modelName?: string
+  eventId?: string
   league: string
   teams: string
   time: string
@@ -200,6 +203,7 @@ export const models: QuantModel[] = [
     hitEvents: 5,
     subscriptions: 14,
     bestSelection: '主',
+    hasStatistics: true,
     yearReturn: 1.74,
     distribution: 0.68,
     hit: 426,
@@ -226,6 +230,7 @@ export const models: QuantModel[] = [
     hitEvents: 3,
     subscriptions: 0,
     bestSelection: '让球客',
+    hasStatistics: true,
     yearReturn: 0.92,
     distribution: 0.63,
     hit: 162,
@@ -252,6 +257,7 @@ export const models: QuantModel[] = [
     hitEvents: 2,
     subscriptions: 0,
     bestSelection: '2球或以下',
+    hasStatistics: true,
     yearReturn: 0.48,
     distribution: 0.57,
     hit: 88,
@@ -279,6 +285,7 @@ export const models: QuantModel[] = [
     hitEvents: 4,
     subscriptions: 31,
     bestSelection: '客',
+    hasStatistics: true,
     yearReturn: 2.13,
     distribution: 0.71,
     hit: 238,
@@ -291,15 +298,15 @@ export const models: QuantModel[] = [
 ]
 
 export const factorGroups: FactorGroup[] = [
-  { id: 'bf-index', label: '必发指数', summary: 'f01-f03' },
-  { id: 'bf-volume', label: '必发成交', summary: 'f04-f06' },
-  { id: 'ratio', label: '标准盘比例', summary: 'f07-f09' },
-  { id: 'profit', label: '盈亏/冷热', summary: 'f10-f18' },
-  { id: 'odds', label: '价位', summary: 'f13-f15' },
-  { id: 'euro', label: '欧洲平均', summary: 'f22-f24' },
-  { id: 'kelly', label: '凯利方差', summary: 'f25-f27' },
-  { id: 'goals', label: '进球盘', summary: 'f28-f40' },
-  { id: 'inside', label: '内外盘', summary: 'f41-f60' },
+  { id: 'bf-index', label: '必发指数', summary: '标准盘指数' },
+  { id: 'bf-volume', label: '必发成交', summary: '成交量级' },
+  { id: 'ratio', label: '标准盘比例', summary: '主平客占比' },
+  { id: 'profit', label: '盈亏/冷热', summary: '盈亏与热度' },
+  { id: 'odds', label: '价位', summary: '赔率价位' },
+  { id: 'euro', label: '欧洲平均', summary: '欧赔均值' },
+  { id: 'kelly', label: '凯利方差', summary: '凯利偏差' },
+  { id: 'goals', label: '进球盘', summary: '大小球维度' },
+  { id: 'inside', label: '内外盘', summary: '内外盘拆分' },
 ]
 
 export const factorDefinitions: FactorDefinition[] = [

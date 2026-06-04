@@ -40,7 +40,7 @@ const onSearchInput = (event: Event) => {
 
       <label class="search-box">
         <Search :size="15" />
-        <input :value="searchText" type="search" placeholder="搜索名称、ObjectId、方向" @input="onSearchInput">
+        <input :value="searchText" type="search" placeholder="搜索名称、方向、状态" @input="onSearchInput">
       </label>
 
       <div class="segment-row">
@@ -77,7 +77,6 @@ const onSearchInput = (event: Event) => {
           <ChevronRight :size="14" />
         </div>
         <div class="row-meta">
-          <span class="mono">{{ model.objectId }}</span>
           <span :class="['status-chip', stateTone(model.state)]">{{ stateLabel(model.state) }}</span>
           <span v-if="model.isLocked" class="status-chip danger">
             <Lock :size="12" />锁定
@@ -85,9 +84,9 @@ const onSearchInput = (event: Event) => {
           <span v-if="model.isSimilarity" class="status-chip warn">相似</span>
         </div>
         <div class="row-score">
-          <span>最佳 {{ model.bestSelection }}</span>
-          <span>命中 {{ model.hit }}</span>
-          <strong class="num">{{ Math.round(model.yearReturn * 100) }}%</strong>
+          <span>{{ model.hasStatistics ? '年化' : '统计' }}</span>
+          <strong v-if="model.hasStatistics" class="num">{{ Math.round(model.yearReturn * 100) }}%</strong>
+          <strong v-else class="pending-text">待回测</strong>
         </div>
       </button>
     </section>
@@ -244,20 +243,12 @@ const onSearchInput = (event: Event) => {
 }
 
 .row-meta {
-  grid-column: 1 / 3;
+  grid-column: 1 / 2;
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
   overflow: hidden;
-}
-
-.row-meta .mono {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.69rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .row-score {
@@ -272,12 +263,20 @@ const onSearchInput = (event: Event) => {
 }
 
 .row-score span {
-  display: none;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
 }
 
 .row-score strong {
   color: var(--teal);
   font-size: 0.9rem;
+}
+
+.row-score .pending-text {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 820;
 }
 
 @media (max-width: 1180px) {

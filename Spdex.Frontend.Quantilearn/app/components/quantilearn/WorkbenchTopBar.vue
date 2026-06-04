@@ -36,12 +36,12 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
     <div class="brand-area">
       <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
       <div class="brand-copy">
-        <h1>Quantilearn</h1>
+        <h1>量化模型</h1>
         <p>{{ selectedWorkspaceLabel }} / {{ selectedModelName }}</p>
       </div>
     </div>
 
-    <nav class="workspace-tabs" aria-label="Quantilearn workspace">
+    <nav class="workspace-tabs" aria-label="量化模型工作台">
       <button
         v-for="item in workspaces"
         :key="item.id"
