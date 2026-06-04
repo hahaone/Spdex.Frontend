@@ -78,65 +78,28 @@ const edgeClass = computed(() => {
   return e > 3 ? 'pos' : e < -3 ? 'neg' : ''
 })
 
+// 公司名脱敏：Bet→B*t / bet→b*t（合规）
+function maskBook(name: string): string {
+  return (name || '').replace(/bet/gi, m => (m[0] === 'B' ? 'B*t' : 'b*t'))
+}
+
 // 价格比较：从富欧赔 1x2 盘口的即时赔率取（主/平/客 = cur[0..2]）
 const priceCompare = computed(() => {
   const line = euroOdds.value?.markets?.find(x => x.key === '1x2')?.lines?.[0]
   if (!line) return []
   return line.rows.map(r => ({
-    book: r.name,
+    book: maskBook(r.name),
     home: (r.cur[0] ?? 0).toFixed(2),
     draw: (r.cur[1] ?? 0).toFixed(2),
     away: (r.cur[2] ?? 0).toFixed(2),
   }))
 })
 
-// 滚球赔率走势：把每个市场的 series 主线(A=主/大)转成 sparkline path + Δ
-const SPARK_W = 140
-const SPARK_H = 28
-function sparkLabel(market: string): string {
-  return market === '大小' ? '大球' : '主胜'
-}
-interface Spark { path: string, last: number, delta: number, dir: 'up' | 'down' | 'flat' }
-const sparkMap = computed<Record<string, Spark>>(() => {
-  const out: Record<string, Spark> = {}
-  for (const m of snapshot.value?.liveOdds?.markets ?? []) {
-    const vals = (m.series ?? [])
-      .map(t => t.a)
-      .filter((v): v is number => typeof v === 'number' && v > 0)
-    if (vals.length < 3) continue
-    const pad = 3
-    const min = Math.min(...vals)
-    const max = Math.max(...vals)
-    const span = max - min || 1
-    const step = (SPARK_W - pad * 2) / (vals.length - 1)
-    const path = vals.map((v, i) => {
-      const x = pad + i * step
-      const y = pad + (SPARK_H - pad * 2) * (1 - (v - min) / span)
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-    }).join(' ')
-    const first = vals[0]!
-    const last = vals[vals.length - 1]!
-    const delta = Math.round((last - first) * 100) / 100
-    out[m.market] = {
-      path,
-      last,
-      delta,
-      dir: delta > 0.01 ? 'up' : delta < -0.01 ? 'down' : 'flat',
-    }
-  }
-  return out
-})
+// (现场价位走势 sparkline 已移除：滚球盘口随时变动，走势无可比性)
 
 // ── 赛中分析（BSW 网关：xG 模型 / 盘口资金流向 / 双红信号走势）──
 const analysis = computed(() => snapshot.value?.analysis ?? null)
 
-const perfMap: Record<string, { text: string, cls: string }> = {
-  over_performing: { text: '超出预期', cls: 'over' },
-  under_performing: { text: '低于预期', cls: 'under' },
-  on_track: { text: '符合预期', cls: 'neutral' },
-}
-function perfText(label: string): string { return perfMap[label]?.text ?? label }
-function perfCls(label: string): string { return perfMap[label]?.cls ?? 'neutral' }
 
 function driftText(dir: string): string {
   switch (dir) {
@@ -218,7 +181,7 @@ function injStatus(s: string): { text: string, cls: string } {
     <!-- 赛中统计模型（xG 外推 + 大小球 edge） -->
     <section v-if="model" class="model-card">
       <div class="section-title brand">
-        <span>赛中统计 <span class="model-tag">模型估算</span></span>
+        <span>赛中分析</span>
         <span :class="['lean', leanClass]">{{ model.lean }}</span>
       </div>
       <div class="model-twin">
@@ -240,10 +203,10 @@ function injStatus(s: string): { text: string, cls: string } {
         <span v-if="model.redCards" class="rd">红牌 {{ model.redCards }}（产能衰减）</span>
       </div>
       <div v-if="model.goalLine" class="m-edge">
-        <div class="edge-title">大小 <b class="num">{{ model.goalLine }}</b> · 模型 vs 庄家</div>
+        <div class="edge-title">大小 <b class="num">{{ model.goalLine }}</b> · 模型 vs 主流平台</div>
         <div class="edge-bars">
           <span class="eb">模型大球 <b class="num">{{ model.modelOverPct }}%</b></span>
-          <span class="eb">庄家隐含 <b class="num">{{ model.bookOverPct }}%</b></span>
+          <span class="eb">主流平台隐含 <b class="num">{{ model.bookOverPct }}%</b></span>
           <span class="eb hi">Edge <b :class="['num', edgeClass]">{{ edgeText }}</b></span>
         </div>
       </div>
@@ -252,30 +215,9 @@ function injStatus(s: string): { text: string, cls: string } {
 
     <!-- 赛中分析（BSW 网关：xG 模型 / 盘口资金流向 / 双红信号走势）-->
     <section
-      v-if="analysis && (analysis.inPlay || analysis.oddsMove || signalSpark)"
+      v-if="analysis && (analysis.oddsMove || signalSpark)"
       class="analysis-card"
     >
-      <div class="section-title brand">
-        <span>赛中分析 <span class="model-tag">BSW 网关</span></span>
-      </div>
-
-      <!-- 网关 xG 模型 -->
-      <div v-if="analysis.inPlay" class="an-block">
-        <div class="m-pair">
-          <span class="num hv">{{ analysis.inPlay.homeXg.toFixed(2) }}</span>
-          <b class="m-lbl">网关 xG</b>
-          <span class="num av">{{ analysis.inPlay.awayXg.toFixed(2) }}</span>
-        </div>
-        <div class="an-meta">
-          <span>投影总进球 <b class="num">{{ analysis.inPlay.projectedTotalGoals.toFixed(1) }}</b></span>
-          <span>支配 <b class="num">{{ analysis.inPlay.homeDominance }}%-{{ analysis.inPlay.awayDominance }}%</b></span>
-          <span :class="['perf', perfCls(analysis.inPlay.performanceLabel)]">{{ perfText(analysis.inPlay.performanceLabel) }}</span>
-          <span v-if="analysis.inPlay.goalLineEdgePct != null" class="eb hi">大球 Edge
-            <b :class="['num', analysis.inPlay.goalLineEdgePct > 3 ? 'pos' : analysis.inPlay.goalLineEdgePct < -3 ? 'neg' : '']">{{ signed(analysis.inPlay.goalLineEdgePct) }}%</b>
-          </span>
-        </div>
-      </div>
-
       <!-- 盘口资金流向 -->
       <div v-if="analysis.oddsMove" class="an-block">
         <div class="an-sub">
@@ -376,7 +318,7 @@ function injStatus(s: string): { text: string, cls: string } {
 
     <section class="odds">
       <div class="section-title brand">
-        <span>现场赔率 <span class="live-tag">LIVE</span></span>
+        <span>现场价位 <span class="live-tag">LIVE</span></span>
         <span v-if="liveOddsMeta" class="lo-meta num">{{ liveOddsMeta }}</span>
       </div>
       <div v-if="snapshot?.liveOdds?.markets?.length" class="lodds-grid">
@@ -387,28 +329,14 @@ function injStatus(s: string): { text: string, cls: string } {
               <i>{{ c.label }}</i><b class="num">{{ c.odd }}</b>
             </span>
           </div>
-          <div v-if="sparkMap[m.market]" class="spark">
-            <span class="spark-lbl">{{ sparkLabel(m.market) }}走势</span>
-            <svg
-              class="spark-svg"
-              :viewBox="`0 0 ${SPARK_W} ${SPARK_H}`"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <path :d="sparkMap[m.market]!.path" :class="['spark-line', sparkMap[m.market]!.dir]" fill="none" />
-            </svg>
-            <span :class="['spark-delta', sparkMap[m.market]!.dir]">
-              {{ sparkMap[m.market]!.delta > 0 ? '+' : '' }}{{ sparkMap[m.market]!.delta.toFixed(2) }}
-            </span>
-          </div>
         </div>
       </div>
       <div v-else class="empty-section">本场暂无现场盘口（未开盘或已封盘）</div>
     </section>
 
     <section class="odds">
-      <div class="section-title brand">
-        <span>赛前赔率 <span class="seg-tag">封盘价</span></span>
+      <div class="section-title seg">
+        <span>赛前价位 <span class="seg-tag">封盘价</span></span>
       </div>
       <div v-if="oddsPanel.length" class="odds-grid">
         <div v-for="item in oddsPanel" :key="item.market" class="odds-row">
@@ -422,8 +350,8 @@ function injStatus(s: string): { text: string, cls: string } {
     </section>
 
     <section class="compare">
-      <div class="section-title brand">
-        <span>价格比较 <span class="seg-tag">赛前赔率</span></span>
+      <div class="section-title seg">
+        <span>价格比较 <span class="seg-tag">赛前价位</span></span>
         <span class="book-count num">{{ priceCompare.length }} 家公司</span>
       </div>
       <div class="compare-grid">
@@ -550,11 +478,11 @@ function injStatus(s: string): { text: string, cls: string } {
 }
 
 .score-block .num:first-child {
-  color: var(--brand);
+  color: var(--ink);
 }
 
 .score-block .num:last-child {
-  color: var(--buy);
+  color: var(--ink);
 }
 
 .colon {
@@ -817,48 +745,7 @@ section.compare {
 }
 
 /* 赔率走势 sparkline */
-.spark {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.spark-lbl {
-  flex: 0 0 66px;
-  color: var(--muted);
-  font-size: 0.66rem;
-  font-weight: 720;
-}
-
-.spark-svg {
-  flex: 1 1 auto;
-  height: 26px;
-  min-width: 0;
-}
-
-.spark-line {
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.spark-line.up { stroke: var(--up); }
-.spark-line.down { stroke: var(--down); }
-.spark-line.flat { stroke: var(--soft); }
-
-.spark-delta {
-  flex: 0 0 auto;
-  min-width: 42px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.spark-delta.up { color: var(--up); }
-.spark-delta.down { color: var(--down); }
-.spark-delta.flat { color: var(--muted); }
+/* (现场价位走势 sparkline 样式已移除) */
 
 .lodds-row .lbl .ln {
   margin-left: 3px;
@@ -973,8 +860,8 @@ section.compare {
 }
 
 .m-pair .m-lbl { color: var(--muted); font-size: 0.74rem; font-weight: 780; }
-.m-pair .hv { text-align: right; font-weight: 860; font-size: 0.96rem; color: var(--brand); }
-.m-pair .av { text-align: left; font-weight: 860; font-size: 0.96rem; color: var(--buy); }
+.m-pair .hv { text-align: right; font-weight: 860; font-size: 0.96rem; color: var(--ink); }
+.m-pair .av { text-align: left; font-weight: 860; font-size: 0.96rem; color: var(--ink); }
 
 .m-goals {
   display: flex;

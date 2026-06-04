@@ -247,6 +247,12 @@ img {
   color: var(--signal-fg);
 }
 
+/* 赛前/参考类板块标题：灰色，区别于赛中实时数据 */
+.section-title.seg {
+  background: linear-gradient(180deg, var(--surface) 0%, var(--canvas) 100%);
+  color: var(--muted);
+}
+
 .row-home {
   background: var(--home-bg);
 }

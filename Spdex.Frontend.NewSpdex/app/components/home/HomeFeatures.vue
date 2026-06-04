@@ -4,7 +4,7 @@ import { ArrowRight, Sparkles, TrendingUp } from '@lucide/vue'
 
 const featureCards = [
   { id: 'football', title: '今日足球', subtitle: '今日重点赛事 · 异动 + 双红', to: '/football', icon: TrendingUp, tone: 'ink' },
-  { id: 'live', title: '实时赛事', subtitle: '进行中赛事 · 现场赔率 + 赛况', to: '/live', icon: Sparkles, tone: 'signal' },
+  { id: 'live', title: '实时赛事', subtitle: '进行中赛事 · 现场价位 + 赛况', to: '/live', icon: Sparkles, tone: 'signal' },
 ]
 </script>
 
