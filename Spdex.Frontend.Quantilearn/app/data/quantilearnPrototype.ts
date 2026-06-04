@@ -32,6 +32,10 @@ export interface PermissionProfile {
   usedPublish: number
   extraPublish: number
   extraPublishExpiresAtUtc?: string
+  flashQCanUseGoalBalance?: boolean
+  flashQCanUseInnerOuter?: boolean
+  flashQCanUseLogics?: boolean
+  flashQCanUseInnerOuterLogics?: boolean
   disabledFactors?: string[]
   warnings?: string[]
 }

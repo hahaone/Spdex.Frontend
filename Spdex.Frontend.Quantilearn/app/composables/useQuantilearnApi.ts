@@ -216,6 +216,11 @@ export interface QuantilearnApiPermissionProfile {
   usedPublish: number
   extraPublish: number
   extraPublishExpiresAtUtc?: string
+  flashQCanUseGoalBalance: boolean
+  flashQCanUseInnerOuter: boolean
+  flashQCanUseLogics: boolean
+  flashQCanUseInnerOuterLogics: boolean
+  flashQ: QuantilearnApiFlashAccessStatus
   disabledFactors: string[]
   warnings: string[]
 }
@@ -349,6 +354,35 @@ export interface QuantilearnApiFlashMatchedEvent {
   under25Odds: number
 }
 
+export interface QuantilearnApiFlashAccessStatus {
+  state: string
+  message: string
+  canAnalyze: boolean
+  isFreeRole: boolean
+  isFridayFree: boolean
+  isPaidActive: boolean
+  isDailyFreeAvailable: boolean
+  isBlocked: boolean
+  requiresPurchase: boolean
+  requiresRecharge: boolean
+  isSameModelFree: boolean
+  bagCount: number
+  hours: number
+  factorLimit: number
+  silkBalance?: number
+  lastFreeDateUtc?: string
+  expiredAtUtc?: string
+  nextFreeAtUtc?: string
+  warnings: string[]
+}
+
+export interface QuantilearnApiFlashPurchaseResult {
+  success: boolean
+  message: string
+  upstreamCode?: string
+  status: QuantilearnApiFlashAccessStatus
+}
+
 export interface QuantilearnApiFlashMatchesResult {
   eventId: string
   factorSetName: string
@@ -365,6 +399,33 @@ export interface QuantilearnApiFlashMatchesResult {
   finalMatchedCount: number
   windowMatchedCount: number
   matches: QuantilearnApiFlashMatchedEvent[]
+}
+
+export interface QuantilearnApiBigTrade {
+  sel: string
+  side: string
+  amount: number
+  price: number
+  time: string
+  per: number
+  highlight: number
+}
+
+export interface QuantilearnApiBigTradeGroup {
+  key: string
+  label: string
+  market: string
+  total: number
+  trades: QuantilearnApiBigTrade[]
+}
+
+export interface QuantilearnApiBigTradesResult {
+  eventId: number
+  homeTeam: string
+  awayTeam: string
+  groups: QuantilearnApiBigTradeGroup[]
+  accessLocked: boolean
+  lockMessage?: string
 }
 
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
@@ -675,6 +736,10 @@ export const toPermissionProfile = (profile: QuantilearnApiPermissionProfile): P
   usedPublish: profile.usedPublish,
   extraPublish: profile.extraPublish,
   extraPublishExpiresAtUtc: profile.extraPublishExpiresAtUtc,
+  flashQCanUseGoalBalance: profile.flashQCanUseGoalBalance,
+  flashQCanUseInnerOuter: profile.flashQCanUseInnerOuter,
+  flashQCanUseLogics: profile.flashQCanUseLogics,
+  flashQCanUseInnerOuterLogics: profile.flashQCanUseInnerOuterLogics,
   disabledFactors: profile.disabledFactors,
   warnings: profile.warnings,
 })
@@ -723,6 +788,26 @@ export const useQuantilearnApi = () => {
     return response.data
   }
 
+  const requestNewSpdex = async <T>(
+    path: string,
+    query?: Record<string, string | number | boolean | undefined | null>,
+  ) => {
+    const headers = import.meta.server ? useRequestHeaders(['authorization', 'cookie']) : undefined
+    const response = await $fetch<QuantilearnApiResponse<T>>(path, {
+      query,
+      headers,
+    })
+
+    if (response.code !== 0) {
+      if (response.code === 401 && config.public.requireAuth) {
+        redirectToLogin()
+      }
+      throw new Error(response.message || `NewSpdex 接口返回错误码 ${response.code}`)
+    }
+
+    return response.data
+  }
+
   return {
     apiBase,
     getModels: (limit = 50) => request<QuantilearnApiModelDetail[]>('/api/quantilearn/models', { limit }),
@@ -731,6 +816,8 @@ export const useQuantilearnApi = () => {
     getStatisticSummary: (id: string, days = 365, half = false) => request<QuantilearnApiStatisticSummary>(`/api/quantilearn/analysis/models/${id}/statistics/summary`, { days, half }),
     getPermissions: () => request<QuantilearnApiPermissionProfile>('/api/quantilearn/me/permissions'),
     getCurrentEvents: (hours = 24 * 30, limit = 80) => request<QuantilearnApiHitEventSummary[]>('/api/quantilearn/events/current', { hours, limit }),
+    getFlashAccessStatus: (includeSilkBalance = false) => request<QuantilearnApiFlashAccessStatus>('/api/quantilearn/flash/access', { includeSilkBalance }),
+    purchaseFlashAccess: () => request<QuantilearnApiFlashPurchaseResult>('/api/quantilearn/flash/access/purchase', undefined, { method: 'POST' }),
     getFlashEventSnapshot: (eventId: string, query: QuantilearnFlashSnapshotRequest = {}) => request<QuantilearnApiFlashEventSnapshot>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}`, {
       snapshot: query.snapshot ?? 'current',
       factorSet: query.factorSet ?? 'spdex_v1',
@@ -743,6 +830,7 @@ export const useQuantilearnApi = () => {
       method: 'POST',
       body,
     }),
+    getFlashBigTrades: (eventId: string | number, perGroup = 6) => requestNewSpdex<QuantilearnApiBigTradesResult>(`/api/newspdex/big-trades/${encodeURIComponent(String(eventId))}`, { perGroup }),
     getHallModels: (query: QuantilearnHallRequest = {}) => request<QuantilearnApiHallModelSummary[]>('/api/quantilearn/hall', {
       type: query.type ?? 'all',
       order: query.order ?? 'return',

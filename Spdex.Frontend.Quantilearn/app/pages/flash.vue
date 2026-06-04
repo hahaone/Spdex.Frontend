@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import {
   Activity,
+  AlertTriangle,
   ChevronRight,
   Clock,
   Database,
+  Lock,
   MinusCircle,
   PlayCircle,
   PlusCircle,
   RefreshCw,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   Target,
+  Wallet,
 } from '@lucide/vue'
 import {
   statisticToGoalRows,
@@ -18,9 +22,13 @@ import {
 } from '~/composables/useQuantilearnApi'
 import type {
   QuantilearnApiFlashAnalysisResult,
+  QuantilearnApiBigTradeGroup,
+  QuantilearnApiBigTradesResult,
+  QuantilearnApiFlashAccessStatus,
   QuantilearnApiFlashEventSnapshot,
   QuantilearnApiFlashFactorCell,
   QuantilearnApiFlashMatchesResult,
+  QuantilearnApiPermissionProfile,
   QuantilearnApiStatisticSummary,
   QuantilearnFlashAnalysisLogic,
 } from '~/composables/useQuantilearnApi'
@@ -94,6 +102,11 @@ const analysisError = ref('')
 const matchesState = ref<'idle' | 'running' | 'done'>('idle')
 const matchesResult = ref<QuantilearnApiFlashMatchesResult | null>(null)
 const matchesError = ref('')
+const purchaseState = ref<'idle' | 'running' | 'done'>('idle')
+const purchaseError = ref('')
+const bigTradesState = ref<'idle' | 'running' | 'done'>('idle')
+const bigTradesResult = ref<QuantilearnApiBigTradesResult | null>(null)
+const bigTradesError = ref('')
 
 const eventId = computed(() => String(route.query.eid || route.query.eventId || eventIdInput.value || '').trim())
 
@@ -139,6 +152,37 @@ const returnText = (value?: number) => {
   return `${Math.round(value * 100)}%`
 }
 
+const moneyText = (value?: number) => {
+  if (value === undefined || Number.isNaN(value)) return '-'
+  return Math.round(value).toLocaleString('en-US')
+}
+
+const accessDateText = (value?: string) => {
+  if (!value) return '-'
+  return formatDateTime(value)
+}
+
+const {
+  data: permissions,
+  error: permissionsError,
+  refresh: refreshPermissions,
+} = await useAsyncData<QuantilearnApiPermissionProfile | null>(
+  'quantilearn-flash-permissions',
+  () => quantilearnApi.getPermissions(),
+  { default: () => null },
+)
+
+const {
+  data: flashAccess,
+  pending: accessPending,
+  error: accessError,
+  refresh: refreshAccess,
+} = await useAsyncData<QuantilearnApiFlashAccessStatus | null>(
+  'quantilearn-flash-access',
+  () => quantilearnApi.getFlashAccessStatus(true),
+  { default: () => null },
+)
+
 const {
   data: flashSnapshot,
   pending: snapshotPending,
@@ -159,9 +203,15 @@ const snapshot = computed<QuantilearnApiFlashEventSnapshot | null>(() => flashSn
 const factorsById = computed(() => new Map((snapshot.value?.factors ?? []).map(factor => [factor.factorId, factor])))
 const selectedFactorIds = computed(() => new Set(selectedFactors.value.map(factor => factor.factorId)))
 const matrixReady = computed(() => Boolean(snapshot.value?.vendorBaseAvailable && snapshot.value.factors.length))
-const selectedLimit = computed(() => 8)
+const flashAccessStatus = computed(() => flashAccess.value ?? permissions.value?.flashQ ?? null)
+const selectedLimit = computed(() => permissions.value?.factor ?? flashAccessStatus.value?.factorLimit ?? 8)
+const canUseGoalBalance = computed(() => permissions.value?.flashQCanUseGoalBalance ?? true)
+const canUseInnerOuter = computed(() => permissions.value?.flashQCanUseInnerOuter ?? true)
+const canUseLogics = computed(() => permissions.value?.flashQCanUseLogics ?? true)
+const canUseInnerOuterLogics = computed(() => permissions.value?.flashQCanUseInnerOuterLogics ?? true)
 const canAddFactor = computed(() => selectedFactors.value.length < selectedLimit.value)
 const flashError = computed(() => errorMessage(snapshotError.value))
+const permissionError = computed(() => errorMessage(permissionsError.value || accessError.value))
 const snapshotSourceLabel = computed(() => {
   if (snapshotPending.value) return '读取快照'
   if (flashError.value) return '快照错误'
@@ -172,6 +222,32 @@ const snapshotSourceLabel = computed(() => {
 const bestDefaultFactor = computed(() => factorsById.value.get('f36'))
 const goalBalanceFactor = computed(() => factorsById.value.get('f40'))
 const validValueCount = computed(() => (snapshot.value?.factors ?? []).filter(factor => factor.hasValue).length)
+const flashAccessLabel = computed(() => {
+  const status = flashAccessStatus.value
+  if (accessPending.value) return '读取权限'
+  if (permissionError.value) return '权限异常'
+  return status?.message || '权限就绪'
+})
+const flashAccessTone = computed(() => {
+  const status = flashAccessStatus.value
+  if (!status) return 'plain'
+  if (status.canAnalyze) return 'good'
+  if (status.requiresPurchase) return 'warn'
+  return 'danger'
+})
+const canPurchaseFlash = computed(() => (
+  Boolean(flashAccessStatus.value?.requiresPurchase) && purchaseState.value !== 'running'
+))
+const flashAccessBlocksAnalysis = computed(() => {
+  const status = flashAccessStatus.value
+  return Boolean(status && !status.canAnalyze)
+})
+const canRunAnalysis = computed(() => (
+  matrixReady.value
+  && selectedFactors.value.length > 0
+  && analysisState.value !== 'running'
+  && !flashAccessBlocksAnalysis.value
+))
 
 const factorPeerGroups = [
   ['f01', 'f02', 'f03'],
@@ -219,6 +295,27 @@ const factorSections = computed<FlashFactorSection[]>(() => {
     .filter(section => section.factors.length)
 })
 
+const isGoalBalanceFactor = (factorId: string) => factorId.toLowerCase() === 'f40'
+
+const isInnerOuterFactor = (factorId: string) => {
+  const order = factorOrder(factorId)
+  return order >= 41 && order <= 60
+}
+
+const factorPermissionMessage = (factorId: string) => {
+  if (isGoalBalanceFactor(factorId) && !canUseGoalBalance.value) return '当前角色暂不可用进球均衡因子'
+  if (isInnerOuterFactor(factorId) && !canUseInnerOuter.value) return '当前角色暂不可用内外盘因子'
+  return ''
+}
+
+const isFactorAllowed = (factorId: string) => !factorPermissionMessage(factorId)
+
+const logicOptionsForFactor = (factorId: string) => {
+  if (!canUseLogics.value) return logicOptions.slice(0, 1)
+  if (isInnerOuterFactor(factorId) && !canUseInnerOuterLogics.value) return logicOptions.slice(0, 1)
+  return logicOptions
+}
+
 const activeSection = computed(() => (
   factorSections.value.find(section => section.id === activeSectionId.value)
   ?? factorSections.value[0]
@@ -237,6 +334,9 @@ const resetAnalysis = () => {
   matchesState.value = 'idle'
   matchesResult.value = null
   matchesError.value = ''
+  bigTradesState.value = 'idle'
+  bigTradesResult.value = null
+  bigTradesError.value = ''
 }
 
 const createSelectedFactor = (factor: QuantilearnApiFlashFactorCell): SelectedFlashFactor => ({
@@ -262,9 +362,10 @@ const resetDefaultSelection = () => {
   const defaultIds = current.defaultSelectedFactorIds?.length ? current.defaultSelectedFactorIds : ['f36']
   const defaults = defaultIds
     .map(id => current.factors.find(factor => factor.factorId === id))
-    .filter((factor): factor is QuantilearnApiFlashFactorCell => Boolean(factor))
+    .filter((factor): factor is QuantilearnApiFlashFactorCell => Boolean(factor && isFactorAllowed(factor.factorId)))
 
-  selectedFactors.value = (defaults.length ? defaults : [current.factors[0]!]).map(createSelectedFactor)
+  const fallback = current.factors.find(factor => factor.hasValue && isFactorAllowed(factor.factorId)) ?? current.factors[0]!
+  selectedFactors.value = (defaults.length ? defaults : [fallback]).slice(0, selectedLimit.value).map(createSelectedFactor)
 }
 
 watch(snapshot, () => {
@@ -286,6 +387,8 @@ const loadEvent = async () => {
 }
 
 const toggleFactor = (factor: QuantilearnApiFlashFactorCell) => {
+  if (!factor.hasValue || !isFactorAllowed(factor.factorId)) return
+
   const existing = selectedFactors.value.find(item => item.factorId === factor.factorId)
   resetAnalysis()
 
@@ -317,9 +420,10 @@ const updateRange = (factorId: string, side: 'min' | 'max', event: Event) => {
 
 const updateLogic = (factorId: string, event: Event) => {
   const value = (event.target as HTMLSelectElement).value as FlashLogic
+  const allowedValues = new Set(logicOptionsForFactor(factorId).map(option => option.id))
   selectedFactors.value = selectedFactors.value.map((factor) => {
     if (factor.factorId !== factorId) return factor
-    return { ...factor, logic: value }
+    return { ...factor, logic: allowedValues.has(value) ? value : 'none' }
   })
   resetAnalysis()
 }
@@ -405,8 +509,29 @@ const loadMatches = async () => {
   }
 }
 
+const loadBigTrades = async () => {
+  if (!eventId.value) return
+
+  bigTradesState.value = 'running'
+  bigTradesError.value = ''
+
+  try {
+    bigTradesResult.value = await quantilearnApi.getFlashBigTrades(eventId.value, 6)
+    bigTradesState.value = 'done'
+  }
+  catch (error) {
+    bigTradesError.value = errorMessage(error)
+    bigTradesState.value = 'idle'
+  }
+}
+
 const runAnalysis = async () => {
   if (!matrixReady.value || !selectedFactors.value.length || !eventId.value) return
+
+  if (flashAccessBlocksAnalysis.value) {
+    analysisError.value = flashAccessStatus.value?.message || '当前账号暂不可使用闪Q分析。'
+    return
+  }
 
   analysisState.value = 'running'
   analysisError.value = ''
@@ -425,11 +550,35 @@ const runAnalysis = async () => {
       logics: buildAnalysisLogics(),
     })
     analysisState.value = 'done'
+    await refreshAccess()
     await loadMatches()
+    await loadBigTrades()
   }
   catch (error) {
     analysisError.value = errorMessage(error)
     analysisState.value = 'idle'
+    await refreshAccess()
+  }
+}
+
+const purchaseFlashAccess = async () => {
+  if (!canPurchaseFlash.value) return
+
+  purchaseState.value = 'running'
+  purchaseError.value = ''
+
+  try {
+    const result = await quantilearnApi.purchaseFlashAccess()
+    purchaseState.value = result.success ? 'done' : 'idle'
+    if (!result.success) {
+      purchaseError.value = result.message || '闪Q开通失败。'
+    }
+    await Promise.all([refreshAccess(), refreshPermissions()])
+  }
+  catch (error) {
+    purchaseError.value = errorMessage(error)
+    purchaseState.value = 'idle'
+    await refreshAccess()
   }
 }
 
@@ -445,6 +594,18 @@ const activeStatisticSummary = computed(() => (
 ))
 const analysisMarketRows = computed(() => statisticToMarketRows(activeStatisticSummary.value))
 const analysisGoalRows = computed(() => statisticToGoalRows(activeStatisticSummary.value))
+const analysisGoalDiffRows = computed(() => {
+  const report = activeAnalysisPeriod.value?.computed
+  if (!report) return []
+
+  return [
+    { label: '主胜2+', value: report.homeWin2 },
+    { label: '主胜1', value: report.homeWin1 },
+    { label: '平局', value: report.draw0 },
+    { label: '客胜1', value: report.awayWin1 },
+    { label: '客胜2+', value: report.awayWin2 },
+  ]
+})
 const bestMarket = computed(() => (
   analysisMarketRows.value.length
     ? [...analysisMarketRows.value].sort((left, right) => right.yearReturn - left.yearReturn)[0]
@@ -465,15 +626,36 @@ const analysisStateLabel = computed(() => {
   return '参数就绪'
 })
 
+const bigTradeGroups = computed<QuantilearnApiBigTradeGroup[]>(() => (
+  (bigTradesResult.value?.groups ?? [])
+    .filter(group => group.trades.length)
+    .slice(0, 6)
+))
+
 watch([activeReportDays, activeReportMode], () => {
   if (analysisState.value === 'done' && analysisResult.value) {
     void loadMatches()
   }
 })
 
+watch([selectedLimit, canUseGoalBalance, canUseInnerOuter, canUseLogics, canUseInnerOuterLogics], () => {
+  const next = selectedFactors.value
+    .filter(factor => isFactorAllowed(factor.factorId))
+    .slice(0, selectedLimit.value)
+    .map((factor) => {
+      const allowedValues = new Set(logicOptionsForFactor(factor.factorId).map(option => option.id))
+      return allowedValues.has(factor.logic) ? factor : { ...factor, logic: 'none' as FlashLogic }
+    })
+
+  if (next.length !== selectedFactors.value.length || next.some((factor, index) => factor !== selectedFactors.value[index])) {
+    selectedFactors.value = next
+    resetAnalysis()
+  }
+})
+
 const refreshFlash = async () => {
   resetAnalysis()
-  await refreshSnapshot()
+  await Promise.all([refreshSnapshot(), refreshAccess(), refreshPermissions()])
 }
 </script>
 
@@ -599,13 +781,14 @@ const refreshFlash = async () => {
               v-for="factor in activeSection?.factors ?? []"
               :key="factor.factorId"
               type="button"
-              :class="['factor-grid', 'factor-row', 'focus-ring', { selected: selectedFactorIds.has(factor.factorId), disabled: !factor.hasValue }]"
-              :disabled="!factor.hasValue"
+              :class="['factor-grid', 'factor-row', 'focus-ring', { selected: selectedFactorIds.has(factor.factorId), disabled: !factor.hasValue, locked: !isFactorAllowed(factor.factorId) }]"
+              :disabled="!factor.hasValue || !isFactorAllowed(factor.factorId)"
+              :title="factorPermissionMessage(factor.factorId)"
               @click="toggleFactor(factor)"
             >
               <span class="factor-name">
                 <strong>{{ factorName(factor) }}</strong>
-                <em>{{ factor.rangeStrategy }}</em>
+                <em>{{ factorPermissionMessage(factor.factorId) || factor.rangeStrategy }}</em>
               </span>
               <strong class="num value-cell">{{ factor.displayValue || '-' }}</strong>
               <span class="range-cell">
@@ -615,7 +798,8 @@ const refreshFlash = async () => {
               </span>
               <span class="limit-cell num">{{ numberText(factor.minLimit) }} - {{ numberText(factor.maxLimit) }}</span>
               <span class="select-mark">
-                <MinusCircle v-if="selectedFactorIds.has(factor.factorId)" :size="16" />
+                <Lock v-if="!isFactorAllowed(factor.factorId)" :size="15" />
+                <MinusCircle v-else-if="selectedFactorIds.has(factor.factorId)" :size="16" />
                 <PlusCircle v-else :size="16" />
               </span>
             </button>
@@ -729,6 +913,22 @@ const refreshFlash = async () => {
                   </div>
                 </div>
               </section>
+
+              <section class="goal-board">
+                <div class="report-table-title">
+                  <strong>净胜球分布</strong>
+                  <span>{{ activeReportMode === 'half' ? '半场' : '全场' }}</span>
+                </div>
+                <div class="goal-bars">
+                  <div v-for="row in analysisGoalDiffRows" :key="row.label" class="goal-bar">
+                    <span>{{ row.label }}</span>
+                    <div>
+                      <i :style="{ width: `${Math.min(100, activeAnalysisPeriod.computed.hit ? row.value / activeAnalysisPeriod.computed.hit * 100 : 0)}%` }" />
+                    </div>
+                    <strong class="num">{{ row.value }}</strong>
+                  </div>
+                </div>
+              </section>
             </div>
 
             <section class="match-board">
@@ -769,6 +969,52 @@ const refreshFlash = async () => {
                   <span>{{ match.goalSelection }}</span>
                   <span class="num">{{ numberText(match.homeOdds) }} / {{ numberText(match.drawOdds) }} / {{ numberText(match.awayOdds) }}</span>
                 </div>
+              </div>
+            </section>
+
+            <section class="big-trades-board">
+              <div class="report-table-title">
+                <strong>超级大注</strong>
+                <span>{{ bigTradesState === 'running' ? '读取中' : bigTradesResult?.accessLocked ? '权限锁定' : `${bigTradeGroups.length} 组` }}</span>
+              </div>
+              <div v-if="bigTradesError" class="state-panel danger inline-state">
+                <Database :size="16" />
+                <span>{{ bigTradesError }}</span>
+              </div>
+              <div v-else-if="bigTradesResult?.accessLocked" class="state-panel inline-state">
+                <Lock :size="16" />
+                <span>{{ bigTradesResult.lockMessage || '当前会员暂不可查看完整大注提示。' }}</span>
+              </div>
+              <div v-else-if="bigTradesState === 'running'" class="state-panel inline-state">
+                <Activity :size="16" />
+                <span>正在读取重大成交</span>
+              </div>
+              <div v-else-if="!bigTradeGroups.length" class="empty-match">
+                暂无可展示的大注记录。
+              </div>
+              <div v-else class="big-trades-grid">
+                <article v-for="group in bigTradeGroups" :key="group.key" class="big-trade-group">
+                  <div class="big-trade-head">
+                    <strong>{{ group.label }}</strong>
+                    <span class="num">{{ moneyText(group.total) }}</span>
+                  </div>
+                  <div class="big-trade-row table-head">
+                    <span>选项</span>
+                    <span>成交</span>
+                    <span>价位</span>
+                    <span>属性</span>
+                    <span>占比</span>
+                    <span>时间</span>
+                  </div>
+                  <div v-for="(trade, index) in group.trades" :key="`${group.key}-${index}`" class="big-trade-row">
+                    <strong>{{ trade.sel }}</strong>
+                    <span class="num">{{ moneyText(trade.amount) }}</span>
+                    <span class="num">{{ numberText(trade.price) }}</span>
+                    <span>{{ trade.side }}</span>
+                    <span :class="['num', 'trade-per', `hl${trade.highlight}`]">{{ percentText(trade.per) }}</span>
+                    <span class="num">{{ trade.time }}</span>
+                  </div>
+                </article>
               </div>
             </section>
           </template>
@@ -824,7 +1070,7 @@ const refreshFlash = async () => {
                 <label>
                   <span>逻辑</span>
                   <select :value="factor.logic" @change="updateLogic(factor.factorId, $event)">
-                    <option v-for="option in logicOptions" :key="option.id" :value="option.id">
+                    <option v-for="option in logicOptionsForFactor(factor.factorId)" :key="option.id" :value="option.id">
                       {{ option.label }}
                     </option>
                   </select>
@@ -839,6 +1085,59 @@ const refreshFlash = async () => {
         </section>
 
         <section class="side-panel action-panel">
+          <div class="panel-title compact-title">
+            <div>
+              <span class="eyebrow">Access</span>
+              <h3>闪Q权限</h3>
+            </div>
+            <span :class="['status-chip', flashAccessTone]">
+              {{ permissions?.role || '账号' }}
+            </span>
+          </div>
+
+          <div class="access-card">
+            <div class="access-line">
+              <ShieldCheck :size="16" />
+              <span>{{ flashAccessLabel }}</span>
+            </div>
+            <div class="access-facts">
+              <div>
+                <span>锦囊余额</span>
+                <strong class="num">{{ flashAccessStatus?.silkBalance === undefined ? '-' : moneyText(flashAccessStatus.silkBalance) }}</strong>
+              </div>
+              <div>
+                <span>开通成本</span>
+                <strong>{{ flashAccessStatus?.bagCount ? `${flashAccessStatus.bagCount} / ${flashAccessStatus.hours}h` : '免费' }}</strong>
+              </div>
+              <div>
+                <span>到期</span>
+                <strong>{{ accessDateText(flashAccessStatus?.expiredAtUtc) }}</strong>
+              </div>
+            </div>
+            <button
+              v-if="flashAccessStatus?.requiresPurchase"
+              type="button"
+              class="purchase-button focus-ring"
+              :disabled="!canPurchaseFlash"
+              @click="purchaseFlashAccess"
+            >
+              <Wallet :size="16" />
+              <span>{{ purchaseState === 'running' ? '开通中' : '消耗锦囊开通' }}</span>
+            </button>
+            <div v-if="flashAccessStatus?.requiresRecharge" class="access-warning">
+              <AlertTriangle :size="15" />
+              <span>锦囊余额不足，请先充值后再开通闪Q。</span>
+            </div>
+            <div v-if="purchaseError" class="access-warning danger-text">
+              <AlertTriangle :size="15" />
+              <span>{{ purchaseError }}</span>
+            </div>
+            <div v-if="permissionError" class="access-warning danger-text">
+              <AlertTriangle :size="15" />
+              <span>{{ permissionError }}</span>
+            </div>
+          </div>
+
           <div class="action-summary">
             <div>
               <span>匹配赛事</span>
@@ -870,7 +1169,7 @@ const refreshFlash = async () => {
             </button>
           </div>
 
-          <button type="button" class="analyze-button focus-ring" :disabled="!matrixReady || !selectedFactors.length || analysisState === 'running'" @click="runAnalysis">
+          <button type="button" class="analyze-button focus-ring" :disabled="!canRunAnalysis" @click="runAnalysis">
             <PlayCircle :size="20" />
             <span>{{ analysisState === 'running' ? '分析中' : '分析' }}</span>
           </button>
@@ -904,7 +1203,7 @@ const refreshFlash = async () => {
         <span>已选 {{ selectedFactors.length }} / {{ selectedLimit }}</span>
         <strong>{{ analysisStateLabel }}</strong>
       </div>
-      <button type="button" class="primary-button focus-ring" :disabled="!matrixReady || !selectedFactors.length || analysisState === 'running'" @click="runAnalysis">
+      <button type="button" class="primary-button focus-ring" :disabled="!canRunAnalysis" @click="runAnalysis">
         <PlayCircle :size="17" />
         <span>{{ analysisState === 'running' ? '分析中' : '分析' }}</span>
       </button>
@@ -1269,6 +1568,15 @@ h1 {
   opacity: 0.45;
 }
 
+.factor-row.locked {
+  background: #fbf7f1;
+  opacity: 0.72;
+}
+
+.factor-row.locked .select-mark {
+  color: var(--amber);
+}
+
 .factor-name {
   display: grid;
   min-width: 0;
@@ -1382,14 +1690,15 @@ h1 {
 
 .report-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.9fr);
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(230px, 0.78fr));
   gap: 10px;
   align-items: start;
 }
 
 .report-table,
 .goal-board,
-.match-board {
+.match-board,
+.big-trades-board {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1437,6 +1746,10 @@ h1 {
   display: grid;
 }
 
+.big-trades-board {
+  display: grid;
+}
+
 .match-row {
   display: grid;
   grid-template-columns: 80px minmax(180px, 1.35fr) 52px 58px 68px 72px minmax(118px, 0.85fr);
@@ -1467,6 +1780,78 @@ h1 {
   padding: 12px;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.big-trades-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+}
+
+.big-trade-group {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.big-trade-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.big-trade-head strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.big-trade-head span {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.big-trade-row {
+  display: grid;
+  grid-template-columns: 34px minmax(58px, 0.9fr) 42px 42px 48px 74px;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.7rem;
+}
+
+.big-trade-row:last-child {
+  border-bottom: 0;
+}
+
+.big-trade-row span,
+.big-trade-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-per {
+  color: var(--muted);
+  font-weight: 780;
+}
+
+.trade-per.hl1 {
+  color: var(--amber);
+}
+
+.trade-per.hl2 {
+  color: var(--rose);
 }
 
 .goal-bars {
@@ -1607,6 +1992,95 @@ h1 {
   background: linear-gradient(180deg, #ffffff 0%, #eef8f7 100%);
 }
 
+.access-card {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.access-line,
+.access-warning,
+.purchase-button {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.access-line {
+  gap: 7px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.access-line span,
+.access-warning span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.access-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.access-facts div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 7px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.access-facts span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-facts strong {
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchase-button {
+  justify-content: center;
+  min-height: 34px;
+  gap: 6px;
+  border: 1px solid #0f8d83;
+  border-radius: 6px;
+  background: #128fcb;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 820;
+}
+
+.purchase-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.access-warning {
+  gap: 6px;
+  color: var(--amber);
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.danger-text {
+  color: var(--rose);
+}
+
 .action-summary,
 .runtime-list {
   display: grid;
@@ -1741,6 +2215,10 @@ h1 {
   .event-strip,
   .matrix-shell,
   .report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .big-trades-grid {
     grid-template-columns: 1fr;
   }
 
