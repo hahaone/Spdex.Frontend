@@ -89,35 +89,56 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
           :class="['live-card focus-ring', { selected: m.eventId === selectedId }]"
           @click="onCardClick(m, $event)"
         >
-          <!-- 头：开赛时间 / 进行分钟 / 状态 / 双红 -->
+          <!-- 时间栏：时间/分钟/状态 · 盘口线 · 现场大单 · 双红 -->
           <div class="c-head">
             <span class="kick num">{{ m.kickoffTime }}</span>
             <span v-if="m.status === 'running'" class="minute num">{{ m.minute }}</span>
             <span v-else-if="m.status === 'finished'" class="st-pill done">完场</span>
             <span v-else class="st-pill up">未开</span>
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="hcap num">让 {{ line(m.liveOdds, '让球') || '-' }} · 大 {{ line(m.liveOdds, '大小') || '-' }}</span>
+            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="hcap num">让 {{ m.prematchHandicap }}</span>
+            <span class="hsp" />
+            <span v-if="m.bigBet" class="bigbet num"><Flame :size="11" />{{ m.bigBet.amountText }}<i class="bb-side">{{ m.bigBet.side }}</i></span>
             <span v-if="m.doubleRed" class="dr-tag">双红</span>
             <ChevronRight :size="14" class="chev" />
           </div>
 
-          <!-- 比分 + 红黄牌 -->
+          <!-- 球队 + 比分 + 行内赔率(进行中: 让球主客 / 大小;未开赛走下方必发行) -->
           <div class="c-teams">
-            <div class="trow">
+            <div class="trow" :class="{ 'has-odds': m.status === 'running' && hasOdds(m.liveOdds) }">
               <span class="tname">{{ m.homeTeam }}</span>
               <span class="tbadges">
                 <i v-if="badge(m, 'home', 'yellow')" class="bdg y num" role="img" :aria-label="`主队黄牌${badge(m, 'home', 'yellow')}`">{{ badge(m, 'home', 'yellow') }}</i>
                 <i v-if="badge(m, 'home', 'red')" class="bdg r num" role="img" :aria-label="`主队红牌${badge(m, 'home', 'red')}`">{{ badge(m, 'home', 'red') }}</i>
               </span>
               <b v-if="m.status !== 'upcoming'" class="tscore num">{{ m.score[0] }}</b>
+              <template v-if="m.status === 'running' && hasOdds(m.liveOdds)">
+                <i class="oc num">{{ odd(m.liveOdds, '让球', '主') }}</i>
+                <i class="oc num">{{ odd(m.liveOdds, '大小', '大') }}</i>
+              </template>
             </div>
-            <div class="trow">
+            <div class="trow" :class="{ 'has-odds': m.status === 'running' && hasOdds(m.liveOdds) }">
               <span class="tname">{{ m.awayTeam }}</span>
               <span class="tbadges">
                 <i v-if="badge(m, 'away', 'yellow')" class="bdg y num" role="img" :aria-label="`客队黄牌${badge(m, 'away', 'yellow')}`">{{ badge(m, 'away', 'yellow') }}</i>
                 <i v-if="badge(m, 'away', 'red')" class="bdg r num" role="img" :aria-label="`客队红牌${badge(m, 'away', 'red')}`">{{ badge(m, 'away', 'red') }}</i>
               </span>
               <b v-if="m.status !== 'upcoming'" class="tscore num">{{ m.score[1] }}</b>
+              <template v-if="m.status === 'running' && hasOdds(m.liveOdds)">
+                <i class="oc num">{{ odd(m.liveOdds, '让球', '客') }}</i>
+                <i class="oc num">{{ odd(m.liveOdds, '大小', '小') }}</i>
+              </template>
             </div>
           </div>
+
+          <!-- 未开赛: 必发 主/平/客 赛前赔率 -->
+          <div v-if="m.status === 'upcoming' && m.prematchOdds" class="c-pre">
+            <span class="pre-l">必发</span>
+            <i class="oc num">主 {{ (m.prematchOdds[0] ?? 0).toFixed(2) }}</i>
+            <i class="oc num">平 {{ (m.prematchOdds[1] ?? 0).toFixed(2) }}</i>
+            <i class="oc num">客 {{ (m.prematchOdds[2] ?? 0).toFixed(2) }}</i>
+          </div>
+          <div v-else-if="m.status === 'running' && !hasOdds(m.liveOdds)" class="c-odds-empty">本场暂无现场盘口</div>
 
           <!-- 半场 + 角球（进行中/完场） -->
           <div v-if="m.status !== 'upcoming'" class="c-micro">
@@ -136,37 +157,6 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
             <span class="ms">预测Σ <b class="num">{{ m.model.modelTotalGoals.toFixed(1) }}</b></span>
           </div>
 
-          <!-- 滚球赔率（进行中，bet365） -->
-          <div v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="c-odds">
-            <div class="orow">
-              <span class="om">1X2</span>
-              <span class="num">{{ odd(m.liveOdds, '1X2', '主') }}</span>
-              <span class="num">{{ odd(m.liveOdds, '1X2', '平') }}</span>
-              <span class="num">{{ odd(m.liveOdds, '1X2', '客') }}</span>
-            </div>
-            <div class="orow">
-              <span class="om">让 <i class="ln num">{{ line(m.liveOdds, '让球') }}</i></span>
-              <span class="num">{{ odd(m.liveOdds, '让球', '主') }}</span>
-              <span class="num dim">—</span>
-              <span class="num">{{ odd(m.liveOdds, '让球', '客') }}</span>
-            </div>
-            <div class="orow">
-              <span class="om">大小 <i class="ln num">{{ line(m.liveOdds, '大小') }}</i></span>
-              <span class="num">{{ odd(m.liveOdds, '大小', '大') }}</span>
-              <span class="num dim">—</span>
-              <span class="num">{{ odd(m.liveOdds, '大小', '小') }}</span>
-            </div>
-          </div>
-          <div v-else-if="m.status === 'running'" class="c-odds-empty">本场暂无现场盘口</div>
-
-          <!-- 最大现场单 -->
-          <div v-if="m.bigBet" class="c-bigbet">
-            <Flame :size="12" />
-            <span>现场单 <b class="num">{{ m.bigBet.amountText }}</b></span>
-            <span class="bb-side">{{ m.bigBet.side }}</span>
-            <span v-if="m.bigBet.odd" class="num">@{{ m.bigBet.odd.toFixed(2) }}</span>
-            <span v-if="m.bigBet.attr" class="bb-attr">{{ m.bigBet.attr }}</span>
-          </div>
         </NuxtLink>
       </div>
       </div>
@@ -294,7 +284,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
   font-weight: 820;
 }
 
-.chev { margin-left: auto; color: var(--brand); flex: 0 0 auto; }
+.chev { color: var(--brand); flex: 0 0 auto; }
 
 .c-teams {
   display: grid;
@@ -312,6 +302,19 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
   padding: 3px 0;
   font-size: 0.9rem;
   font-weight: 760;
+}
+
+/* 进行中:球队行 = 名称 | 牌 | 比分 | 让球赔 | 大小赔 */
+.trow.has-odds {
+  grid-template-columns: minmax(0, 1fr) auto 22px 44px 44px;
+  gap: 6px;
+}
+
+.oc {
+  text-align: center;
+  font-style: normal;
+  font-weight: 820;
+  color: var(--brand-deep);
 }
 
 .tname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -366,26 +369,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 .c-model .lean.neutral { background: var(--surface); color: var(--muted); }
 .c-model .lean .edge { font-style: normal; }
 
-.c-odds {
-  display: grid;
-  gap: 2px;
-  padding: 4px 0 1px;
-  border-top: 1px dashed var(--divider);
-}
-
-.orow {
-  display: grid;
-  grid-template-columns: 64px repeat(3, minmax(0, 1fr));
-  align-items: center;
-  gap: 4px;
-  font-size: 0.78rem;
-}
-
-.orow .om { color: var(--accent-deep); font-weight: 760; font-size: 0.72rem; }
-.orow .om .ln { color: var(--brand-deep); margin-left: 2px; font-size: 0.68rem; }
-.orow .num { text-align: center; font-weight: 740; color: var(--ink); }
-.orow .num.dim { color: var(--soft); }
-
+/* 进行中无 BSW 盘口提示 */
 .c-odds-empty {
   padding: 4px 0;
   color: var(--soft);
@@ -394,20 +378,41 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
   border-top: 1px dashed var(--divider);
 }
 
-.c-bigbet {
-  display: flex;
+/* 时间栏:撑开 + 盘口线 + 现场大单 */
+.hsp { flex: 1 1 auto; }
+
+.hcap {
+  color: var(--brand-deep);
+  font-size: 0.74rem;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.bigbet {
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 7px;
-  border-radius: 4px;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 3px;
   background: var(--away-bg);
   color: #8a6212;
-  font-size: 0.74rem;
-  font-weight: 740;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
-.c-bigbet b { color: #8a6212; font-weight: 860; }
-.c-bigbet .bb-side { font-weight: 820; }
-.c-bigbet .bb-attr { padding: 0 4px; border-radius: 2px; background: rgba(138, 98, 18, 0.14); font-size: 0.68rem; }
+.bigbet .bb-side { font-style: normal; font-weight: 860; }
+
+/* 未开赛:必发赛前赔率行(主/平/客) */
+.c-pre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 1px;
+  border-top: 1px dashed var(--divider);
+  font-size: 0.82rem;
+}
+.c-pre .pre-l { color: var(--accent-deep); font-weight: 820; font-size: 0.72rem; }
+.c-pre .oc { color: var(--ink); }
 
 @media (min-width: 768px) {
   .live-body { grid-template-columns: 1fr; }

@@ -54,6 +54,10 @@ export interface LiveListItem {
   bigBet: LiveBigBet | null
   doubleRed: boolean
   dataStatus: string
+  /** 赛前让球线(亚盘平均让球)，未开赛卡用。 */
+  prematchHandicap?: string | null
+  /** 赛前必发 主/平/客 赔率 [home, draw, away]，未开赛卡用。 */
+  prematchOdds?: number[] | null
 }
 
 interface BackendLiveListResult { matches: LiveListItem[], tab: string }
