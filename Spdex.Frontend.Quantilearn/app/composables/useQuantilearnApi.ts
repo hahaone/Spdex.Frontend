@@ -463,6 +463,43 @@ export interface QuantilearnApiBigTradesResult {
   lockMessage?: string
 }
 
+export interface QuantilearnApiSuperBigTrade {
+  pcId: number
+  selection: string
+  amount: number
+  price: number
+  side: string
+  updateTime: string
+  per: number
+  onTime: boolean
+  hold: boolean
+  hold2: boolean
+  bossAmount: number
+  bossPrice: number
+  bossSelection: string
+  highlight: number
+}
+
+export interface QuantilearnApiSuperBigTradeEvent {
+  eventId: number
+  sport: string
+  league: string
+  matchTime: string
+  homeTeam: string
+  awayTeam: string
+  totalAmount: number
+  trades: QuantilearnApiSuperBigTrade[]
+}
+
+export interface QuantilearnApiSuperBigTradesResult {
+  events: QuantilearnApiSuperBigTradeEvent[]
+  scannedEvents: number
+  windowFrom: string
+  windowTo: string
+  accessLocked: boolean
+  lockMessage?: string
+}
+
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
 
 const formatDate = (value?: string) => {
@@ -883,6 +920,7 @@ export const useQuantilearnApi = () => {
       body,
     }),
     getFlashBigTrades: (eventId: string | number, perGroup = 6) => requestNewSpdex<QuantilearnApiBigTradesResult>(`/api/newspdex/big-trades/${encodeURIComponent(String(eventId))}`, { perGroup }),
+    getFlashSuperBigTrades: (limit = 20) => requestNewSpdex<QuantilearnApiSuperBigTradesResult>('/api/newspdex/big-trades/super', { limit }),
     getHallModels: (query: QuantilearnHallRequest = {}) => request<QuantilearnApiHallModelSummary[]>('/api/quantilearn/hall', {
       type: query.type ?? 'all',
       order: query.order ?? 'return',

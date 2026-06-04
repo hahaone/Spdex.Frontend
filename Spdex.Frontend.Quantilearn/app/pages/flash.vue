@@ -23,8 +23,7 @@ import {
 } from '~/composables/useQuantilearnApi'
 import type {
   QuantilearnApiFlashAnalysisResult,
-  QuantilearnApiBigTradeGroup,
-  QuantilearnApiBigTradesResult,
+  QuantilearnApiSuperBigTradesResult,
   QuantilearnApiFlashAccessStatus,
   QuantilearnApiFlashEventSnapshot,
   QuantilearnApiFlashFactorCell,
@@ -122,7 +121,7 @@ const matchesError = ref('')
 const purchaseState = ref<'idle' | 'running' | 'done'>('idle')
 const purchaseError = ref('')
 const bigTradesState = ref<'idle' | 'running' | 'done'>('idle')
-const bigTradesResult = ref<QuantilearnApiBigTradesResult | null>(null)
+const bigTradesResult = ref<QuantilearnApiSuperBigTradesResult | null>(null)
 const bigTradesError = ref('')
 
 const eventId = computed(() => String(route.query.eid || route.query.eventId || '35675743').trim())
@@ -770,13 +769,11 @@ const loadMatches = async () => {
 }
 
 const loadBigTrades = async () => {
-  if (!eventId.value) return
-
   bigTradesState.value = 'running'
   bigTradesError.value = ''
 
   try {
-    bigTradesResult.value = await quantilearnApi.getFlashBigTrades(eventId.value, 6)
+    bigTradesResult.value = await quantilearnApi.getFlashSuperBigTrades(20)
     bigTradesState.value = 'done'
   }
   catch (error) {
@@ -916,10 +913,9 @@ const analysisStateLabel = computed(() => {
   return '参数就绪'
 })
 
-const bigTradeGroups = computed<QuantilearnApiBigTradeGroup[]>(() => (
-  (bigTradesResult.value?.groups ?? [])
-    .filter(group => group.trades.length)
-    .slice(0, 6)
+const superBigTradeEvents = computed(() => (
+  (bigTradesResult.value?.events ?? [])
+    .filter(event => event.trades.length)
 ))
 
 watch([activeReportDays, activeReportMode], () => {
@@ -1350,7 +1346,7 @@ const refreshFlash = async () => {
             <section class="big-trades-board">
               <div class="report-table-title">
                 <strong>超级大注</strong>
-                <span>{{ bigTradesState === 'running' ? '读取中' : bigTradesResult?.accessLocked ? '权限锁定' : `${bigTradeGroups.length} 组` }}</span>
+                <span>{{ bigTradesState === 'running' ? '读取中' : bigTradesResult?.accessLocked ? '权限锁定' : `命中 ${superBigTradeEvents.length} 场 / 扫描 ${bigTradesResult?.scannedEvents ?? 0} 场` }}</span>
               </div>
               <div v-if="bigTradesError" class="state-panel danger inline-state">
                 <Database :size="16" />
@@ -1364,30 +1360,42 @@ const refreshFlash = async () => {
                 <Activity :size="16" />
                 <span>正在读取重大成交</span>
               </div>
-              <div v-else-if="!bigTradeGroups.length" class="empty-match">
+              <div v-else-if="!superBigTradeEvents.length" class="empty-match">
                 暂无可展示的大注记录。
               </div>
-              <div v-else class="big-trades-grid">
-                <article v-for="group in bigTradeGroups" :key="group.key" class="big-trade-group">
-                  <div class="big-trade-head">
-                    <strong>{{ group.label }}</strong>
-                    <span class="num">{{ moneyText(group.total) }}</span>
+              <div v-else class="super-trade-list">
+                <article v-for="event in superBigTradeEvents" :key="event.eventId" class="super-trade-event">
+                  <div class="super-trade-event-head">
+                    <div>
+                      <strong>{{ event.homeTeam }} vs {{ event.awayTeam }}</strong>
+                      <span>{{ event.league || event.eventId }} · {{ formatDateTime(event.matchTime) }}</span>
+                    </div>
+                    <div class="super-trade-meta">
+                      <span class="num">总成交 {{ moneyText(event.totalAmount) }}</span>
+                      <span>{{ event.trades.length }} 笔</span>
+                    </div>
                   </div>
-                  <div class="big-trade-row table-head">
-                    <span>选项</span>
+                  <div class="super-trade-row table-head">
+                    <span>方向</span>
                     <span>成交</span>
                     <span>价位</span>
                     <span>属性</span>
                     <span>占比</span>
-                    <span>时间</span>
+                    <span>发生</span>
+                    <span>临场</span>
+                    <span>维持</span>
+                    <span>本场最大</span>
                   </div>
-                  <div v-for="(trade, index) in group.trades" :key="`${group.key}-${index}`" class="big-trade-row">
-                    <strong>{{ trade.sel }}</strong>
+                  <div v-for="trade in event.trades" :key="`${event.eventId}-${trade.pcId}`" class="super-trade-row">
+                    <strong>{{ trade.selection }}</strong>
                     <span class="num">{{ moneyText(trade.amount) }}</span>
                     <span class="num">{{ numberText(trade.price) }}</span>
                     <span>{{ trade.side }}</span>
                     <span :class="['num', 'trade-per', `hl${trade.highlight}`]">{{ percentText(trade.per) }}</span>
-                    <span class="num">{{ trade.time }}</span>
+                    <span class="num">{{ formatDateTime(trade.updateTime) }}</span>
+                    <span :class="['flag-cell', { on: trade.onTime }]">{{ trade.onTime ? '是' : '-' }}</span>
+                    <span :class="['flag-cell', { on: trade.hold, strong: trade.hold2 }]">{{ trade.hold2 ? '维持2' : trade.hold ? '是' : '-' }}</span>
+                    <span class="num">{{ trade.bossSelection }} {{ moneyText(trade.bossAmount) }} @{{ numberText(trade.bossPrice) }}</span>
                   </div>
                 </article>
               </div>
@@ -2698,6 +2706,96 @@ h1 {
 
 .big-trades-board {
   display: grid;
+}
+
+.super-trade-list {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.super-trade-event {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.super-trade-event-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+  background: #f7fafc;
+}
+
+.super-trade-event-head div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.super-trade-event-head strong,
+.super-trade-event-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.super-trade-event-head strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.super-trade-event-head span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.super-trade-meta {
+  justify-items: end;
+}
+
+.super-trade-row {
+  display: grid;
+  grid-template-columns: 38px minmax(76px, 0.9fr) 44px 48px 52px 74px 42px 50px minmax(112px, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 720px;
+  min-height: 31px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.69rem;
+}
+
+.super-trade-row:last-child {
+  border-bottom: 0;
+}
+
+.super-trade-row span,
+.super-trade-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flag-cell {
+  color: var(--muted);
+  font-weight: 780;
+}
+
+.flag-cell.on {
+  color: var(--teal);
+}
+
+.flag-cell.strong {
+  color: var(--rose);
 }
 
 .match-row {
