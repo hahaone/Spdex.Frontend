@@ -1361,7 +1361,7 @@ const refreshFlash = async () => {
                 <span>正在读取重大成交</span>
               </div>
               <div v-else-if="!superBigTradeEvents.length" class="empty-match">
-                暂无可展示的大注记录。
+                当前未完场赛事暂无符合条件的超级大注。
               </div>
               <div v-else class="super-trade-list">
                 <article v-for="event in superBigTradeEvents" :key="event.eventId" class="super-trade-event">
