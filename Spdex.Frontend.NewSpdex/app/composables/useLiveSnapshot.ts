@@ -108,6 +108,26 @@ export interface LiveAnalysis {
   signalTimeline: LiveSignalPoint[]
 }
 
+/** 完场回放序列上的一个时刻（标量快照，重建自归档）。 */
+export interface AnalysisReplayPoint {
+  capturedAt: string
+  minute: number
+  score: number[]
+  edgePct?: number | null
+  modelOverPct?: number | null
+  bookOverPct?: number | null
+  homeProb?: number | null
+  drawProb?: number | null
+  awayProb?: number | null
+  signalStrength?: number | null
+}
+
+/** 完场回放：赛中分析时序序列（仅完场且有归档时非空）。 */
+export interface AnalysisReplay {
+  series: AnalysisReplayPoint[]
+  signalPeak: number
+}
+
 /** 单条伤停记录。 */
 export interface LiveInjuryItem {
   player: string
@@ -139,6 +159,7 @@ interface BackendSnapshot {
   liveOdds: LiveOdds | null
   model: LiveModel | null
   analysis: LiveAnalysis | null
+  analysisReplay: AnalysisReplay | null
   injuries: LiveInjuryInfo | null
   dataStatus: LiveDataStatus
   generatedAt: string
@@ -166,6 +187,7 @@ export interface LiveSnapshot {
   liveOdds: LiveOdds | null
   model: LiveModel | null
   analysis: LiveAnalysis | null
+  analysisReplay: AnalysisReplay | null
   injuries: LiveInjuryInfo | null
   dataStatus: LiveDataStatus
 }
@@ -208,6 +230,7 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     liveOdds: data.liveOdds ?? null,
     model: data.model ?? null,
     analysis: data.analysis ?? null,
+    analysisReplay: data.analysisReplay ?? null,
     injuries: data.injuries ?? null,
     dataStatus: data.dataStatus,
   }

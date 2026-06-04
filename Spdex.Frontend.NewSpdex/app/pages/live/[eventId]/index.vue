@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, BarChart3, Lock } from '@lucide/vue'
+import type { AnalysisReplayPoint } from '~/composables/useLiveSnapshot'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
@@ -130,6 +131,76 @@ const signalSpark = computed(() => {
   return { path, w: W, h: H, max }
 })
 
+// ── 完场回放：赛中分析时序（仅完场且有归档时非空）──
+const replay = computed(() => snapshot.value?.analysisReplay ?? null)
+const replaySeries = computed<AnalysisReplayPoint[]>(() => replay.value?.series ?? [])
+const hasReplay = computed(() => replaySeries.value.length >= 2)
+
+// 时间轴游标：默认停在末态（最后一条），序列变化时复位
+const replayIndex = ref(0)
+watch(replaySeries, (s) => { replayIndex.value = s.length ? s.length - 1 : 0 }, { immediate: true })
+const replayPoint = computed(() => replaySeries.value[replayIndex.value] ?? null)
+
+function edgeToneOf(e: number): string { return e > 3 ? 'pos' : e < -3 ? 'neg' : '' }
+function pctSigned(e: number): string { return `${e > 0 ? '+' : ''}${e}%` }
+
+// 单序列 sparkline：可选 0 基线 + 选中游标竖线 + 选中点 marker；断点（null）断线。
+function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | undefined, baseZero = false) {
+  const series = replaySeries.value
+  const vals = series.map(getter).map(v => (v == null ? null : Number(v)))
+  const nums = vals.filter((v): v is number => v != null)
+  if (nums.length < 2) return null
+  const W = 240, H = 42, pad = 4
+  let min = Math.min(...nums), max = Math.max(...nums)
+  if (baseZero) { min = Math.min(min, 0); max = Math.max(max, 0) }
+  const span = max - min || 1
+  const step = vals.length > 1 ? (W - pad * 2) / (vals.length - 1) : 0
+  const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
+  let path = '', pen = false
+  vals.forEach((v, i) => {
+    if (v == null) { pen = false; return }
+    const x = pad + i * step
+    path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${yOf(v).toFixed(1)} `
+    pen = true
+  })
+  const cursorX = pad + replayIndex.value * step
+  const sel = vals[replayIndex.value]
+  return {
+    path, w: W, h: H,
+    min: Math.round(min), max: Math.round(max),
+    cursorX,
+    marker: sel != null ? { x: cursorX, y: yOf(sel) } : null,
+    zeroY: baseZero ? yOf(0) : null,
+  }
+}
+
+const edgeSpark = computed(() => buildReplaySpark(p => p.edgePct, true))
+
+// 大球概率走势：模型 vs 平台，两线共用一套刻度才可比。
+const overProbSpark = computed(() => {
+  const series = replaySeries.value
+  const model = series.map(p => (p.modelOverPct ?? null))
+  const book = series.map(p => (p.bookOverPct ?? null))
+  const nums = [...model, ...book].filter((v): v is number => v != null)
+  if (nums.length < 2) return null
+  const W = 240, H = 44, pad = 4
+  const min = Math.min(...nums), max = Math.max(...nums)
+  const span = max - min || 1
+  const step = series.length > 1 ? (W - pad * 2) / (series.length - 1) : 0
+  const draw = (arr: (number | null)[]) => {
+    let d = '', pen = false
+    arr.forEach((v, i) => {
+      if (v == null) { pen = false; return }
+      const x = pad + i * step
+      const y = pad + (H - pad * 2) * (1 - (v - min) / span)
+      d += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `
+      pen = true
+    })
+    return d
+  }
+  return { w: W, h: H, model: draw(model), book: draw(book), min: Math.round(min), max: Math.round(max), cursorX: pad + replayIndex.value * step }
+})
+
 // ── 赛前伤停情报 ──
 const injuries = computed(() => snapshot.value?.injuries ?? null)
 const hasInjuries = computed(() => (injuries.value?.home.length ?? 0) + (injuries.value?.away.length ?? 0) > 0)
@@ -240,6 +311,68 @@ function injStatus(s: string): { text: string, cls: string } {
           <path :d="signalSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
         </svg>
       </div>
+    </section>
+
+    <!-- 完场回放：赛中分析时序（Edge / 大球概率 演变 + 时间轴拖动）-->
+    <section v-if="hasReplay" class="replay-card">
+      <div class="section-title brand">
+        <span>赛中回放</span>
+        <span class="model-tag">完场时序 · {{ replaySeries.length }} 点</span>
+      </div>
+
+      <!-- 时间轴滑块 + 选中时刻读数 -->
+      <div class="rp-scrub">
+        <input
+          v-model.number="replayIndex"
+          class="rp-range focus-ring"
+          type="range"
+          min="0"
+          :max="replaySeries.length - 1"
+          step="1"
+          :aria-label="`赛中时间轴，共 ${replaySeries.length} 个采样点`"
+        >
+        <div v-if="replayPoint" class="rp-head">
+          <span class="rp-min num">{{ replayPoint.minute }}'</span>
+          <span class="rp-score num">{{ replayPoint.score[0] ?? 0 }}-{{ replayPoint.score[1] ?? 0 }}</span>
+          <span v-if="replayPoint.edgePct != null" class="rp-edge">Edge <b :class="['num', edgeToneOf(replayPoint.edgePct)]">{{ pctSigned(replayPoint.edgePct) }}</b></span>
+          <span v-if="replayPoint.signalStrength != null" class="rp-sig">信号 <b class="num">{{ replayPoint.signalStrength }}</b></span>
+        </div>
+      </div>
+      <div v-if="replayPoint" class="rp-detail">
+        <span v-if="replayPoint.modelOverPct != null">模型大球 <b class="num">{{ Math.round(replayPoint.modelOverPct) }}%</b></span>
+        <span v-if="replayPoint.bookOverPct != null">平台隐含 <b class="num">{{ Math.round(replayPoint.bookOverPct) }}%</b></span>
+        <span v-if="replayPoint.homeProb != null" class="rp-flow">资金 主<b class="num">{{ replayPoint.homeProb }}</b> 平<b class="num">{{ replayPoint.drawProb }}</b> 客<b class="num">{{ replayPoint.awayProb }}</b></span>
+      </div>
+
+      <!-- Edge 走势 -->
+      <div v-if="edgeSpark" class="rp-chart">
+        <div class="rp-clbl"><span>Edge 走势</span><span class="muted">{{ edgeSpark.min }}% ~ {{ edgeSpark.max }}%</span></div>
+        <svg class="rp-spark edge" :viewBox="`0 0 ${edgeSpark.w} ${edgeSpark.h}`" preserveAspectRatio="none">
+          <line v-if="edgeSpark.zeroY != null" class="rp-zero" :x1="0" :y1="edgeSpark.zeroY" :x2="edgeSpark.w" :y2="edgeSpark.zeroY" />
+          <line class="rp-cursor" :x1="edgeSpark.cursorX" :y1="0" :x2="edgeSpark.cursorX" :y2="edgeSpark.h" />
+          <path :d="edgeSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
+          <circle v-if="edgeSpark.marker" :cx="edgeSpark.marker.x" :cy="edgeSpark.marker.y" r="2.6" class="rp-dot" />
+        </svg>
+      </div>
+
+      <!-- 大球概率走势：模型 vs 平台 -->
+      <div v-if="overProbSpark" class="rp-chart">
+        <div class="rp-clbl">
+          <span>大球概率走势</span>
+          <span class="rp-legend"><i class="lg model"></i>模型<i class="lg book"></i>平台</span>
+        </div>
+        <svg class="rp-spark" :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`" preserveAspectRatio="none">
+          <line class="rp-cursor" :x1="overProbSpark.cursorX" :y1="0" :x2="overProbSpark.cursorX" :y2="overProbSpark.h" />
+          <path :d="overProbSpark.book" fill="none" class="ln-book" stroke-width="1.5" />
+          <path :d="overProbSpark.model" fill="none" class="ln-model" stroke-width="1.5" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- 完场但无赛中分析归档（系统上线前进行的老比赛）-->
+    <section v-else-if="snapshot?.status === 'finished' && !model" class="replay-empty">
+      <BarChart3 :size="15" />
+      <span>该场无赛中分析归档（仅系统上线后进行过的比赛可回放）</span>
     </section>
 
     <!-- 赛前伤停情报（BSW 网关 Kinetel）-->
@@ -1037,6 +1170,78 @@ section.compare {
 .an-probs .p em.down { color: var(--buy); }
 
 .sig-spark { display: block; width: 100%; height: 30px; margin-top: 6px; color: #b1253c; }
+
+/* ── 完场回放：赛中分析时序 ── */
+.replay-card {
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #f6f3fe 0%, var(--panel) 60%);
+  border-bottom: 1px solid var(--divider);
+}
+.replay-card .section-title { font-weight: 820; }
+
+.rp-scrub { margin-top: 8px; }
+.rp-range { width: 100%; margin: 0; accent-color: var(--brand-deep); cursor: pointer; }
+
+.rp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 740;
+}
+.rp-head .rp-min { color: var(--brand-deep); font-weight: 860; font-size: 0.9rem; }
+.rp-head .rp-score { color: var(--ink); font-weight: 860; font-size: 0.9rem; }
+.rp-head b { color: var(--ink); font-weight: 840; margin-left: 2px; }
+.rp-head .pos { color: var(--sell); }
+.rp-head .neg { color: var(--buy); }
+
+.rp-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+.rp-detail b { color: var(--ink); font-weight: 820; margin-left: 2px; }
+
+.rp-chart { margin-top: 9px; }
+.rp-clbl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 780;
+}
+.rp-clbl .muted { color: var(--muted); font-weight: 700; font-size: 0.7rem; }
+
+.rp-legend { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 0.7rem; font-weight: 720; }
+.rp-legend .lg { display: inline-block; width: 11px; height: 0; border-top: 2px solid currentColor; }
+.rp-legend .lg.model { color: var(--brand-deep); }
+.rp-legend .lg.book { color: var(--soft); margin-left: 7px; }
+
+.rp-spark { display: block; width: 100%; height: 42px; margin-top: 4px; color: var(--brand-deep); }
+.rp-zero { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.rp-cursor { stroke: var(--soft); stroke-width: 1; opacity: 0.5; }
+.rp-dot { fill: var(--brand-deep); }
+.ln-model { stroke: var(--brand-deep); }
+.ln-book { stroke: var(--soft); stroke-dasharray: 4 3; }
+
+.replay-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--divider);
+}
 
 /* ── 赛前伤停情报 ── */
 .injury-card {
