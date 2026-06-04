@@ -25,6 +25,8 @@ export default defineNuxtConfig({
         || (process.env.NODE_ENV === 'production' ? 'https://ql.spdex.com' : ''),
       requireAuth,
       newspdexLoginUrl: process.env.NUXT_PUBLIC_NEWSPDEX_LOGIN_URL || 'https://new.spdex.com/login',
+      newspdexSilkRechargeUrl: process.env.NUXT_PUBLIC_NEWSPDEX_SILK_RECHARGE_URL
+        || 'https://new.spdex.com/account/silkbag/recharge',
       buildSha: process.env.BUILD_SHA || 'dev',
       buildTime: process.env.BUILD_TIME || '',
     },

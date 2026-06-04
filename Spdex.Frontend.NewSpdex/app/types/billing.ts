@@ -7,6 +7,7 @@ export interface PriceStage {
   stageName: string
   price: number
   month: number
+  days: number
 }
 
 export interface PaymentPlan {
@@ -32,6 +33,11 @@ export interface AlipayOrderResult {
   expireAt: string | null
 }
 
+export interface WxCodeOrderResult {
+  orderId: string | null
+  qrImageBase64: string
+}
+
 export interface SilkOrderResult {
   success: boolean
   orderId: string | null
@@ -54,9 +60,23 @@ export interface SilkNeed {
   sufficient: boolean
 }
 
+export interface SilkProduct {
+  productId: number
+  unitPrice: number
+}
+
+export interface SilkRechargeOrderResult {
+  channel: string
+  orderId: string | null
+  formHtml: string | null
+  qrImageBase64: string | null
+  totalFee: number
+  number: number
+}
+
 export interface OrderRecord {
   orderId: string
-  channel: string         // yft / alipay / silk / wechat
+  channel: string         // wxcode / alipay / silk / wechat
   roleId: number
   roleName: string | null
   dueMonths: number
@@ -91,4 +111,5 @@ export interface CreateOrderRequest {
   stageId: number
 }
 
-export type PaymentChannel = 'yft' | 'alipay' | 'silk'
+export type PaymentChannel = 'wxcode' | 'alipay' | 'silk'
+export type SilkRechargeChannel = 'alipay' | 'wxcode'

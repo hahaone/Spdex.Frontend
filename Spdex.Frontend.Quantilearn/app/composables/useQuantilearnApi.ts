@@ -412,6 +412,9 @@ export interface QuantilearnApiFlashPurchaseResult {
   success: boolean
   message: string
   upstreamCode?: string
+  consumeId?: string
+  remainingSilk?: number
+  paymentProvider?: string
   status: QuantilearnApiFlashAccessStatus
 }
 

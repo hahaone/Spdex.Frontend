@@ -5,7 +5,7 @@ import type {
   PaymentChannel,
   SilkNeed,
   SilkOrderResult,
-  YftOrderResult,
+  WxCodeOrderResult,
 } from '~/types/billing'
 
 const route = useRoute()
@@ -13,18 +13,22 @@ const router = useRouter()
 
 const roleId = computed(() => Number(route.query.roleId) || 0)
 const stageId = computed(() => Number(route.query.stageId) || 0)
-const initialChannel = computed(() => (route.query.channel as PaymentChannel | 'choose') || 'choose')
+const initialChannel = computed<PaymentChannel | 'choose'>(() => {
+  const raw = String(route.query.channel || 'choose')
+  if (raw === 'yft') return 'wxcode'
+  return (['wxcode', 'alipay', 'silk', 'choose'].includes(raw) ? raw : 'choose') as PaymentChannel | 'choose'
+})
 
 const channel = ref<PaymentChannel | 'choose'>(initialChannel.value)
 const phase = ref<'idle' | 'creating' | 'showing' | 'success' | 'error'>('idle')
 const errorMessage = ref<string>('')
 
-const yftResult = ref<YftOrderResult | null>(null)
+const wxResult = ref<WxCodeOrderResult | null>(null)
 const alipayResult = ref<AlipayOrderResult | null>(null)
 const silkResult = ref<SilkOrderResult | null>(null)
 const silkNeed = ref<SilkNeed | null>(null)
 
-const { createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
+const { createWxCodeOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
 const { refreshToken } = useAuth()
 
 // 进入页面后立即拉取锦囊所需点数（即使没选锦囊也展示）
@@ -34,17 +38,17 @@ onMounted(async () => {
   }
 })
 
-async function startYft() {
-  channel.value = 'yft'
+async function startWxCode() {
+  channel.value = 'wxcode'
   phase.value = 'creating'
   errorMessage.value = ''
-  const res = await createYftOrder(roleId.value, stageId.value)
+  const res = await createWxCodeOrder(roleId.value, stageId.value)
   if (!res) {
     phase.value = 'error'
     errorMessage.value = '下单失败，请稍后重试或更换支付方式'
     return
   }
-  yftResult.value = res
+  wxResult.value = res
   phase.value = 'showing'
 }
 
@@ -119,10 +123,10 @@ function goBack() {
     <section v-if="channel === 'choose'" class="channel-band">
       <h2>选择支付方式</h2>
       <div class="channel-grid">
-        <button class="channel-btn yft focus-ring" type="button" @click="startYft">
+        <button class="channel-btn wxcode focus-ring" type="button" @click="startWxCode">
           <QrCode :size="18" />
-          <b>扫码支付</b>
-          <span>微信 / 银行卡 · 推荐</span>
+          <b>微信扫码</b>
+          <span>微信支付 · 推荐</span>
         </button>
         <button class="channel-btn alipay focus-ring" type="button" @click="startAlipay">
           <CreditCard :size="18" />
@@ -153,17 +157,13 @@ function goBack() {
       </button>
     </div>
 
-    <!-- YFT 二维码 -->
-    <section v-else-if="channel === 'yft' && phase === 'showing'" class="yft-band">
-      <h2>请使用支付 App 扫码</h2>
-      <div v-if="yftResult?.qrCodeBase64" class="qr-box">
-        <img :src="`data:image/png;base64,${yftResult.qrCodeBase64}`" alt="二维码">
+    <!-- 微信二维码 -->
+    <section v-else-if="channel === 'wxcode' && phase === 'showing'" class="wxcode-band">
+      <h2>请使用微信扫码</h2>
+      <div v-if="wxResult?.qrImageBase64" class="qr-box">
+        <img :src="`data:image/png;base64,${wxResult.qrImageBase64}`" alt="微信支付二维码">
       </div>
-      <div v-else-if="yftResult?.payUrl" class="qr-fallback">
-        <p>请打开支付链接完成付款：</p>
-        <a :href="yftResult.payUrl" target="_blank" rel="noopener" class="pay-link num">{{ yftResult.payUrl }}</a>
-      </div>
-      <p class="hint">订单号：<span class="num">{{ yftResult?.orderId }}</span></p>
+      <p class="hint">订单号：<span class="num">{{ wxResult?.orderId }}</span></p>
       <p class="hint">支付完成后约 30 秒内自动到账，可点击下方按钮刷新会籍状态。</p>
       <button class="action-btn focus-ring" type="button" @click="checkRefresh">
         <RefreshCw :size="14" />
@@ -275,7 +275,7 @@ function goBack() {
   font-weight: 720;
 }
 
-.channel-btn.yft { border-color: var(--brand); }
+.channel-btn.wxcode { border-color: var(--brand); }
 .channel-btn.alipay { border-color: #0984e3; }
 .channel-btn.silk { border-color: #c8a64b; }
 
@@ -319,7 +319,7 @@ function goBack() {
 }
 
 /* ─── 二维码 ─── */
-.yft-band,
+.wxcode-band,
 .alipay-band,
 .success-band {
   display: grid;
@@ -330,7 +330,7 @@ function goBack() {
   background: var(--panel);
 }
 
-.yft-band h2,
+.wxcode-band h2,
 .alipay-band h2,
 .success-band h2 {
   margin: 0;

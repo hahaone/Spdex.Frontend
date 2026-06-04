@@ -140,7 +140,7 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
       <section class="pay-info">
         <h2>支持的支付方式</h2>
         <div class="pay-methods">
-          <span class="pay-item"><QrCode :size="13" /> 扫码（YFT）</span>
+          <span class="pay-item"><QrCode :size="13" /> 微信扫码</span>
           <span class="pay-item">支付宝</span>
           <span class="pay-item"><Coins :size="13" /> 锦囊扣点</span>
           <span class="pay-item"><MessageCircle :size="13" /> 客服</span>

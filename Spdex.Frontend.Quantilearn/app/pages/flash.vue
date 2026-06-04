@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Clock,
   Database,
+  ExternalLink,
   Lock,
   MinusCircle,
   PlayCircle,
@@ -79,6 +80,7 @@ interface SelectedFactorGroup {
 
 const route = useRoute()
 const router = useRouter()
+const runtimeConfig = useRuntimeConfig()
 const quantilearnApi = useQuantilearnApi()
 const apiBase = quantilearnApi.apiBase
 
@@ -259,6 +261,20 @@ const flashAccessTone = computed(() => {
 const canPurchaseFlash = computed(() => (
   Boolean(flashAccessStatus.value?.requiresPurchase) && purchaseState.value !== 'running'
 ))
+const flashRechargeUrl = computed(() => {
+  const status = flashAccessStatus.value
+  const base = String(runtimeConfig.public.newspdexSilkRechargeUrl || 'https://new.spdex.com/account/silkbag/recharge')
+  const returnUrl = typeof window !== 'undefined'
+    ? window.location.href
+    : `${runtimeConfig.public.quantilearnPublicBaseUrl || ''}${route.fullPath}`
+  const params = new URLSearchParams({
+    product: 'flashq',
+    returnUrl,
+    required: String(status?.bagCount ?? 0),
+    balance: String(status?.silkBalance ?? 0),
+  })
+  return `${base}${base.includes('?') ? '&' : '?'}${params.toString()}`
+})
 const flashAccessBlocksAnalysis = computed(() => {
   const status = flashAccessStatus.value
   return Boolean(status && !status.canAnalyze)
@@ -824,6 +840,12 @@ const purchaseFlashAccess = async () => {
     purchaseError.value = errorMessage(error)
     purchaseState.value = 'idle'
     await refreshAccess()
+  }
+}
+
+const goToSilkRecharge = () => {
+  if (typeof window !== 'undefined') {
+    window.location.href = flashRechargeUrl.value
   }
 }
 
@@ -1546,6 +1568,15 @@ const refreshFlash = async () => {
               <AlertTriangle :size="15" />
               <span>锦囊余额不足，请先充值后再开通闪Q。</span>
             </div>
+            <button
+              v-if="flashAccessStatus?.requiresRecharge"
+              type="button"
+              class="purchase-button recharge-button focus-ring"
+              @click="goToSilkRecharge"
+            >
+              <ExternalLink :size="16" />
+              <span>去 NewSpdex 买锦囊</span>
+            </button>
             <div v-if="purchaseError" class="access-warning danger-text">
               <AlertTriangle :size="15" />
               <span>{{ purchaseError }}</span>
@@ -3250,6 +3281,11 @@ h1 {
 .purchase-button:disabled {
   cursor: not-allowed;
   opacity: 0.46;
+}
+
+.recharge-button {
+  border-color: #c08418;
+  background: #b7791f;
 }
 
 .access-warning {

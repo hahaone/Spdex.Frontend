@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight } from '@lucide/vue'
+import { ChevronRight, Zap } from '@lucide/vue'
 import type { MatchSummary } from '~/types/match'
 
 const props = withDefaults(defineProps<{
@@ -8,11 +8,16 @@ const props = withDefaults(defineProps<{
   twoWay?: boolean
   /** 跳转路径，默认 /football/{eventId} */
   to?: string
+  /** 是否展示闪Q入口；默认足球卡片展示，篮球调用方可关闭。 */
+  showFlashQ?: boolean
 }>(), {
   twoWay: false,
+  showFlashQ: true,
 })
 
+const { buildFlashQLink } = useFlashQLink()
 const linkTo = computed(() => props.to ?? `/football/${props.match.eventId}`)
+const flashQUrl = computed(() => buildFlashQLink(props.match.eventId))
 
 const maxTurnover = computed(() => Math.max(...props.match.turnovers.map(toNumber), 1))
 
@@ -59,72 +64,81 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 </script>
 
 <template>
-  <NuxtLink :to="linkTo" class="match-card focus-ring">
-    <div class="card-head">
-      <span class="league">
-        <span class="code">{{ match.leagueCode }}</span>
-        <span class="name">{{ match.leagueName }}</span>
-      </span>
-      <span class="head-right">
-        <span :class="['status', `st-${match.status}`]">
-          <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
+  <article class="match-card">
+    <NuxtLink :to="linkTo" class="match-main focus-ring">
+      <div class="card-head">
+        <span class="league">
+          <span class="code">{{ match.leagueCode }}</span>
+          <span class="name">{{ match.leagueName }}</span>
         </span>
-        <span class="num kick-off">{{ kickOff }}</span>
-        <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
-        <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
-      </span>
+        <span class="head-right">
+          <span :class="['status', `st-${match.status}`]">
+            <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
+          </span>
+          <span class="num kick-off">{{ kickOff }}</span>
+          <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
+          <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
+        </span>
+      </div>
+
+      <div v-if="scoreText" class="score-strip">
+        <span class="sc-label">比分</span>
+        <span class="sc-main num">{{ scoreText }}</span>
+        <span v-if="match.halfScoreText" class="sc-half">半 {{ match.halfScoreText }}</span>
+      </div>
+
+      <div class="grid-legend">
+        <span class="lg-team">球队</span>
+        <span>必发</span>
+        <span>必指</span>
+        <span class="lg-to">成交</span>
+      </div>
+
+      <div :class="['market-grid', { 'two-way': twoWay }]">
+        <span class="cell selection home">{{ match.homeTeam }}</span>
+        <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[0]) }}</span>
+        <span class="cell bfidx"><i :style="{ width: `${bfPct(0)}%` }" /><b class="num">{{ bfPct(0) }}</b></span>
+        <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[0]) }" /><b class="num">{{ match.turnovers[0] }}</b></span>
+
+        <template v-if="!twoWay">
+          <span class="cell selection handicap">{{ match.handicap || '平' }}</span>
+          <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[1]) }}</span>
+          <span class="cell bfidx"><i :style="{ width: `${bfPct(1)}%` }" /><b class="num">{{ bfPct(1) }}</b></span>
+          <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[1]) }" /><b class="num">{{ match.turnovers[1] }}</b></span>
+        </template>
+
+        <span class="cell selection away">{{ match.awayTeam }}</span>
+        <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[2]) }}</span>
+        <span class="cell bfidx"><i :style="{ width: `${bfPct(2)}%` }" /><b class="num">{{ bfPct(2) }}</b></span>
+        <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[2]) }" /><b class="num">{{ match.turnovers[2] }}</b></span>
+      </div>
+
+      <div class="meta-foot">
+        <span class="m-chip total">成交 <b class="num">{{ totalTurnover }}</b></span>
+        <span v-if="match.euro" class="m-chip euro">欧赔 <b class="num">{{ match.euro[0].toFixed(2) }}/{{ match.euro[1].toFixed(2) }}/{{ match.euro[2].toFixed(2) }}</b></span>
+        <span v-if="match.kellyVar" class="m-chip kelly" title="跨公司凯利方差 主/平/客">
+          凯利方差 <b class="num">{{ match.kellyVar[0] }}/{{ match.kellyVar[1] }}/{{ match.kellyVar[2] }}</b>
+        </span>
+        <span v-if="hasPoly" class="m-chip poly">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
+        <span
+          v-if="match.bigBetSide"
+          :class="['big-bet', `side-${bigBetSideKey(match.bigBetSide)}`]"
+          :title="match.bigBetAttr"
+        >
+          大单 {{ match.bigBetSide }}<template v-if="match.bigBetOdds">@{{ match.bigBetOdds.toFixed(2) }}</template> {{ match.bigBetAttr }}
+        </span>
+        <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
+        <ChevronRight class="chev" :size="16" />
+      </div>
+    </NuxtLink>
+
+    <div v-if="showFlashQ" class="quick-actions">
+      <a :href="flashQUrl" class="flashq-action focus-ring" aria-label="使用闪Q分析">
+        <Zap :size="14" />
+        <span>闪Q分析</span>
+      </a>
     </div>
-
-    <div v-if="scoreText" class="score-strip">
-      <span class="sc-label">比分</span>
-      <span class="sc-main num">{{ scoreText }}</span>
-      <span v-if="match.halfScoreText" class="sc-half">半 {{ match.halfScoreText }}</span>
-    </div>
-
-    <div class="grid-legend">
-      <span class="lg-team">球队</span>
-      <span>必发</span>
-      <span>必指</span>
-      <span class="lg-to">成交</span>
-    </div>
-
-    <div :class="['market-grid', { 'two-way': twoWay }]">
-      <span class="cell selection home">{{ match.homeTeam }}</span>
-      <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[0]) }}</span>
-      <span class="cell bfidx"><i :style="{ width: `${bfPct(0)}%` }" /><b class="num">{{ bfPct(0) }}</b></span>
-      <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[0]) }" /><b class="num">{{ match.turnovers[0] }}</b></span>
-
-      <template v-if="!twoWay">
-        <span class="cell selection handicap">{{ match.handicap || '平' }}</span>
-        <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[1]) }}</span>
-        <span class="cell bfidx"><i :style="{ width: `${bfPct(1)}%` }" /><b class="num">{{ bfPct(1) }}</b></span>
-        <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[1]) }" /><b class="num">{{ match.turnovers[1] }}</b></span>
-      </template>
-
-      <span class="cell selection away">{{ match.awayTeam }}</span>
-      <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[2]) }}</span>
-      <span class="cell bfidx"><i :style="{ width: `${bfPct(2)}%` }" /><b class="num">{{ bfPct(2) }}</b></span>
-      <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[2]) }" /><b class="num">{{ match.turnovers[2] }}</b></span>
-    </div>
-
-    <div class="meta-foot">
-      <span class="m-chip total">成交 <b class="num">{{ totalTurnover }}</b></span>
-      <span v-if="match.euro" class="m-chip euro">欧赔 <b class="num">{{ match.euro[0].toFixed(2) }}/{{ match.euro[1].toFixed(2) }}/{{ match.euro[2].toFixed(2) }}</b></span>
-      <span v-if="match.kellyVar" class="m-chip kelly" title="跨公司凯利方差 主/平/客">
-        凯利方差 <b class="num">{{ match.kellyVar[0] }}/{{ match.kellyVar[1] }}/{{ match.kellyVar[2] }}</b>
-      </span>
-      <span v-if="hasPoly" class="m-chip poly">P指 <b class="num">{{ match.polyIndex.join('/') }}</b></span>
-      <span
-        v-if="match.bigBetSide"
-        :class="['big-bet', `side-${bigBetSideKey(match.bigBetSide)}`]"
-        :title="match.bigBetAttr"
-      >
-        大单 {{ match.bigBetSide }}<template v-if="match.bigBetOdds">@{{ match.bigBetOdds.toFixed(2) }}</template> {{ match.bigBetAttr }}
-      </span>
-      <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
-      <ChevronRight class="chev" :size="16" />
-    </div>
-  </NuxtLink>
+  </article>
 </template>
 
 <style scoped>
@@ -135,6 +149,12 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   background: var(--panel);
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(26, 34, 51, 0.05);
+}
+
+.match-main {
+  display: block;
+  color: inherit;
+  text-decoration: none;
 }
 
 .card-head {
@@ -363,6 +383,33 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   flex: 0 0 auto;
   margin-left: auto;
   color: var(--brand);
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--divider);
+  background: linear-gradient(180deg, #fffefa 0%, #fff7d9 100%);
+}
+
+.flashq-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  gap: 5px;
+  border: 1px solid #f0d46c;
+  border-radius: 4px;
+  background: #fff34f;
+  color: #1a2233;
+  font-size: 0.8rem;
+  font-weight: 860;
+  text-decoration: none;
+}
+
+.flashq-action:active {
+  transform: translateY(1px);
 }
 
 @media (max-width: 370px) {

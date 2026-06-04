@@ -109,6 +109,7 @@ const leagueOptions = computed(() => {
         :match="match"
         :two-way="true"
         :to="`/basketball/${match.eventId}`"
+        :show-flash-q="false"
       />
       <div v-if="!pending && !matches.length" class="empty" role="status">
         暂无赛事

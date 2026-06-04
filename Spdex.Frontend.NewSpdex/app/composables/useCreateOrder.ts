@@ -1,6 +1,6 @@
 /**
  * 下单 composable：3 种支付通道。
- *   - YFT 易付通：返回 base64 二维码 + payUrl
+ *   - 微信扫码：返回 base64 二维码
  *   - 支付宝：返回 formHtml（前端自动 submit）
  *   - 锦囊扣点：即时生效，返回扣点结果
  */
@@ -13,6 +13,10 @@ import type {
   SilkBalance,
   SilkNeed,
   SilkOrderResult,
+  SilkProduct,
+  SilkRechargeChannel,
+  SilkRechargeOrderResult,
+  WxCodeOrderResult,
   YftOrderResult,
 } from '~/types/billing'
 
@@ -24,6 +28,15 @@ export function useCreateOrder() {
   async function createYftOrder(roleId: number, stageId: number): Promise<YftOrderResult | null> {
     const body: CreateOrderRequest = { roleId, stageId }
     const res = await $apiFetch<ApiResponse<YftOrderResult>>('/api/newspdex/billing/order/yft', {
+      method: 'POST',
+      body,
+    })
+    return res.code === 0 ? (res.data ?? null) : null
+  }
+
+  async function createWxCodeOrder(roleId: number, stageId: number): Promise<WxCodeOrderResult | null> {
+    const body: CreateOrderRequest = { roleId, stageId }
+    const res = await $apiFetch<ApiResponse<WxCodeOrderResult>>('/api/newspdex/billing/order/wxcode', {
       method: 'POST',
       body,
     })
@@ -42,7 +55,7 @@ export function useCreateOrder() {
   async function createSilkOrder(roleId: number, stageId: number): Promise<SilkOrderResult> {
     const body: CreateOrderRequest = { roleId, stageId }
     try {
-      const res = await $apiFetch<ApiResponse<SilkOrderResult>>('/api/newspdex/billing/order/silk', {
+      const res = await $apiFetch<ApiResponse<SilkOrderResult>>('/api/newspdex/billing/order/silk-local', {
         method: 'POST',
         body,
       })
@@ -72,6 +85,19 @@ export function useCreateOrder() {
     return res.code === 0 ? (res.data ?? null) : null
   }
 
+  async function getSilkProduct(): Promise<SilkProduct | null> {
+    const res = await $apiFetch<ApiResponse<SilkProduct>>('/api/newspdex/billing/silk-product')
+    return res.code === 0 ? (res.data ?? null) : null
+  }
+
+  async function createSilkRechargeOrder(channel: SilkRechargeChannel, number: number): Promise<SilkRechargeOrderResult | null> {
+    const res = await $apiFetch<ApiResponse<SilkRechargeOrderResult>>('/api/newspdex/billing/silk-recharge', {
+      method: 'POST',
+      body: { channel, number },
+    })
+    return res.code === 0 ? (res.data ?? null) : null
+  }
+
   async function getSilkNeed(roleId: number, stageId: number): Promise<SilkNeed | null> {
     const res = await $apiFetch<ApiResponse<SilkNeed>>('/api/newspdex/billing/silk-need', {
       query: { roleId, stageId },
@@ -89,10 +115,13 @@ export function useCreateOrder() {
 
   return {
     createYftOrder,
+    createWxCodeOrder,
     createAlipayOrder,
     createSilkOrder,
+    createSilkRechargeOrder,
     getSilkBalance,
     getSilkNeed,
+    getSilkProduct,
     getCustomerService,
   }
 }
