@@ -101,7 +101,7 @@ const leagueOptions = computed(() => {
 </script>
 
 <template>
-  <div class="football-page">
+  <div :class="['football-page', { 'is-metric-filtered': isMetricFiltered }]">
     <aside v-if="!isMetricFiltered" class="filter-band">
       <div class="filter-head">
         <h2>赛事筛选</h2>
@@ -368,15 +368,20 @@ select {
 
 @media (min-width: 1024px) {
   .football-page {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 270px minmax(0, 1fr);
     align-items: start;
     gap: 16px;
     padding: 16px 0;
   }
 
+  .football-page.is-metric-filtered {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .filter-band {
     position: sticky;
     top: 72px;
+    grid-column: 1;
     gap: 10px;
     padding: 14px 14px 16px;
     border: 1px solid var(--line);
@@ -391,15 +396,26 @@ select {
   }
 
   .match-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-column: 2;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 10px;
     padding: 0;
   }
-}
 
-@media (min-width: 1280px) {
-  .match-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .lock-banner {
+    grid-column: 2;
+    width: fit-content;
+    margin: 0;
+  }
+
+  .metric-filter-band {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .football-page.is-metric-filtered .match-list,
+  .football-page.is-metric-filtered .lock-banner {
+    grid-column: 1;
   }
 }
 

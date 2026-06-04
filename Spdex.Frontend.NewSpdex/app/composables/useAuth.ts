@@ -35,6 +35,7 @@ export function useAuth() {
   const config = useRuntimeConfig()
   const token = useNewSpdexTokenCookie()
   const user = useState<AuthUser | null>('newspdex_auth_user', () => null)
+  const authVersion = useState<number>('newspdex_auth_version', () => 0)
   const refreshTimer = useState<ReturnType<typeof setTimeout> | null>('newspdex_refresh_timer', () => null)
   const visibilityBound = useState('newspdex_visibility_bound', () => false)
 
@@ -42,6 +43,24 @@ export function useAuth() {
   const tier = computed(() => user.value?.tier ?? 'Free')
   const entitlements = computed(() => user.value?.entitlements ?? null)
   const userName = computed(() => user.value?.userName ?? '')
+
+  function authSignature(nextUser: AuthUser | null): string {
+    if (!nextUser) return 'anonymous'
+    return `${nextUser.userId}:${nextUser.roleId}:${nextUser.tier ?? ''}:${nextUser.endDate ?? ''}`
+  }
+
+  function setAuthUser(nextUser: AuthUser | null) {
+    const before = authSignature(user.value)
+    user.value = nextUser
+    if (authSignature(nextUser) !== before) authVersion.value += 1
+  }
+
+  function clearAuthState() {
+    const hadAuth = !!token.value || !!user.value
+    token.value = null
+    user.value = null
+    if (hadAuth) authVersion.value += 1
+  }
 
   function tokenStatus(): 'ok' | 'need_refresh' | 'expired' {
     if (!token.value) return 'expired'
@@ -105,21 +124,19 @@ export function useAuth() {
 
       if (res.code === 0 && res.data) {
         token.value = res.data.token
-        user.value = res.data.user
+        setAuthUser(res.data.user)
         scheduleRefresh()
         return true
       }
 
-      token.value = null
-      user.value = null
+      clearAuthState()
       navigateTo('/login')
       return false
     }
     catch (err: unknown) {
       const fetchErr = err as { statusCode?: number }
       if (fetchErr?.statusCode === 401 || fetchErr?.statusCode === 403) {
-        token.value = null
-        user.value = null
+        clearAuthState()
         navigateTo('/login')
       }
       return false
@@ -136,7 +153,7 @@ export function useAuth() {
 
       if (res.code === 0 && res.data) {
         token.value = res.data.token
-        user.value = res.data.user
+        setAuthUser(res.data.user)
         scheduleRefresh()
         return { ok: true, error: null, captchaFailed: false }
       }
@@ -170,7 +187,7 @@ export function useAuth() {
 
       if (res.code === 0 && res.data) {
         token.value = res.data.token
-        user.value = res.data.user
+        setAuthUser(res.data.user)
         scheduleRefresh()
         return { ok: true, error: null, captchaFailed: false }
       }
@@ -199,7 +216,7 @@ export function useAuth() {
       })
       if (res.code === 0 && res.data) {
         token.value = res.data.token
-        user.value = res.data.user
+        setAuthUser(res.data.user)
         scheduleRefresh()
         return { ok: true, error: null, captchaFailed: false }
       }
@@ -250,8 +267,7 @@ export function useAuth() {
       clearTimeout(refreshTimer.value)
       refreshTimer.value = null
     }
-    token.value = null
-    user.value = null
+    clearAuthState()
     navigateTo('/login')
   }
 
@@ -265,20 +281,18 @@ export function useAuth() {
       })
 
       if (res.code === 0 && res.data) {
-        user.value = res.data
+        setAuthUser(res.data)
         scheduleRefresh()
         return true
       }
 
-      token.value = null
-      user.value = null
+      clearAuthState()
       return false
     }
     catch (err: unknown) {
       const fetchErr = err as { statusCode?: number }
       if (fetchErr?.statusCode === 401 || fetchErr?.statusCode === 403) {
-        token.value = null
-        user.value = null
+        clearAuthState()
       }
       return false
     }
@@ -287,6 +301,7 @@ export function useAuth() {
   return {
     token: readonly(token),
     user: readonly(user),
+    authVersion: readonly(authVersion),
     isLoggedIn,
     tier,
     entitlements,

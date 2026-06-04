@@ -109,6 +109,17 @@ const sectionTitle = computed(() => {
   }
 })
 
+const sectionLockMessage = computed(() => {
+  switch (sectionMode.value) {
+    case 'standard': return access.value.standard ? '' : '标盘数据未对当前会籍开放'
+    case 'goals': return access.value.goals ? '' : '进球数据未对当前会籍开放'
+    case 'handicap': return access.value.handicap ? '' : '让分数据未对当前会籍开放'
+    case 'cs': return access.value.cs ? '' : '比分 · 白金会员专属'
+    case 'corner': return access.value.corner ? '' : '角球 · 白金会员专属'
+    default: return ''
+  }
+})
+
 const match = computed(() => detail.value?.match)
 
 function jumpTo(target: SectionKey) {
@@ -144,7 +155,10 @@ function jumpTo(target: SectionKey) {
             </div>
             <div class="teams">
               <span class="team home">{{ match.homeTeam }}</span>
-              <b class="handicap">{{ match.handicap || '—' }}</b>
+              <a :href="flashQUrl" class="flashq-versus focus-ring" aria-label="使用闪Q分析">
+                <Zap :size="13" />
+                <span>闪Q</span>
+              </a>
               <span class="team away">{{ match.awayTeam }}</span>
             </div>
             <div class="meta-row">
@@ -153,12 +167,6 @@ function jumpTo(target: SectionKey) {
               <span>状态 {{ match.status === 'upcoming' ? '未开赛' : match.status === 'started' ? '进行中' : '已完场' }}</span>
               <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
             </div>
-          </div>
-          <div class="header-actions">
-            <a :href="flashQUrl" class="flashq-detail focus-ring" aria-label="使用闪Q分析">
-              <Zap :size="16" />
-              <span>闪Q分析</span>
-            </a>
           </div>
         </div>
       </section>
@@ -287,12 +295,9 @@ function jumpTo(target: SectionKey) {
           </section>
 
           <template v-else-if="sectionMode">
-            <div
-              v-if="(sectionMode === 'cs' && !access.cs) || (sectionMode === 'corner' && !access.corner)"
-              class="access-card"
-            >
+            <div v-if="sectionLockMessage" class="access-card">
               <Lock :size="14" />
-              <span>{{ sectionMode === 'cs' ? '比分' : '角球' }} · 白金会员专属</span>
+              <span>{{ sectionLockMessage }}</span>
             </div>
             <MarketMetricTable v-else :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
           </template>
@@ -427,31 +432,6 @@ function jumpTo(target: SectionKey) {
   gap: 6px;
 }
 
-.header-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.flashq-detail {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  gap: 6px;
-  padding: 0 14px;
-  border: 1px solid #f0d46c;
-  border-radius: 4px;
-  background: #fff34f;
-  color: #1a2233;
-  font-size: 0.84rem;
-  font-weight: 860;
-  text-decoration: none;
-}
-
-.flashq-detail:active {
-  transform: translateY(1px);
-}
-
 .league-line {
   display: flex;
   align-items: center;
@@ -496,15 +476,26 @@ function jumpTo(target: SectionKey) {
   white-space: nowrap;
 }
 
-/* 限定在赛事头内，避免 scoped 样式经子组件根继承泄漏到 .summary-card.handicap 卡片。 */
-.teams .handicap {
-  padding: 2px 8px;
-  border-radius: 3px;
-  background: var(--brand);
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+.flashq-versus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  min-height: 28px;
+  gap: 4px;
+  padding: 0 9px;
+  border: 1px solid #f0d46c;
+  border-radius: 4px;
+  background: #fff34f;
+  color: #1a2233;
+  font-size: 0.78rem;
+  font-weight: 860;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.flashq-versus:active {
+  transform: translateY(1px);
 }
 
 .meta-row {
@@ -669,21 +660,14 @@ function jumpTo(target: SectionKey) {
     gap: 8px;
   }
 
-  .header-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-  }
-
-  .header-actions {
-    min-width: 118px;
-  }
-
   .teams .team {
     font-size: 1.24rem;
   }
 
-  .teams .handicap {
-    font-size: 0.96rem;
+  .flashq-versus {
+    min-width: 60px;
+    min-height: 30px;
+    font-size: 0.82rem;
   }
 
   .tab-band {

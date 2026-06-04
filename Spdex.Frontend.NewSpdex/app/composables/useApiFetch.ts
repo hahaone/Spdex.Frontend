@@ -12,6 +12,8 @@ export function useApiFetch<T>(
 ) {
   const config = useRuntimeConfig()
   const token = useNewSpdexTokenCookie()
+  const authVersion = useState<number>('newspdex_auth_version', () => 0)
+  const fetchOpts = withAuthVersionWatch(opts, authVersion)
 
   return useFetch<T>(path as never, {
     baseURL: config.public.apiBase as string,
@@ -34,8 +36,21 @@ export function useApiFetch<T>(
         navigateTo('/login')
       }
     },
-    ...opts,
+    ...fetchOpts,
   } as never)
+}
+
+function withAuthVersionWatch(opts: Record<string, unknown>, authVersion: Ref<number>) {
+  const merged = { ...opts }
+  const existingWatch = merged.watch
+  if (existingWatch !== false) {
+    merged.watch = Array.isArray(existingWatch)
+      ? [...existingWatch, authVersion]
+      : existingWatch
+        ? [existingWatch, authVersion]
+        : [authVersion]
+  }
+  return merged
 }
 
 /**

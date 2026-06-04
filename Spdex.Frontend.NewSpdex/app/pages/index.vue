@@ -43,8 +43,13 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
 
     <HomeCustomizer v-if="editMode" />
     <div v-else class="module-stack">
-      <component :is="MODULE_COMPONENT[id]" v-for="id in orderedSections" :key="id" :class="{ 'mod-wide': id === 'metrics' }" />
-      <HomeMembership />
+      <component
+        :is="MODULE_COMPONENT[id]"
+        v-for="id in orderedSections"
+        :key="id"
+        :class="['module-item', `mod-${id}`, { 'mod-wide': id === 'metrics' }]"
+      />
+      <HomeMembership class="module-item mod-membership" />
     </div>
   </div>
 </template>
@@ -134,31 +139,45 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
     font-size: 0.86rem;
   }
 
-  /* 桌面仪表盘：2 列瀑布流；KPI 指标行占满整宽置顶 */
+  /* 桌面仪表盘：规则栅格；指标行占满整宽，其他模块自动填充左右空位。 */
   .module-stack {
-    display: block;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-flow: dense;
+    align-items: start;
     width: 100%;
     max-width: 1120px;
     margin: 0 auto;
     padding: 16px 0 32px;
-    column-count: 2;
-    column-gap: 16px;
+    gap: 16px;
   }
 
-  .module-stack > * {
-    break-inside: avoid;
-    margin: 0 0 16px;
+  .module-item {
+    grid-column: span 6;
+    min-width: 0;
   }
 
-  .module-stack > .mod-wide {
+  .module-item.mod-wide {
     column-span: all;
+    grid-column: 1 / -1;
+  }
+
+  .mod-big-trades,
+  .mod-features {
+    align-self: stretch;
   }
 }
 
 @media (min-width: 1440px) {
   .module-stack {
     max-width: 1280px;
-    column-gap: 20px;
+    gap: 18px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .module-stack {
+    max-width: 1440px;
   }
 }
 </style>

@@ -65,22 +65,30 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 
 <template>
   <article class="match-card">
-    <NuxtLink :to="linkTo" class="match-main focus-ring">
-      <div class="card-head">
+    <div class="card-head">
+      <NuxtLink :to="linkTo" class="card-head-main focus-ring">
         <span class="league">
           <span class="code">{{ match.leagueCode }}</span>
           <span class="name">{{ match.leagueName }}</span>
         </span>
-        <span class="head-right">
-          <span :class="['status', `st-${match.status}`]">
-            <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
-          </span>
-          <span class="num kick-off">{{ kickOff }}</span>
-          <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
-          <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
-        </span>
-      </div>
+      </NuxtLink>
 
+      <a v-if="showFlashQ" :href="flashQUrl" class="flashq-mini focus-ring" aria-label="使用闪Q分析">
+        <Zap :size="12" />
+        <span>闪Q</span>
+      </a>
+
+      <NuxtLink :to="linkTo" class="head-right focus-ring">
+        <span :class="['status', `st-${match.status}`]">
+          <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
+        </span>
+        <span class="num kick-off">{{ kickOff }}</span>
+        <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
+        <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
+      </NuxtLink>
+    </div>
+
+    <NuxtLink :to="linkTo" class="match-main focus-ring">
       <div v-if="scoreText" class="score-strip">
         <span class="sc-label">比分</span>
         <span class="sc-main num">{{ scoreText }}</span>
@@ -131,13 +139,6 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
         <ChevronRight class="chev" :size="16" />
       </div>
     </NuxtLink>
-
-    <div v-if="showFlashQ" class="quick-actions">
-      <a :href="flashQUrl" class="flashq-action focus-ring" aria-label="使用闪Q分析">
-        <Zap :size="14" />
-        <span>闪Q分析</span>
-      </a>
-    </div>
   </article>
 </template>
 
@@ -158,17 +159,29 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 }
 
 .card-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 6px 9px;
   border-bottom: 1px solid var(--divider);
   background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 100%);
 }
 
+.card-head-main,
+.head-right,
+.flashq-mini {
+  text-decoration: none;
+}
+
+.card-head-main {
+  min-width: 0;
+  color: inherit;
+}
+
 .league {
   display: inline-flex;
+  max-width: 100%;
   min-width: 0;
   align-items: center;
   gap: 5px;
@@ -200,6 +213,28 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   flex: 0 0 auto;
   align-items: center;
   gap: 5px;
+  color: inherit;
+}
+
+.flashq-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  min-height: 22px;
+  gap: 3px;
+  padding: 0 7px;
+  border: 1px solid #f0d46c;
+  border-radius: 4px;
+  background: #fff34f;
+  color: #1a2233;
+  font-size: 0.68rem;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.flashq-mini:active {
+  transform: translateY(1px);
 }
 
 .status {
@@ -385,34 +420,17 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   color: var(--brand);
 }
 
-.quick-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  padding: 6px 8px 8px;
-  border-top: 1px solid var(--divider);
-  background: linear-gradient(180deg, #fffefa 0%, #fff7d9 100%);
-}
-
-.flashq-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  gap: 5px;
-  border: 1px solid #f0d46c;
-  border-radius: 4px;
-  background: #fff34f;
-  color: #1a2233;
-  font-size: 0.8rem;
-  font-weight: 860;
-  text-decoration: none;
-}
-
-.flashq-action:active {
-  transform: translateY(1px);
-}
-
 @media (max-width: 370px) {
+  .card-head {
+    gap: 5px;
+    padding-inline: 7px;
+  }
+
+  .flashq-mini {
+    min-width: 40px;
+    padding-inline: 5px;
+  }
+
   .market-grid,
   .grid-legend {
     grid-template-columns: minmax(52px, 1fr) 42px 46px minmax(52px, 0.85fr);

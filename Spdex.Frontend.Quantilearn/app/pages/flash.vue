@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Clock,
   Database,
   ExternalLink,
   Lock,
@@ -14,10 +13,8 @@ import {
   PlayCircle,
   PlusCircle,
   RefreshCw,
-  Search,
   ShieldCheck,
   SlidersHorizontal,
-  Target,
   Wallet,
 } from '@lucide/vue'
 import {
@@ -79,10 +76,8 @@ interface SelectedFactorGroup {
 }
 
 const route = useRoute()
-const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
 const quantilearnApi = useQuantilearnApi()
-const apiBase = quantilearnApi.apiBase
 
 const snapshotOptions: Array<{ id: FlashSnapshotId, label: string }> = [
   { id: 'current', label: '即时' },
@@ -109,7 +104,6 @@ const leagueOptions = [
   { id: 3, label: '友谊赛' },
 ]
 
-const eventIdInput = ref(String(route.query.eid || route.query.eventId || '35675743'))
 const activeSnapshot = ref<FlashSnapshotId>('current')
 const selectedFactors = ref<SelectedFlashFactor[]>([])
 const activeSectionId = ref('bf-core')
@@ -131,7 +125,7 @@ const bigTradesState = ref<'idle' | 'running' | 'done'>('idle')
 const bigTradesResult = ref<QuantilearnApiBigTradesResult | null>(null)
 const bigTradesError = ref('')
 
-const eventId = computed(() => String(route.query.eid || route.query.eventId || eventIdInput.value || '').trim())
+const eventId = computed(() => String(route.query.eid || route.query.eventId || '35675743').trim())
 
 const errorMessage = (error: unknown) => toQuantilearnUserError(error)
 
@@ -257,6 +251,24 @@ const flashAccessTone = computed(() => {
   if (status.canAnalyze) return 'good'
   if (status.requiresPurchase) return 'warn'
   return 'danger'
+})
+const roleLabel = computed(() => {
+  const raw = String(permissions.value?.role || '').trim()
+  const clean = raw.split(/[：:]/)[0]?.trim()
+  if (clean) return clean
+
+  switch (permissions.value?.roleId) {
+    case 11: return '翡翠版'
+    case 12: return '红宝石版'
+    case 5:
+    case 13: return '白金版'
+    default: return '黄金版'
+  }
+})
+const flashCostLabel = computed(() => {
+  const status = flashAccessStatus.value
+  if (!status?.bagCount) return '免费'
+  return `${status.bagCount} 锦囊 / ${status.hours}h`
 })
 const canPurchaseFlash = computed(() => (
   Boolean(flashAccessStatus.value?.requiresPurchase) && purchaseState.value !== 'running'
@@ -627,16 +639,6 @@ watch(snapshot, () => {
   }
 }, { immediate: true })
 
-const loadEvent = async () => {
-  const nextEventId = eventIdInput.value.trim()
-  if (!nextEventId) return
-
-  await router.replace({
-    path: '/flash',
-    query: { ...route.query, eid: nextEventId },
-  })
-}
-
 const toggleFactor = (factor: QuantilearnApiFlashFactorCell) => {
   if (!factor.hasValue || !isFactorAllowed(factor.factorId)) return
 
@@ -959,21 +961,9 @@ const refreshFlash = async () => {
       <div class="brand-block">
         <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
         <div>
-          <span class="eyebrow">FlashQ.aspx</span>
           <h1>闪Q单场分析</h1>
         </div>
       </div>
-
-      <form class="event-search" @submit.prevent="loadEvent">
-        <label>
-          <Search :size="15" />
-          <input v-model="eventIdInput" type="search" inputmode="numeric" placeholder="EventId">
-        </label>
-        <button type="submit" class="primary-button focus-ring">
-          <Target :size="15" />
-          <span>加载</span>
-        </button>
-      </form>
 
       <div class="snapshot-tabs" aria-label="FlashQ snapshot">
         <button
@@ -987,7 +977,7 @@ const refreshFlash = async () => {
         </button>
       </div>
 
-      <button type="button" class="icon-button focus-ring" title="刷新快照" @click="refreshFlash">
+      <button type="button" class="icon-button header-refresh focus-ring" title="刷新赛事数据" @click="refreshFlash">
         <RefreshCw :size="16" />
       </button>
     </header>
@@ -1531,7 +1521,7 @@ const refreshFlash = async () => {
               <h3>闪Q权限</h3>
             </div>
             <span :class="['status-chip', flashAccessTone]">
-              {{ permissions?.role || '账号' }}
+              {{ roleLabel }}
             </span>
           </div>
 
@@ -1547,7 +1537,11 @@ const refreshFlash = async () => {
               </div>
               <div>
                 <span>开通成本</span>
-                <strong>{{ flashAccessStatus?.bagCount ? `${flashAccessStatus.bagCount} / ${flashAccessStatus.hours}h` : '免费' }}</strong>
+                <strong>{{ flashCostLabel }}</strong>
+              </div>
+              <div>
+                <span>因子上限</span>
+                <strong>{{ selectedLimit }} 个</strong>
               </div>
               <div>
                 <span>到期</span>
@@ -1575,7 +1569,7 @@ const refreshFlash = async () => {
               @click="goToSilkRecharge"
             >
               <ExternalLink :size="16" />
-              <span>去 NewSpdex 买锦囊</span>
+              <span>购买锦囊</span>
             </button>
             <div v-if="purchaseError" class="access-warning danger-text">
               <AlertTriangle :size="15" />
@@ -1584,25 +1578,6 @@ const refreshFlash = async () => {
             <div v-if="permissionError" class="access-warning danger-text">
               <AlertTriangle :size="15" />
               <span>{{ permissionError }}</span>
-            </div>
-          </div>
-
-          <div class="action-summary">
-            <div>
-              <span>匹配赛事</span>
-              <strong>{{ snapshot?.eventId || '-' }}</strong>
-            </div>
-            <div>
-              <span>快照路径</span>
-              <strong>{{ snapshot?.vendorBasePath || '-' }}</strong>
-            </div>
-            <div>
-              <span>默认市场</span>
-              <strong>胜平负 / 进球盘</strong>
-            </div>
-            <div v-if="analysisResult">
-              <span>总匹配</span>
-              <strong>{{ numberText(analysisResult.finalMatchedCount) }}</strong>
             </div>
           </div>
 
@@ -1629,21 +1604,6 @@ const refreshFlash = async () => {
           </div>
         </section>
 
-        <section class="side-panel">
-          <div class="panel-title compact-title">
-            <div>
-              <span class="eyebrow">Runtime</span>
-              <h3>数据状态</h3>
-            </div>
-            <Clock :size="16" />
-          </div>
-          <div class="runtime-list">
-            <div><span>API</span><strong>{{ apiBase }}</strong></div>
-            <div><span>更新</span><strong>{{ formatDateTime(snapshot?.updateTimeUtc) }}</strong></div>
-            <div><span>原始盘</span><strong>{{ snapshot?.vendorBaseAvailable ? '可用' : '缺失' }}</strong></div>
-            <div v-if="snapshot?.warnings.length"><span>提示</span><strong>{{ snapshot.warnings[0] }}</strong></div>
-          </div>
-        </section>
       </aside>
     </main>
 
@@ -1675,7 +1635,7 @@ const refreshFlash = async () => {
   top: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(260px, 360px) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   min-height: 58px;
@@ -1686,8 +1646,6 @@ const refreshFlash = async () => {
 }
 
 .brand-block,
-.event-search,
-.event-search label,
 .snapshot-tabs,
 .event-title,
 .matrix-title,
@@ -1713,6 +1671,10 @@ const refreshFlash = async () => {
   gap: 10px;
 }
 
+.header-refresh {
+  justify-self: end;
+}
+
 .brand-logo {
   display: block;
   flex: 0 0 96px;
@@ -1733,30 +1695,6 @@ p {
 h1 {
   font-size: 1rem;
   font-weight: 850;
-}
-
-.event-search {
-  gap: 7px;
-}
-
-.event-search label {
-  width: 100%;
-  min-height: 34px;
-  gap: 7px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--muted);
-}
-
-.event-search input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ink);
 }
 
 .snapshot-tabs {
@@ -1796,8 +1734,7 @@ h1 {
 .flash-stage,
 .flash-sidebar,
 .selected-group-stack,
-.selected-stack,
-.runtime-list {
+.selected-stack {
   display: grid;
   align-content: start;
   gap: 10px;
@@ -1865,9 +1802,7 @@ h1 {
   gap: 7px;
 }
 
-.event-metrics div,
-.action-summary div,
-.runtime-list div {
+.event-metrics div {
   min-width: 0;
   border-radius: 6px;
   background: var(--surface);
@@ -1880,9 +1815,7 @@ h1 {
   padding: 7px 8px;
 }
 
-.event-metrics span,
-.action-summary span,
-.runtime-list span {
+.event-metrics span {
   overflow: hidden;
   color: var(--muted);
   font-size: 0.7rem;
@@ -1891,9 +1824,7 @@ h1 {
   white-space: nowrap;
 }
 
-.event-metrics strong,
-.action-summary strong,
-.runtime-list strong {
+.event-metrics strong {
   overflow: hidden;
   color: var(--ink);
   font-size: 0.84rem;
@@ -3299,12 +3230,6 @@ h1 {
   color: var(--rose);
 }
 
-.action-summary,
-.runtime-list {
-  display: grid;
-  gap: 6px;
-}
-
 .league-tabs {
   flex-wrap: wrap;
   gap: 5px;
@@ -3315,16 +3240,6 @@ h1 {
   min-height: 30px;
   min-width: 64px;
   font-size: 0.75rem;
-}
-
-.action-summary div,
-.runtime-list div {
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 8px;
 }
 
 .analyze-button {
@@ -3368,7 +3283,6 @@ h1 {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "brand refresh"
-      "search search"
       "snapshots snapshots";
   }
 
@@ -3376,13 +3290,13 @@ h1 {
     grid-area: brand;
   }
 
-  .event-search {
-    grid-area: search;
-  }
-
   .snapshot-tabs {
     grid-area: snapshots;
     overflow-x: auto;
+  }
+
+  .header-refresh {
+    grid-area: refresh;
   }
 
   .flash-layout {
@@ -3434,12 +3348,6 @@ h1 {
     font-size: 0.94rem;
   }
 
-  .event-search {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .event-search label,
   .primary-button,
   .snapshot-tab {
     min-height: 36px;

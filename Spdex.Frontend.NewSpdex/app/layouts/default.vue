@@ -82,8 +82,15 @@ onMounted(() => {
   }
 
   .content-inner {
-    max-width: 1280px;
+    max-width: 1440px;
     padding: 0 20px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .content-inner {
+    max-width: 1680px;
+    padding-inline: 24px;
   }
 }
 </style>

@@ -68,7 +68,8 @@ function indexValue(row: MarketMetricRow): string {
 
 <style scoped>
 .summary-card {
-  display: block;
+  display: grid;
+  align-content: start;
   width: 100%;
   padding: 0;
   border: 1px solid var(--line);
