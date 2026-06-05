@@ -11,6 +11,7 @@ import type {
   AlipayOrderResult,
   CreateOrderRequest,
   CustomerService,
+  PaymentSyncResult,
   SilkBalance,
   SilkNeed,
   SilkOrderResult,
@@ -60,6 +61,19 @@ export function useCreateOrder() {
       const res = await $apiFetch<ApiResponse<AlipayOrderResult>>('/api/newspdex/billing/order/alipay', {
         method: 'POST',
         body,
+      })
+      return res.code === 0 ? (res.data ?? null) : null
+    }
+    catch {
+      return null
+    }
+  }
+
+  async function syncAlipayOrder(orderId: string): Promise<PaymentSyncResult | null> {
+    try {
+      const res = await $apiFetch<ApiResponse<PaymentSyncResult>>('/api/newspdex/billing/order/alipay/sync', {
+        method: 'POST',
+        body: { orderId },
       })
       return res.code === 0 ? (res.data ?? null) : null
     }
@@ -133,6 +147,7 @@ export function useCreateOrder() {
     createYftOrder,
     createWxCodeOrder,
     createAlipayOrder,
+    syncAlipayOrder,
     createSilkOrder,
     createSilkRechargeOrder,
     getSilkBalance,

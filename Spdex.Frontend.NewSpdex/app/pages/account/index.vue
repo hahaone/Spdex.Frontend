@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
+import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ReceiptText, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
+import type { OrderRecord } from '~/types/billing'
 
-const { user, userName, tier, logout } = useAuth()
-const { summary, refresh } = useAccount()
+const route = useRoute()
+const router = useRouter()
+const { user, userName, tier, logout, refreshToken } = useAuth()
+const { summary, orders, ordersServiceAvailable, refresh } = useAccount()
 const { start: startOnboarding } = useOnboarding()
-const { getCustomerService } = useCreateOrder()
+const { getCustomerService, syncAlipayOrder } = useCreateOrder()
 
 // 客服 QQ（优先取后端配置，回退默认）
 const customerQQ = ref('2735629769')
 const qqCopied = ref(false)
+const paymentNotice = ref('')
+const syncingPayment = ref(false)
 
 async function copyQQ() {
   try {
@@ -44,6 +49,7 @@ const endDate = computed(() => {
 const silkTotal = computed(() => Math.round(summary.value?.silkBalance?.total ?? 0))
 
 const isTest = computed(() => summary.value?.isTestAccount === true)
+const recentOrders = computed(() => orders.value.slice(0, 5))
 
 const lastLogin = computed(() => {
   const raw = summary.value?.lastActivityDate
@@ -55,7 +61,61 @@ async function handleLogout() {
   await logout()
 }
 
+function queryStringValue(value: unknown) {
+  return Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '')
+}
+
+async function reconcileAlipayReturn() {
+  if (queryStringValue(route.query.payment) !== 'alipay') return
+
+  const orderId = queryStringValue(route.query.out_trade_no || route.query.orderId)
+  if (!orderId) {
+    paymentNotice.value = '支付宝支付结果确认中'
+    return
+  }
+
+  syncingPayment.value = true
+  paymentNotice.value = '正在确认支付宝支付结果'
+  const result = await syncAlipayOrder(orderId)
+  syncingPayment.value = false
+
+  if (result?.paid) {
+    paymentNotice.value = '支付已确认，会籍已更新'
+    await refreshToken()
+  }
+  else {
+    paymentNotice.value = result?.message || '支付结果仍在确认中'
+  }
+
+  await router.replace('/account')
+}
+
+function channelLabel(channel: string) {
+  const key = channel.toLowerCase()
+  if (key === 'alipay') return '支付宝'
+  if (key === 'yft') return '扫码支付'
+  if (key === 'wxcode' || key === 'wechat') return '微信'
+  if (key === 'silk') return '锦囊'
+  return channel || '—'
+}
+
+function formatAmount(amount: number) {
+  return `¥${amount.toFixed(2)}`
+}
+
+function formatOrderTime(raw: string | null) {
+  if (!raw) return '—'
+  return raw.slice(5, 16).replace('T', ' ')
+}
+
+function orderStatusClass(order: OrderRecord) {
+  if (order.status === 1) return 'is-paid'
+  if (order.status === 0) return 'is-pending'
+  return 'is-failed'
+}
+
 onMounted(async () => {
+  await reconcileAlipayReturn()
   await refresh()
   const cs = await getCustomerService().catch(() => null)
   if (cs?.qq) customerQQ.value = cs.qq
@@ -109,6 +169,11 @@ onMounted(async () => {
       </div>
     </div>
 
+    <div v-if="paymentNotice" class="payment-notice" :class="{ syncing: syncingPayment }">
+      <CreditCard :size="14" />
+      <span>{{ paymentNotice }}</span>
+    </div>
+
     <div v-if="summary?.email || summary?.mobile" class="contact-row">
       <span v-if="summary?.email" class="contact-item">
         <Mail :size="13" />
@@ -136,6 +201,29 @@ onMounted(async () => {
         <span>客服 QQ</span>
         <b class="qq-val num">{{ qqCopied ? '已复制' : customerQQ }}</b>
       </button>
+    </section>
+
+    <section class="orders-band">
+      <div class="band-head">
+        <span>
+          <ReceiptText :size="15" />
+          <b>最近订单</b>
+        </span>
+        <em v-if="!ordersServiceAvailable">历史订单暂不可用</em>
+      </div>
+      <div v-if="recentOrders.length" class="order-list">
+        <div v-for="order in recentOrders" :key="order.orderId" class="order-row">
+          <div class="order-main">
+            <b class="num">{{ order.orderId }}</b>
+            <span>{{ channelLabel(order.channel) }} · {{ formatOrderTime(order.createTime) }}</span>
+          </div>
+          <div class="order-side">
+            <b class="num">{{ formatAmount(order.amount) }}</b>
+            <span class="order-status" :class="orderStatusClass(order)">{{ order.statusText || '—' }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-orders">暂无订单</div>
     </section>
 
     <button class="logout-btn focus-ring" type="button" @click="handleLogout">
@@ -277,6 +365,26 @@ onMounted(async () => {
   gap: 4px;
 }
 
+.payment-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid #b7e4c7;
+  border-radius: 5px;
+  background: #f0fff4;
+  color: #1b6a3a;
+  font-size: 0.8rem;
+  font-weight: 780;
+}
+
+.payment-notice.syncing {
+  border-color: #d8cdfc;
+  background: #f6f2ff;
+  color: var(--brand);
+}
+
 .settings-band {
   display: grid;
   border: 1px solid var(--line);
@@ -322,6 +430,120 @@ onMounted(async () => {
 
 .setting-row:active {
   background: var(--surface);
+}
+
+.orders-band {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.band-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.band-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.band-head svg {
+  color: var(--brand);
+}
+
+.band-head em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 720;
+}
+
+.order-list {
+  display: grid;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+
+.order-row + .order-row {
+  border-top: 1px solid var(--divider);
+}
+
+.order-main,
+.order-side {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.order-main b {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 820;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-main span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.order-side {
+  justify-items: end;
+}
+
+.order-side b {
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 820;
+}
+
+.order-status {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 820;
+}
+
+.order-status.is-paid {
+  background: #e9f9ef;
+  color: #17703b;
+}
+
+.order-status.is-pending {
+  background: #fff7e6;
+  color: #9a5a00;
+}
+
+.order-status.is-failed {
+  background: #fdecef;
+  color: #b4233c;
+}
+
+.empty-orders {
+  padding: 13px 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 720;
 }
 
 .logout-btn {

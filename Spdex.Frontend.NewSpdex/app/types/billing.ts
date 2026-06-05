@@ -87,6 +87,16 @@ export interface OrderRecord {
   expireTime: string | null
 }
 
+export interface PaymentSyncResult {
+  orderId: string
+  status: number
+  statusText: string
+  paid: boolean
+  paidTime: string | null
+  newEndDate: string | null
+  message: string | null
+}
+
 export interface AccountSummary {
   userId: number
   userName: string
