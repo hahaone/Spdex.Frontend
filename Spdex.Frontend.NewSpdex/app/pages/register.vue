@@ -25,6 +25,11 @@ function postAuthTarget() {
 
   try {
     const target = new URL(redirect, window.location.origin)
+    if (target.hostname === 'ql.spdex.com' && target.pathname === '/flash') {
+      const eid = target.searchParams.get('eid') || ''
+      const cleanTarget = `${target.origin}${target.pathname}`
+      return `/flashq/bridge?eid=${encodeURIComponent(eid)}&target=${encodeURIComponent(cleanTarget)}`
+    }
     if (target.origin === window.location.origin || target.hostname.endsWith('.spdex.com')) {
       return target.href
     }

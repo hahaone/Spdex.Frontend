@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, BarChart3, Lock } from '@lucide/vue'
+import { ArrowLeft, BarChart3, CircleDot, Flag, Lock } from '@lucide/vue'
 import type { AnalysisReplayPoint } from '~/composables/useLiveSnapshot'
 
 const route = useRoute()
@@ -19,6 +19,11 @@ function eventTone(type: string): string {
     case 'corner': return 'corner'
     default: return 'mute'
   }
+}
+function eventIcon(type: string) {
+  if (type === 'goal' || type === 'penalty') return CircleDot
+  if (type === 'corner') return Flag
+  return null
 }
 
 const homeCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'home') ?? [])
@@ -118,17 +123,30 @@ const signalSpark = computed(() => {
   const pts = analysis.value?.signalTimeline ?? []
   if (pts.length < 3) return null
   const vals = pts.map(p => p.strength)
-  const W = 200, H = 30, pad = 3
+  const W = 200, H = 34, pad = 4
   const min = Math.min(...vals)
   const max = Math.max(...vals)
   const span = max - min || 1
-  const step = (W - pad * 2) / (vals.length - 1)
-  const path = vals.map((v, i) => {
-    const x = pad + i * step
+  const maxMinute = Math.max(90, ...pts.map(p => p.minute || 0))
+  const xOfMinute = (minute: number) => pad + (W - pad * 2) * (Math.max(0, minute) / maxMinute)
+  const path = pts.map((p, i) => {
+    const v = p.strength
+    const x = xOfMinute(p.minute || i)
     const y = pad + (H - pad * 2) * (1 - (v - min) / span)
     return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
-  return { path, w: W, h: H, max }
+  const guides = [
+    { minute: 20, x: xOfMinute(20), label: '20', dashed: true },
+    { minute: 45, x: xOfMinute(45), label: 'HT', dashed: false },
+  ]
+  const triggers = pts
+    .filter(p => p.strength >= 80)
+    .map(p => ({
+      x: xOfMinute(p.minute),
+      y: pad + (H - pad * 2) * (1 - (p.strength - min) / span),
+      minute: p.minute,
+    }))
+  return { path, w: W, h: H, max, guides, triggers }
 })
 
 // ── 完场回放：赛中分析时序（仅完场且有归档时非空）──
@@ -199,6 +217,41 @@ const overProbSpark = computed(() => {
     return d
   }
   return { w: W, h: H, model: draw(model), book: draw(book), min: Math.round(min), max: Math.round(max), cursorX: pad + replayIndex.value * step }
+})
+
+const totalGoalsSpark = computed(() => {
+  const series = replaySeries.value
+  const vals = series.map(p => (p.modelTotalGoals == null ? null : Number(p.modelTotalGoals)))
+  const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
+  if (nums.length < 2) return null
+  const W = 240, H = 50, pad = 6
+  const min = Math.min(...nums), max = Math.max(...nums)
+  const span = max - min || 1
+  const step = series.length > 1 ? (W - pad * 2) / (series.length - 1) : 0
+  const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
+  let path = '', pen = false
+  const marked = new Set<number>()
+  vals.forEach((v, i) => {
+    if (v == null) { pen = false; return }
+    const x = pad + i * step
+    path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${yOf(v).toFixed(1)} `
+    pen = true
+    const prev = vals[i - 1]
+    if (prev != null && Math.abs(v - prev) > 0.5) {
+      marked.add(i - 1)
+      marked.add(i)
+    }
+  })
+  const labels = [...marked].sort((a, b) => a - b).map(i => {
+    const v = vals[i]!
+    return {
+      x: pad + i * step,
+      y: yOf(v),
+      text: v.toFixed(2),
+      anchor: i > vals.length - 3 ? 'end' : 'middle',
+    }
+  })
+  return { path, w: W, h: H, min: min.toFixed(2), max: max.toFixed(2), labels }
 })
 
 // ── 赛前伤停情报 ──
@@ -273,6 +326,19 @@ function injStatus(s: string): { text: string, cls: string } {
         <span>模型总进球 <b class="num">{{ model.modelTotalGoals.toFixed(2) }}</b></span>
         <span v-if="model.redCards" class="rd">红牌 {{ model.redCards }}（产能衰减）</span>
       </div>
+      <div v-if="totalGoalsSpark" class="total-goals-chart">
+        <div class="tg-head">
+          <span>模型总进球</span>
+          <span class="muted num">{{ totalGoalsSpark.min }} ~ {{ totalGoalsSpark.max }}</span>
+        </div>
+        <svg class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
+          <path :d="totalGoalsSpark.path" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <g v-for="label in totalGoalsSpark.labels" :key="`${label.x}-${label.text}`">
+            <circle :cx="label.x" :cy="label.y" r="2.7" class="tg-dot" />
+            <text :x="label.x" :y="Math.max(9, label.y - 5)" :text-anchor="label.anchor" class="tg-label">{{ label.text }}</text>
+          </g>
+        </svg>
+      </div>
       <div v-if="model.goalLine" class="m-edge">
         <div class="edge-title">大小 <b class="num">{{ model.goalLine }}</b> · 模型 vs 主流平台</div>
         <div class="edge-bars">
@@ -308,7 +374,20 @@ function injStatus(s: string): { text: string, cls: string } {
       <div v-if="signalSpark" class="an-block">
         <div class="an-sub"><span>双红信号走势</span><span class="muted">峰值 {{ signalSpark.max }}</span></div>
         <svg class="sig-spark" :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`" preserveAspectRatio="none">
+          <line
+            v-for="guide in signalSpark.guides"
+            :key="guide.label"
+            :x1="guide.x"
+            y1="0"
+            :x2="guide.x"
+            :y2="signalSpark.h"
+            :class="['sig-guide', { dashed: guide.dashed }]"
+          />
           <path :d="signalSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
+          <g v-for="(trigger, index) in signalSpark.triggers" :key="`${trigger.minute}-${index}`">
+            <circle :cx="trigger.x" :cy="trigger.y" r="2.7" class="sig-trigger" />
+            <text :x="trigger.x" :y="signalSpark.h - 1" text-anchor="middle" class="sig-label">{{ trigger.minute }}'</text>
+          </g>
         </svg>
       </div>
     </section>
@@ -422,7 +501,10 @@ function injStatus(s: string): { text: string, cls: string } {
           :class="['event-row', event.side, eventTone(event.type)]"
         >
           <span class="minute num">{{ event.minute }}</span>
-          <b>{{ event.text }}</b>
+          <b>
+            <component :is="eventIcon(event.type)" v-if="eventIcon(event.type)" class="event-icon" :size="13" />
+            <span>{{ event.text }}</span>
+          </b>
         </div>
       </div>
       <div v-else class="empty-section">
@@ -751,6 +833,22 @@ section.compare {
   grid-row: 1;
 }
 
+.event-row b {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.event-row.away b {
+  justify-self: end;
+}
+
+.event-icon {
+  flex: 0 0 auto;
+  stroke-width: 2.3;
+}
+
 .event-row.goal b {
   color: var(--sell);
 }
@@ -1008,6 +1106,35 @@ section.compare {
 .m-goals b { color: var(--ink); font-weight: 820; }
 .m-goals .rd { color: #b1253c; font-weight: 760; }
 
+.total-goals-chart {
+  margin: 2px 0 6px;
+  padding: 6px 8px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.tg-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.tg-head .muted { color: var(--muted); font-size: 0.68rem; font-weight: 720; }
+.tg-spark { display: block; width: 100%; height: 50px; margin-top: 3px; color: var(--brand-deep); }
+.tg-dot { fill: #fff; stroke: var(--sell); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.tg-label {
+  fill: var(--ink);
+  font-size: 7px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
 .m-edge {
   margin-top: 4px;
   padding: 7px 9px;
@@ -1169,7 +1296,22 @@ section.compare {
 .an-probs .p em.up { color: var(--sell); }
 .an-probs .p em.down { color: var(--buy); }
 
-.sig-spark { display: block; width: 100%; height: 30px; margin-top: 6px; color: #b1253c; }
+.sig-spark { display: block; width: 100%; height: 34px; margin-top: 6px; color: #b1253c; }
+.sig-guide {
+  stroke: rgba(107, 115, 133, 0.5);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.sig-guide.dashed { stroke-dasharray: 3 3; }
+.sig-trigger { fill: #fff; stroke: var(--buy); stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.sig-label {
+  fill: var(--buy);
+  font-size: 6.5px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 2px;
+}
 
 /* ── 完场回放：赛中分析时序 ── */
 .replay-card {

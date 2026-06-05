@@ -41,8 +41,7 @@ function isActive(to: string): boolean {
 }
 
 async function handleLogout() {
-  logout()
-  await navigateTo('/login')
+  await logout()
 }
 </script>
 

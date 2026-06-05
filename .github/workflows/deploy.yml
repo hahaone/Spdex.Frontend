@@ -16,6 +16,7 @@ env:
   IMAGE_2026: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026
   IMAGE_NEWSPDEX: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex
   IMAGE_QUANTILEARN: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn
+  IMAGE_ADMIN: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.admin
 
 jobs:
   changes:
@@ -30,6 +31,7 @@ jobs:
       frontend2026: ${{ steps.detect.outputs.frontend2026 }}
       newspdex: ${{ steps.detect.outputs.newspdex }}
       quantilearn: ${{ steps.detect.outputs.quantilearn }}
+      admin: ${{ steps.detect.outputs.admin }}
       any: ${{ steps.detect.outputs.any }}
 
     steps:
@@ -48,6 +50,7 @@ jobs:
           frontend2026=false
           newspdex=false
           quantilearn=false
+          admin=false
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # 手动触发保留原来的全量构建语义。
@@ -55,6 +58,7 @@ jobs:
             frontend2026=true
             newspdex=true
             quantilearn=true
+            admin=true
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
@@ -86,19 +90,23 @@ jobs:
                 Spdex.Frontend.Quantilearn/*)
                   quantilearn=true
                   ;;
+                Spdex.Frontend.Admin/*)
+                  admin=true
+                  ;;
                 .github/workflows/deploy.yml)
                   # 部署流水线自身变化影响所有服务，构建一次全量镜像验证新流程。
                   fjc=true
                   frontend2026=true
                   newspdex=true
                   quantilearn=true
+                  admin=true
                   ;;
               esac
             done
           fi
 
           any=false
-          if [ "$fjc" = "true" ] || [ "$frontend2026" = "true" ] || [ "$newspdex" = "true" ] || [ "$quantilearn" = "true" ]; then
+          if [ "$fjc" = "true" ] || [ "$frontend2026" = "true" ] || [ "$newspdex" = "true" ] || [ "$quantilearn" = "true" ] || [ "$admin" = "true" ]; then
             any=true
           fi
 
@@ -107,6 +115,7 @@ jobs:
             echo "frontend2026=$frontend2026"
             echo "newspdex=$newspdex"
             echo "quantilearn=$quantilearn"
+            echo "admin=$admin"
             echo "any=$any"
           } >> "$GITHUB_OUTPUT"
 
@@ -116,6 +125,7 @@ jobs:
             echo "- 2026: $frontend2026"
             echo "- NewSpdex: $newspdex"
             echo "- Quantilearn: $quantilearn"
+            echo "- Admin: $admin"
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -188,6 +198,20 @@ jobs:
             ${{ env.IMAGE_QUANTILEARN }}:latest
             ${{ env.IMAGE_QUANTILEARN }}:${{ github.sha }}
 
+      - name: Build and push Admin Docker image
+        if: needs.changes.outputs.admin == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Spdex.Frontend.Admin
+          push: true
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+            API_INTERNAL_URL=http://127.0.0.1:5000
+          tags: |
+            ${{ env.IMAGE_ADMIN }}:latest
+            ${{ env.IMAGE_ADMIN }}:${{ github.sha }}
+
   deploy:
     name: Deploy changed frontend services
     needs: [changes, build]
@@ -205,7 +229,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: ACR_USERNAME,ACR_PASSWORD,DEPLOY_FJC,DEPLOY_2026,DEPLOY_NEWSPDEX,DEPLOY_QUANTILEARN
+          envs: ACR_USERNAME,ACR_PASSWORD,DEPLOY_FJC,DEPLOY_2026,DEPLOY_NEWSPDEX,DEPLOY_QUANTILEARN,DEPLOY_ADMIN
           script: |
             set -eu
 
@@ -276,6 +300,10 @@ jobs:
               deploy_compose_service frontend-quantilearn spdex-frontend-quantilearn 3004 http://127.0.0.1:3004/
             fi
 
+            if [ "$DEPLOY_ADMIN" = "true" ]; then
+              deploy_compose_service frontend-admin spdex-frontend-admin 3005 http://127.0.0.1:3005/login
+            fi
+
             docker image prune -f
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
@@ -284,3 +312,4 @@ jobs:
           DEPLOY_2026: ${{ needs.changes.outputs.frontend2026 }}
           DEPLOY_NEWSPDEX: ${{ needs.changes.outputs.newspdex }}
           DEPLOY_QUANTILEARN: ${{ needs.changes.outputs.quantilearn }}
+          DEPLOY_ADMIN: ${{ needs.changes.outputs.admin }}

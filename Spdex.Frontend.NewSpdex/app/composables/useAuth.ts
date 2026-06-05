@@ -1,9 +1,9 @@
 /**
  * NewSpdex 认证状态管理 Composable。
  * 替代旧 useFakeAuth：
- *   - 使用真实 JWT（存 cookie）
+ *   - 使用后端 HttpOnly session cookie
  *   - 调 /api/newspdex/auth/{login,me,refresh}
- *   - 自动续期：剩余 < 10 分钟时刷新
+ *   - 自动续期：客户端只触发 refresh，不读取 JWT
  *   - 401/403 自动登出
  *   - 暴露 Entitlements / Tier 给组件
  */
@@ -11,7 +11,7 @@
 import type { ApiResponse, AuthUser, LoginResponseData } from '~/types/auth'
 
 export interface AuthSubmitResult {
-  /** 业务是否成功（已登录/已注册，token 已存）。 */
+  /** 业务是否成功（已登录/已注册，会话已建立）。 */
   ok: boolean
   /** 错误信息（ok=false 时）。 */
   error: string | null
@@ -34,12 +34,13 @@ function getTokenExp(jwt: string): number | null {
 export function useAuth() {
   const config = useRuntimeConfig()
   const token = useNewSpdexTokenCookie()
+  const sessionHint = useNewSpdexSessionHintCookie()
   const user = useState<AuthUser | null>('newspdex_auth_user', () => null)
   const authVersion = useState<number>('newspdex_auth_version', () => 0)
   const refreshTimer = useState<ReturnType<typeof setTimeout> | null>('newspdex_refresh_timer', () => null)
   const visibilityBound = useState('newspdex_visibility_bound', () => false)
 
-  const isLoggedIn = computed(() => !!token.value)
+  const isLoggedIn = computed(() => !!user.value || !!sessionHint.value || !!token.value)
   const tier = computed(() => user.value?.tier ?? 'Free')
   const entitlements = computed(() => user.value?.entitlements ?? null)
   const userName = computed(() => user.value?.userName ?? '')
@@ -56,15 +57,23 @@ export function useAuth() {
   }
 
   function clearAuthState() {
-    const hadAuth = !!token.value || !!user.value
+    const hadAuth = !!token.value || !!sessionHint.value || !!user.value
     token.value = null
+    sessionHint.value = null
     user.value = null
     if (hadAuth) authVersion.value += 1
   }
 
+  function markAuthenticated(nextUser: AuthUser) {
+    token.value = null
+    sessionHint.value = true
+    setAuthUser(nextUser)
+    scheduleRefresh()
+  }
+
   function tokenStatus(): 'ok' | 'need_refresh' | 'expired' {
     if (!token.value) return 'expired'
-    const exp = getTokenExp(token.value)
+    const exp = token.value ? getTokenExp(token.value) : null
     if (!exp) return 'expired'
     const nowSec = Math.floor(Date.now() / 1000)
     if (nowSec >= exp) return 'expired'
@@ -80,13 +89,12 @@ export function useAuth() {
       refreshTimer.value = null
     }
 
-    if (!token.value) return
-    const exp = getTokenExp(token.value)
-    if (!exp) return
+    if (!token.value && !sessionHint.value && !user.value) return
 
-    const nowSec = Math.floor(Date.now() / 1000)
-    const remainMs = (exp - nowSec) * 1000
-    const refreshIn = Math.max(remainMs - 10 * 60 * 1000, 0)
+    const exp = token.value ? getTokenExp(token.value) : null
+    const refreshIn = exp
+      ? Math.max((exp - Math.floor(Date.now() / 1000)) * 1000 - 10 * 60 * 1000, 0)
+      : 50 * 60 * 1000
 
     refreshTimer.value = setTimeout(async () => {
       await refreshToken()
@@ -99,9 +107,8 @@ export function useAuth() {
         const status = tokenStatus()
         if (status === 'expired') {
           const ok = await refreshToken()
-          if (!ok && token.value) {
-            token.value = null
-            user.value = null
+          if (!ok && (sessionHint.value || token.value)) {
+            clearAuthState()
             navigateTo('/login')
           }
         }
@@ -113,19 +120,15 @@ export function useAuth() {
   }
 
   async function refreshToken(): Promise<boolean> {
-    if (!token.value) return false
-
     try {
       const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/refresh', {
         baseURL: config.public.apiBase as string,
         method: 'POST',
-        headers: { Authorization: `Bearer ${token.value}` },
+        credentials: 'include',
       })
 
       if (res.code === 0 && res.data) {
-        token.value = res.data.token
-        setAuthUser(res.data.user)
-        scheduleRefresh()
+        markAuthenticated(res.data.user)
         return true
       }
 
@@ -148,13 +151,12 @@ export function useAuth() {
       const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/login', {
         baseURL: config.public.apiBase as string,
         method: 'POST',
+        credentials: 'include',
         body: { userName: loginName, password, captchaVerifyParam },
       })
 
       if (res.code === 0 && res.data) {
-        token.value = res.data.token
-        setAuthUser(res.data.user)
-        scheduleRefresh()
+        markAuthenticated(res.data.user)
         return { ok: true, error: null, captchaFailed: false }
       }
 
@@ -182,13 +184,12 @@ export function useAuth() {
       const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/register', {
         baseURL: config.public.apiBase as string,
         method: 'POST',
+        credentials: 'include',
         body: payload,
       })
 
       if (res.code === 0 && res.data) {
-        token.value = res.data.token
-        setAuthUser(res.data.user)
-        scheduleRefresh()
+        markAuthenticated(res.data.user)
         return { ok: true, error: null, captchaFailed: false }
       }
 
@@ -204,20 +205,18 @@ export function useAuth() {
     }
   }
 
-  /** 已登录修改密码：成功后后端旋转 JTI 并回新 token，这里续上。 */
+  /** 已登录修改密码：成功后后端旋转 JTI 并续写 HttpOnly session。 */
   async function changePassword(oldPassword: string, newPassword: string): Promise<AuthSubmitResult> {
-    if (!token.value) return { ok: false, error: '未登录', captchaFailed: false }
+    if (!isLoggedIn.value) return { ok: false, error: '未登录', captchaFailed: false }
     try {
       const res = await $fetch<ApiResponse<LoginResponseData>>('/api/newspdex/auth/change-password', {
         baseURL: config.public.apiBase as string,
         method: 'POST',
-        headers: { Authorization: `Bearer ${token.value}` },
+        credentials: 'include',
         body: { oldPassword, newPassword },
       })
       if (res.code === 0 && res.data) {
-        token.value = res.data.token
-        setAuthUser(res.data.user)
-        scheduleRefresh()
+        markAuthenticated(res.data.user)
         return { ok: true, error: null, captchaFailed: false }
       }
       return { ok: false, error: res.message || '修改失败', captchaFailed: false }
@@ -262,27 +261,31 @@ export function useAuth() {
     }
   }
 
-  function logout() {
+  async function logout() {
     if (refreshTimer.value) {
       clearTimeout(refreshTimer.value)
       refreshTimer.value = null
     }
+
+    await $fetch('/api/newspdex/auth/logout', {
+      baseURL: config.public.apiBase as string,
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => null)
+
     clearAuthState()
     navigateTo('/login')
   }
 
   async function fetchUser(): Promise<boolean> {
-    if (!token.value) return false
-
     try {
       const res = await $fetch<ApiResponse<AuthUser>>('/api/newspdex/auth/me', {
         baseURL: config.public.apiBase as string,
-        headers: { Authorization: `Bearer ${token.value}` },
+        credentials: 'include',
       })
 
       if (res.code === 0 && res.data) {
-        setAuthUser(res.data)
-        scheduleRefresh()
+        markAuthenticated(res.data)
         return true
       }
 

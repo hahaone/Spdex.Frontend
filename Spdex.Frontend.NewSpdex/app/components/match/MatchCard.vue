@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ChevronRight, Zap } from '@lucide/vue'
+import type { RouteLocationRaw } from 'vue-router'
 import type { MatchSummary } from '~/types/match'
 
 const props = withDefaults(defineProps<{
@@ -7,7 +8,7 @@ const props = withDefaults(defineProps<{
   /** twoWay=true 适配篮球：只显示主/客两行，让分线显示在头部 chip */
   twoWay?: boolean
   /** 跳转路径，默认 /football/{eventId} */
-  to?: string
+  to?: RouteLocationRaw
   /** 是否展示闪Q入口；默认足球卡片展示，篮球调用方可关闭。 */
   showFlashQ?: boolean
 }>(), {

@@ -33,13 +33,13 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
 
 <template>
   <header class="top-bar">
-    <div class="brand-area">
+    <a class="brand-area focus-ring" href="https://new.spdex.com" aria-label="返回 NewSPdex 首页">
       <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
       <div class="brand-copy">
         <h1>量化模型</h1>
         <p>{{ selectedWorkspaceLabel }} / {{ selectedModelName }}</p>
       </div>
-    </div>
+    </a>
 
     <nav class="workspace-tabs" aria-label="量化模型工作台">
       <button
@@ -95,6 +95,8 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
 
 .brand-area {
   gap: 10px;
+  color: inherit;
+  text-decoration: none;
 }
 
 .brand-logo {

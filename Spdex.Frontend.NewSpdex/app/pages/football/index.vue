@@ -2,13 +2,18 @@
 import { Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
 
-const day = ref('today')
+const route = useRoute()
+const routeDay = route.query.day === 'yesterday' ? 'yesterday' : 'today'
+const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
+const routeLottery = ['all', 'jc', 'lottery'].includes(String(route.query.lottery)) ? String(route.query.lottery) as 'all' | 'jc' | 'lottery' : 'all'
+
+const day = ref(routeDay)
 // 状态筛选与「竞彩/胜负彩」拆成两组独立控件（G2/G3）
-const status = ref<'upcoming' | 'started' | 'all'>('upcoming')
-const lottery = ref<'all' | 'jc' | 'lottery'>('all')
-const league = ref('all')
+const status = ref<'upcoming' | 'started' | 'all'>(routeStatus)
+const lottery = ref<'all' | 'jc' | 'lottery'>(routeLottery)
+const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 // 数据回查：自选日期，非空时覆盖「今日/昨日」
-const customDate = ref('')
+const customDate = ref(typeof route.query.date === 'string' ? route.query.date : '')
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -49,7 +54,6 @@ const daySeg = computed({
 })
 
 // ── 首页异动指标点击落地：?metric=xxx&events=1,2,3 → 只显示命中的这些比赛 ──
-const route = useRoute()
 const metricKey = computed(() => (route.query.metric as string) || '')
 const isMetricFiltered = computed(() => metricKey.value !== '')
 const eventIdSet = computed(() => {
@@ -98,6 +102,24 @@ const leagueOptions = computed(() => {
   }
   return opts
 })
+
+const listReturnQuery = computed(() => {
+  const query: Record<string, string> = {}
+  if (customDate.value) query.date = customDate.value
+  else if (day.value !== 'today') query.day = day.value
+  if (status.value !== 'upcoming') query.status = status.value
+  if (lottery.value !== 'all') query.lottery = lottery.value
+  if (league.value !== 'all') query.league = league.value
+  if (metricKey.value) {
+    query.metric = metricKey.value
+    if (typeof route.query.events === 'string') query.events = route.query.events
+  }
+  return query
+})
+
+function detailRoute(eventId: number) {
+  return { path: `/football/${eventId}`, query: listReturnQuery.value }
+}
 </script>
 
 <template>
@@ -150,7 +172,7 @@ const leagueOptions = computed(() => {
       <div v-if="pending && !displayMatches.length" class="match-skeleton">
         <div v-for="i in 4" :key="i" class="skeleton-card" />
       </div>
-      <MatchCard v-for="match in displayMatches" v-else :key="match.eventId" :match="match" />
+      <MatchCard v-for="match in displayMatches" v-else :key="match.eventId" :match="match" :to="detailRoute(match.eventId)" />
       <div v-if="!pending && !displayMatches.length" class="empty" role="status">
         {{ isMetricFiltered ? '该指标暂无命中赛事（可能已开赛或不在当前窗口）' : '暂无赛事' }}
       </div>

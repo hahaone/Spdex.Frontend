@@ -12,6 +12,14 @@ const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useC
 const { fetchSnapshot } = useMatchSnapshot()
 const { buildFlashQLink } = useFlashQLink()
 const flashQUrl = computed(() => buildFlashQLink(eventId.value))
+const footballBackRoute = computed(() => {
+  const query: Record<string, string> = {}
+  for (const key of ['date', 'day', 'status', 'lottery', 'league', 'metric', 'events']) {
+    const value = route.query[key]
+    if (typeof value === 'string' && value) query[key] = value
+  }
+  return Object.keys(query).length ? { path: '/football', query } : '/football'
+})
 
 // 时光机：现在 / -1h / -2h / -6h / -12h / -24h
 const timeMachinePoints = [
@@ -140,7 +148,7 @@ function jumpTo(target: SectionKey) {
 
     <template v-else-if="match">
       <section class="match-header">
-        <NuxtLink to="/football" class="back focus-ring">
+        <NuxtLink :to="footballBackRoute" class="back focus-ring">
           <ArrowLeft :size="15" />
           <span>返回赛事</span>
         </NuxtLink>

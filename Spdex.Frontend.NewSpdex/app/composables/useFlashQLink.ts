@@ -4,8 +4,7 @@ export function useFlashQLink() {
   function buildFlashQLink(eventId: number | string): string {
     const base = String(runtimeConfig.public.quantilearnFlashUrl || 'https://ql.spdex.com/flash').trim()
       || 'https://ql.spdex.com/flash'
-    const separator = base.includes('?') ? '&' : '?'
-    return `${base}${separator}eid=${encodeURIComponent(String(eventId))}`
+    return `/flashq/bridge?eid=${encodeURIComponent(String(eventId))}&target=${encodeURIComponent(base)}`
   }
 
   return { buildFlashQLink }

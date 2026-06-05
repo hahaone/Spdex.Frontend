@@ -59,17 +59,32 @@ const isHandicap = computed(() => market.value?.key === 'handicap')
 function fmtSigned(n: number): string {
   return (n > 0 ? '+' : '') + n.toFixed(2)
 }
+function parseLineValue(label: string | null | undefined): number | null {
+  const raw = (label || '').trim()
+  if (!raw) return null
+  const clean = raw.replace(/[＋]/g, '+').replace(/\s*\(.+\)\s*$/, '')
+  if (clean.includes('/')) {
+    const parts = clean.split('/').map(x => Number.parseFloat(x.trim())).filter(Number.isFinite)
+    if (parts.length === 2) return (parts[0]! + parts[1]!) / 2
+  }
+  const n = Number.parseFloat(clean)
+  return Number.isFinite(n) ? n : null
+}
+function fmtLineValue(label: string | null | undefined): string {
+  const n = parseLineValue(label)
+  return n == null ? (label || '—') : n.toFixed(2)
+}
 /** 让球线 chip：成对显示，如「-1.50 / +1.50」。 */
 function chipLabel(l: EuroLine): string {
-  if (!isHandicap.value) return l.label || '—'
-  const n = Number.parseFloat(l.label)
-  return Number.isFinite(n) ? `${fmtSigned(n)} / ${fmtSigned(-n)}` : (l.label || '—')
+  if (!isHandicap.value) return fmtLineValue(l.label)
+  const n = parseLineValue(l.label)
+  return n != null ? `${fmtSigned(n)} / ${fmtSigned(-n)}` : (l.label || '—')
 }
 /** 让球列头把让球标记放赔率前：主 -1.50 / 客 +1.50。 */
 function colHeader(col: string): string {
   if (!isHandicap.value || !line.value) return col
-  const n = Number.parseFloat(line.value.label)
-  if (!Number.isFinite(n)) return col
+  const n = parseLineValue(line.value.label)
+  if (n == null) return col
   if (col === '主') return `主 ${fmtSigned(n)}`
   if (col === '客') return `客 ${fmtSigned(-n)}`
   return col

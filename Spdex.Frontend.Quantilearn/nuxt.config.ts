@@ -15,6 +15,7 @@ export default defineNuxtConfig({
       || process.env.API_INTERNAL_URL
       || 'http://127.0.0.1:5015',
     spdexApiInternalUrl: process.env.SPDEX_API_INTERNAL_URL || 'http://127.0.0.1:5000',
+    spdexApiKey: process.env.SPDEX_API_KEY || process.env.API_KEY || '',
     quantilearnAuthSharedSecret: process.env.QUANTILEARN_AUTH_SHARED_SECRET
       || process.env.QuantilearnAuth__SharedSecret
       || '',

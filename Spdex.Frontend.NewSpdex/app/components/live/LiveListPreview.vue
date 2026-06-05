@@ -79,8 +79,7 @@ const oddsMarket = computed(() => snapshot.value?.liveOdds?.markets?.find(m => m
         </div>
         <div class="pv-mmeta">
           <span>xG <b class="num">{{ model.xgHome.toFixed(2) }}-{{ model.xgAway.toFixed(2) }}</b></span>
-          <span>控 <b class="num">{{ model.control[0] }}-{{ model.control[1] }}%</b></span>
-          <span>模型Σ <b class="num">{{ model.modelTotalGoals.toFixed(1) }}</b></span>
+          <span>模型Σ <b class="num">{{ model.modelTotalGoals.toFixed(2) }}</b></span>
         </div>
       </div>
 

@@ -113,6 +113,7 @@ export interface AnalysisReplayPoint {
   capturedAt: string
   minute: number
   score: number[]
+  modelTotalGoals?: number | null
   edgePct?: number | null
   modelOverPct?: number | null
   bookOverPct?: number | null

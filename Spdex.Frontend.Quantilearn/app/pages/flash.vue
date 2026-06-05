@@ -954,12 +954,12 @@ const refreshFlash = async () => {
 <template>
   <div class="flash-page">
     <header class="flash-header">
-      <div class="brand-block">
+      <a class="brand-block focus-ring" href="https://new.spdex.com" aria-label="返回 NewSPdex 首页">
         <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
         <div>
           <h1>闪Q单场分析</h1>
         </div>
-      </div>
+      </a>
 
       <div class="snapshot-tabs" aria-label="FlashQ snapshot">
         <button
@@ -1677,6 +1677,8 @@ const refreshFlash = async () => {
 
 .brand-block {
   gap: 10px;
+  color: inherit;
+  text-decoration: none;
 }
 
 .header-refresh {

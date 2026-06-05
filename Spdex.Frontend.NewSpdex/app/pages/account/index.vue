@@ -50,8 +50,7 @@ const lastLogin = computed(() => {
 })
 
 async function handleLogout() {
-  logout()
-  await navigateTo('/login')
+  await logout()
 }
 
 onMounted(async () => {

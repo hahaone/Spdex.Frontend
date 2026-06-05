@@ -59,7 +59,7 @@ export interface ApiResponse<T> {
 }
 
 export interface LoginResponseData {
-  token: string
+  token?: string
   expiresAt: string
   user: AuthUser
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, Flame, RefreshCw } from '@lucide/vue'
+import { ChevronRight, RefreshCw } from '@lucide/vue'
 import type { LiveListItem, LiveOdds, LiveTabKey } from '~/composables/useLiveList'
 
 const tab = ref<LiveTabKey>('running')
@@ -89,18 +89,19 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
           :class="['live-card focus-ring', { selected: m.eventId === selectedId }]"
           @click="onCardClick(m, $event)"
         >
-          <!-- 时间栏：时间/分钟/状态 · 盘口线 · 现场大单 · 双红 -->
+          <!-- 时间栏：时间/分钟/状态 · 盘口线 · 双红 -->
           <div class="c-head">
             <span class="kick num">{{ m.kickoffTime }}</span>
             <span v-if="m.status === 'running'" class="minute num">{{ m.minute }}</span>
             <span v-else-if="m.status === 'finished'" class="st-pill done">完场</span>
             <span v-else class="st-pill up">未开</span>
-            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="hcap num">让 {{ line(m.liveOdds, '让球') || '-' }} · 大 {{ line(m.liveOdds, '大小') || '-' }}</span>
-            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="hcap num">让 {{ m.prematchHandicap }}</span>
             <span class="hsp" />
-            <span v-if="m.bigBet" class="bigbet num"><Flame :size="11" />{{ m.bigBet.amountText }}<i class="bb-side">{{ m.bigBet.side }}</i></span>
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">让 {{ line(m.liveOdds, '让球') || '-' }}</span>
+            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="odds-line num">让 {{ m.prematchHandicap }}</span>
+            <span v-else class="odds-line" aria-hidden="true" />
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">大 {{ line(m.liveOdds, '大小') || '-' }}</span>
+            <span v-else class="odds-line" aria-hidden="true" />
             <span v-if="m.doubleRed" class="dr-tag">双红</span>
-            <ChevronRight :size="14" class="chev" />
           </div>
 
           <!-- 球队 + 比分 + 行内赔率(进行中: 让球主客 / 大小;未开赛走下方必发行) -->
@@ -144,17 +145,17 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
           <div v-if="m.status !== 'upcoming'" class="c-micro">
             <span>半 <b class="num">{{ m.halfScore }}</b></span>
             <span>角 <b class="num">{{ m.corners[0] }}-{{ m.corners[1] }}</b></span>
+            <span class="hsp" />
+            <ChevronRight :size="14" class="chev" />
           </div>
 
-          <!-- 赛中模型分析（进行中）：价值倾向 + xG + 控球 + 射正 + 预测总进球 -->
+          <!-- 赛中模型分析（进行中）：价值倾向 + xG + 预测总进球 -->
           <div v-if="m.status === 'running' && m.model" class="c-model">
             <span class="lean" :class="leanCls(m.model.lean)">
               {{ m.model.lean }}<i v-if="m.model.goalLine && m.model.edgePct != null" class="edge num"> {{ fmtEdge(m.model.edgePct) }}</i>
             </span>
-            <span class="ms">xG <b class="num">{{ m.model.xgHome.toFixed(1) }}-{{ m.model.xgAway.toFixed(1) }}</b></span>
-            <span class="ms">控 <b class="num">{{ m.model.control[0] }}-{{ m.model.control[1] }}%</b></span>
-            <span v-if="m.stats" class="ms">射正 <b class="num">{{ m.stats.shotsOnTarget.home }}-{{ m.stats.shotsOnTarget.away }}</b></span>
-            <span class="ms">预测Σ <b class="num">{{ m.model.modelTotalGoals.toFixed(1) }}</b></span>
+            <span class="ms">xG <b class="num">{{ m.model.xgHome.toFixed(2) }}-{{ m.model.xgAway.toFixed(2) }}</b></span>
+            <span class="ms">预测Σ <b class="num">{{ m.model.modelTotalGoals.toFixed(2) }}</b></span>
           </div>
 
         </NuxtLink>
@@ -250,7 +251,8 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 }
 
 .c-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) 44px 44px auto;
   align-items: center;
   gap: 7px;
 }
@@ -339,6 +341,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 
 .c-micro {
   display: flex;
+  align-items: center;
   gap: 12px;
   color: var(--muted);
   font-size: 0.74rem;
@@ -378,29 +381,17 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
   border-top: 1px dashed var(--divider);
 }
 
-/* 时间栏:撑开 + 盘口线 + 现场大单 */
+/* 时间栏:撑开 + 盘口线 */
 .hsp { flex: 1 1 auto; }
 
-.hcap {
+.odds-line {
   color: var(--brand-deep);
   font-size: 0.74rem;
   font-weight: 820;
+  min-height: 17px;
+  text-align: center;
   white-space: nowrap;
 }
-
-.bigbet {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--away-bg);
-  color: #8a6212;
-  font-size: 0.72rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.bigbet .bb-side { font-style: normal; font-weight: 860; }
 
 /* 未开赛:必发赛前赔率行(主/平/客) */
 .c-pre {
