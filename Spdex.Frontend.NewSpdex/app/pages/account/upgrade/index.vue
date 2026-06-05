@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ArrowLeft, CheckCircle, Coins, Flame, MessageCircle, QrCode, Sparkles } from '@lucide/vue'
+import { ArrowLeft, CheckCircle, Coins, CreditCard, Flame, QrCode, Sparkles } from '@lucide/vue'
 import type { PaymentPlan, PriceStage } from '~/types/billing'
+import { canPurchaseTarget } from '~/utils/membership'
 
 const { user } = useAuth()
-const { plans, featuredPlans, standardPlans, pending, error } = useBillingPlans()
+const { plans, pending, error } = useBillingPlans()
 const { getSilkBalance, getCustomerService } = useCreateOrder()
 
 // 当前用户余额（用于锦囊不足提示）
@@ -34,12 +35,17 @@ function isCurrentTier(roleId: number): boolean {
   return user.value?.roleId === roleId
 }
 
-function lowestPrice(plan: PaymentPlan): PriceStage | null {
-  if (!plan.prices.length) return null
-  return [...plan.prices].sort((a, b) => a.price - b.price)[0] ?? null
-}
+const availablePlans = computed(() =>
+  plans.value.filter(plan =>
+    plan.prices.length > 0
+      ? canPurchaseTarget(user.value, plan.roleId)
+      : isCurrentTier(plan.roleId)))
+
+const featuredPlans = computed(() => availablePlans.value.filter(p => p.hot > 0))
+const standardPlans = computed(() => availablePlans.value.filter(p => p.hot === 0))
 
 function pickStage(plan: PaymentPlan, stage: PriceStage) {
+  if (!canPurchaseTarget(user.value, plan.roleId)) return
   navigateTo({
     path: '/account/upgrade/result',
     query: { roleId: plan.roleId, stageId: stage.stageId, channel: 'choose' },
@@ -140,10 +146,10 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
       <section class="pay-info">
         <h2>支持的支付方式</h2>
         <div class="pay-methods">
-          <span class="pay-item"><QrCode :size="13" /> 微信扫码</span>
-          <span class="pay-item">支付宝</span>
+          <span class="pay-item"><CreditCard :size="13" /> 支付宝</span>
+          <span class="pay-item"><QrCode :size="13" /> 扫码支付</span>
           <span class="pay-item"><Coins :size="13" /> 锦囊扣点</span>
-          <span class="pay-item"><MessageCircle :size="13" /> 客服</span>
+          <span class="pay-item"><QrCode :size="13" /> 微信扫码</span>
         </div>
         <p class="pay-hint">
           <CheckCircle :size="12" />

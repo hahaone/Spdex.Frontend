@@ -438,7 +438,7 @@ function injStatus(s: string): { text: string, cls: string } {
       <div v-if="overProbSpark" class="rp-chart">
         <div class="rp-clbl">
           <span>大球概率走势</span>
-          <span class="rp-legend"><i class="lg model"></i>模型<i class="lg book"></i>平台</span>
+          <span class="rp-legend"><i class="lg model" />模型<i class="lg book" />平台</span>
         </div>
         <svg class="rp-spark" :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`" preserveAspectRatio="none">
           <line class="rp-cursor" :x1="overProbSpark.cursorX" :y1="0" :x2="overProbSpark.cursorX" :y2="overProbSpark.h" />

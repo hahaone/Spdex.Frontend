@@ -133,6 +133,16 @@ const sectionLockMessage = computed(() => {
   }
 })
 
+const allLockNotices = computed(() => {
+  const notices: string[] = []
+  if (!access.value.standard) notices.push('标盘未开放')
+  if (!access.value.goals) notices.push('进球未开放')
+  if (!access.value.handicap) notices.push('让分未开放')
+  if (!access.value.cs) notices.push('比分白金专属')
+  if (!access.value.corner) notices.push('角球白金专属')
+  return notices
+})
+
 const match = computed(() => detail.value?.match)
 
 function jumpTo(target: SectionKey) {
@@ -219,19 +229,14 @@ function jumpTo(target: SectionKey) {
       <div class="detail-grid">
         <div class="main-col">
           <section v-if="tab === 'all'" class="all-grid">
-            <template v-if="access.standard">
-              <MarketSummaryCard
-                :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
-                tone="standard"
-                :rows="effectiveStandard"
-                index-label="必指"
-                @open="jumpTo('standard')"
-              />
-            </template>
-            <div v-else class="access-card">
-              <Lock :size="14" />
-              <span>标盘数据未对当前会籍开放</span>
-            </div>
+            <MarketSummaryCard
+              v-if="access.standard"
+              :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
+              tone="standard"
+              :rows="effectiveStandard"
+              index-label="必指"
+              @open="jumpTo('standard')"
+            />
 
             <MarketSummaryCard
               v-if="detail.poly.length"
@@ -246,64 +251,47 @@ function jumpTo(target: SectionKey) {
               <span>本场暂无 Poly 成交数据</span>
             </div>
 
-            <template v-if="access.goals">
-              <MarketSummaryCard
-                :title="goalsTitle"
-                tone="goals"
-                :rows="goalsRows"
-                index-label="必指"
-                @open="jumpTo('goals')"
-              />
-            </template>
-            <div v-else class="access-card">
-              <Lock :size="14" />
-              <span>进球数据未对当前会籍开放</span>
-            </div>
+            <MarketSummaryCard
+              v-if="access.goals"
+              :title="goalsTitle"
+              tone="goals"
+              :rows="goalsRows"
+              index-label="必指"
+              @open="jumpTo('goals')"
+            />
 
-            <template v-if="access.handicap">
-              <MarketSummaryCard
-                :title="handicapTitle"
-                tone="handicap"
-                :rows="handicapRows"
-                index-label="必指"
-                @open="jumpTo('handicap')"
-              />
-            </template>
-            <div v-else class="access-card">
-              <Lock :size="14" />
-              <span>让分数据未对当前会籍开放</span>
-            </div>
+            <MarketSummaryCard
+              v-if="access.handicap"
+              :title="handicapTitle"
+              tone="handicap"
+              :rows="handicapRows"
+              index-label="必指"
+              @open="jumpTo('handicap')"
+            />
 
-            <template v-if="access.cs">
-              <MarketSummaryCard
-                v-if="detail.cs.length"
-                title="比分 CS"
-                tone="goals"
-                :rows="detail.cs.slice(0, 3)"
-                index-label="大注"
-                index-format="amount"
-                @open="jumpTo('cs')"
-              />
-            </template>
-            <div v-else class="access-card">
-              <Lock :size="14" />
-              <span>比分 · 白金会员专属</span>
-            </div>
+            <MarketSummaryCard
+              v-if="access.cs && detail.cs.length"
+              title="比分 CS"
+              tone="goals"
+              :rows="detail.cs.slice(0, 3)"
+              index-label="大注"
+              index-format="amount"
+              @open="jumpTo('cs')"
+            />
 
-            <template v-if="access.corner">
-              <MarketSummaryCard
-                v-if="detail.corner.length"
-                title="角球"
-                tone="goals"
-                :rows="detail.corner"
-                index-label="区间"
-                wide-option
-                @open="jumpTo('corner')"
-              />
-            </template>
-            <div v-else class="access-card">
+            <MarketSummaryCard
+              v-if="access.corner && detail.corner.length"
+              title="角球"
+              tone="goals"
+              :rows="detail.corner"
+              index-label="区间"
+              wide-option
+              @open="jumpTo('corner')"
+            />
+
+            <div v-if="allLockNotices.length" class="access-summary">
               <Lock :size="14" />
-              <span>角球 · 白金会员专属</span>
+              <span v-for="notice in allLockNotices" :key="notice">{{ notice }}</span>
             </div>
           </section>
 
@@ -385,6 +373,7 @@ function jumpTo(target: SectionKey) {
 .access-card {
   display: inline-flex;
   align-items: center;
+  align-self: start;
   gap: 6px;
   padding: 10px 12px;
   border: 1px dashed var(--line);
@@ -393,6 +382,27 @@ function jumpTo(target: SectionKey) {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
+}
+
+.access-summary {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  background: #f9fafc;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 720;
+}
+
+.access-summary span {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--panel);
 }
 
 .access-card.poly {

@@ -112,5 +112,5 @@ export interface CreateOrderRequest {
   stageId: number
 }
 
-export type PaymentChannel = 'wxcode' | 'alipay' | 'silk'
+export type PaymentChannel = 'alipay' | 'yft' | 'silk' | 'wxcode'
 export type SilkRechargeChannel = 'alipay' | 'wxcode'
