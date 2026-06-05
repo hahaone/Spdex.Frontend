@@ -31,6 +31,13 @@ function getTokenExp(jwt: string): number | null {
   }
 }
 
+function serverCookieHeaders(): HeadersInit | undefined {
+  if (!import.meta.server) return undefined
+
+  const cookie = useRequestHeaders(['cookie']).cookie
+  return cookie ? { cookie } : undefined
+}
+
 export function useAuth() {
   const config = useRuntimeConfig()
   const token = useNewSpdexTokenCookie()
@@ -39,6 +46,7 @@ export function useAuth() {
   const authVersion = useState<number>('newspdex_auth_version', () => 0)
   const refreshTimer = useState<ReturnType<typeof setTimeout> | null>('newspdex_refresh_timer', () => null)
   const visibilityBound = useState('newspdex_visibility_bound', () => false)
+  const ssrCookieHeaders = serverCookieHeaders()
 
   const isLoggedIn = computed(() => !!user.value || !!sessionHint.value || !!token.value)
   const tier = computed(() => user.value?.tier ?? 'Free')
@@ -125,6 +133,7 @@ export function useAuth() {
         baseURL: config.public.apiBase as string,
         method: 'POST',
         credentials: 'include',
+        ...(ssrCookieHeaders ? { headers: ssrCookieHeaders } : {}),
       })
 
       if (res.code === 0 && res.data) {
@@ -271,6 +280,7 @@ export function useAuth() {
       baseURL: config.public.apiBase as string,
       method: 'POST',
       credentials: 'include',
+      ...(ssrCookieHeaders ? { headers: ssrCookieHeaders } : {}),
     }).catch(() => null)
 
     clearAuthState()
@@ -282,6 +292,7 @@ export function useAuth() {
       const res = await $fetch<ApiResponse<AuthUser>>('/api/newspdex/auth/me', {
         baseURL: config.public.apiBase as string,
         credentials: 'include',
+        ...(ssrCookieHeaders ? { headers: ssrCookieHeaders } : {}),
       })
 
       if (res.code === 0 && res.data) {
