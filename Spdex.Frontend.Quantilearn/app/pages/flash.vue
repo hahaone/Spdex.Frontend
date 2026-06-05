@@ -2,6 +2,7 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   BarChart3,
   ChevronDown,
   ChevronRight,
@@ -125,6 +126,20 @@ const bigTradesResult = ref<QuantilearnApiSuperBigTradesResult | null>(null)
 const bigTradesError = ref('')
 
 const eventId = computed(() => String(route.query.eid || route.query.eventId || '35675743').trim())
+const newspdexOrigin = computed(() => {
+  try {
+    return new URL(String(runtimeConfig.public.newspdexLoginUrl || 'https://new.spdex.com/login')).origin
+  }
+  catch {
+    return 'https://new.spdex.com'
+  }
+})
+const newspdexReturnUrl = computed(() => {
+  const id = eventId.value
+  return /^\d+$/.test(id)
+    ? `${newspdexOrigin.value}/football/${id}`
+    : `${newspdexOrigin.value}/football`
+})
 
 const errorMessage = (error: unknown) => toQuantilearnUserError(error)
 
@@ -973,9 +988,15 @@ const refreshFlash = async () => {
         </button>
       </div>
 
-      <button type="button" class="icon-button header-refresh focus-ring" title="刷新赛事数据" @click="refreshFlash">
-        <RefreshCw :size="16" />
-      </button>
+      <div class="header-actions">
+        <a class="return-link focus-ring" :href="newspdexReturnUrl" aria-label="返回 NewSpdex 赛事页">
+          <ArrowLeft :size="15" />
+          <span>返回 NewSpdex</span>
+        </a>
+        <button type="button" class="icon-button header-refresh focus-ring" title="刷新赛事数据" @click="refreshFlash">
+          <RefreshCw :size="16" />
+        </button>
+      </div>
     </header>
 
     <main :class="['flash-layout', { 'report-focus': parametersCollapsed && hasAnalysisReport }]">
@@ -1654,6 +1675,7 @@ const refreshFlash = async () => {
 }
 
 .brand-block,
+.header-actions,
 .snapshot-tabs,
 .event-title,
 .matrix-title,
@@ -1681,7 +1703,37 @@ const refreshFlash = async () => {
   text-decoration: none;
 }
 
+.header-actions {
+  justify-self: end;
+  gap: 8px;
+}
+
+.return-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 850;
+  white-space: nowrap;
+  box-shadow: 0 2px 5px rgba(21, 32, 43, 0.05);
+}
+
+.return-link:hover {
+  border-color: rgba(58, 160, 151, 0.42);
+  background: #f4fbfa;
+  color: var(--teal-dark);
+}
+
 .header-refresh {
+  flex: 0 0 auto;
   justify-self: end;
 }
 
@@ -3382,7 +3434,7 @@ h1 {
   .flash-header {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "brand refresh"
+      "brand actions"
       "snapshots snapshots";
   }
 
@@ -3395,8 +3447,8 @@ h1 {
     overflow-x: auto;
   }
 
-  .header-refresh {
-    grid-area: refresh;
+  .header-actions {
+    grid-area: actions;
   }
 
   .flash-layout {

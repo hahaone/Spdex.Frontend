@@ -58,6 +58,7 @@ const menuOptions = computed(() => {
   if (can(P.orderView)) items.push({ label: '退款工单', key: '/refunds' })
   if (can(P.orderReconcile)) items.push({ label: '对账', key: '/reconcile' })
   if (can(P.planView)) items.push({ label: '套餐定价', key: '/plans' })
+  if (can(P.signalView)) items.push({ label: '信号引擎', key: '/signals' })
   if (can(P.systemAuditView)) items.push({ label: '审计日志', key: '/system/audit' })
   if (can(P.systemAdminManage)) items.push({ label: '管理员', key: '/system/admins' })
   return items
