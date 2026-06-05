@@ -2,6 +2,7 @@
 import { ChevronRight, Zap } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { MatchSummary } from '~/types/match'
+import { formatHandicapLine } from '~/utils/handicap'
 
 const props = withDefaults(defineProps<{
   match: MatchSummary
@@ -54,6 +55,7 @@ function fmtAmount(n: number): string {
 }
 
 const kickOff = computed(() => props.match.matchTime.slice(11, 16))
+const handicapLabel = computed(() => formatHandicapLine(props.match.handicap))
 const statusLabel = computed(() => {
   if (props.match.status === 'finished') return '完场'
   if (props.match.status === 'started') return '进行中'
@@ -84,7 +86,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
           <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
         </span>
         <span class="num kick-off">{{ kickOff }}</span>
-        <span v-if="twoWay && match.handicap" class="tag tag-quant num">{{ match.handicap }}</span>
+        <span v-if="twoWay && handicapLabel" class="tag tag-quant num">{{ handicapLabel }}</span>
         <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
       </NuxtLink>
     </div>
@@ -110,7 +112,7 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
         <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[0]) }" /><b class="num">{{ match.turnovers[0] }}</b></span>
 
         <template v-if="!twoWay">
-          <span class="cell selection handicap">{{ match.handicap || '平' }}</span>
+          <span class="cell selection handicap">{{ handicapLabel || '平' }}</span>
           <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[1]) }}</span>
           <span class="cell bfidx"><i :style="{ width: `${bfPct(1)}%` }" /><b class="num">{{ bfPct(1) }}</b></span>
           <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[1]) }" /><b class="num">{{ match.turnovers[1] }}</b></span>

@@ -2,6 +2,7 @@
 import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Zap } from '@lucide/vue'
 import type { MarketMetricRow, MarketTab } from '~/types/market'
 import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
+import { formatHandicapLine } from '~/utils/handicap'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
@@ -62,14 +63,18 @@ const isSnapshotMode = computed(() => snapshot.value !== null)
 function fmtLine(s: string): string {
   return (s || '').replace(/-?\d+(?:\.\d+)?/g, m => Number.parseFloat(m).toFixed(2))
 }
+function fmtHandicapLine(s: string): string {
+  return formatHandicapLine(s, { fixed: 2 })
+}
 function dropLineRow(rows: MarketMetricRow[]): MarketMetricRow[] {
   return rows.filter(r => r.key !== 'line')
 }
-function lineLabel(rows: MarketMetricRow[]): string {
-  return fmtLine(rows.find(r => r.key === 'line')?.price ?? '')
+function lineLabel(rows: MarketMetricRow[], signed = false): string {
+  const raw = rows.find(r => r.key === 'line')?.price ?? ''
+  return signed ? fmtHandicapLine(raw) : fmtLine(raw)
 }
 const goalsLine = computed(() => lineLabel(effectiveGoals.value))
-const handicapLine = computed(() => lineLabel(effectiveHandicap.value))
+const handicapLine = computed(() => lineLabel(effectiveHandicap.value, true))
 const goalsRows = computed(() => dropLineRow(effectiveGoals.value))
 const handicapRows = computed(() => dropLineRow(effectiveHandicap.value))
 

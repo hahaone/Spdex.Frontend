@@ -6,6 +6,7 @@
 
 import type { ApiResponse } from '~/types/auth'
 import type { MatchStatus, MatchSummary } from '~/types/match'
+import { formatHandicapLine } from '~/utils/handicap'
 
 interface BackendMatchSummary {
   eventId: number
@@ -105,7 +106,7 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     status: item.status,
     isJc: item.isJc,
     marketType: item.marketType || '胜负',
-    handicap: item.handicap,
+    handicap: formatHandicapLine(item.handicap),
     prices: [0, 0, 0],  // 后端 list 不返回 odds，详情页才有
     turnovers: distributeTurnover(item.bfAmount, bfIndex),
     bfIndex,

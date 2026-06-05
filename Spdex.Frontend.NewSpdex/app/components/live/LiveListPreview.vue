@@ -4,6 +4,7 @@
  * 点击左侧赛事即在此展示比分/统计/赔率/模型，无需跳转;底部可进完整赛况页。
  */
 import { ArrowUpRight } from '@lucide/vue'
+import { formatHandicapLine } from '~/utils/handicap'
 
 const props = defineProps<{ eventId: number }>()
 
@@ -37,6 +38,11 @@ const leanClass = computed(() => {
 
 // 取首个有数据的滚球赔率市场展示
 const oddsMarket = computed(() => snapshot.value?.liveOdds?.markets?.find(m => m.cells.length) ?? null)
+const oddsMarketLine = computed(() => {
+  const market = oddsMarket.value
+  if (!market?.line) return ''
+  return market.market === '让球' ? formatHandicapLine(market.line) : market.line
+})
 </script>
 
 <template>
@@ -97,7 +103,7 @@ const oddsMarket = computed(() => snapshot.value?.liveOdds?.markets?.find(m => m
 
       <!-- 滚球赔率 -->
       <div v-if="oddsMarket" class="pv-odds">
-        <span class="pv-odds-h">{{ oddsMarket.market }}<i v-if="oddsMarket.line"> {{ oddsMarket.line }}</i></span>
+        <span class="pv-odds-h">{{ oddsMarket.market }}<i v-if="oddsMarketLine"> {{ oddsMarketLine }}</i></span>
         <span v-for="c in oddsMarket.cells" :key="c.label" class="pv-cell">
           <i>{{ c.label }}</i><b class="num">{{ c.odd }}</b>
         </span>

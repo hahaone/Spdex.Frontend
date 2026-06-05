@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { CHART_MARKETS } from '~/composables/useChartSeries'
+import { formatHandicapLine } from '~/utils/handicap'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
@@ -31,6 +32,7 @@ const timeOptions = [
 
 const { detail } = useMatchDetail(eventId)
 const match = computed(() => detail.value?.match)
+const matchHandicap = computed(() => formatHandicapLine(match.value?.handicap))
 
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventId, graphType)
 
@@ -119,7 +121,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
       </NuxtLink>
       <div class="teams">
         <span class="num">{{ match?.homeTeam ?? '—' }}</span>
-        <b class="line">{{ match?.handicap || '—' }}</b>
+        <b class="line">{{ matchHandicap || '—' }}</b>
         <span class="num">{{ match?.awayTeam ?? '—' }}</span>
       </div>
     </section>

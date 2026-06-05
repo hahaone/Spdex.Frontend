@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronRight, RefreshCw } from '@lucide/vue'
 import type { LiveListItem, LiveOdds, LiveTabKey } from '~/composables/useLiveList'
+import { formatHandicapLine } from '~/utils/handicap'
 
 const tab = ref<LiveTabKey>('running')
 const tabOptions = [
@@ -22,6 +23,10 @@ function odd(lo: LiveOdds | null, market: string, label: string): string {
 }
 function line(lo: LiveOdds | null, market: string): string {
   return lo?.markets.find(x => x.market === market)?.line ?? ''
+}
+function marketLine(lo: LiveOdds | null, market: string): string {
+  const raw = line(lo, market)
+  return market === '让球' ? formatHandicapLine(raw) : raw
 }
 function hasOdds(lo: LiveOdds | null): boolean {
   return !!lo?.markets?.length
@@ -96,10 +101,10 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
             <span v-else-if="m.status === 'finished'" class="st-pill done">完场</span>
             <span v-else class="st-pill up">未开</span>
             <span class="hsp" />
-            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">让 {{ line(m.liveOdds, '让球') || '-' }}</span>
-            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="odds-line num">让 {{ m.prematchHandicap }}</span>
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">让 {{ marketLine(m.liveOdds, '让球') || '-' }}</span>
+            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="odds-line num">让 {{ formatHandicapLine(m.prematchHandicap) }}</span>
             <span v-else class="odds-line" aria-hidden="true" />
-            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">大 {{ line(m.liveOdds, '大小') || '-' }}</span>
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">大 {{ marketLine(m.liveOdds, '大小') || '-' }}</span>
             <span v-else class="odds-line" aria-hidden="true" />
             <span v-if="m.doubleRed" class="dr-tag">双红</span>
           </div>
