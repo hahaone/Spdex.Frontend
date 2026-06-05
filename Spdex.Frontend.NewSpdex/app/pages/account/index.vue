@@ -52,9 +52,7 @@ const isTest = computed(() => summary.value?.isTestAccount === true)
 const recentOrders = computed(() => orders.value.slice(0, 5))
 
 const lastLogin = computed(() => {
-  const raw = summary.value?.lastActivityDate
-  if (!raw) return '—'
-  return raw.slice(5, 16).replace('T', ' ') // "...T17:30" → "06-01 17:30"（紧凑，适配卡片宽度）
+  return formatCompactLocalTime(summary.value?.lastActivityDate)
 })
 
 async function handleLogout() {
@@ -103,9 +101,27 @@ function formatAmount(amount: number) {
   return `¥${amount.toFixed(2)}`
 }
 
-function formatOrderTime(raw: string | null) {
+function parseApiDateTime(raw: string) {
+  const text = raw.trim()
+  const isoLike = text.includes('T') ? text : text.replace(' ', 'T')
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(isoLike) ? isoLike : `${isoLike}Z`
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function formatCompactLocalTime(raw?: string | null) {
   if (!raw) return '—'
-  return raw.slice(5, 16).replace('T', ' ')
+  const date = parseApiDateTime(raw)
+  if (!date) return '—'
+  return `${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+function formatOrderTime(raw: string | null) {
+  return formatCompactLocalTime(raw)
 }
 
 function orderStatusClass(order: OrderRecord) {

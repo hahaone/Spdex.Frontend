@@ -94,7 +94,20 @@ async function load() {
 }
 function reload() { pagination.page = 1; load() }
 function onPage(p: number) { pagination.page = p; load() }
-function fmt(d?: string | null) { return d ? d.replace('T', ' ').substring(0, 19) : '—' }
+function parseApiDateTime(d: string) {
+  const text = d.trim()
+  const isoLike = text.includes('T') ? text : text.replace(' ', 'T')
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(isoLike) ? isoLike : `${isoLike}Z`
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+function pad2(n: number) { return String(n).padStart(2, '0') }
+function fmt(d?: string | null) {
+  if (!d) return '—'
+  const date = parseApiDateTime(d)
+  if (!date) return '—'
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+}
 
 const showDetail = ref(false)
 const detail = ref<OrderDetailT | null>(null)

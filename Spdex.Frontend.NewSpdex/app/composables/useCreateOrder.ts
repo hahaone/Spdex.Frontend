@@ -27,16 +27,22 @@ let csCache: { ts: number, value: CustomerService | null } | null = null
 const CS_TTL_MS = 10 * 60_000
 
 export function useCreateOrder() {
+  const yftOrderError = ref('')
+
   async function createYftOrder(roleId: number, stageId: number): Promise<YftOrderResult | null> {
+    yftOrderError.value = ''
     const body: CreateOrderRequest = { roleId, stageId }
     try {
       const res = await $apiFetch<ApiResponse<YftOrderResult>>('/api/newspdex/billing/order/yft', {
         method: 'POST',
         body,
       })
-      return res.code === 0 ? (res.data ?? null) : null
+      if (res.code === 0) return res.data ?? null
+      yftOrderError.value = res.message || '扫码支付下单失败'
+      return null
     }
-    catch {
+    catch (err: unknown) {
+      yftOrderError.value = apiErrorMessage(err, '扫码支付下单失败')
       return null
     }
   }
@@ -143,7 +149,17 @@ export function useCreateOrder() {
     return value
   }
 
+  function apiErrorMessage(err: unknown, fallback: string) {
+    const fetchErr = err as {
+      data?: { message?: string }
+      response?: { _data?: { message?: string } }
+      message?: string
+    }
+    return fetchErr?.data?.message || fetchErr?.response?._data?.message || fetchErr?.message || fallback
+  }
+
   return {
+    yftOrderError,
     createYftOrder,
     createWxCodeOrder,
     createAlipayOrder,

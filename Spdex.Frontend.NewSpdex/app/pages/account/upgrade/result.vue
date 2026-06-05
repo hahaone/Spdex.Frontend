@@ -31,7 +31,7 @@ const alipayResult = ref<AlipayOrderResult | null>(null)
 const silkResult = ref<SilkOrderResult | null>(null)
 const silkNeed = ref<SilkNeed | null>(null)
 
-const { createYftOrder, createWxCodeOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
+const { yftOrderError, createYftOrder, createWxCodeOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
 
 const purchaseBlockMessage = computed(() => {
   if (roleId.value <= 0 || stageId.value <= 0) return '套餐参数无效，请返回重新选择'
@@ -104,7 +104,7 @@ async function startYft() {
   const res = await createYftOrder(roleId.value, stageId.value)
   if (!res) {
     phase.value = 'error'
-    errorMessage.value = '扫码支付下单失败，请稍后重试或更换支付方式'
+    errorMessage.value = yftOrderError.value || '扫码支付下单失败，请稍后重试或更换支付方式'
     return
   }
   yftResult.value = res
