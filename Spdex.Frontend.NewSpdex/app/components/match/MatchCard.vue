@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
 })
 
 const { buildFlashQLink } = useFlashQLink()
+const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 const linkTo = computed(() => props.to ?? `/football/${props.match.eventId}`)
 const flashQUrl = computed(() => buildFlashQLink(props.match.eventId))
 
@@ -76,10 +77,21 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
         </span>
       </NuxtLink>
 
-      <a v-if="showFlashQ" :href="flashQUrl" class="flashq-mini focus-ring" aria-label="使用闪Q分析">
+      <a v-if="showFlashQ && canOpenFlashQ" :href="flashQUrl" class="flashq-mini focus-ring" aria-label="使用闪Q分析">
         <Zap :size="12" />
         <span>闪Q</span>
       </a>
+      <button
+        v-else-if="showFlashQ"
+        type="button"
+        class="flashq-mini locked focus-ring"
+        :title="flashQLockMessage"
+        aria-label="免费版暂未开放闪Q"
+        disabled
+      >
+        <Zap :size="12" />
+        <span>闪Q</span>
+      </button>
 
       <NuxtLink :to="linkTo" class="head-right focus-ring">
         <span :class="['status', `st-${match.status}`]">
@@ -227,17 +239,31 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   min-height: 22px;
   gap: 3px;
   padding: 0 7px;
-  border: 1px solid #f0d46c;
+  border: 1px solid #e8cf83;
   border-radius: 4px;
-  background: #fff34f;
-  color: #1a2233;
+  background: #fff2bd;
+  color: #252d3a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  font: inherit;
   font-size: 0.68rem;
   font-weight: 860;
   white-space: nowrap;
 }
 
+.flashq-mini.locked {
+  cursor: not-allowed;
+  border-color: #ddd0a2;
+  background: #f7efd3;
+  color: var(--muted);
+  opacity: 0.68;
+}
+
 .flashq-mini:active {
   transform: translateY(1px);
+}
+
+.flashq-mini.locked:active {
+  transform: none;
 }
 
 .status {

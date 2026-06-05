@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   BarChart3,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Database,
   ExternalLink,
@@ -140,6 +139,7 @@ const newspdexReturnUrl = computed(() => {
     ? `${newspdexOrigin.value}/football/${id}`
     : `${newspdexOrigin.value}/football`
 })
+const newspdexUpgradeUrl = computed(() => `${newspdexOrigin.value}/account/upgrade`)
 
 const errorMessage = (error: unknown) => toQuantilearnUserError(error)
 
@@ -214,6 +214,19 @@ const {
   { default: () => null },
 )
 
+const flashAccessStatus = computed(() => flashAccess.value ?? permissions.value?.flashQ ?? null)
+const isFreeFlashRole = computed(() => {
+  const role = String(permissions.value?.role || '').toLowerCase()
+  return Boolean(
+    flashAccessStatus.value?.isFreeRole
+    || permissions.value?.roleId === 2
+    || role.includes('free')
+    || role.includes('免费')
+  )
+})
+const flashEntryBlocked = computed(() => isFreeFlashRole.value)
+const flashEntryBlockMessage = computed(() => '免费版暂未开放闪Q，请返回 NewSpdex 升级会籍后使用。')
+
 const {
   data: flashSnapshot,
   pending: snapshotPending,
@@ -221,11 +234,11 @@ const {
   refresh: refreshSnapshot,
 } = await useAsyncData(
   'quantilearn-flash-snapshot',
-  () => eventId.value
+  () => eventId.value && !flashEntryBlocked.value
     ? quantilearnApi.getFlashEventSnapshot(eventId.value, { snapshot: activeSnapshot.value })
     : Promise.resolve(null),
   {
-    watch: [eventId, activeSnapshot],
+    watch: [eventId, activeSnapshot, flashEntryBlocked],
     default: () => null,
   },
 )
@@ -234,14 +247,13 @@ const snapshot = computed<QuantilearnApiFlashEventSnapshot | null>(() => flashSn
 const factorsById = computed(() => new Map((snapshot.value?.factors ?? []).map(factor => [factor.factorId, factor])))
 const selectedFactorIds = computed(() => new Set(selectedFactors.value.map(factor => factor.factorId)))
 const matrixReady = computed(() => Boolean(snapshot.value?.vendorBaseAvailable && snapshot.value.factors.length))
-const flashAccessStatus = computed(() => flashAccess.value ?? permissions.value?.flashQ ?? null)
 const selectedLimit = computed(() => permissions.value?.factor ?? flashAccessStatus.value?.factorLimit ?? 8)
 const canUseGoalBalance = computed(() => permissions.value?.flashQCanUseGoalBalance ?? true)
 const canUseInnerOuter = computed(() => permissions.value?.flashQCanUseInnerOuter ?? true)
 const canUseLogics = computed(() => permissions.value?.flashQCanUseLogics ?? true)
 const canUseInnerOuterLogics = computed(() => permissions.value?.flashQCanUseInnerOuterLogics ?? true)
 const canAddFactor = computed(() => selectedFactors.value.length < selectedLimit.value)
-const flashError = computed(() => errorMessage(snapshotError.value))
+const flashError = computed(() => flashEntryBlocked.value ? '' : errorMessage(snapshotError.value))
 const permissionError = computed(() => errorMessage(permissionsError.value || accessError.value))
 const snapshotSourceLabel = computed(() => {
   if (snapshotPending.value) return '读取快照'
@@ -1033,7 +1045,13 @@ const refreshFlash = async () => {
           </div>
         </section>
 
-        <section v-if="flashError" class="state-panel danger">
+        <section v-if="flashEntryBlocked" class="state-panel warn flash-access-block">
+          <Lock :size="16" />
+          <span>{{ flashEntryBlockMessage }}</span>
+          <a class="inline-upgrade-link focus-ring" :href="newspdexUpgradeUrl">升级会籍</a>
+        </section>
+
+        <section v-else-if="flashError" class="state-panel danger">
           <Database :size="16" />
           <span>{{ flashError }}</span>
         </section>
@@ -1426,7 +1444,7 @@ const refreshFlash = async () => {
       </section>
 
       <aside class="flash-sidebar">
-        <section :class="['side-panel', 'parameter-side-panel', { collapsed: parametersCollapsed && hasAnalysisReport }]">
+        <section v-if="!flashEntryBlocked" :class="['side-panel', 'parameter-side-panel', { collapsed: parametersCollapsed && hasAnalysisReport }]">
           <div class="panel-title">
             <div>
               <span class="eyebrow">Parameters</span>
@@ -1610,7 +1628,7 @@ const refreshFlash = async () => {
             </div>
           </div>
 
-          <div class="league-tabs">
+          <div v-if="!flashEntryBlocked" class="league-tabs">
             <button
               v-for="option in leagueOptions"
               :key="option.id"
@@ -1622,12 +1640,12 @@ const refreshFlash = async () => {
             </button>
           </div>
 
-          <button type="button" class="analyze-button focus-ring" :disabled="!canRunAnalysis" @click="runAnalysis">
+          <button v-if="!flashEntryBlocked" type="button" class="analyze-button focus-ring" :disabled="!canRunAnalysis" @click="runAnalysis">
             <PlayCircle :size="20" />
             <span>{{ analysisState === 'running' ? '分析中' : '分析' }}</span>
           </button>
 
-          <div :class="['analysis-state', { active: analysisState !== 'idle' }]">
+          <div v-if="!flashEntryBlocked" :class="['analysis-state', { active: analysisState !== 'idle' }]">
             <SlidersHorizontal :size="15" />
             <span>{{ analysisStateLabel }}</span>
           </div>
@@ -1636,7 +1654,7 @@ const refreshFlash = async () => {
       </aside>
     </main>
 
-    <div class="mobile-run-bar">
+    <div v-if="!flashEntryBlocked" class="mobile-run-bar">
       <div>
         <span>已选 {{ selectedFactors.length }} / {{ selectedLimit }}</span>
         <strong>{{ analysisStateLabel }}</strong>
@@ -1909,10 +1927,37 @@ h1 {
   color: var(--rose);
 }
 
+.state-panel.warn {
+  background: #fff8e5;
+  color: #9a6519;
+}
+
+.flash-access-block {
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.inline-upgrade-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid #e4c681;
+  border-radius: 6px;
+  background: #fff2bd;
+  color: #4f3510;
+  font-size: 0.78rem;
+  font-weight: 820;
+  text-decoration: none;
+}
+
 .matrix-shell {
   display: grid;
   grid-template-columns: 178px minmax(0, 1fr);
-  min-height: calc(100vh - 150px);
+  min-height: 0;
   overflow: hidden;
 }
 

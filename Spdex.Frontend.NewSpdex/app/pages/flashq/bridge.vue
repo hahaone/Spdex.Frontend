@@ -8,7 +8,16 @@ interface QuantilearnTicket {
 }
 
 const route = useRoute()
+const { user, refreshToken } = useAuth()
 const error = ref('')
+const blockedByPlan = ref(false)
+const freeFlashQMessage = '免费版暂未开放闪Q，请升级会籍后使用'
+
+function isFreeFlashQUser() {
+  return user.value?.roleId === 2
+    || user.value?.tier === 'Free'
+    || user.value?.roleName === '免费版'
+}
 
 function appendQuery(url: string, params: Record<string, string>) {
   const separator = url.includes('?') ? '&' : '?'
@@ -39,6 +48,18 @@ onMounted(async () => {
   }
 
   try {
+    const authenticated = await refreshToken()
+    if (!authenticated || !user.value) {
+      error.value = '请先登录 NewSpdex 后访问闪Q'
+      return
+    }
+
+    if (isFreeFlashQUser()) {
+      blockedByPlan.value = true
+      error.value = freeFlashQMessage
+      return
+    }
+
     const res = await $apiFetch<ApiResponse<QuantilearnTicket>>('/api/newspdex/auth/quantilearn-ticket', {
       method: 'POST',
     })
@@ -63,6 +84,9 @@ onMounted(async () => {
     <h1>正在打开闪Q</h1>
     <p v-if="!error">正在建立安全会话...</p>
     <p v-else class="error">{{ error }}</p>
+    <NuxtLink v-if="blockedByPlan" to="/account/upgrade" class="upgrade-link focus-ring">
+      升级会籍
+    </NuxtLink>
   </section>
 </template>
 
@@ -93,5 +117,19 @@ onMounted(async () => {
 
 .flashq-bridge .error {
   color: #b42318;
+}
+
+.upgrade-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  background: #6f55f2;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 760;
+  text-decoration: none;
 }
 </style>

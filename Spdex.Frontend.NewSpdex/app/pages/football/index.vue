@@ -86,7 +86,7 @@ const filters = computed<MatchListFilters>(() => {
   }
 })
 
-const { items: matches, leagues, totalCount, prematchSixHourLockApplied, pending, refresh } = useMatchList(filters)
+const { items: matches, leagues, prematchSixHourLockApplied, pending, refresh } = useMatchList(filters)
 
 /** 异动筛选生效时只显示命中的比赛 */
 const displayMatches = computed(() => {
@@ -163,20 +163,22 @@ function detailRoute(eventId: number) {
       <NuxtLink to="/football" class="mf-clear focus-ring">清除筛选</NuxtLink>
     </div>
 
-    <div v-if="prematchSixHourLockApplied" class="lock-banner">
-      <Lock :size="13" />
-      <span>免费会员已隐去赛前 6 小时内未开赛赛事</span>
-    </div>
+    <div class="football-main">
+      <div v-if="prematchSixHourLockApplied" class="lock-banner">
+        <Lock :size="13" />
+        <span>免费会员已隐去赛前 6 小时内未开赛赛事</span>
+      </div>
 
-    <section class="match-list">
-      <div v-if="pending && !displayMatches.length" class="match-skeleton">
-        <div v-for="i in 4" :key="i" class="skeleton-card" />
-      </div>
-      <MatchCard v-for="match in displayMatches" v-else :key="match.eventId" :match="match" :to="detailRoute(match.eventId)" />
-      <div v-if="!pending && !displayMatches.length" class="empty" role="status">
-        {{ isMetricFiltered ? '该指标暂无命中赛事（可能已开赛或不在当前窗口）' : '暂无赛事' }}
-      </div>
-    </section>
+      <section class="match-list">
+        <div v-if="pending && !displayMatches.length" class="match-skeleton">
+          <div v-for="i in 4" :key="i" class="skeleton-card" />
+        </div>
+        <MatchCard v-for="match in displayMatches" v-else :key="match.eventId" :match="match" :to="detailRoute(match.eventId)" />
+        <div v-if="!pending && !displayMatches.length" class="empty" role="status">
+          {{ isMetricFiltered ? '该指标暂无命中赛事（可能已开赛或不在当前窗口）' : '暂无赛事' }}
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -294,6 +296,12 @@ select {
   padding: 9px 10px 16px;
 }
 
+.football-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .empty {
   padding: 30px 0;
   color: var(--muted);
@@ -390,9 +398,11 @@ select {
 
 @media (min-width: 1024px) {
   .football-page {
-    grid-template-columns: 270px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
     align-items: start;
-    gap: 16px;
+    gap: 14px;
+    width: min(100%, 1180px);
+    margin: 0 auto;
     padding: 16px 0;
   }
 
@@ -417,15 +427,18 @@ select {
     border-bottom: 1px solid var(--divider);
   }
 
-  .match-list {
+  .football-main {
     grid-column: 2;
+    gap: 10px;
+  }
+
+  .match-list {
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 10px;
     padding: 0;
   }
 
   .lock-banner {
-    grid-column: 2;
     width: fit-content;
     margin: 0;
   }
@@ -435,8 +448,7 @@ select {
     margin: 0;
   }
 
-  .football-page.is-metric-filtered .match-list,
-  .football-page.is-metric-filtered .lock-banner {
+  .football-page.is-metric-filtered .football-main {
     grid-column: 1;
   }
 }

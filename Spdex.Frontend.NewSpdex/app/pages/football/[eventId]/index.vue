@@ -12,6 +12,7 @@ const { detail, access, euroOdds, pending, refresh } = useMatchDetail(eventId)
 const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
 const { fetchSnapshot } = useMatchSnapshot()
 const { buildFlashQLink } = useFlashQLink()
+const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 const flashQUrl = computed(() => buildFlashQLink(eventId.value))
 const footballBackRoute = computed(() => {
   const query: Record<string, string> = {}
@@ -211,10 +212,21 @@ function jumpTo(target: SectionKey) {
             </div>
             <div class="teams">
               <span class="team home">{{ match.homeTeam }}</span>
-              <a :href="flashQUrl" class="flashq-versus focus-ring" aria-label="使用闪Q分析">
+              <a v-if="canOpenFlashQ" :href="flashQUrl" class="flashq-versus focus-ring" aria-label="使用闪Q分析">
                 <Zap :size="13" />
                 <span>闪Q</span>
               </a>
+              <button
+                v-else
+                type="button"
+                class="flashq-versus locked focus-ring"
+                :title="flashQLockMessage"
+                aria-label="免费版暂未开放闪Q"
+                disabled
+              >
+                <Zap :size="13" />
+                <span>闪Q</span>
+              </button>
               <span class="team away">{{ match.awayTeam }}</span>
             </div>
             <div class="meta-row">
@@ -259,11 +271,12 @@ function jumpTo(target: SectionKey) {
         </div>
       </section>
 
-      <div v-if="hasUnlockedData" class="detail-grid">
+      <div v-if="hasUnlockedData" :class="['detail-grid', { 'all-mode': tab === 'all' }]">
         <div class="main-col">
           <section v-if="tab === 'all'" class="all-grid">
             <MarketSummaryCard
               v-if="access.standard"
+              class="market-panel market-standard"
               :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
               tone="standard"
               :rows="effectiveStandard"
@@ -273,6 +286,7 @@ function jumpTo(target: SectionKey) {
 
             <MarketSummaryCard
               v-if="detail.poly.length"
+              class="market-panel market-poly"
               title="Poly"
               tone="poly"
               :rows="detail.poly"
@@ -283,6 +297,7 @@ function jumpTo(target: SectionKey) {
 
             <MarketSummaryCard
               v-if="access.goals"
+              class="market-panel market-goals"
               :title="goalsTitle"
               tone="goals"
               :rows="goalsRows"
@@ -292,6 +307,7 @@ function jumpTo(target: SectionKey) {
 
             <MarketSummaryCard
               v-if="access.handicap"
+              class="market-panel market-handicap"
               :title="handicapTitle"
               tone="handicap"
               :rows="handicapRows"
@@ -301,6 +317,7 @@ function jumpTo(target: SectionKey) {
 
             <MarketSummaryCard
               v-if="access.cs && detail.cs.length"
+              class="market-panel market-cs"
               title="比分 CS"
               tone="goals"
               :rows="detail.cs.slice(0, 3)"
@@ -311,6 +328,7 @@ function jumpTo(target: SectionKey) {
 
             <MarketSummaryCard
               v-if="access.corner && detail.corner.length"
+              class="market-panel market-corner"
               title="角球"
               tone="goals"
               :rows="detail.corner"
@@ -339,7 +357,7 @@ function jumpTo(target: SectionKey) {
         </div>
 
         <aside class="side-col">
-          <section class="chart-preview">
+          <section class="chart-preview panel-chart">
             <div class="chart-title-row">
               <h2>走势图</h2>
               <div class="chart-actions">
@@ -358,11 +376,11 @@ function jumpTo(target: SectionKey) {
             </div>
           </section>
 
-          <BigTradesSummary v-if="access.tradeDetails" :event-id="match.eventId" />
+          <BigTradesSummary v-if="access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
 
-          <EuroOddsTable v-if="access.euroOdds && euroOdds" :euro="euroOdds" />
+          <EuroOddsTable v-if="access.euroOdds && euroOdds" class="panel-euro" :euro="euroOdds" />
 
-          <LadderPanel v-if="access.tradeDetails" :event-id="match.eventId" />
+          <LadderPanel v-if="access.tradeDetails" class="panel-ladder" :event-id="match.eventId" />
         </aside>
       </div>
 
@@ -501,18 +519,32 @@ function jumpTo(target: SectionKey) {
   min-height: 28px;
   gap: 4px;
   padding: 0 9px;
-  border: 1px solid #f0d46c;
+  border: 1px solid #e8cf83;
   border-radius: 4px;
-  background: #fff34f;
-  color: #1a2233;
+  background: #fff2bd;
+  color: #252d3a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  font: inherit;
   font-size: 0.78rem;
   font-weight: 860;
   text-decoration: none;
   white-space: nowrap;
 }
 
+.flashq-versus.locked {
+  cursor: not-allowed;
+  border-color: #ddd0a2;
+  background: #f7efd3;
+  color: var(--muted);
+  opacity: 0.68;
+}
+
 .flashq-versus:active {
   transform: translateY(1px);
+}
+
+.flashq-versus.locked:active {
+  transform: none;
 }
 
 .meta-row {
@@ -680,6 +712,8 @@ function jumpTo(target: SectionKey) {
 
 @media (min-width: 1024px) {
   .detail-page {
+    width: min(100%, 1180px);
+    margin: 0 auto;
     padding: 16px 0;
     gap: 12px;
   }
@@ -691,6 +725,8 @@ function jumpTo(target: SectionKey) {
   }
 
   .header-main {
+    width: min(100%, 900px);
+    margin: 0 auto;
     gap: 8px;
   }
 
@@ -724,9 +760,14 @@ function jumpTo(target: SectionKey) {
   }
 
   .detail-grid {
-    grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 12px;
     align-items: start;
+  }
+
+  .detail-grid.all-mode {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: row dense;
   }
 
   .main-col,
@@ -736,6 +777,12 @@ function jumpTo(target: SectionKey) {
     gap: 12px;
   }
 
+  .detail-grid.all-mode .main-col,
+  .detail-grid.all-mode .side-col,
+  .detail-grid.all-mode .all-grid {
+    display: contents;
+  }
+
   /* 桌面：右侧信息栏(走势/成交/欧赔/盘口)吸顶，主栏滚动时保持可见(让开 sticky tab-band) */
   .side-col {
     position: sticky;
@@ -743,10 +790,49 @@ function jumpTo(target: SectionKey) {
     align-self: start;
   }
 
+  .detail-grid.all-mode .side-col {
+    position: static;
+    top: auto;
+    align-self: auto;
+  }
+
   .all-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
     background: transparent;
+  }
+
+  .market-panel,
+  .panel-chart,
+  .panel-big-trades,
+  .panel-euro,
+  .panel-ladder {
+    min-width: 0;
+  }
+
+  .market-standard { order: 1; }
+  .market-poly { order: 2; }
+  .market-goals { order: 3; }
+  .market-handicap { order: 4; }
+  .panel-chart { order: 5; }
+  .market-cs { order: 6; }
+  .market-corner { order: 7; }
+  .panel-big-trades { order: 8; }
+  .panel-euro { order: 9; }
+  .panel-ladder { order: 10; }
+  .span-all { order: 20; }
+
+  .detail-grid.all-mode .panel-euro,
+  .detail-grid.all-mode .panel-ladder,
+  .detail-grid.all-mode .span-all {
+    grid-column: span 2;
+  }
+
+  .panel-euro {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-shadow: var(--card-shadow);
   }
 
   .chart-preview,
@@ -757,15 +843,24 @@ function jumpTo(target: SectionKey) {
   }
 }
 
-/* 超宽屏：盘口卡三列，密度更高 */
+/* 超宽屏：保持两列盘口卡，避免少量卡片散成一行后留下大块空白。 */
 @media (min-width: 1440px) {
   .detail-grid {
-    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.6fr);
-    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 14px;
+  }
+
+  .detail-grid.all-mode {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .all-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-grid.all-mode .panel-euro,
+  .detail-grid.all-mode .panel-ladder {
+    grid-column: span 2;
   }
 }
 
@@ -782,6 +877,14 @@ function jumpTo(target: SectionKey) {
   padding: 7px 12px;
   background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
   border-bottom: 1px solid var(--divider);
+}
+
+@media (min-width: 1024px) {
+  .time-machine-band {
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
 }
 
 .tm-head {

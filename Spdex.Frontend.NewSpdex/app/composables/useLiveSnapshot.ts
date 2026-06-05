@@ -114,6 +114,8 @@ export interface AnalysisReplayPoint {
   minute: number
   score: number[]
   modelTotalGoals?: number | null
+  /** BSW 网关预期总进球（B+ 统一口径，预期总进球走势图数据源）。 */
+  projectedTotalGoals?: number | null
   edgePct?: number | null
   modelOverPct?: number | null
   bookOverPct?: number | null

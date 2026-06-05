@@ -280,7 +280,7 @@ const overProbSpark = computed(() => {
 
 const totalGoalsSpark = computed(() => {
   const series = replaySeries.value
-  const vals = series.map(p => (p.modelTotalGoals == null ? null : Number(p.modelTotalGoals)))
+  const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
   const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
   if (nums.length < 2) return null
   const W = 240, H = 50, pad = 6
@@ -409,7 +409,7 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
       <div v-if="totalGoalsSpark" class="total-goals-chart">
         <div class="tg-head">
-          <span>模型总进球</span>
+          <span>预期总进球</span>
           <span class="muted num">{{ totalGoalsSpark.min }} ~ {{ totalGoalsSpark.max }}</span>
         </div>
         <svg class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
@@ -589,7 +589,7 @@ function injStatus(s: string): { text: string, cls: string } {
     </section>
 
     <template v-if="hasLiveContent">
-    <section class="timeline">
+    <section class="timeline live-timeline-section">
       <div class="section-title">
         <span>事件时间线</span>
         <span v-if="liveDataPending" class="pending-pill">
@@ -614,7 +614,7 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
     </section>
 
-    <section class="stats">
+    <section class="stats live-stats-section">
       <div class="section-title">
         <span>实时技术统计</span>
         <NuxtLink :to="`/football/${eventId}/chart`" class="head-link focus-ring">
@@ -633,7 +633,7 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
     </section>
 
-    <section class="odds">
+    <section class="odds live-odds-section">
       <div class="section-title brand">
         <span>现场价位 <span class="live-tag">LIVE</span></span>
         <span v-if="liveOddsMeta" class="lo-meta num">{{ liveOddsMeta }}</span>
@@ -658,11 +658,11 @@ function injStatus(s: string): { text: string, cls: string } {
       <span>{{ livePendingMessage }}</span>
     </section>
 
-    <section class="odds">
+    <section v-if="oddsPanel.length" class="odds prematch-odds-section">
       <div class="section-title seg">
         <span>赛前价位 <span class="seg-tag">封盘价</span></span>
       </div>
-      <div v-if="oddsPanel.length" class="odds-grid">
+      <div class="odds-grid">
         <div v-for="item in oddsPanel" :key="item.market" class="odds-row">
           <b class="lbl">{{ item.market }}</b>
           <span class="num">主 {{ item.home }}</span>
@@ -670,10 +670,9 @@ function injStatus(s: string): { text: string, cls: string } {
           <span class="num">客 {{ item.away }}</span>
         </div>
       </div>
-      <div v-else class="empty-section">暂无赛前盘口</div>
     </section>
 
-    <section class="compare">
+    <section v-if="priceCompare.length" class="compare price-compare-section">
       <div class="section-title seg">
         <span>价格比较 <span class="seg-tag">赛前价位</span></span>
         <span class="book-count num">{{ priceCompare.length }} 家公司</span>
@@ -1327,6 +1326,8 @@ section.compare {
 
 @media (min-width: 1024px) {
   .live-detail {
+    width: min(100%, 1180px);
+    margin: 0 auto;
     padding: 16px 0;
     gap: 12px;
   }
@@ -1344,6 +1345,11 @@ section.compare {
     font-size: 1.8rem;
   }
 
+  .score-line {
+    width: min(100%, 900px);
+    margin: 0 auto;
+  }
+
   .team {
     font-size: 1.2rem;
   }
@@ -1351,10 +1357,16 @@ section.compare {
   .content-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 14px;
+    gap: 12px;
+    grid-auto-flow: row dense;
     align-items: start;
   }
 
+  section.model-card,
+  section.analysis-card,
+  section.replay-card,
+  section.replay-empty,
+  section.injury-card,
   section.timeline,
   section.stats,
   section.odds,
@@ -1363,15 +1375,54 @@ section.compare {
     border: 1px solid var(--line);
   }
 
-  section.timeline {
+  .live-timeline-section {
     grid-row: span 2;
   }
 }
 
-/* 超宽屏：分析区三列 */
+/* 超宽屏：固定区域，避免数据块按 DOM 顺序散落。 */
 @media (min-width: 1440px) {
   .content-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(320px, 0.86fr);
+  }
+
+  .model-card {
+    grid-column: 1;
+  }
+
+  .analysis-card {
+    grid-column: 2;
+  }
+
+  .replay-card,
+  .replay-empty {
+    grid-column: 3;
+    grid-row: span 2;
+  }
+
+  .injury-card {
+    grid-column: 1 / span 2;
+  }
+
+  .live-timeline-section {
+    grid-column: 1;
+    grid-row: span 4;
+  }
+
+  .live-stats-section {
+    grid-column: 2;
+  }
+
+  .live-odds-section {
+    grid-column: 3;
+  }
+
+  .prematch-odds-section {
+    grid-column: 2;
+  }
+
+  .price-compare-section {
+    grid-column: 3;
   }
 }
 
