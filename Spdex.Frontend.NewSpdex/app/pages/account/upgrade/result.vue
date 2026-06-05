@@ -30,6 +30,13 @@ const yftResult = ref<YftOrderResult | null>(null)
 const alipayResult = ref<AlipayOrderResult | null>(null)
 const silkResult = ref<SilkOrderResult | null>(null)
 const silkNeed = ref<SilkNeed | null>(null)
+const membershipBeforePayment = ref<{ roleId: number, endDate: string | null }>({ roleId: 0, endDate: null })
+const pollingPayment = ref(false)
+const pollInFlight = ref(false)
+const pollAttempt = ref(0)
+const pollMessage = ref('')
+const pollTimeout = ref<number | null>(null)
+const pollTimer = ref<number | null>(null)
 
 const { yftOrderError, createYftOrder, createWxCodeOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
 
@@ -46,6 +53,10 @@ onMounted(async () => {
   }
 })
 
+onBeforeUnmount(() => {
+  stopPaymentPolling()
+})
+
 function ensurePurchasable() {
   if (!purchaseBlockMessage.value) return true
   phase.value = 'error'
@@ -55,6 +66,7 @@ function ensurePurchasable() {
 
 async function startWxCode() {
   if (!ensurePurchasable()) return
+  membershipBeforePayment.value = currentMembershipSnapshot()
   channel.value = 'wxcode'
   phase.value = 'creating'
   errorMessage.value = ''
@@ -66,6 +78,7 @@ async function startWxCode() {
   }
   wxResult.value = res
   phase.value = 'showing'
+  startPaymentPolling()
 }
 
 async function startAlipay() {
@@ -98,6 +111,7 @@ async function startAlipay() {
 
 async function startYft() {
   if (!ensurePurchasable()) return
+  membershipBeforePayment.value = currentMembershipSnapshot()
   channel.value = 'yft'
   phase.value = 'creating'
   errorMessage.value = ''
@@ -109,6 +123,7 @@ async function startYft() {
   }
   yftResult.value = res
   phase.value = 'showing'
+  startPaymentPolling()
 }
 
 async function startSilk() {
@@ -132,13 +147,96 @@ async function startSilk() {
 }
 
 async function checkRefresh() {
+  stopPaymentPolling()
   await refreshToken()
   await router.push('/account')
 }
 
 function goBack() {
+  stopPaymentPolling()
   router.push('/account/upgrade')
 }
+
+function currentMembershipSnapshot() {
+  return {
+    roleId: user.value?.roleId ?? 0,
+    endDate: user.value?.endDate ?? null,
+  }
+}
+
+function endDateMs(raw?: string | null) {
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  return Number.isNaN(ms) ? null : ms
+}
+
+function membershipApplied() {
+  const current = user.value
+  if (!current || roleId.value <= 0) return false
+
+  const before = membershipBeforePayment.value
+  if (current.roleId === roleId.value && before.roleId !== roleId.value) return true
+
+  const beforeEnd = endDateMs(before.endDate)
+  const currentEnd = endDateMs(current.endDate)
+  if (current.roleId === roleId.value && beforeEnd === null && currentEnd !== null) return true
+  return current.roleId === roleId.value
+    && beforeEnd !== null
+    && currentEnd !== null
+    && currentEnd > beforeEnd + 60_000
+}
+
+async function pollMembershipOnce() {
+  if (pollInFlight.value || phase.value !== 'showing' || !['yft', 'wxcode'].includes(channel.value)) return
+
+  pollInFlight.value = true
+  pollAttempt.value += 1
+  try {
+    await refreshToken()
+    if (membershipApplied()) {
+      stopPaymentPolling()
+      phase.value = 'success'
+      pollMessage.value = '支付已确认，会籍已更新'
+      setTimeout(() => router.push('/account'), 900)
+      return
+    }
+
+    if (pollAttempt.value >= 60) {
+      stopPaymentPolling()
+      pollMessage.value = '仍在等待支付回调，可稍后手动刷新会籍状态'
+      return
+    }
+
+    pollMessage.value = `正在自动检测支付结果（${pollAttempt.value}）`
+  }
+  finally {
+    pollInFlight.value = false
+  }
+}
+
+function startPaymentPolling() {
+  if (typeof window === 'undefined') return
+  stopPaymentPolling()
+  pollingPayment.value = true
+  pollAttempt.value = 0
+  pollMessage.value = '正在自动检测支付结果…'
+  pollTimeout.value = window.setTimeout(() => { void pollMembershipOnce() }, 3000)
+  pollTimer.value = window.setInterval(() => { void pollMembershipOnce() }, 5000)
+}
+
+function stopPaymentPolling() {
+  if (pollTimeout.value) {
+    clearTimeout(pollTimeout.value)
+    pollTimeout.value = null
+  }
+  if (pollTimer.value) {
+    clearInterval(pollTimer.value)
+    pollTimer.value = null
+  }
+  pollingPayment.value = false
+}
+
+const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！' : '支付已确认！')
 </script>
 
 <template>
@@ -215,6 +313,10 @@ function goBack() {
       </div>
       <p v-if="yftResult?.orderId" class="hint">订单号：<span class="num">{{ yftResult.orderId }}</span></p>
       <p class="hint">支付完成后约 30 秒内自动到账，可点击下方按钮刷新会籍状态。</p>
+      <p class="poll-status">
+        <Loader2 v-if="pollingPayment || pollInFlight" :size="13" class="spinning" />
+        <span>{{ pollMessage || '等待支付回调' }}</span>
+      </p>
       <button class="action-btn focus-ring" type="button" @click="checkRefresh">
         <RefreshCw :size="14" />
         <span>已支付，刷新会籍</span>
@@ -228,6 +330,10 @@ function goBack() {
       </div>
       <p class="hint">订单号：<span class="num">{{ wxResult?.orderId }}</span></p>
       <p class="hint">支付完成后约 30 秒内自动到账，可点击下方按钮刷新会籍状态。</p>
+      <p class="poll-status">
+        <Loader2 v-if="pollingPayment || pollInFlight" :size="13" class="spinning" />
+        <span>{{ pollMessage || '等待支付回调' }}</span>
+      </p>
       <button class="action-btn focus-ring" type="button" @click="checkRefresh">
         <RefreshCw :size="14" />
         <span>已支付，刷新会籍</span>
@@ -249,11 +355,14 @@ function goBack() {
     <!-- 锦囊扣点成功 -->
     <section v-else-if="phase === 'success'" class="success-band">
       <CheckCircle :size="40" />
-      <h2>扣点成功！</h2>
-      <p>已扣除锦囊 · 剩余余额 <b class="num">{{ silkResult?.remainingSilk }}</b></p>
-      <p v-if="silkResult?.newEndDate" class="hint">
-        新到期日：<b class="num">{{ silkResult.newEndDate.slice(0, 10) }}</b>
-      </p>
+      <h2>{{ successTitle }}</h2>
+      <template v-if="channel === 'silk'">
+        <p>已扣除锦囊 · 剩余余额 <b class="num">{{ silkResult?.remainingSilk }}</b></p>
+        <p v-if="silkResult?.newEndDate" class="hint">
+          新到期日：<b class="num">{{ silkResult.newEndDate.slice(0, 10) }}</b>
+        </p>
+      </template>
+      <p v-else>会籍已更新，正在进入会员中心…</p>
       <p class="hint">会籍正在刷新…</p>
       <button class="action-btn focus-ring" type="button" @click="checkRefresh">
         <RefreshCw :size="14" />
@@ -429,6 +538,18 @@ function goBack() {
   font-size: 0.78rem;
   font-weight: 740;
   word-break: break-all;
+}
+
+.poll-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 22px;
+  margin: 0;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 780;
 }
 
 .success-band {
