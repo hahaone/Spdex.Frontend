@@ -11,7 +11,7 @@
 |---|---|---|---|
 | D1 | 前端 UI 技术栈 | **Nuxt 4 + Naive UI** + Tailwind（布局） | 沿用现有前端构建/部署范式；Naive UI 提供中后台表格/表单/弹窗/树形组件，TS 友好、体积小、有 Nuxt 模块 |
 | D2 | 鉴权与权限模型 | **独立 Admin 账号体系 + RBAC** | 与 C 端 `Users` 完全隔离，安全边界清晰；支持超管/运营/客服/财务/审计角色；每个写操作审计到人 |
-| D3 | 网络访问边界 | **公网 `admin.spdex.com` + 强鉴权 + IP 白名单** | 运营/客服可异地办公；nginx 出口 IP 白名单 + JWT + 登录限流构成安全基线，后续可加 2FA |
+| D3 | 网络访问边界 | **公网 `admin2026.spdex.com` + 强鉴权 + IP 白名单** | 运营/客服可异地办公；nginx 出口 IP 白名单 + JWT + 登录限流构成安全基线，后续可加 2FA |
 
 ## 评审修正（v0.2，已吸收）
 
@@ -190,7 +190,7 @@ push.send   push.template
 | **授权** | 后端强制 RBAC policy，**不信任前端**；越权一律 403 |
 | **审计** | 所有 POST/PUT/DELETE 自动留痕（who/what/before/after/ip/ua），日志只增不可删 |
 | **敏感操作** | 二次确认弹窗 + 影响范围提示；调账/退款理由必填；大额操作高亮 |
-| **网络** | HTTPS；`admin.spdex.com` 独立证书；nginx IP 白名单；限流 |
+| **网络** | HTTPS；`admin2026.spdex.com` 独立证书；nginx IP 白名单；限流 |
 | **性能** | 列表强制分页（默认 50/页）；大表查询走 `WITH(NOLOCK)` 参数化 SQL（沿用现有 repo 范式） |
 | **数据脱敏** | 列表页手机号/邮箱脱敏，详情按权限展示 |
 | **一致性** | 复用 `ApiResponse<T>`、`ISessionProvider`、`ISpdexCache`、NHibernate 模式 |
@@ -202,7 +202,7 @@ push.send   push.template
 ## 2.1 总体架构
 
 ```
-浏览器 (admin.spdex.com)
+浏览器 (admin2026.spdex.com)
    │  HTTPS + httpOnly Cookie(AdminJwt)
    ▼
 nginx  ── IP 白名单 allow/deny ── proxy_pass 127.0.0.1:3005
@@ -417,17 +417,17 @@ frontend-admin:                          # 镜像由 GitHub Actions 构建并推
     - NITRO_PORT=3005
     - NUXT_PUBLIC_REQUIRE_AUTH=true
     - NUXT_ADMIN_API_INTERNAL_URL=http://127.0.0.1:5000
-    - NUXT_PUBLIC_ADMIN_PUBLIC_BASE_URL=https://admin.spdex.com
+    - NUXT_PUBLIC_ADMIN_PUBLIC_BASE_URL=https://admin2026.spdex.com
   restart: unless-stopped
 ```
 
 ### Dockerfile
 - Node 22-alpine 两阶段（`npm ci` + `nuxt build` → `.output/server/index.mjs`），`EXPOSE 3005`（照搬 Quantilearn）。
 
-### nginx（新增 `deploy/nginx/admin.spdex.com.ssl.conf`）
+### nginx（新增 `deploy/nginx/admin2026.spdex.com.ssl.conf`）
 ```nginx
 server {
-  server_name admin.spdex.com;
+  server_name admin2026.spdex.com;
   # —— IP 白名单 ——
   allow  <运营出口IP-1>;
   allow  <运营出口IP-2>;
@@ -555,7 +555,7 @@ dash     GET /api/admin/dashboard/overview
 | 2026 | 3001 | （现网） |
 | NewSpdex | 3002 | new.spdex.com |
 | Quantilearn | 3004 | ql.spdex.com |
-| **Admin（新）** | **3005** | **admin.spdex.com** |
+| **Admin（新）** | **3005** | **admin2026.spdex.com** |
 
 **Admin 后端新增配置段（appsettings / 环境变量）**
 ```
