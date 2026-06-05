@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { MatchListResult } from '~/types/match'
-import type { ApiResponse } from '~/types/api'
+import type { MatchListItem, MatchListResult } from '~/types/match'
 import { formatMoney, formatBfAmount, formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
 
 // --- 令牌权限 ---
@@ -174,33 +173,9 @@ function formatHandicap(val: string | null): string {
   return `${sign}${num.toFixed(2)}`
 }
 
-// 最大单注列表单元格摘要（简短显示在表格中），包含P标记
-// V2.0: 金额与括号间加空格
-function formatMaxBetSummary(item: typeof matches.value[0]): string {
-  if (!item.maxBet) return ''
-  const amount = formatMoney(item.maxBet)
-  const per = item.maxBetPercent.toFixed(0)
-  const attr = item.maxBetAttr || '-'
-  const pmark = item.pMark ? `,${item.pMark}` : ''
-  const selection = item.maxBetSelection || '-'
-  return `${amount} (${per}%,${attr}${pmark}) ${selection}`
-}
-
 // V2.0: 波胆最大单注去掉高亮算法
 function isMaxBetHighlight(_item: typeof matches.value[0]): boolean {
   return false
-}
-
-// 标盘最大单注摘要
-// V2.0: 金额与括号间加空格
-function formatBfMaxBetSummary(item: typeof matches.value[0]): string {
-  if (!item.bfMaxBet) return ''
-  const amount = formatMoney(item.bfMaxBet)
-  const per = item.bfMaxBetPercent.toFixed(0)
-  const attr = item.bfMaxBetAttr || '-'
-  const pmark = item.bfPMark ? `,${item.bfPMark}` : ''
-  const selection = item.bfMaxBetSelection || '-'
-  return `${amount} (${per}%,${attr}${pmark}) ${selection}`
 }
 
 // V2.0: 波胆最大单注后缀（括号部分+选项名）
@@ -311,7 +286,21 @@ const detailLinks = [
   { path: 'cs5', label: '亚', title: '亚盘', color: '#8a2be2' },
   { path: 'cs7', label: '角', title: '角球', color: '#ff7f50' },
   { path: 'poly', label: 'Poly', title: 'Polymarket', color: '#6d28d9' },
+  { path: 'kalshi', label: 'Ks', title: 'Kalshi', color: '#047857' },
 ]
+
+function detailLinkTo(link: typeof detailLinks[number], item: MatchListItem): string {
+  const home = encodeURIComponent(item.match.homeTeam)
+  const away = encodeURIComponent(item.match.guestTeam)
+  const league = encodeURIComponent(item.match.sortName || item.match.fullName)
+  if (link.path === 'poly') {
+    return `/poly/details?id=${item.match.eventId}&home=${home}&away=${away}&league=${league}`
+  }
+  if (link.path === 'kalshi') {
+    return `/kalshi/details?id=${item.match.eventId}&home=${home}&away=${away}&league=${league}`
+  }
+  return `/${link.path}/details?id=${item.match.eventId}`
+}
 
 onMounted(() => {
   autoRefreshTimer = setInterval(() => {
@@ -520,9 +509,7 @@ onUnmounted(() => {
                 <NuxtLink
                   v-for="link in detailLinks"
                   :key="link.path"
-                  :to="link.path === 'poly'
-                    ? `/poly/details?id=${item.match.eventId}&home=${encodeURIComponent(item.match.homeTeam)}&away=${encodeURIComponent(item.match.guestTeam)}&league=${encodeURIComponent(item.match.sortName || item.match.fullName)}`
-                    : `/${link.path}/details?id=${item.match.eventId}`"
+                  :to="detailLinkTo(link, item)"
                   :title="link.title"
                   class="detail-btn"
                   :style="{ backgroundColor: link.color }"
@@ -1055,7 +1042,7 @@ onUnmounted(() => {
 .col-score { width: 90px; white-space: nowrap; }
 .col-bf { width: 65px; text-align: right; white-space: nowrap; }
 .col-asian { width: 65px; text-align: right; white-space: nowrap; }
-.col-detail { width: 160px; white-space: nowrap; }
+.col-detail { width: 190px; white-space: nowrap; }
 
 .league-tag {
   display: inline-block;

@@ -23,6 +23,11 @@ const polyEnabled = ref(false)
 const polyEventId = computed(() => polyEnabled.value ? eventId.value : 0)
 const { tradeWindowStats: polyWindowStatsFromApi, loading: polyLoading } = usePolymarketData(polyEventId)
 
+// ── Kalshi 数据（延迟加载，点击按钮后才请求） ──
+const kalshiEnabled = ref(false)
+const kalshiEventId = computed(() => kalshiEnabled.value ? eventId.value : null)
+const { tradeWindowStats: kalshiWindowStatsFromApi, loading: kalshiLoading } = useKalshiData(kalshiEventId)
+
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
 const windows = computed(() => result.value?.windows ?? [])
@@ -141,6 +146,32 @@ const polyWindowStats = computed<PolyWindowStats[]>(() => {
   })
 })
 
+const kalshiWindowStats = computed<PolyWindowStats[]>(() => {
+  const ws = windows.value
+  if (ws.length === 0) return []
+  const apiData = kalshiWindowStatsFromApi.value
+  if (!apiData?.windows?.length) {
+    return ws.map(() => ({ volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }))
+  }
+
+  const byOffset = new Map<number, typeof apiData.windows[0]>()
+  for (const w of apiData.windows) {
+    byOffset.set(w.hoursOffset, w)
+  }
+
+  return ws.map((w) => {
+    const api = byOffset.get(w.hoursOffset)
+    if (!api) return { volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }
+    return {
+      volume: api.volume,
+      indexHome: api.indexHome,
+      indexDraw: api.indexDraw,
+      indexAway: api.indexAway,
+      pctChange: api.pctChange,
+    }
+  })
+})
+
 /** 格式化 Poly 成交量 */
 function formatPolyVol(vol: number): string {
   if (vol <= 0) return '-'
@@ -165,6 +196,10 @@ function formatBpRatio(w: TimeWindowData, s: PolyWindowStats | undefined): strin
   if (!s || s.volume <= 0) return '-'
   const ratio = (w.odds.totalAmount / 7.8) / s.volume
   return ratio.toFixed(2)
+}
+
+function formatBkRatio(w: TimeWindowData, s: PolyWindowStats | undefined): string {
+  return formatBpRatio(w, s)
 }
 
 /**
@@ -298,6 +333,8 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
           分时统计摘要
           <button v-if="!polyEnabled" class="poly-load-btn" @click="polyEnabled = true">📊 加载 Poly 数据</button>
           <span v-else-if="polyLoading" class="poly-loading-hint">Poly 加载中...</span>
+          <button v-if="!kalshiEnabled" class="ks-load-btn" @click="kalshiEnabled = true">加载 Ks 数据</button>
+          <span v-else-if="kalshiLoading" class="ks-loading-hint">Ks 加载中...</span>
         </div>
         <div class="summary-scroll">
         <table class="summary-table">
@@ -309,7 +346,6 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
               <th class="st-pct-detail">比例</th>
               <th class="st-payout">盈亏</th>
               <th class="st-pct">分时环比</th>
-              <th class="st-pct-detail">环比主平客</th>
               <th class="st-asian-volume">亚盘成交量</th>
               <th class="st-asian-ratio">亚盘主客比</th>
               <th class="st-asian-pct">环比主客</th>
@@ -317,6 +353,10 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
               <th class="st-poly-idx">Poly指数</th>
               <th class="st-poly-pct">Poly环比</th>
               <th class="st-bp-ratio">BP量比</th>
+              <th class="st-ks-vol">Ks量</th>
+              <th class="st-ks-idx">Ks指数</th>
+              <th class="st-ks-pct">Ks环比</th>
+              <th class="st-bk-ratio">BK量比</th>
             </tr>
           </thead>
           <tbody>
@@ -342,10 +382,6 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                 <template v-if="w.amountPercent != null">{{ w.amountPercent.toFixed(2) }}%</template>
                 <template v-else>-</template>
               </td>
-              <td class="st-pct-detail">
-                <template v-if="w.homeAmountPercent != null || w.drawAmountPercent != null || w.awayAmountPercent != null">{{ w.homeAmountPercent != null ? w.homeAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.drawAmountPercent != null ? w.drawAmountPercent.toFixed(0) + '%' : '-' }} | {{ w.awayAmountPercent != null ? w.awayAmountPercent.toFixed(0) + '%' : '-' }}</template>
-                <template v-else>-</template>
-              </td>
               <td class="st-asian-volume">{{ formatAsianVolume(w) }}</td>
               <td class="st-asian-ratio">
                 <span :class="asianHomeAwayRatioClass(w)">{{ formatAsianHomeAwayRatio(w) }}</span>
@@ -362,6 +398,13 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                 <template v-else>-</template>
               </td>
               <td class="st-bp-ratio">{{ formatBpRatio(w, polyWindowStats[idx]) }}</td>
+              <td class="st-ks-vol">{{ kalshiWindowStats[idx] ? formatPolyVol(kalshiWindowStats[idx]!.volume) : '-' }}</td>
+              <td class="st-ks-idx">{{ kalshiWindowStats[idx] ? formatPolyIndex(kalshiWindowStats[idx]!) : '-' }}</td>
+              <td class="st-ks-pct" :style="kalshiWindowStats[idx]?.pctChange != null ? pctColorStyle(kalshiWindowStats[idx]!.pctChange, kalshiWindowStats[idx]!.volume > 100 ? 50000 : 0) : ''">
+                <template v-if="kalshiWindowStats[idx]?.pctChange != null">{{ kalshiWindowStats[idx]!.pctChange!.toFixed(0) }}%</template>
+                <template v-else>-</template>
+              </td>
+              <td class="st-bk-ratio">{{ formatBkRatio(w, kalshiWindowStats[idx]) }}</td>
             </tr>
           </tbody>
         </table>
@@ -708,8 +751,23 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
   cursor: pointer;
 }
 .poly-load-btn:hover { background: #6d28d9; }
+.ks-load-btn {
+  padding: 2px 10px;
+  font-size: 11px;
+  background: #047857;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ks-load-btn:hover { background: #065f46; }
 .poly-loading-hint {
   margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+.ks-loading-hint {
   font-size: 11px;
   font-weight: 400;
   opacity: 0.8;
@@ -859,6 +917,57 @@ td.st-bp-ratio {
 }
 .summary-active td.st-bp-ratio {
   background: #ede9fe;
+}
+
+/* ── Kalshi 列样式（绿色背景区分 Ks 数据区域） ── */
+th.st-ks-vol, th.st-ks-idx, th.st-ks-pct {
+  background: #dcfce7 !important;
+  color: #047857;
+  font-size: 11px;
+  white-space: nowrap;
+}
+td.st-ks-vol, td.st-ks-idx, td.st-ks-pct {
+  background: #f0fdf4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 12px;
+}
+td.st-ks-vol {
+  text-align: right;
+  font-weight: 600;
+  color: #047857;
+}
+td.st-ks-idx {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 11px;
+  color: #555;
+}
+td.st-ks-pct {
+  font-weight: 600;
+  color: #888;
+}
+.summary-active td.st-ks-vol,
+.summary-active td.st-ks-idx,
+.summary-active td.st-ks-pct {
+  background: #dcfce7;
+}
+th.st-bk-ratio {
+  background: #d1fae5 !important;
+  color: #047857;
+  font-size: 11px;
+  white-space: nowrap;
+}
+td.st-bk-ratio {
+  background: #ecfdf5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  font-weight: 600;
+  color: #047857;
+  font-size: 12px;
+}
+.summary-active td.st-bk-ratio {
+  background: #d1fae5;
 }
 
 /* ── 提炼表入口链接 ── */
