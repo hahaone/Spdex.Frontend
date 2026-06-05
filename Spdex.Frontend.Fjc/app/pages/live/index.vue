@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ApiResponse } from '~/types/api'
 import type { MatchListItem, MatchListResult } from '~/types/match'
-import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary } from '~/types/live'
+import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary, LiveXgItem, LiveXgReplay } from '~/types/live'
+import type { LiveXgRef } from '~/composables/useLiveXg'
 import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatMoney } from '~/utils/formatters'
 
 const MATCH_REFRESH_INTERVAL_MS = 30_000
@@ -128,6 +129,90 @@ const liveMarkets = computed(() => matchCandidates.value.map(item => ({
 })))
 const liveTrades = useLiveMatchOddsTopTrades(liveMarkets)
 const liveByEventId = computed(() => liveTrades.byEventId.value)
+
+// ── 现场频道 BSW xG（B+：预期总进球统一 BSW 网关）──
+const xgToken = useCookie('spdex_token')
+const xgRefs = computed<LiveXgRef[]>(() => matchCandidates.value.map(item => ({
+  eventId: item.match.eventId,
+  homeTeamName: item.match.homeTeamName,
+  guestTeamName: item.match.guestTeamName,
+})))
+const liveXg = useLiveXg(xgRefs)
+function getXg(item: MatchListItem): LiveXgItem | null {
+  return liveXg.byEventId.value.get(item.match.eventId) ?? null
+}
+function formatXg(item: MatchListItem): string {
+  const xg = getXg(item)
+  return xg ? `${xg.xgHome.toFixed(2)}-${xg.xgAway.toFixed(2)}` : '-'
+}
+function formatProjGoals(item: MatchListItem): string {
+  const xg = getXg(item)
+  return xg ? xg.projectedTotalGoals.toFixed(2) : '-'
+}
+
+// 「预期总进球」折叠（独立于 TOP10 大单展开）+ 走势序列懒加载
+const xgExpandedEventIds = ref<Set<number>>(new Set())
+const xgReplayByEventId = ref<Map<number, LiveXgReplay>>(new Map())
+function isXgExpanded(eventId: number): boolean {
+  return xgExpandedEventIds.value.has(eventId)
+}
+async function loadXgReplay(eventId: number) {
+  if (!import.meta.client) return
+  try {
+    const headers: Record<string, string> = {}
+    if (xgToken.value) headers.Authorization = `Bearer ${xgToken.value}`
+    const res = await $fetch<ApiResponse<LiveXgReplay>>(`/api/live/xg/${eventId}/replay`, { headers })
+    if (res.code === 0 && res.data) {
+      const map = new Map(xgReplayByEventId.value)
+      map.set(eventId, res.data)
+      xgReplayByEventId.value = map
+    }
+  }
+  catch { /* 忽略 */ }
+}
+async function toggleXgExpand(eventId: number) {
+  const next = new Set(xgExpandedEventIds.value)
+  if (next.has(eventId)) {
+    next.delete(eventId)
+  }
+  else {
+    next.add(eventId)
+    if (!xgReplayByEventId.value.has(eventId)) await loadXgReplay(eventId)
+  }
+  xgExpandedEventIds.value = next
+}
+
+// 预期总进球走势 sparkline（照搬 NewSpdex totalGoalsSpark：projectedTotalGoals + 时间轴 guide + 断点跳过）
+function tgSpark(eventId: number) {
+  const series = xgReplayByEventId.value.get(eventId)?.series ?? []
+  const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
+  const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
+  if (nums.length < 2) return null
+  const W = 320, H = 64, pad = 8
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const span = max - min || 1
+  const maxMinute = Math.max(90, ...series.map(p => p.minute || 0))
+  const xOf = (m: number) => pad + (W - pad * 2) * (Math.max(0, m) / maxMinute)
+  const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
+  let path = ''
+  let pen = false
+  let lastX = pad
+  let lastY = H - pad
+  vals.forEach((v, i) => {
+    if (v == null) { pen = false; return }
+    const x = xOf(series[i]?.minute ?? i)
+    const y = yOf(v)
+    path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `
+    pen = true
+    lastX = x
+    lastY = y
+  })
+  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: 'HT' }]
+    .filter(g => maxMinute >= g.minute)
+    .map(g => ({ x: xOf(g.minute), label: g.label }))
+  return { path, w: W, h: H, min: min.toFixed(1), max: max.toFixed(1), guides, lastX, lastY }
+}
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
 
@@ -475,16 +560,6 @@ function liveMaxPromptClass(live: LiveMatchOddsEventItem | undefined, item: Matc
   return getLiveTradePromptClass(live?.maxTopTrade, item)
 }
 
-function formatBfIndex(item: MatchListItem): string {
-  const indexes = [item.bfIndexHome, item.bfIndexDraw, item.bfIndexAway]
-    .map(value => Number(value ?? 0))
-
-  if (indexes.every(value => !Number.isFinite(value) || value <= 0)) return '-'
-  return indexes
-    .map(value => (Number.isFinite(value) && value > 0 ? Math.round(value).toString() : '-'))
-    .join('-')
-}
-
 function formatBfMaxBetSummary(item: MatchListItem): string {
   if (!item.bfMaxBet) return '-'
   const amount = formatHkdMoney(item.bfMaxBet)
@@ -613,10 +688,11 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <th class="col-price">价格</th>
             <th class="col-max">标盘最大单</th>
             <th class="col-money">成交</th>
-            <th class="col-index">必指</th>
             <th class="col-live-total">现场总成交</th>
             <th class="col-live-ltp">现场价位</th>
             <th class="col-live">现场最大单</th>
+            <th class="col-xg">xG</th>
+            <th class="col-tg">预期总进球</th>
             <th class="col-action" />
           </tr>
         </thead>
@@ -646,7 +722,6 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
               <td class="max-cell">{{ formatBfMaxBetSummary(item) }}</td>
               <td class="money-cell">{{ formatHkdCompact(item.bfAmount) }}</td>
-              <td class="index-cell">{{ formatBfIndex(item) }}</td>
               <td class="live-total-cell" :class="{ 'live-latest': isLiveMaxLatest(getLiveItem(item)) }">
                 {{ formatLiveTotal(getLiveItem(item), item) }}
               </td>
@@ -662,6 +737,17 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
               </td>
+              <td class="xg-cell">{{ formatXg(item) }}</td>
+              <td class="tg-cell">
+                <button
+                  class="tg-toggle"
+                  :class="{ open: isXgExpanded(item.match.eventId) }"
+                  @click.stop="toggleXgExpand(item.match.eventId)"
+                >
+                  <span class="num">{{ formatProjGoals(item) }}</span>
+                  <i class="tg-arrow">{{ isXgExpanded(item.match.eventId) ? '⌃' : '⌄' }}</i>
+                </button>
+              </td>
               <td class="action-cell">
                 <button
                   :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
@@ -672,7 +758,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
-              <td colspan="12">
+              <td colspan="13">
                 <table class="top-table">
                   <thead>
                     <tr>
@@ -708,6 +794,37 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                     </tr>
                   </tbody>
                 </table>
+              </td>
+            </tr>
+            <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
+              <td colspan="13">
+                <template v-for="(spark, sparkIdx) in [tgSpark(item.match.eventId)]" :key="sparkIdx">
+                  <div class="tg-chart">
+                    <div class="tg-chart-head">
+                      <span class="tg-title">预期总进球走势</span>
+                      <span v-if="spark" class="tg-range num">{{ spark.min }} ~ {{ spark.max }}</span>
+                    </div>
+                    <svg
+                      v-if="spark"
+                      class="tg-svg"
+                      :viewBox="`0 0 ${spark.w} ${spark.h}`"
+                      preserveAspectRatio="none"
+                    >
+                      <line
+                        v-for="g in spark.guides"
+                        :key="g.label"
+                        class="tg-guide"
+                        :x1="g.x"
+                        y1="0"
+                        :x2="g.x"
+                        :y2="spark.h"
+                      />
+                      <path :d="spark.path" fill="none" class="tg-line" />
+                      <circle :cx="spark.lastX" :cy="spark.lastY" r="3" class="tg-dot" />
+                    </svg>
+                    <div v-else class="tg-empty">暂无预期总进球走势（数据积累中或非足球）</div>
+                  </div>
+                </template>
               </td>
             </tr>
           </template>
@@ -917,6 +1034,104 @@ th.col-live {
 .match-row:nth-child(4n + 1) td.live-ltp-cell,
 .match-row:nth-child(4n + 1) td.live-cell {
   background: #f1f8ff;
+}
+
+/* xG 组（赛中 BSW，薄荷绿，区别于赛前白 + 必发毫秒/现场蓝） */
+th.col-xg,
+th.col-tg {
+  background: #e9f7ef;
+}
+
+.match-row td.xg-cell,
+.match-row td.tg-cell {
+  background: #f4fbf6;
+}
+
+.match-row:nth-child(4n + 1) td.xg-cell,
+.match-row:nth-child(4n + 1) td.tg-cell {
+  background: #eef9f1;
+}
+
+/* 预期总进球折叠按钮（同现场最大单的展开交互） */
+.tg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px solid #cde7d6;
+  border-radius: 5px;
+  background: #fff;
+  color: #1f7a45;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tg-toggle.open {
+  background: #e9f7ef;
+}
+
+.tg-arrow {
+  font-style: normal;
+  color: #4a9968;
+}
+
+/* xG 预期总进球走势图（独立展开行） */
+.xg-detail-row td {
+  background: #f4fbf6;
+  padding: 12px 16px;
+}
+
+.tg-chart {
+  max-width: 420px;
+}
+
+.tg-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.tg-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1f7a45;
+}
+
+.tg-range {
+  font-size: 12px;
+  color: #6b7a72;
+}
+
+.tg-svg {
+  width: 100%;
+  height: 64px;
+  color: #2e9c5f;
+}
+
+.tg-guide {
+  stroke: #cfe6d8;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.tg-line {
+  stroke: #2e9c5f;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.tg-dot {
+  fill: #2e9c5f;
+}
+
+.tg-empty {
+  padding: 16px 0;
+  color: #8a958f;
+  font-size: 13px;
 }
 
 .match-row td.live-total-cell.live-latest,

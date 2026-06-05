@@ -86,3 +86,25 @@ export interface LiveMatchOddsTopTradeSummary {
   bestLaySize?: number | null
   sideHint: 'backPressure' | 'layPressure' | 'unknown' | string
 }
+
+// ── 现场频道 BSW xG（B+ 统一口径）──
+export interface LiveXgItem {
+  eventId: number
+  xgHome: number
+  xgAway: number
+  projectedTotalGoals: number
+}
+
+export interface LiveXgResponse {
+  items: LiveXgItem[]
+}
+
+/** 预期总进球走势序列点（只用到 minute + projectedTotalGoals，其余字段忽略）。 */
+export interface LiveXgReplayPoint {
+  minute: number
+  projectedTotalGoals?: number | null
+}
+
+export interface LiveXgReplay {
+  series: LiveXgReplayPoint[]
+}
