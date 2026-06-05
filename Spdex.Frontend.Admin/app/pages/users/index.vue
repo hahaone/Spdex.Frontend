@@ -177,6 +177,7 @@ const columns = [
     width: 280,
     render: (r: MemberItem) => h(NSpace, { size: 'small' }, {
       default: () => [
+        h(NButton, { size: 'small', onClick: () => navigateTo(`/users/${r.userId}`) }, { default: () => '详情' }),
         can(P.userMembershipEdit) ? h(NButton, { size: 'small', onClick: () => openMembership(r) }, { default: () => '改会籍' }) : null,
         can(P.userStatusEdit) ? h(NButton, { size: 'small', type: r.enabled ? 'error' : 'success', onClick: () => toggleStatus(r) }, { default: () => (r.enabled ? '禁用' : '启用') }) : null,
         can(P.userPasswordReset) ? h(NButton, { size: 'small', onClick: () => openPwd(r) }, { default: () => '重置密码' }) : null,

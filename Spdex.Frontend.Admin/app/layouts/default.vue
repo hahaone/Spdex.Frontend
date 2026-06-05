@@ -54,6 +54,7 @@ const menuOptions = computed(() => {
   const items: { label: string, key: string }[] = [{ label: '工作台', key: '/' }]
   if (can(P.userView)) items.push({ label: '用户管理', key: '/users' })
   if (can(P.silkView)) items.push({ label: '锦囊账本', key: '/silkbag' })
+  if (can(P.orderView)) items.push({ label: '订单管理', key: '/orders' })
   if (can(P.systemAuditView)) items.push({ label: '审计日志', key: '/system/audit' })
   if (can(P.systemAdminManage)) items.push({ label: '管理员', key: '/system/admins' })
   return items
