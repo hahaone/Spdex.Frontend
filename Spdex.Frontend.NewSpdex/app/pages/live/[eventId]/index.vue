@@ -38,6 +38,24 @@ const statusLabel = computed(() => {
 
 const liveDataPending = computed(() => snapshot.value?.dataStatus === 'pending')
 
+// 是否有任意实时内容（事件/统计/现场盘口）。
+// 无 → 把三块"暂无…"空框收敛成一个统一占位，避免宽屏网格里散落多个 dashed 框。
+const hasLiveContent = computed(() => {
+  const s = snapshot.value
+  return !!(s?.events.length || s?.stats.length || s?.liveOdds?.markets?.length)
+})
+
+const livePendingTitle = computed(() => {
+  if (snapshot.value?.status === 'upcoming') return '比赛尚未开始'
+  if (liveDataPending.value) return '实时数据获取中'
+  return '本场暂无实时数据'
+})
+const livePendingMessage = computed(() => {
+  if (snapshot.value?.status === 'upcoming') return '开赛后将实时显示事件时间线、技术统计与现场盘口'
+  if (snapshot.value?.status === 'finished') return '本场暂无实时数据'
+  return '稍候将自动刷新事件、统计与现场盘口'
+})
+
 // 现场赔率头部信息：只显示对应的比分 · 分钟（不暴露庄家名）
 const liveOddsMeta = computed(() => {
   const lo = snapshot.value?.liveOdds
@@ -161,6 +179,35 @@ const replayPoint = computed(() => replaySeries.value[replayIndex.value] ?? null
 
 function edgeToneOf(e: number): string { return e > 3 ? 'pos' : e < -3 ? 'neg' : '' }
 function pctSigned(e: number): string { return `${e > 0 ? '+' : ''}${e}%` }
+function replayMaxMinute(series: AnalysisReplayPoint[]): number {
+  return Math.max(45, ...series.map(p => Number.isFinite(p.minute) ? p.minute : 0))
+}
+function replayMinute(point: AnalysisReplayPoint | undefined, index: number): number {
+  const minute = point?.minute
+  return typeof minute === 'number' && Number.isFinite(minute) ? Math.max(0, minute) : index
+}
+function clampChartX(x: number, w: number, pad = 6): number {
+  return Math.max(pad, Math.min(w - pad, x))
+}
+function buildTimeGuides(series: AnalysisReplayPoint[], w: number, h: number, pad: number) {
+  const maxMinute = replayMaxMinute(series)
+  const xOfMinute = (minute: number) => pad + (w - pad * 2) * (Math.max(0, minute) / maxMinute)
+  return [
+    { minute: 20, label: "20'", dashed: true },
+    { minute: 45, label: '中场', dashed: false },
+  ]
+    .filter(g => maxMinute >= g.minute)
+    .map(g => {
+      const x = xOfMinute(g.minute)
+      return {
+        ...g,
+        x,
+        labelX: clampChartX(x + 3, w),
+        labelY: Math.max(7, h - 2),
+        anchor: x > w - 18 ? 'end' : 'start',
+      }
+    })
+}
 
 // 单序列 sparkline：可选 0 基线 + 选中游标竖线 + 选中点 marker；断点（null）断线。
 function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | undefined, baseZero = false) {
@@ -172,16 +219,17 @@ function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | un
   let min = Math.min(...nums), max = Math.max(...nums)
   if (baseZero) { min = Math.min(min, 0); max = Math.max(max, 0) }
   const span = max - min || 1
-  const step = vals.length > 1 ? (W - pad * 2) / (vals.length - 1) : 0
+  const maxMinute = replayMaxMinute(series)
+  const xOf = (p: AnalysisReplayPoint | undefined, i: number) => pad + (W - pad * 2) * (replayMinute(p, i) / maxMinute)
   const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
   let path = '', pen = false
   vals.forEach((v, i) => {
     if (v == null) { pen = false; return }
-    const x = pad + i * step
+    const x = xOf(series[i], i)
     path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${yOf(v).toFixed(1)} `
     pen = true
   })
-  const cursorX = pad + replayIndex.value * step
+  const cursorX = xOf(series[replayIndex.value] ?? series[series.length - 1], replayIndex.value)
   const sel = vals[replayIndex.value]
   return {
     path, w: W, h: H,
@@ -189,6 +237,7 @@ function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | un
     cursorX,
     marker: sel != null ? { x: cursorX, y: yOf(sel) } : null,
     zeroY: baseZero ? yOf(0) : null,
+    guides: buildTimeGuides(series, W, H, pad),
   }
 }
 
@@ -204,19 +253,29 @@ const overProbSpark = computed(() => {
   const W = 240, H = 44, pad = 4
   const min = Math.min(...nums), max = Math.max(...nums)
   const span = max - min || 1
-  const step = series.length > 1 ? (W - pad * 2) / (series.length - 1) : 0
+  const maxMinute = replayMaxMinute(series)
+  const xOf = (p: AnalysisReplayPoint | undefined, i: number) => pad + (W - pad * 2) * (replayMinute(p, i) / maxMinute)
   const draw = (arr: (number | null)[]) => {
     let d = '', pen = false
     arr.forEach((v, i) => {
       if (v == null) { pen = false; return }
-      const x = pad + i * step
+      const x = xOf(series[i], i)
       const y = pad + (H - pad * 2) * (1 - (v - min) / span)
       d += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `
       pen = true
     })
     return d
   }
-  return { w: W, h: H, model: draw(model), book: draw(book), min: Math.round(min), max: Math.round(max), cursorX: pad + replayIndex.value * step }
+  return {
+    w: W,
+    h: H,
+    model: draw(model),
+    book: draw(book),
+    min: Math.round(min),
+    max: Math.round(max),
+    cursorX: xOf(series[replayIndex.value] ?? series[series.length - 1], replayIndex.value),
+    guides: buildTimeGuides(series, W, H, pad),
+  }
 })
 
 const totalGoalsSpark = computed(() => {
@@ -227,13 +286,14 @@ const totalGoalsSpark = computed(() => {
   const W = 240, H = 50, pad = 6
   const min = Math.min(...nums), max = Math.max(...nums)
   const span = max - min || 1
-  const step = series.length > 1 ? (W - pad * 2) / (series.length - 1) : 0
+  const maxMinute = replayMaxMinute(series)
+  const xOf = (p: AnalysisReplayPoint | undefined, i: number) => pad + (W - pad * 2) * (replayMinute(p, i) / maxMinute)
   const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
   let path = '', pen = false
   const marked = new Set<number>()
   vals.forEach((v, i) => {
     if (v == null) { pen = false; return }
-    const x = pad + i * step
+    const x = xOf(series[i], i)
     path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${yOf(v).toFixed(1)} `
     pen = true
     const prev = vals[i - 1]
@@ -244,14 +304,35 @@ const totalGoalsSpark = computed(() => {
   })
   const labels = [...marked].sort((a, b) => a - b).map(i => {
     const v = vals[i]!
+    const x = xOf(series[i], i)
+    const nearRight = x > W - 30
     return {
-      x: pad + i * step,
+      x,
       y: yOf(v),
+      textX: nearRight ? x - 4 : x + 4,
+      textY: Math.max(8, yOf(v) - 5),
       text: v.toFixed(2),
-      anchor: i > vals.length - 3 ? 'end' : 'middle',
+      anchor: nearRight ? 'end' : 'start',
     }
   })
-  return { path, w: W, h: H, min: min.toFixed(2), max: max.toFixed(2), labels }
+  const overMarkers = vals
+    .map((v, i) => {
+      const point = series[i]
+      const edge = point?.edgePct
+      if (!point || v == null || edge == null || edge <= 3) return null
+      return { x: xOf(point, i), y: yOf(v), minute: replayMinute(point, i) }
+    })
+    .filter((m): m is { x: number, y: number, minute: number } => m !== null)
+  return {
+    path,
+    w: W,
+    h: H,
+    min: min.toFixed(2),
+    max: max.toFixed(2),
+    labels,
+    overMarkers,
+    guides: buildTimeGuides(series, W, H, pad),
+  }
 })
 
 // ── 赛前伤停情报 ──
@@ -332,10 +413,22 @@ function injStatus(s: string): { text: string, cls: string } {
           <span class="muted num">{{ totalGoalsSpark.min }} ~ {{ totalGoalsSpark.max }}</span>
         </div>
         <svg class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
+          <g v-for="guide in totalGoalsSpark.guides" :key="`tg-guide-${guide.label}`">
+            <line :class="['tg-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="totalGoalsSpark.h" />
+            <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="tg-guide-label">{{ guide.label }}</text>
+          </g>
           <path :d="totalGoalsSpark.path" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <circle
+            v-for="marker in totalGoalsSpark.overMarkers"
+            :key="`tg-over-${marker.minute}-${marker.x}`"
+            :cx="marker.x"
+            :cy="marker.y"
+            r="3"
+            class="tg-over-dot"
+          />
           <g v-for="label in totalGoalsSpark.labels" :key="`${label.x}-${label.text}`">
             <circle :cx="label.x" :cy="label.y" r="2.7" class="tg-dot" />
-            <text :x="label.x" :y="Math.max(9, label.y - 5)" :text-anchor="label.anchor" class="tg-label">{{ label.text }}</text>
+            <text :x="label.textX" :y="label.textY" :text-anchor="label.anchor" class="tg-label">{{ label.text }}</text>
           </g>
         </svg>
       </div>
@@ -427,6 +520,10 @@ function injStatus(s: string): { text: string, cls: string } {
       <div v-if="edgeSpark" class="rp-chart">
         <div class="rp-clbl"><span>Edge 走势</span><span class="muted">{{ edgeSpark.min }}% ~ {{ edgeSpark.max }}%</span></div>
         <svg class="rp-spark edge" :viewBox="`0 0 ${edgeSpark.w} ${edgeSpark.h}`" preserveAspectRatio="none">
+          <g v-for="guide in edgeSpark.guides" :key="`edge-guide-${guide.label}`">
+            <line :class="['rp-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="edgeSpark.h" />
+            <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="rp-guide-label">{{ guide.label }}</text>
+          </g>
           <line v-if="edgeSpark.zeroY != null" class="rp-zero" :x1="0" :y1="edgeSpark.zeroY" :x2="edgeSpark.w" :y2="edgeSpark.zeroY" />
           <line class="rp-cursor" :x1="edgeSpark.cursorX" :y1="0" :x2="edgeSpark.cursorX" :y2="edgeSpark.h" />
           <path :d="edgeSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
@@ -441,6 +538,10 @@ function injStatus(s: string): { text: string, cls: string } {
           <span class="rp-legend"><i class="lg model" />模型<i class="lg book" />平台</span>
         </div>
         <svg class="rp-spark" :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`" preserveAspectRatio="none">
+          <g v-for="guide in overProbSpark.guides" :key="`over-guide-${guide.label}`">
+            <line :class="['rp-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="overProbSpark.h" />
+            <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="rp-guide-label">{{ guide.label }}</text>
+          </g>
           <line class="rp-cursor" :x1="overProbSpark.cursorX" :y1="0" :x2="overProbSpark.cursorX" :y2="overProbSpark.h" />
           <path :d="overProbSpark.book" fill="none" class="ln-book" stroke-width="1.5" />
           <path :d="overProbSpark.model" fill="none" class="ln-model" stroke-width="1.5" />
@@ -487,6 +588,7 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
     </section>
 
+    <template v-if="hasLiveContent">
     <section class="timeline">
       <div class="section-title">
         <span>事件时间线</span>
@@ -548,6 +650,13 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
       <div v-else class="empty-section">本场暂无现场盘口（未开盘或已封盘）</div>
     </section>
+    </template>
+
+    <section v-else class="live-pending">
+      <div class="lp-icon"><BarChart3 :size="22" /></div>
+      <b>{{ livePendingTitle }}</b>
+      <span>{{ livePendingMessage }}</span>
+    </section>
 
     <section class="odds">
       <div class="section-title seg">
@@ -557,7 +666,7 @@ function injStatus(s: string): { text: string, cls: string } {
         <div v-for="item in oddsPanel" :key="item.market" class="odds-row">
           <b class="lbl">{{ item.market }}</b>
           <span class="num">主 {{ item.home }}</span>
-          <span class="num line">{{ item.drawOrLine }}</span>
+          <span :class="['num', { line: item.market !== '1X2' }]">{{ item.drawOrLine }}</span>
           <span class="num">客 {{ item.away }}</span>
         </div>
       </div>
@@ -618,6 +727,24 @@ function injStatus(s: string): { text: string, cls: string } {
   font-size: 0.78rem;
   font-weight: 720;
 }
+
+/* 未开赛/无实时数据：三块空框收敛为一个全宽占位（桌面跨整行，不散落） */
+.live-pending {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 34px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  text-align: center;
+}
+.live-pending .lp-icon { color: var(--brand); margin-bottom: 2px; }
+.live-pending b { color: var(--ink); font-size: 0.92rem; font-weight: 820; }
+.live-pending span { max-width: 28em; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
 
 .header {
   display: grid;
@@ -1124,7 +1251,28 @@ section.compare {
 }
 .tg-head .muted { color: var(--muted); font-size: 0.68rem; font-weight: 720; }
 .tg-spark { display: block; width: 100%; height: 50px; margin-top: 3px; color: var(--brand-deep); }
+.tg-guide {
+  stroke: rgba(107, 115, 133, 0.48);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.tg-guide.dashed { stroke-dasharray: 3 3; }
+.tg-guide-label {
+  fill: var(--muted);
+  font-size: 6.5px;
+  font-weight: 780;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
 .tg-dot { fill: #fff; stroke: var(--sell); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.tg-over-dot {
+  fill: var(--buy);
+  stroke: #fff;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
 .tg-label {
   fill: var(--ink);
   font-size: 7px;
@@ -1368,6 +1516,21 @@ section.compare {
 .rp-legend .lg.book { color: var(--soft); margin-left: 7px; }
 
 .rp-spark { display: block; width: 100%; height: 42px; margin-top: 4px; color: var(--brand-deep); }
+.rp-guide {
+  stroke: rgba(107, 115, 133, 0.48);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.rp-guide.dashed { stroke-dasharray: 3 3; }
+.rp-guide-label {
+  fill: var(--muted);
+  font-size: 6.5px;
+  font-weight: 780;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
 .rp-zero { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
 .rp-cursor { stroke: var(--soft); stroke-width: 1; opacity: 0.5; }
 .rp-dot { fill: var(--brand-deep); }

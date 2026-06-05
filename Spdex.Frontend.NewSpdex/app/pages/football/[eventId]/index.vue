@@ -88,7 +88,7 @@ const handicapTitle = computed(() => {
 })
 
 const tab = ref<MarketTab>('all')
-const options = [
+const baseOptions = [
   { label: '全部', value: 'all' },
   { label: '标盘', value: 'standard' },
   { label: 'Poly', value: 'poly' },
@@ -97,6 +97,14 @@ const options = [
   { label: '比分', value: 'cs' },
   { label: '角球', value: 'corner' },
 ]
+const options = computed(() => baseOptions.filter(option =>
+  option.value !== 'poly' || (detail.value?.poly.length ?? 0) > 0))
+
+watchEffect(() => {
+  if (tab.value === 'poly' && !(detail.value?.poly.length)) {
+    tab.value = 'all'
+  }
+})
 
 type SectionKey = 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
 
@@ -133,15 +141,40 @@ const sectionLockMessage = computed(() => {
   }
 })
 
-const allLockNotices = computed(() => {
-  const notices: string[] = []
-  if (!access.value.standard) notices.push('标盘未开放')
-  if (!access.value.goals) notices.push('进球未开放')
-  if (!access.value.handicap) notices.push('让分未开放')
-  if (!access.value.cs) notices.push('比分白金专属')
-  if (!access.value.corner) notices.push('角球白金专属')
-  return notices
+// 锁定项合并到一张升级卡：列出未对当前会籍开放的功能（替代散落的 dashed 空卡）
+const lockedFeatures = computed(() => {
+  const f: string[] = []
+  if (!access.value.standard) f.push('标盘')
+  if (!access.value.goals) f.push('进球')
+  if (!access.value.handicap) f.push('让分')
+  if (!access.value.cs) f.push('比分')
+  if (!access.value.corner) f.push('角球')
+  if (!access.value.euroOdds) f.push('欧赔')
+  if (!access.value.tradeDetails) f.push('盘口明细')
+  return f
 })
+
+// 是否有任意可见数据（盘口/Poly/欧赔/成交/走势之一）。
+// 全锁（免费会籍）→ 主区单列居中升级 hero；有任意解锁 → 网格 + 末尾合并升级条。
+const hasUnlockedData = computed(() => {
+  const d = detail.value
+  return !!(
+    access.value.standard
+    || d?.poly.length
+    || access.value.goals
+    || access.value.handicap
+    || (access.value.cs && d?.cs.length)
+    || (access.value.corner && d?.corner.length)
+    || access.value.euroOdds
+    || access.value.tradeDetails
+    || chartPoints.value.length
+  )
+})
+
+const sectionLabelMap: Record<SectionKey, string> = {
+  standard: '标盘', poly: 'Poly', goals: '进球', handicap: '让分', cs: '比分', corner: '角球',
+}
+const sectionLockLabel = computed(() => (sectionMode.value ? sectionLabelMap[sectionMode.value] : ''))
 
 const match = computed(() => detail.value?.match)
 
@@ -194,14 +227,14 @@ function jumpTo(target: SectionKey) {
         </div>
       </section>
 
-      <section class="tab-band">
+      <section v-if="hasUnlockedData" class="tab-band">
         <div class="tab-row">
           <span class="band-label">指数成交</span>
           <SegmentedControl v-model="tab" :options="options" dense tone="accent" />
         </div>
       </section>
 
-      <section class="time-machine-band">
+      <section v-if="hasUnlockedData" class="time-machine-band">
         <div class="tm-head">
           <Clock :size="13" />
           <b>时光机</b>
@@ -226,7 +259,7 @@ function jumpTo(target: SectionKey) {
         </div>
       </section>
 
-      <div class="detail-grid">
+      <div v-if="hasUnlockedData" class="detail-grid">
         <div class="main-col">
           <section v-if="tab === 'all'" class="all-grid">
             <MarketSummaryCard
@@ -247,9 +280,6 @@ function jumpTo(target: SectionKey) {
               turnover-prefix="$"
               @open="jumpTo('poly')"
             />
-            <div v-else class="access-card poly">
-              <span>本场暂无 Poly 成交数据</span>
-            </div>
 
             <MarketSummaryCard
               v-if="access.goals"
@@ -289,17 +319,21 @@ function jumpTo(target: SectionKey) {
               @open="jumpTo('corner')"
             />
 
-            <div v-if="allLockNotices.length" class="access-summary">
-              <Lock :size="14" />
-              <span v-for="notice in allLockNotices" :key="notice">{{ notice }}</span>
-            </div>
+            <UpgradeUnlockCard
+              v-if="lockedFeatures.length"
+              class="span-all"
+              variant="inline"
+              :features="lockedFeatures"
+            />
           </section>
 
           <template v-else-if="sectionMode">
-            <div v-if="sectionLockMessage" class="access-card">
-              <Lock :size="14" />
-              <span>{{ sectionLockMessage }}</span>
-            </div>
+            <UpgradeUnlockCard
+              v-if="sectionLockMessage"
+              variant="inline"
+              :features="sectionLockLabel ? [sectionLockLabel] : []"
+              :subline="sectionLockMessage"
+            />
             <MarketMetricTable v-else :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
           </template>
         </div>
@@ -320,24 +354,25 @@ function jumpTo(target: SectionKey) {
             </div>
             <LazyStaticTrendChart v-if="chartPoints.length" :points="chartPoints" :height="180" />
             <div v-else class="chart-empty">
-              {{ chartStatus === 'pending' ? '走势图待接入' : '暂无走势' }}
+              {{ chartStatus === 'no-access' ? '走势图未对当前会籍开放' : chartStatus === 'pending' ? '走势图待接入' : '暂无走势' }}
             </div>
           </section>
 
           <BigTradesSummary v-if="access.tradeDetails" :event-id="match.eventId" />
 
           <EuroOddsTable v-if="access.euroOdds && euroOdds" :euro="euroOdds" />
-          <section v-else-if="!access.euroOdds" class="access-card">
-            <Lock :size="14" />
-            <span>欧赔数据未对当前会籍开放</span>
-          </section>
 
           <LadderPanel v-if="access.tradeDetails" :event-id="match.eventId" />
-          <section v-else class="access-card">
-            <Lock :size="14" />
-            <span>盘口明细未对当前会籍开放</span>
-          </section>
         </aside>
+      </div>
+
+      <div v-else class="detail-locked">
+        <UpgradeUnlockCard
+          variant="hero"
+          :features="lockedFeatures"
+          headline="解锁完整赛事数据"
+          subline="标盘 · 进球 · 让分 · 走势图 · 成交明细等暂未对当前会籍开放"
+        />
       </div>
     </template>
   </div>
@@ -368,47 +403,6 @@ function jumpTo(target: SectionKey) {
   color: var(--brand-deep);
   font-size: 0.82rem;
   font-weight: 760;
-}
-
-.access-card {
-  display: inline-flex;
-  align-items: center;
-  align-self: start;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px dashed var(--line);
-  border-radius: 6px;
-  background: #f9fafc;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 720;
-}
-
-.access-summary {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 8px 10px;
-  border: 1px dashed var(--line);
-  border-radius: 5px;
-  background: #f9fafc;
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 720;
-}
-
-.access-summary span {
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--panel);
-}
-
-.access-card.poly {
-  border-color: var(--lavender-strong);
-  background: #faf8fd;
-  color: var(--accent);
 }
 
 .chart-empty {
@@ -577,6 +571,23 @@ function jumpTo(target: SectionKey) {
   gap: 8px;
   padding: 10px 10px;
   background: var(--surface);
+}
+
+/* 合并升级条跨整行；全锁 hero 居中限宽，避免散落空卡 */
+.span-all {
+  grid-column: 1 / -1;
+}
+
+.detail-locked {
+  padding: 12px 10px 18px;
+}
+
+@media (min-width: 1024px) {
+  .detail-locked {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 4px 0 24px;
+  }
 }
 
 .chart-preview {

@@ -586,6 +586,6 @@ onMounted(async () => {
 
 /* 桌面：内容居中限宽，避免单列拉伸到整屏 */
 @media (min-width: 1024px) {
-  .account-page { max-width: 880px; margin-inline: auto; }
+  .account-page { max-width: var(--w-read); margin-inline: auto; }
 }
 </style>

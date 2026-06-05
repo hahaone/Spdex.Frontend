@@ -19,14 +19,30 @@ function badge(m: LiveListItem, side: 'home' | 'away', color: 'yellow' | 'red'):
 }
 /** 取某市场的赔率单元（按 label）。 */
 function odd(lo: LiveOdds | null, market: string, label: string): string {
-  return lo?.markets.find(x => x.market === market)?.cells.find(c => c.label === label)?.odd ?? '-'
+  return formatFixedNumber(lo?.markets.find(x => x.market === market)?.cells.find(c => c.label === label)?.odd) || '-'
 }
 function line(lo: LiveOdds | null, market: string): string {
   return lo?.markets.find(x => x.market === market)?.line ?? ''
 }
+function formatFixedNumber(value: string | number | null | undefined, fixed = 2): string {
+  if (value == null) return ''
+  const raw = String(value).trim()
+  if (!raw) return ''
+  return raw.replace(/[+-]?\d+(?:\.\d+)?/g, token => {
+    const n = Number.parseFloat(token.replace('＋', '+'))
+    return Number.isFinite(n) ? n.toFixed(fixed) : token
+  })
+}
 function marketLine(lo: LiveOdds | null, market: string): string {
   const raw = line(lo, market)
-  return market === '让球' ? formatHandicapLine(raw) : raw
+  return market === '让球' ? formatHandicapLine(raw, { fixed: 2 }) : formatFixedNumber(raw)
+}
+function marketLineText(lo: LiveOdds | null, market: '让球' | '大小'): string {
+  const prefix = market === '让球' ? '让' : '大'
+  return `${prefix}${marketLine(lo, market) || '-'}`
+}
+function prematchHandicapText(value: string | number | null | undefined): string {
+  return `让${formatHandicapLine(value, { fixed: 2 }) || '-'}`
 }
 function hasOdds(lo: LiveOdds | null): boolean {
   return !!lo?.markets?.length
@@ -101,10 +117,10 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
             <span v-else-if="m.status === 'finished'" class="st-pill done">完场</span>
             <span v-else class="st-pill up">未开</span>
             <span class="hsp" />
-            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">让 {{ marketLine(m.liveOdds, '让球') || '-' }}</span>
-            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="odds-line num">让 {{ formatHandicapLine(m.prematchHandicap) }}</span>
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">{{ marketLineText(m.liveOdds, '让球') }}</span>
+            <span v-else-if="m.status === 'upcoming' && m.prematchHandicap" class="odds-line num">{{ prematchHandicapText(m.prematchHandicap) }}</span>
             <span v-else class="odds-line" aria-hidden="true" />
-            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">大 {{ marketLine(m.liveOdds, '大小') || '-' }}</span>
+            <span v-if="m.status === 'running' && hasOdds(m.liveOdds)" class="odds-line num">{{ marketLineText(m.liveOdds, '大小') }}</span>
             <span v-else class="odds-line" aria-hidden="true" />
             <span v-if="m.doubleRed" class="dr-tag">双红</span>
           </div>
@@ -245,6 +261,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 }
 
 .live-card {
+  --live-odds-col: 50px;
   display: grid;
   gap: 5px;
   padding: 8px 10px;
@@ -257,9 +274,9 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 
 .c-head {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) 44px 44px auto;
+  grid-template-columns: auto auto minmax(0, 1fr) var(--live-odds-col) var(--live-odds-col) auto;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 
 .kick { color: var(--muted); font-size: 0.76rem; font-weight: 760; }
@@ -313,12 +330,12 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 
 /* 进行中:球队行 = 名称 | 牌 | 比分 | 让球赔 | 大小赔 */
 .trow.has-odds {
-  grid-template-columns: minmax(0, 1fr) auto 22px 44px 44px;
+  grid-template-columns: minmax(0, 1fr) auto 22px var(--live-odds-col) var(--live-odds-col);
   gap: 6px;
 }
 
 .oc {
-  text-align: center;
+  text-align: right;
   font-style: normal;
   font-weight: 820;
   color: var(--brand-deep);
@@ -394,7 +411,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
   font-size: 0.74rem;
   font-weight: 820;
   min-height: 17px;
-  text-align: center;
+  text-align: right;
   white-space: nowrap;
 }
 

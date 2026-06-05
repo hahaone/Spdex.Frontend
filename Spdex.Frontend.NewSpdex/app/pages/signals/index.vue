@@ -260,6 +260,6 @@ function matchKick(iso: string): string {
 
 /* 桌面：信号流居中限宽，便于阅读 */
 @media (min-width: 1024px) {
-  .signals-page { max-width: 860px; margin-inline: auto; }
+  .signals-page { max-width: var(--w-read); margin-inline: auto; }
 }
 </style>

@@ -52,6 +52,13 @@
   --shadow-elev: 0 2px 8px rgba(26, 34, 51, 0.08);
   --card-shadow: 0 2px 8px rgba(26, 34, 51, 0.05);
 
+  /* layout contract — 桌面宽度的单一真源。
+     导航与正文共用 --w-wide + --gutter，左右边缘对齐，消除错位；
+     宽度与主题无关，故只定义在 :root（不需要在 .dark 重复）。 */
+  --w-wide: 1320px;   /* 数据页：列表 / 详情 / 实时 / 首页 / 图表外框 */
+  --w-read: 880px;    /* 阅读 & 表单页：会员中心 / 信号 / 推送 / 升级 / 改密 */
+  --gutter: 20px;     /* 共享的左右留白 */
+
   /* chips / sections / rows */
   --chip-strong-bg: #1a2233;
   --chip-strong-fg: #ffffff;

@@ -26,6 +26,15 @@ function homePct(home: string, away: string): number {
   const t = h + a
   return t > 0 ? Math.round((h / t) * 100) : 50
 }
+function formatFixedNumber(value: string | number | null | undefined, fixed = 2): string {
+  if (value == null) return ''
+  const raw = String(value).trim()
+  if (!raw) return ''
+  return raw.replace(/[+-]?\d+(?:\.\d+)?/g, token => {
+    const n = Number.parseFloat(token.replace('＋', '+'))
+    return Number.isFinite(n) ? n.toFixed(fixed) : token
+  })
+}
 
 const homeCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'home') ?? [])
 const awayCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'away') ?? [])
@@ -41,7 +50,7 @@ const oddsMarket = computed(() => snapshot.value?.liveOdds?.markets?.find(m => m
 const oddsMarketLine = computed(() => {
   const market = oddsMarket.value
   if (!market?.line) return ''
-  return market.market === '让球' ? formatHandicapLine(market.line) : market.line
+  return market.market === '让球' ? formatHandicapLine(market.line, { fixed: 2 }) : formatFixedNumber(market.line)
 })
 </script>
 
@@ -105,7 +114,7 @@ const oddsMarketLine = computed(() => {
       <div v-if="oddsMarket" class="pv-odds">
         <span class="pv-odds-h">{{ oddsMarket.market }}<i v-if="oddsMarketLine"> {{ oddsMarketLine }}</i></span>
         <span v-for="c in oddsMarket.cells" :key="c.label" class="pv-cell">
-          <i>{{ c.label }}</i><b class="num">{{ c.odd }}</b>
+          <i>{{ c.label }}</i><b class="num">{{ formatFixedNumber(c.odd) || c.odd }}</b>
         </span>
       </div>
 

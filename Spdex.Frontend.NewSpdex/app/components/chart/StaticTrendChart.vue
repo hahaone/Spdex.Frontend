@@ -17,9 +17,27 @@ const props = defineProps<{
   barMode?: boolean
 }>()
 
-const width = 320
+// viewBox 宽度 = 容器实测宽度 → 1px viewBox = 1px 屏幕。
+// 这样字体/线宽/圆点不会随容器变宽被等比放大（修复宽屏下走势图被拉成巨大化）。
+// SSR/首帧用 320 兜底，挂载后用 ResizeObserver 同步真实宽度。
+const svgRef = ref<SVGSVGElement | null>(null)
+const measuredWidth = ref(320)
+const width = computed(() => measuredWidth.value)
 const height = computed(() => props.height ?? 188)
 const pad = { left: 30, right: 8, top: 16, bottom: 32 }
+
+onMounted(() => {
+  const el = svgRef.value
+  if (!el) return
+  const sync = () => {
+    const w = el.clientWidth
+    if (w > 0) measuredWidth.value = w
+  }
+  sync()
+  const ro = new ResizeObserver(sync)
+  ro.observe(el)
+  onScopeDispose(() => ro.disconnect())
+})
 
 const labels = computed<ChartSeriesLabels>(() => props.seriesLabels ?? { home: '主', draw: '平', away: '客' })
 const hasDraw = computed(() => labels.value.draw != null)
@@ -83,7 +101,7 @@ const priceMax = computed(() => (priceScaleVals.value.length ? Math.max(...price
 const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 
 const padRight = computed(() => (showPrice.value ? 30 : pad.right))
-const chartW = computed(() => width - pad.left - padRight.value)
+const chartW = computed(() => width.value - pad.left - padRight.value)
 
 // 柱顶可达的最高 y：叠加价位线时压到下方带，给上方价位带让位
 const barCeilY = computed(() => (showPrice.value ? pad.top + chartH.value * (PRICE_BAND + 0.06) : pad.top))
@@ -195,7 +213,6 @@ const yTicks = computed(() => {
 })
 
 // ── 交互：十字准线 + 悬浮提示（鼠标 hover / 触屏拖动 scrub）──
-const svgRef = ref<SVGSVGElement | null>(null)
 const hoverIndex = ref<number | null>(null)
 
 const hover = computed(() => {
@@ -209,7 +226,7 @@ const hover = computed(() => {
 const tooltip = computed(() => {
   const h = hover.value
   if (!h) return null
-  const frac = h.x / width
+  const frac = h.x / width.value
   const anchor = frac > 0.62 ? 'right' : frac < 0.2 ? 'left' : 'mid'
   return {
     time: h.p.time,
@@ -227,7 +244,7 @@ function updateFromEvent(e: PointerEvent) {
   if (!svg || n === 0) return
   const rect = svg.getBoundingClientRect()
   if (rect.width === 0) return
-  const vbX = ((e.clientX - rect.left) / rect.width) * width
+  const vbX = ((e.clientX - rect.left) / rect.width) * width.value
   const t = (vbX - pad.left) / (chartW.value || 1)
   hoverIndex.value = Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))))
 }
@@ -241,6 +258,7 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
     <svg
       ref="svgRef"
       :viewBox="`0 0 ${width} ${height}`"
+      :style="{ height: `${height}px` }"
       role="img"
       aria-label="走势图"
       @pointerdown="onMove"
@@ -370,7 +388,6 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
 svg {
   display: block;
   width: 100%;
-  height: auto;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);

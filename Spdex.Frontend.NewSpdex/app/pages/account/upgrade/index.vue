@@ -411,4 +411,9 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   .featured-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .standard-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* 桌面：聚焦居中，套餐卡不被拉伸到整屏 */
+@media (min-width: 1024px) {
+  .upgrade-page { max-width: 1080px; margin-inline: auto; gap: 14px; }
+}
 </style>

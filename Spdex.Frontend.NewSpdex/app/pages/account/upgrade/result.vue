@@ -590,4 +590,9 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
 }
 
 .action-btn:active { background: var(--brand-deep); }
+
+/* 桌面：结果页居中限宽，避免单列拉伸到整屏 */
+@media (min-width: 1024px) {
+  .result-page { max-width: var(--w-read); margin-inline: auto; }
+}
 </style>

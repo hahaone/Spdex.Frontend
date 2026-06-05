@@ -146,7 +146,7 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
     grid-auto-flow: dense;
     align-items: start;
     width: 100%;
-    max-width: 1120px;
+    max-width: var(--w-wide);
     margin: 0 auto;
     padding: 16px 0 32px;
     gap: 16px;
@@ -170,14 +170,7 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
 
 @media (min-width: 1440px) {
   .module-stack {
-    max-width: 1280px;
     gap: 18px;
-  }
-}
-
-@media (min-width: 1600px) {
-  .module-stack {
-    max-width: 1440px;
   }
 }
 </style>

@@ -104,9 +104,9 @@ async function handleLogout() {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 18px;
-  max-width: 1280px;
+  max-width: var(--w-wide);
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 var(--gutter);
   height: 56px;
 }
 
