@@ -98,6 +98,7 @@ export interface AccountSummary {
   email: string | null
   mobile: string | null
   lastActivityDate: string | null
+  isTestAccount: boolean
 }
 
 export interface CustomerService {

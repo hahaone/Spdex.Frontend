@@ -43,6 +43,8 @@ const endDate = computed(() => {
 
 const silkTotal = computed(() => Math.round(summary.value?.silkBalance?.total ?? 0))
 
+const isTest = computed(() => summary.value?.isTestAccount === true)
+
 const lastLogin = computed(() => {
   const raw = summary.value?.lastActivityDate
   if (!raw) return '—'
@@ -67,8 +69,8 @@ onMounted(async () => {
         <UserCircle :size="36" stroke-width="1.6" />
       </div>
       <div class="account-info">
-        <b>{{ summary?.userName || userName || '—' }}</b>
-        <span>SPdex · 会员中心</span>
+        <b>{{ summary?.userName || userName || '—' }}<span v-if="isTest" class="test-badge">测试账号</span></b>
+        <span>{{ isTest ? 'SPdex · 会员中心 · 测试账号（支付 0.01 元）' : 'SPdex · 会员中心' }}</span>
       </div>
       <NuxtLink to="/account/upgrade" class="upgrade-btn">
         <ArrowUpRight :size="14" />
@@ -187,6 +189,17 @@ onMounted(async () => {
   opacity: 0.84;
   font-size: 0.74rem;
   font-weight: 720;
+}
+
+.test-badge {
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 0.62rem;
+  font-weight: 820;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
 }
 
 .upgrade-btn {

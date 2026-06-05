@@ -11,7 +11,15 @@
         <NDescriptionsItem label="邮箱">{{ user.email || '—' }}</NDescriptionsItem>
         <NDescriptionsItem label="注册">{{ fmtDate(user.registerDate) }}</NDescriptionsItem>
         <NDescriptionsItem label="最后活跃">{{ fmtDate(user.lastActivityDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="测试账号">
+          <NTag v-if="user.isTestAccount" type="warning" size="small" :bordered="false">是 · 支付 0.01</NTag>
+          <span v-else>否</span>
+        </NDescriptionsItem>
       </NDescriptions>
+      <div v-if="can(P.userMembershipEdit)" class="mt-3 flex items-center gap-2">
+        <NSwitch :value="!!user.isTestAccount" :loading="testSaving" @update:value="toggleTest" />
+        <span class="text-xs text-gray-400">开启后该用户购买会员 / 锦囊的支付金额固定 0.01 元（会籍与权限不变）</span>
+      </div>
     </NCard>
 
     <NCard size="small">
@@ -34,15 +42,25 @@
 </template>
 
 <script setup lang="ts">
+import { useMessage } from 'naive-ui'
 import { P } from '~/utils/permissions'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const route = useRoute()
 const api = useAdminApi()
+const message = useMessage()
 const { can } = usePermission()
 const id = Number(route.params.id)
 
 const user = ref<any>(null)
+const testSaving = ref(false)
+async function toggleTest(val: boolean) {
+  testSaving.value = true
+  const res = await api.put(`users/${id}/test-account`, { isTest: val, remark: null })
+  testSaving.value = false
+  if (res.code === 0) { message.success(val ? '已设为测试账号' : '已取消测试账号'); loadUser() }
+  else message.error(res.message || '操作失败')
+}
 const orders = ref<any[]>([])
 const balance = ref<any>(null)
 const silkLogs = ref<any[]>([])
