@@ -969,7 +969,7 @@ const refreshFlash = async () => {
 <template>
   <div class="flash-page">
     <header class="flash-header">
-      <a class="brand-block focus-ring" href="https://new.spdex.com" aria-label="返回 NewSPdex 首页">
+      <a class="brand-block focus-ring" href="https://new.spdex.com" aria-label="返回首页">
         <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
         <div>
           <h1>闪Q单场分析</h1>
@@ -989,9 +989,9 @@ const refreshFlash = async () => {
       </div>
 
       <div class="header-actions">
-        <a class="return-link focus-ring" :href="newspdexReturnUrl" aria-label="返回 NewSpdex 赛事页">
+        <a class="return-link focus-ring" :href="newspdexReturnUrl" aria-label="返回赛事">
           <ArrowLeft :size="15" />
-          <span>返回 NewSpdex</span>
+          <span>返回赛事</span>
         </a>
         <button type="button" class="icon-button header-refresh focus-ring" title="刷新赛事数据" @click="refreshFlash">
           <RefreshCw :size="16" />
