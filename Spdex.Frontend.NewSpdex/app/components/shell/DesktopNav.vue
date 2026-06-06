@@ -70,6 +70,7 @@ async function handleLogout() {
       </nav>
 
       <div class="nav-actions">
+        <ClassicDesktopToggle />
         <button class="action-btn focus-ring" aria-label="搜索 (⌘K)" @click="showCommand()">
           <Search :size="16" />
         </button>

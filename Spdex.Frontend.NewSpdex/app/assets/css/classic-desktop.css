@@ -1,0 +1,34 @@
+.classic-desktop {
+  --classic-bg: #e5e5e5;
+  --classic-panel: #ffffff;
+  --classic-title: #353535;
+  --classic-title-muted: #8f8f8f;
+  --classic-green: #5cae91;
+  --classic-green-soft: #d9f2e8;
+  --classic-purple: #8f8cf7;
+  --classic-purple-soft: #eeeafd;
+  --classic-blue-soft: #d9ecf8;
+  --classic-yellow: #fff38a;
+  --classic-border: #d8d8d8;
+  --classic-grid: #e7e7e7;
+  --classic-text: #555c66;
+  --classic-link: #1b4feb;
+}
+
+.dark.classic-desktop,
+.dark .classic-desktop {
+  --classic-bg: #121722;
+  --classic-panel: #1b2230;
+  --classic-title: #2b3342;
+  --classic-title-muted: #9aa3b4;
+  --classic-green: #377f68;
+  --classic-green-soft: #1c3b34;
+  --classic-purple: #706be3;
+  --classic-purple-soft: #272641;
+  --classic-blue-soft: #183447;
+  --classic-yellow: #5a4d18;
+  --classic-border: #303846;
+  --classic-grid: #2a3240;
+  --classic-text: #c7ceda;
+  --classic-link: #8ea6ff;
+}

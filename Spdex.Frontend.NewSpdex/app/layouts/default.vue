@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const route = useRoute()
 const { maybeAutoStart } = useOnboarding()
+const { isClassicDesktop } = useDesktopViewMode()
 
 onMounted(() => {
   // 仅首页首次访问自动弹新手引导（看过一次后 cookie 记 seen）
@@ -9,7 +10,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="viewport-shell">
+  <div :class="['viewport-shell', { 'classic-desktop': isClassicDesktop }]">
     <DesktopNav class="desktop-only" />
     <div class="app-frame">
       <AppTopBar class="mobile-only" />
@@ -84,6 +85,11 @@ onMounted(() => {
   .content-inner {
     max-width: var(--w-wide);
     padding-inline: var(--gutter);
+  }
+
+  .classic-desktop .content-inner {
+    max-width: min(1920px, calc(100vw - 48px));
+    padding-inline: 0;
   }
 }
 </style>

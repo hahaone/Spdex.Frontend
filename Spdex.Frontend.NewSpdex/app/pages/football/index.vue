@@ -96,6 +96,7 @@ const filters = computed<MatchListFilters>(() => {
 })
 
 const { items: matches, leagues, prematchSixHourLockApplied, pending, refresh } = useMatchList(filters)
+const { isClassicDesktop } = useDesktopViewMode()
 
 /** 异动筛选生效时只显示命中的比赛 */
 const displayMatches = computed(() => {
@@ -132,7 +133,29 @@ function detailRoute(eventId: number) {
 </script>
 
 <template>
-  <div :class="['football-page', { 'is-metric-filtered': isMetricFiltered }]">
+  <ClassicMatchWorkbenchList
+    v-if="isClassicDesktop"
+    v-model:day-seg="daySeg"
+    v-model:custom-date="customDate"
+    v-model:status="status"
+    v-model:lottery="lottery"
+    v-model:league="league"
+    :matches="displayMatches"
+    :pending="pending"
+    :archive-min-date="archiveMinDate"
+    :day-options="dayOptions"
+    :status-options="statusOptions"
+    :lottery-options="lotteryOptions"
+    :league-options="leagueOptions"
+    :prematch-six-hour-lock-applied="prematchSixHourLockApplied"
+    :is-metric-filtered="isMetricFiltered"
+    :metric-label="metricLabel"
+    :detail-route="detailRoute"
+    @refresh="refresh()"
+    @clear-metric="navigateTo('/football')"
+  />
+
+  <div v-else :class="['football-page', { 'is-metric-filtered': isMetricFiltered }]">
     <aside v-if="!isMetricFiltered" class="filter-band">
       <div class="filter-head">
         <h2>赛事筛选</h2>

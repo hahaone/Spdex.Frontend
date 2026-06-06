@@ -160,6 +160,79 @@ const { elRef: edgeSvg, w: edgeW } = useSparkWidth()
 const { elRef: probSvg, w: probW } = useSparkWidth()
 const { elRef: tgSvg, w: tgW } = useSparkWidth()
 
+type ChartKey = 'totalGoals' | 'signal' | 'edge' | 'prob'
+type HoverPointBase = { index: number, x: number }
+
+const chartHover = reactive<Record<ChartKey, number | null>>({
+  totalGoals: null,
+  signal: null,
+  edge: null,
+  prob: null,
+})
+const chartClearTimers: Partial<Record<ChartKey, ReturnType<typeof setTimeout>>> = {}
+
+function clearChartTimer(key: ChartKey) {
+  const timer = chartClearTimers[key]
+  if (timer) clearTimeout(timer)
+  chartClearTimers[key] = undefined
+}
+function nearestByX<T extends HoverPointBase>(points: T[], x: number): T | null {
+  if (!points.length) return null
+  return points.reduce((best, point) => Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best, points[0]!)
+}
+function updateChartHover<T extends HoverPointBase>(
+  key: ChartKey,
+  svgRef: { value: SVGSVGElement | null },
+  points: T[],
+  e: PointerEvent,
+  width: number,
+) {
+  const svg = svgRef.value
+  if (!svg || !points.length || width <= 0) return
+  clearChartTimer(key)
+  const rect = svg.getBoundingClientRect()
+  const x = Math.max(0, Math.min(width, ((e.clientX - rect.left) / Math.max(rect.width, 1)) * width))
+  const point = nearestByX(points, x)
+  if (!point) return
+  chartHover[key] = point.index
+  if (key === 'edge' || key === 'prob')
+    replayIndex.value = point.index
+}
+function leaveChartHover(key: ChartKey, e: PointerEvent) {
+  if (e.pointerType === 'mouse')
+    chartHover[key] = null
+}
+function endChartHover(key: ChartKey, e: PointerEvent) {
+  if (e.pointerType === 'mouse') return
+  clearChartTimer(key)
+  chartClearTimers[key] = setTimeout(() => { chartHover[key] = null }, 1800)
+}
+onScopeDispose(() => {
+  for (const key of Object.keys(chartClearTimers) as ChartKey[])
+    clearChartTimer(key)
+})
+
+function tipAnchor(x: number, width: number): 'left' | 'mid' | 'right' {
+  if (x < width * 0.28) return 'left'
+  if (x > width * 0.72) return 'right'
+  return 'mid'
+}
+function tipLeftPct(x: number, width: number): number {
+  return Math.max(4, Math.min(96, (x / Math.max(width, 1)) * 100))
+}
+function fmtPct(value: number | null | undefined, digits = 1): string {
+  if (value == null || !Number.isFinite(value)) return '-'
+  return `${value.toFixed(digits)}%`
+}
+function fmtSignedPct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '-'
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+}
+function scoreText(point?: AnalysisReplayPoint): string {
+  const score = point?.score
+  return score ? `${score[0] ?? 0}-${score[1] ?? 0}` : '-'
+}
+
 // 双红信号强度走势 sparkline
 const signalSpark = computed(() => {
   const pts = analysis.value?.signalTimeline ?? []
@@ -171,12 +244,13 @@ const signalSpark = computed(() => {
   const span = max - min || 1
   const maxMinute = Math.max(90, ...pts.map(p => p.minute || 0))
   const xOfMinute = (minute: number) => pad + (W - pad * 2) * (Math.max(0, minute) / maxMinute)
-  const path = pts.map((p, i) => {
+  const points = pts.map((p, i) => {
     const v = p.strength
     const x = xOfMinute(p.minute || i)
     const y = pad + (H - pad * 2) * (1 - (v - min) / span)
-    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
+    return { index: i, x, y, minute: p.minute || i, strength: v }
+  })
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
   const guides = [
     { minute: 20, x: xOfMinute(20), label: '20', dashed: true },
     { minute: 45, x: xOfMinute(45), label: 'HT', dashed: false },
@@ -188,7 +262,7 @@ const signalSpark = computed(() => {
       y: pad + (H - pad * 2) * (1 - (p.strength - min) / span),
       minute: p.minute,
     }))
-  return { path, w: W, h: H, max, guides, triggers }
+  return { path, w: W, h: H, max, guides, triggers, points }
 })
 
 // ── 完场回放：赛中分析时序（仅完场且有归档时非空）──
@@ -255,6 +329,19 @@ function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | un
   })
   const cursorX = xOf(series[replayIndex.value] ?? series[series.length - 1], replayIndex.value)
   const sel = vals[replayIndex.value]
+  const points = vals
+    .map((v, i) => {
+      if (v == null || !Number.isFinite(v)) return null
+      return {
+        index: i,
+        x: xOf(series[i], i),
+        y: yOf(v),
+        value: v,
+        minute: replayMinute(series[i], i),
+        raw: series[i],
+      }
+    })
+    .filter((p): p is { index: number, x: number, y: number, value: number, minute: number, raw: AnalysisReplayPoint } => p !== null)
   return {
     path, w: W, h: H,
     min: Math.round(min), max: Math.round(max),
@@ -262,6 +349,7 @@ function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | un
     marker: sel != null ? { x: cursorX, y: yOf(sel) } : null,
     zeroY: baseZero ? yOf(0) : null,
     guides: buildTimeGuides(series, W, H, pad),
+    points,
   }
 }
 
@@ -270,35 +358,63 @@ const edgeSpark = computed(() => buildReplaySpark(p => p.edgePct, true, edgeW.va
 // 大球概率走势：模型 vs 平台，两线共用一套刻度才可比。
 const overProbSpark = computed(() => {
   const series = replaySeries.value
-  const model = series.map(p => (p.modelOverPct ?? null))
-  const book = series.map(p => (p.bookOverPct ?? null))
-  const nums = [...model, ...book].filter((v): v is number => v != null)
+  const modelVals = series.map(p => (p.modelOverPct ?? null))
+  const bookVals = series.map(p => (p.bookOverPct ?? null))
+  const nums = [...modelVals, ...bookVals].filter((v): v is number => v != null)
   if (nums.length < 2) return null
   const W = probW.value, H = 50, pad = 4
   const min = Math.min(...nums), max = Math.max(...nums)
   const span = max - min || 1
   const maxMinute = replayMaxMinute(series)
   const xOf = (p: AnalysisReplayPoint | undefined, i: number) => pad + (W - pad * 2) * (replayMinute(p, i) / maxMinute)
+  const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
   const draw = (arr: (number | null)[]) => {
     let d = '', pen = false
     arr.forEach((v, i) => {
       if (v == null) { pen = false; return }
       const x = xOf(series[i], i)
-      const y = pad + (H - pad * 2) * (1 - (v - min) / span)
+      const y = yOf(v)
       d += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `
       pen = true
     })
     return d
   }
+  const points = series
+    .map((p, i) => {
+      const modelValue = modelVals[i]
+      const bookValue = bookVals[i]
+      if (modelValue == null && bookValue == null) return null
+      return {
+        index: i,
+        x: xOf(p, i),
+        modelY: modelValue == null ? null : yOf(modelValue),
+        bookY: bookValue == null ? null : yOf(bookValue),
+        modelValue,
+        bookValue,
+        minute: replayMinute(p, i),
+        raw: p,
+      }
+    })
+    .filter((p): p is {
+      index: number
+      x: number
+      modelY: number | null
+      bookY: number | null
+      modelValue: number | null
+      bookValue: number | null
+      minute: number
+      raw: AnalysisReplayPoint
+    } => p !== null)
   return {
     w: W,
     h: H,
-    model: draw(model),
-    book: draw(book),
+    model: draw(modelVals),
+    book: draw(bookVals),
     min: Math.round(min),
     max: Math.round(max),
     cursorX: xOf(series[replayIndex.value] ?? series[series.length - 1], replayIndex.value),
     guides: buildTimeGuides(series, W, H, pad),
+    points,
   }
 })
 
@@ -361,6 +477,21 @@ const totalGoalsSpark = computed(() => {
     })
     .filter((m): m is { x: number, y: number, minute: number, text: string } => m !== null)
 
+  const points = vals
+    .map((v, i) => {
+      if (v == null || !Number.isFinite(v)) return null
+      const point = series[i]
+      return {
+        index: i,
+        x: xOf(point, i),
+        y: yOf(v),
+        value: v,
+        minute: replayMinute(point, i),
+        raw: point,
+      }
+    })
+    .filter((p): p is { index: number, x: number, y: number, value: number, minute: number, raw: AnalysisReplayPoint } => p !== null)
+
   const accepted: typeof candidates = []
   const minLabelGap = Math.max(32, Math.min(54, W / 8))
   candidates
@@ -405,8 +536,116 @@ const totalGoalsSpark = computed(() => {
     overMarkers,
     yGuides,
     guides: buildTimeGuides(series, W, H, pad),
+    points,
   }
 })
+
+type ChartTipRow = { label: string, value: string, tone?: string }
+function compactRows(rows: Array<ChartTipRow | null | undefined | false>): ChartTipRow[] {
+  return rows.filter((row): row is ChartTipRow => !!row)
+}
+
+const totalGoalsHoverPoint = computed(() => {
+  const spark = totalGoalsSpark.value
+  const index = chartHover.totalGoals
+  return spark && index != null ? spark.points.find(p => p.index === index) ?? null : null
+})
+const signalHoverPoint = computed(() => {
+  const spark = signalSpark.value
+  const index = chartHover.signal
+  return spark && index != null ? spark.points.find(p => p.index === index) ?? null : null
+})
+const edgeHoverPoint = computed(() => {
+  const spark = edgeSpark.value
+  const index = chartHover.edge
+  return spark && index != null ? spark.points.find(p => p.index === index) ?? null : null
+})
+const probHoverPoint = computed(() => {
+  const spark = overProbSpark.value
+  const index = chartHover.prob
+  return spark && index != null ? spark.points.find(p => p.index === index) ?? null : null
+})
+
+const totalGoalsTip = computed(() => {
+  const spark = totalGoalsSpark.value
+  const point = totalGoalsHoverPoint.value
+  if (!spark || !point) return null
+  const raw = point.raw
+  return {
+    leftPct: tipLeftPct(point.x, spark.w),
+    anchor: tipAnchor(point.x, spark.w),
+    title: `${point.minute}' · ${scoreText(raw)}`,
+    rows: compactRows([
+      { label: '预期总进球', value: point.value.toFixed(2) },
+      raw.edgePct != null && { label: 'Edge', value: fmtSignedPct(raw.edgePct), tone: edgeToneOf(raw.edgePct) },
+      raw.modelOverPct != null && { label: '模型大球', value: fmtPct(raw.modelOverPct) },
+      raw.bookOverPct != null && { label: '平台隐含', value: fmtPct(raw.bookOverPct) },
+      raw.signalStrength != null && { label: '双红信号', value: String(raw.signalStrength) },
+    ]),
+  }
+})
+const signalTip = computed(() => {
+  const spark = signalSpark.value
+  const point = signalHoverPoint.value
+  if (!spark || !point) return null
+  return {
+    leftPct: tipLeftPct(point.x, spark.w),
+    anchor: tipAnchor(point.x, spark.w),
+    title: `${point.minute}'`,
+    rows: [{ label: '双红信号', value: String(point.strength) }],
+  }
+})
+const edgeTip = computed(() => {
+  const spark = edgeSpark.value
+  const point = edgeHoverPoint.value
+  if (!spark || !point) return null
+  const raw = point.raw
+  return {
+    leftPct: tipLeftPct(point.x, spark.w),
+    anchor: tipAnchor(point.x, spark.w),
+    title: `${point.minute}' · ${scoreText(raw)}`,
+    rows: compactRows([
+      { label: 'Edge', value: fmtSignedPct(point.value), tone: edgeToneOf(point.value) },
+      raw.modelOverPct != null && { label: '模型大球', value: fmtPct(raw.modelOverPct) },
+      raw.bookOverPct != null && { label: '平台隐含', value: fmtPct(raw.bookOverPct) },
+      raw.signalStrength != null && { label: '双红信号', value: String(raw.signalStrength) },
+    ]),
+  }
+})
+const probTip = computed(() => {
+  const spark = overProbSpark.value
+  const point = probHoverPoint.value
+  if (!spark || !point) return null
+  const raw = point.raw
+  return {
+    leftPct: tipLeftPct(point.x, spark.w),
+    anchor: tipAnchor(point.x, spark.w),
+    title: `${point.minute}' · ${scoreText(raw)}`,
+    rows: compactRows([
+      point.modelValue != null && { label: '模型大球', value: fmtPct(point.modelValue) },
+      point.bookValue != null && { label: '平台隐含', value: fmtPct(point.bookValue) },
+      raw.edgePct != null && { label: 'Edge', value: fmtSignedPct(raw.edgePct), tone: edgeToneOf(raw.edgePct) },
+      raw.homeProb != null && { label: '资金', value: `主 ${raw.homeProb} 平 ${raw.drawProb ?? '-'} 客 ${raw.awayProb ?? '-'}` },
+    ]),
+  }
+})
+
+function onTotalGoalsPointer(e: PointerEvent) {
+  const spark = totalGoalsSpark.value
+  if (spark) updateChartHover('totalGoals', tgSvg, spark.points, e, spark.w)
+}
+function onSignalPointer(e: PointerEvent) {
+  const spark = signalSpark.value
+  if (spark) updateChartHover('signal', sigSvg, spark.points, e, spark.w)
+}
+function onEdgePointer(e: PointerEvent) {
+  const spark = edgeSpark.value
+  if (spark) updateChartHover('edge', edgeSvg, spark.points, e, spark.w)
+}
+function onProbPointer(e: PointerEvent) {
+  const spark = overProbSpark.value
+  if (spark) updateChartHover('prob', probSvg, spark.points, e, spark.w)
+}
 
 // ── 赛前伤停情报 ──
 const injuries = computed(() => snapshot.value?.injuries ?? null)
@@ -485,7 +724,17 @@ function injStatus(s: string): { text: string, cls: string } {
           <span>预期总进球</span>
           <span class="muted num">{{ totalGoalsSpark.min }} ~ {{ totalGoalsSpark.max }}</span>
         </div>
-        <svg ref="tgSvg" class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
+        <svg
+          ref="tgSvg"
+          class="tg-spark interactive-chart"
+          :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`"
+          preserveAspectRatio="none"
+          @pointerdown="onTotalGoalsPointer"
+          @pointermove="onTotalGoalsPointer"
+          @pointerleave="leaveChartHover('totalGoals', $event)"
+          @pointerup="endChartHover('totalGoals', $event)"
+          @pointercancel="endChartHover('totalGoals', $event)"
+        >
           <line
             v-for="guide in totalGoalsSpark.yGuides"
             :key="`tg-y-${guide.y}`"
@@ -514,7 +763,20 @@ function injStatus(s: string): { text: string, cls: string } {
             <circle :cx="label.x" :cy="label.y" r="2.5" class="tg-dot" />
             <text :x="label.textX" :y="label.textY" :text-anchor="label.anchor" class="tg-label">{{ label.text }}</text>
           </g>
+          <g v-if="totalGoalsHoverPoint" class="chart-crosshair">
+            <line class="chart-crosshair-line" :x1="totalGoalsHoverPoint.x" y1="0" :x2="totalGoalsHoverPoint.x" :y2="totalGoalsSpark.h" />
+            <line class="chart-crosshair-line soft" x1="0" :y1="totalGoalsHoverPoint.y" :x2="totalGoalsSpark.w" :y2="totalGoalsHoverPoint.y" />
+            <circle class="chart-focus-dot" :cx="totalGoalsHoverPoint.x" :cy="totalGoalsHoverPoint.y" r="3.2" />
+          </g>
+          <rect class="chart-hitbox" x="0" y="0" :width="totalGoalsSpark.w" :height="totalGoalsSpark.h" />
         </svg>
+        <div v-if="totalGoalsTip" :class="['chart-tip', `a-${totalGoalsTip.anchor}`]" :style="{ left: `${totalGoalsTip.leftPct}%` }">
+          <div class="chart-tip-title">{{ totalGoalsTip.title }}</div>
+          <div v-for="row in totalGoalsTip.rows" :key="row.label" class="chart-tip-row">
+            <span>{{ row.label }}</span>
+            <b :class="['num', row.tone]">{{ row.value }}</b>
+          </div>
+        </div>
       </div>
       <div v-if="model.goalLine" class="m-edge">
         <div class="edge-title">大小 <b class="num">{{ model.goalLine }}</b> · 模型 vs 主流平台</div>
@@ -550,7 +812,17 @@ function injStatus(s: string): { text: string, cls: string } {
       <!-- 双红信号走势 -->
       <div v-if="signalSpark" class="an-block">
         <div class="an-sub"><span>双红信号走势</span><span class="muted">峰值 {{ signalSpark.max }}</span></div>
-        <svg ref="sigSvg" class="sig-spark" :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`" preserveAspectRatio="none">
+        <svg
+          ref="sigSvg"
+          class="sig-spark interactive-chart"
+          :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`"
+          preserveAspectRatio="none"
+          @pointerdown="onSignalPointer"
+          @pointermove="onSignalPointer"
+          @pointerleave="leaveChartHover('signal', $event)"
+          @pointerup="endChartHover('signal', $event)"
+          @pointercancel="endChartHover('signal', $event)"
+        >
           <line
             v-for="guide in signalSpark.guides"
             :key="guide.label"
@@ -565,7 +837,20 @@ function injStatus(s: string): { text: string, cls: string } {
             <circle :cx="trigger.x" :cy="trigger.y" r="2.7" class="sig-trigger" />
             <text :x="trigger.x" :y="signalSpark.h - 1" text-anchor="middle" class="sig-label">{{ trigger.minute }}'</text>
           </g>
+          <g v-if="signalHoverPoint" class="chart-crosshair">
+            <line class="chart-crosshair-line" :x1="signalHoverPoint.x" y1="0" :x2="signalHoverPoint.x" :y2="signalSpark.h" />
+            <line class="chart-crosshair-line soft" x1="0" :y1="signalHoverPoint.y" :x2="signalSpark.w" :y2="signalHoverPoint.y" />
+            <circle class="chart-focus-dot red" :cx="signalHoverPoint.x" :cy="signalHoverPoint.y" r="3" />
+          </g>
+          <rect class="chart-hitbox" x="0" y="0" :width="signalSpark.w" :height="signalSpark.h" />
         </svg>
+        <div v-if="signalTip" :class="['chart-tip', `a-${signalTip.anchor}`]" :style="{ left: `${signalTip.leftPct}%` }">
+          <div class="chart-tip-title">{{ signalTip.title }}</div>
+          <div v-for="row in signalTip.rows" :key="row.label" class="chart-tip-row">
+            <span>{{ row.label }}</span>
+            <b class="num">{{ row.value }}</b>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -603,7 +888,17 @@ function injStatus(s: string): { text: string, cls: string } {
       <!-- Edge 走势 -->
       <div v-if="edgeSpark" class="rp-chart">
         <div class="rp-clbl"><span>Edge 走势</span><span class="muted">{{ edgeSpark.min }}% ~ {{ edgeSpark.max }}%</span></div>
-        <svg ref="edgeSvg" class="rp-spark edge" :viewBox="`0 0 ${edgeSpark.w} ${edgeSpark.h}`" preserveAspectRatio="none">
+        <svg
+          ref="edgeSvg"
+          class="rp-spark edge interactive-chart"
+          :viewBox="`0 0 ${edgeSpark.w} ${edgeSpark.h}`"
+          preserveAspectRatio="none"
+          @pointerdown="onEdgePointer"
+          @pointermove="onEdgePointer"
+          @pointerleave="leaveChartHover('edge', $event)"
+          @pointerup="endChartHover('edge', $event)"
+          @pointercancel="endChartHover('edge', $event)"
+        >
           <g v-for="guide in edgeSpark.guides" :key="`edge-guide-${guide.label}`">
             <line :class="['rp-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="edgeSpark.h" />
             <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="rp-guide-label">{{ guide.label }}</text>
@@ -612,7 +907,20 @@ function injStatus(s: string): { text: string, cls: string } {
           <line class="rp-cursor" :x1="edgeSpark.cursorX" :y1="0" :x2="edgeSpark.cursorX" :y2="edgeSpark.h" />
           <path :d="edgeSpark.path" fill="none" stroke="currentColor" stroke-width="1.5" />
           <circle v-if="edgeSpark.marker" :cx="edgeSpark.marker.x" :cy="edgeSpark.marker.y" r="2.6" class="rp-dot" />
+          <g v-if="edgeHoverPoint" class="chart-crosshair">
+            <line class="chart-crosshair-line" :x1="edgeHoverPoint.x" y1="0" :x2="edgeHoverPoint.x" :y2="edgeSpark.h" />
+            <line class="chart-crosshair-line soft" x1="0" :y1="edgeHoverPoint.y" :x2="edgeSpark.w" :y2="edgeHoverPoint.y" />
+            <circle class="chart-focus-dot" :cx="edgeHoverPoint.x" :cy="edgeHoverPoint.y" r="3" />
+          </g>
+          <rect class="chart-hitbox" x="0" y="0" :width="edgeSpark.w" :height="edgeSpark.h" />
         </svg>
+        <div v-if="edgeTip" :class="['chart-tip', `a-${edgeTip.anchor}`]" :style="{ left: `${edgeTip.leftPct}%` }">
+          <div class="chart-tip-title">{{ edgeTip.title }}</div>
+          <div v-for="row in edgeTip.rows" :key="row.label" class="chart-tip-row">
+            <span>{{ row.label }}</span>
+            <b :class="['num', row.tone]">{{ row.value }}</b>
+          </div>
+        </div>
       </div>
 
       <!-- 大球概率走势：模型 vs 平台 -->
@@ -621,7 +929,17 @@ function injStatus(s: string): { text: string, cls: string } {
           <span>大球概率走势</span>
           <span class="rp-legend"><i class="lg model" />模型<i class="lg book" />平台</span>
         </div>
-        <svg ref="probSvg" class="rp-spark" :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`" preserveAspectRatio="none">
+        <svg
+          ref="probSvg"
+          class="rp-spark interactive-chart"
+          :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`"
+          preserveAspectRatio="none"
+          @pointerdown="onProbPointer"
+          @pointermove="onProbPointer"
+          @pointerleave="leaveChartHover('prob', $event)"
+          @pointerup="endChartHover('prob', $event)"
+          @pointercancel="endChartHover('prob', $event)"
+        >
           <g v-for="guide in overProbSpark.guides" :key="`over-guide-${guide.label}`">
             <line :class="['rp-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="overProbSpark.h" />
             <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="rp-guide-label">{{ guide.label }}</text>
@@ -629,7 +947,20 @@ function injStatus(s: string): { text: string, cls: string } {
           <line class="rp-cursor" :x1="overProbSpark.cursorX" :y1="0" :x2="overProbSpark.cursorX" :y2="overProbSpark.h" />
           <path :d="overProbSpark.book" fill="none" class="ln-book" stroke-width="1.5" />
           <path :d="overProbSpark.model" fill="none" class="ln-model" stroke-width="1.5" />
+          <g v-if="probHoverPoint" class="chart-crosshair">
+            <line class="chart-crosshair-line" :x1="probHoverPoint.x" y1="0" :x2="probHoverPoint.x" :y2="overProbSpark.h" />
+            <circle v-if="probHoverPoint.bookY != null" class="chart-focus-dot muted" :cx="probHoverPoint.x" :cy="probHoverPoint.bookY" r="2.8" />
+            <circle v-if="probHoverPoint.modelY != null" class="chart-focus-dot" :cx="probHoverPoint.x" :cy="probHoverPoint.modelY" r="2.8" />
+          </g>
+          <rect class="chart-hitbox" x="0" y="0" :width="overProbSpark.w" :height="overProbSpark.h" />
         </svg>
+        <div v-if="probTip" :class="['chart-tip', `a-${probTip.anchor}`]" :style="{ left: `${probTip.leftPct}%` }">
+          <div class="chart-tip-title">{{ probTip.title }}</div>
+          <div v-for="row in probTip.rows" :key="row.label" class="chart-tip-row">
+            <span>{{ row.label }}</span>
+            <b :class="['num', row.tone]">{{ row.value }}</b>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1321,6 +1652,8 @@ section.compare {
 .m-goals .rd { color: #b1253c; font-weight: 760; }
 
 .total-goals-chart {
+  position: relative;
+  --tip-top: 34px;
   margin: 2px 0 6px;
   padding: 7px 8px 6px;
   border: 1px solid var(--line);
@@ -1403,6 +1736,84 @@ section.compare {
   stroke: #fff;
   stroke-width: 1.8px;
   vector-effect: non-scaling-stroke;
+}
+
+.interactive-chart {
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+.chart-hitbox {
+  fill: transparent;
+  pointer-events: all;
+}
+.chart-crosshair {
+  pointer-events: none;
+}
+.chart-crosshair-line {
+  stroke: rgba(26, 34, 51, 0.42);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.chart-crosshair-line.soft {
+  stroke: rgba(100, 116, 139, 0.26);
+  stroke-dasharray: 3 3;
+}
+.chart-focus-dot {
+  fill: var(--brand-deep);
+  stroke: #fff;
+  stroke-width: 1.7;
+  vector-effect: non-scaling-stroke;
+}
+.chart-focus-dot.red {
+  fill: var(--buy);
+}
+.chart-focus-dot.muted {
+  fill: var(--soft);
+}
+.chart-tip {
+  position: absolute;
+  z-index: 6;
+  top: var(--tip-top, 28px);
+  min-width: 136px;
+  max-width: min(220px, calc(100% - 16px));
+  padding: 6px 8px;
+  border: 1px solid rgba(124, 92, 250, 0.26);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(27, 35, 55, 0.14);
+  color: var(--ink);
+  pointer-events: none;
+}
+.chart-tip.a-left { transform: translateX(0); }
+.chart-tip.a-mid { transform: translateX(-50%); }
+.chart-tip.a-right { transform: translateX(-100%); }
+.chart-tip-title {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.chart-tip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.68rem;
+  font-weight: 740;
+  line-height: 1.45;
+}
+.chart-tip-row span {
+  color: var(--muted);
+}
+.chart-tip-row b {
+  color: var(--ink);
+  font-weight: 860;
+}
+.chart-tip-row b.pos {
+  color: var(--sell);
+}
+.chart-tip-row b.neg {
+  color: var(--buy);
 }
 
 .m-edge {
@@ -1548,6 +1959,8 @@ section.compare {
 .analysis-card .section-title { font-weight: 820; }
 
 .an-block {
+  position: relative;
+  --tip-top: 30px;
   margin-top: 7px;
   padding: 7px 9px;
   border: 1px solid var(--line);
@@ -1664,6 +2077,10 @@ section.compare {
 .rp-detail b { color: var(--ink); font-weight: 820; margin-left: 2px; }
 
 .rp-chart { margin-top: 9px; }
+.rp-chart {
+  position: relative;
+  --tip-top: 25px;
+}
 .rp-clbl {
   display: flex;
   align-items: center;
