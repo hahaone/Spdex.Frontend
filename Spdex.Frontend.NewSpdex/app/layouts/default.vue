@@ -88,8 +88,8 @@ onMounted(() => {
   }
 
   .classic-desktop .content-inner {
-    max-width: min(1920px, calc(100vw - 48px));
-    padding-inline: 0;
+    max-width: 1360px;
+    padding-inline: 12px;
   }
 }
 </style>

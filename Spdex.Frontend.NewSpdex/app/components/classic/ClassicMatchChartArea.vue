@@ -251,7 +251,7 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
 <style scoped>
 .classic-chart-area {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 392px;
   gap: 12px;
   padding: 10px 12px 12px;
 }
@@ -479,7 +479,7 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
   color: var(--classic-text);
 }
 
-@media (max-width: 1500px) {
+@media (max-width: 1080px) {
   .classic-chart-area {
     grid-template-columns: minmax(0, 1fr);
   }

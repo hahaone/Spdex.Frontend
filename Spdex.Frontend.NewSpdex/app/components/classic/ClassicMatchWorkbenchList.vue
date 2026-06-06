@@ -219,7 +219,7 @@ function restore() {
 .classic-workbench {
   display: grid;
   gap: 10px;
-  width: min(100%, 1900px);
+  width: 100%;
   margin: 0 auto;
   padding: 12px 0 24px;
   background: var(--classic-bg);

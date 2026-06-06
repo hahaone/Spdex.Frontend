@@ -129,19 +129,19 @@ const rows = computed<Cell[][]>(() => [0, 1, 2].map(i => columns.map(c => ({
 
 .classic-metric-grid {
   width: 100%;
-  min-width: 1880px;
+  min-width: 1200px;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   background: var(--classic-panel);
   color: var(--classic-text);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
 }
 
 th,
 td {
-  height: 27px;
-  padding: 1px 5px;
+  height: 26px;
+  padding: 0 4px;
   border-right: 1px solid var(--classic-grid);
   border-bottom: 1px solid var(--classic-grid);
   text-align: right;
@@ -169,7 +169,7 @@ td.tone-extra { background: var(--classic-blue-soft); }
 
 th.team,
 td.tone-team {
-  width: 116px;
+  width: 84px;
   text-align: center;
 }
 
