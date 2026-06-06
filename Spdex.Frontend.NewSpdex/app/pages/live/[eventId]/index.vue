@@ -136,12 +136,36 @@ function driftText(dir: string): string {
 function signed(n: number): string { return n > 0 ? `+${n}` : `${n}` }
 function driftCls(n: number): string { return n > 1 ? 'up' : n < -1 ? 'down' : '' }
 
+// 每个 sparkline 实测自身宽度 → viewBox 宽 = 渲染 px 宽，x 缩放恒为 1。
+// 修复宽屏/详情分栏下文字被横向拉扁、圆点被拉成椭圆（preserveAspectRatio="none" 会把整图含文字一起拉伸）。
+// SSR/首帧用 320 兜底，挂载后用 ResizeObserver 同步真实宽度（同 StaticTrendChart 套路）。
+function useSparkWidth() {
+  const elRef = ref<SVGSVGElement | null>(null)
+  const w = ref(320)
+  let ro: ResizeObserver | null = null
+  watch(elRef, (node) => {
+    ro?.disconnect()
+    ro = null
+    if (!node) return
+    const sync = () => { const cw = Math.round(node.clientWidth); if (cw > 0) w.value = cw }
+    sync()
+    ro = new ResizeObserver(sync)
+    ro.observe(node)
+  })
+  onScopeDispose(() => ro?.disconnect())
+  return { elRef, w }
+}
+const { elRef: sigSvg, w: sigW } = useSparkWidth()
+const { elRef: edgeSvg, w: edgeW } = useSparkWidth()
+const { elRef: probSvg, w: probW } = useSparkWidth()
+const { elRef: tgSvg, w: tgW } = useSparkWidth()
+
 // 双红信号强度走势 sparkline
 const signalSpark = computed(() => {
   const pts = analysis.value?.signalTimeline ?? []
   if (pts.length < 3) return null
   const vals = pts.map(p => p.strength)
-  const W = 200, H = 34, pad = 4
+  const W = sigW.value, H = 42, pad = 4
   const min = Math.min(...vals)
   const max = Math.max(...vals)
   const span = max - min || 1
@@ -210,12 +234,12 @@ function buildTimeGuides(series: AnalysisReplayPoint[], w: number, h: number, pa
 }
 
 // 单序列 sparkline：可选 0 基线 + 选中游标竖线 + 选中点 marker；断点（null）断线。
-function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | undefined, baseZero = false) {
+function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | undefined, baseZero = false, width = 320) {
   const series = replaySeries.value
   const vals = series.map(getter).map(v => (v == null ? null : Number(v)))
   const nums = vals.filter((v): v is number => v != null)
   if (nums.length < 2) return null
-  const W = 240, H = 42, pad = 4
+  const W = width, H = 50, pad = 4
   let min = Math.min(...nums), max = Math.max(...nums)
   if (baseZero) { min = Math.min(min, 0); max = Math.max(max, 0) }
   const span = max - min || 1
@@ -241,7 +265,7 @@ function buildReplaySpark(getter: (p: AnalysisReplayPoint) => number | null | un
   }
 }
 
-const edgeSpark = computed(() => buildReplaySpark(p => p.edgePct, true))
+const edgeSpark = computed(() => buildReplaySpark(p => p.edgePct, true, edgeW.value))
 
 // 大球概率走势：模型 vs 平台，两线共用一套刻度才可比。
 const overProbSpark = computed(() => {
@@ -250,7 +274,7 @@ const overProbSpark = computed(() => {
   const book = series.map(p => (p.bookOverPct ?? null))
   const nums = [...model, ...book].filter((v): v is number => v != null)
   if (nums.length < 2) return null
-  const W = 240, H = 44, pad = 4
+  const W = probW.value, H = 50, pad = 4
   const min = Math.min(...nums), max = Math.max(...nums)
   const span = max - min || 1
   const maxMinute = replayMaxMinute(series)
@@ -283,7 +307,7 @@ const totalGoalsSpark = computed(() => {
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
   const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
   if (nums.length < 2) return null
-  const W = 240, H = 50, pad = 6
+  const W = tgW.value, H = 62, pad = 6
   const min = Math.min(...nums), max = Math.max(...nums)
   const span = max - min || 1
   const maxMinute = replayMaxMinute(series)
@@ -310,7 +334,7 @@ const totalGoalsSpark = computed(() => {
       x,
       y: yOf(v),
       textX: nearRight ? x - 4 : x + 4,
-      textY: Math.max(8, yOf(v) - 5),
+      textY: Math.max(10, yOf(v) - 5),
       text: v.toFixed(2),
       anchor: nearRight ? 'end' : 'start',
     }
@@ -412,7 +436,7 @@ function injStatus(s: string): { text: string, cls: string } {
           <span>预期总进球</span>
           <span class="muted num">{{ totalGoalsSpark.min }} ~ {{ totalGoalsSpark.max }}</span>
         </div>
-        <svg class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
+        <svg ref="tgSvg" class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
           <g v-for="guide in totalGoalsSpark.guides" :key="`tg-guide-${guide.label}`">
             <line :class="['tg-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="totalGoalsSpark.h" />
             <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="tg-guide-label">{{ guide.label }}</text>
@@ -466,7 +490,7 @@ function injStatus(s: string): { text: string, cls: string } {
       <!-- 双红信号走势 -->
       <div v-if="signalSpark" class="an-block">
         <div class="an-sub"><span>双红信号走势</span><span class="muted">峰值 {{ signalSpark.max }}</span></div>
-        <svg class="sig-spark" :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`" preserveAspectRatio="none">
+        <svg ref="sigSvg" class="sig-spark" :viewBox="`0 0 ${signalSpark.w} ${signalSpark.h}`" preserveAspectRatio="none">
           <line
             v-for="guide in signalSpark.guides"
             :key="guide.label"
@@ -519,7 +543,7 @@ function injStatus(s: string): { text: string, cls: string } {
       <!-- Edge 走势 -->
       <div v-if="edgeSpark" class="rp-chart">
         <div class="rp-clbl"><span>Edge 走势</span><span class="muted">{{ edgeSpark.min }}% ~ {{ edgeSpark.max }}%</span></div>
-        <svg class="rp-spark edge" :viewBox="`0 0 ${edgeSpark.w} ${edgeSpark.h}`" preserveAspectRatio="none">
+        <svg ref="edgeSvg" class="rp-spark edge" :viewBox="`0 0 ${edgeSpark.w} ${edgeSpark.h}`" preserveAspectRatio="none">
           <g v-for="guide in edgeSpark.guides" :key="`edge-guide-${guide.label}`">
             <line :class="['rp-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="edgeSpark.h" />
             <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="rp-guide-label">{{ guide.label }}</text>
@@ -537,7 +561,7 @@ function injStatus(s: string): { text: string, cls: string } {
           <span>大球概率走势</span>
           <span class="rp-legend"><i class="lg model" />模型<i class="lg book" />平台</span>
         </div>
-        <svg class="rp-spark" :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`" preserveAspectRatio="none">
+        <svg ref="probSvg" class="rp-spark" :viewBox="`0 0 ${overProbSpark.w} ${overProbSpark.h}`" preserveAspectRatio="none">
           <g v-for="guide in overProbSpark.guides" :key="`over-guide-${guide.label}`">
             <line :class="['rp-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="overProbSpark.h" />
             <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="rp-guide-label">{{ guide.label }}</text>
@@ -1249,7 +1273,7 @@ section.compare {
   font-weight: 800;
 }
 .tg-head .muted { color: var(--muted); font-size: 0.68rem; font-weight: 720; }
-.tg-spark { display: block; width: 100%; height: 50px; margin-top: 3px; color: var(--brand-deep); }
+.tg-spark { display: block; width: 100%; height: 62px; margin-top: 3px; color: var(--brand-deep); }
 .tg-guide {
   stroke: rgba(107, 115, 133, 0.48);
   stroke-width: 1;
@@ -1258,7 +1282,7 @@ section.compare {
 .tg-guide.dashed { stroke-dasharray: 3 3; }
 .tg-guide-label {
   fill: var(--muted);
-  font-size: 6.5px;
+  font-size: 8px;
   font-weight: 780;
   paint-order: stroke;
   stroke: #fff;
@@ -1274,7 +1298,7 @@ section.compare {
 }
 .tg-label {
   fill: var(--ink);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 800;
   paint-order: stroke;
   stroke: #fff;
@@ -1495,7 +1519,7 @@ section.compare {
 .an-probs .p em.up { color: var(--sell); }
 .an-probs .p em.down { color: var(--buy); }
 
-.sig-spark { display: block; width: 100%; height: 34px; margin-top: 6px; color: #b1253c; }
+.sig-spark { display: block; width: 100%; height: 42px; margin-top: 6px; color: #b1253c; }
 .sig-guide {
   stroke: rgba(107, 115, 133, 0.5);
   stroke-width: 1;
@@ -1505,7 +1529,7 @@ section.compare {
 .sig-trigger { fill: #fff; stroke: var(--buy); stroke-width: 1.8; vector-effect: non-scaling-stroke; }
 .sig-label {
   fill: var(--buy);
-  font-size: 6.5px;
+  font-size: 8px;
   font-weight: 800;
   paint-order: stroke;
   stroke: #fff;
@@ -1566,7 +1590,7 @@ section.compare {
 .rp-legend .lg.model { color: var(--brand-deep); }
 .rp-legend .lg.book { color: var(--soft); margin-left: 7px; }
 
-.rp-spark { display: block; width: 100%; height: 42px; margin-top: 4px; color: var(--brand-deep); }
+.rp-spark { display: block; width: 100%; height: 50px; margin-top: 4px; color: var(--brand-deep); }
 .rp-guide {
   stroke: rgba(107, 115, 133, 0.48);
   stroke-width: 1;
@@ -1575,7 +1599,7 @@ section.compare {
 .rp-guide.dashed { stroke-dasharray: 3 3; }
 .rp-guide-label {
   fill: var(--muted);
-  font-size: 6.5px;
+  font-size: 8px;
   font-weight: 780;
   paint-order: stroke;
   stroke: #fff;
