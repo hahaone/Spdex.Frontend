@@ -2,7 +2,7 @@
 import { Lock, RefreshCw } from '@lucide/vue'
 import { LADDER_MARKETS, useMatchLadder, type LadderPoint } from '~/composables/useMatchLadder'
 
-const props = defineProps<{ eventId: number }>()
+const props = defineProps<{ eventId: number, initialMarket?: string }>()
 
 const { data, market, activeKey, setMarket, setSelection, pending, refresh } = useMatchLadder(
   computed(() => props.eventId),
@@ -11,6 +11,11 @@ const { data, market, activeKey, setMarket, setSelection, pending, refresh } = u
 const active = computed(() => data.value?.active ?? null)
 const selections = computed(() => data.value?.selections ?? [])
 const locked = computed(() => data.value?.accessLocked === true)
+
+watch(() => props.initialMarket, (m) => {
+  if (m && LADDER_MARKETS.some(item => item.value === m))
+    setMarket(m)
+}, { immediate: true })
 
 /** 金额：显示完整金额（千分位，不缩写 万/K）。 */
 function money(n: number | undefined): string {

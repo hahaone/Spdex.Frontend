@@ -50,7 +50,7 @@ onMounted(async () => {
   try {
     const authenticated = await refreshToken()
     if (!authenticated || !user.value) {
-      error.value = '请先登录 NewSpdex 后访问闪Q'
+      error.value = '请先登录后访问闪Q'
       return
     }
 

@@ -78,7 +78,7 @@ export default defineEventHandler(async (event) => {
   const token = bearerFromRequest(event)
 
   if (!token) {
-    const error = apiError(401, '请先登录 NewSpdex')
+    const error = apiError(401, '请先登录')
     setResponseStatus(event, error.status)
     return error.body
   }
@@ -108,7 +108,7 @@ export default defineEventHandler(async (event) => {
     })
 
     if (me.code !== 0 || !me.data) {
-      const error = apiError(401, me.message || 'NewSpdex token is invalid.')
+      const error = apiError(401, me.message || '登录状态已失效，请重新登录。')
       setResponseStatus(event, error.status)
       return error.body
     }
@@ -116,7 +116,7 @@ export default defineEventHandler(async (event) => {
     user = me.data
   }
   catch {
-    const error = apiError(401, 'NewSpdex token is invalid or expired.')
+    const error = apiError(401, '登录状态已失效，请重新登录。')
     setResponseStatus(event, error.status)
     return error.body
   }

@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     setResponseStatus(event, 500)
     return {
       code: 500,
-      message: 'NewSpdex auth bridge is not configured.',
+      message: '登录服务暂不可用。',
       data: null,
     }
   }

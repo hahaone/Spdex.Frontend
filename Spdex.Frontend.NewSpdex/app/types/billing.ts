@@ -8,6 +8,8 @@ export interface PriceStage {
   price: number
   month: number
   days: number
+  originalPrice: number | null
+  discountLabel: string | null
 }
 
 export interface PaymentPlan {

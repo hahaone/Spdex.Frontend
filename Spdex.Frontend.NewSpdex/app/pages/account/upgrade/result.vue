@@ -270,7 +270,7 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
         <button class="channel-btn yft focus-ring" type="button" @click="startYft">
           <QrCode :size="18" />
           <b>扫码支付</b>
-          <span>易付通通道</span>
+          <span>微信/支付宝扫码</span>
         </button>
         <button class="channel-btn silk focus-ring" type="button" :disabled="!silkNeed?.sufficient" @click="startSilk">
           <Coins :size="18" />
@@ -281,7 +281,7 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
         <button class="channel-btn wxcode focus-ring" type="button" @click="startWxCode">
           <QrCode :size="18" />
           <b>微信扫码</b>
-          <span>备用通道</span>
+          <span>备用通道 · 有限额</span>
         </button>
       </div>
     </section>

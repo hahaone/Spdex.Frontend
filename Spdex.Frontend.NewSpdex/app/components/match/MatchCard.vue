@@ -65,6 +65,27 @@ const statusLabel = computed(() => {
 const totalTurnover = computed(() => fmtAmount(props.match.bfAmount ?? 0))
 const hasPoly = computed(() => props.match.polyIndex.some(v => v > 0))
 const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.replace('-', ' : ') : ''))
+const hasGoalsMarket = computed(() => props.twoWay && Boolean(
+  props.match.goalsLine
+  || props.match.goalsOdds?.some(value => value > 0)
+  || props.match.goalsIndex?.some(value => value > 0)
+  || props.match.goalsAmount?.some(value => value > 0),
+))
+const goalsLineLabel = computed(() => props.match.goalsLine ? `大小 ${props.match.goalsLine}` : '大小')
+const goalsOddsOver = computed(() => fmtOdds(props.match.goalsOdds?.[0]))
+const goalsOddsUnder = computed(() => fmtOdds(props.match.goalsOdds?.[1]))
+const goalsIndexText = computed(() => {
+  const values = props.match.goalsIndex
+  if (!values) return '-'
+  const over = Math.round(values[0] ?? 0)
+  const under = Math.round(values[1] ?? 0)
+  return (over > 0 || under > 0) ? `${over}/${under}` : '-'
+})
+const goalsTurnoverText = computed(() => {
+  const values = props.match.goalsTurnovers
+  if (!values) return '-'
+  return `${values[0]} / ${values[1]}`
+})
 </script>
 
 <template>
@@ -134,6 +155,16 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
         <span class="cell num odds">{{ fmtOdds(match.bfPrice?.[2]) }}</span>
         <span class="cell bfidx"><i :style="{ width: `${bfPct(2)}%` }" /><b class="num">{{ bfPct(2) }}</b></span>
         <span class="cell turnover"><i :style="{ width: barWidth(match.turnovers[2]) }" /><b class="num">{{ match.turnovers[2] }}</b></span>
+      </div>
+
+      <div v-if="hasGoalsMarket" class="goals-grid">
+        <span class="goals-label">{{ goalsLineLabel }}</span>
+        <span class="goals-odds num">大 {{ goalsOddsOver }}</span>
+        <span class="goals-odds num">小 {{ goalsOddsUnder }}</span>
+        <span class="goals-meta">
+          <b class="num">{{ goalsIndexText }}</b>
+          <span class="num">{{ goalsTurnoverText }}</span>
+        </span>
       </div>
 
       <div class="meta-foot">
@@ -338,6 +369,54 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   border-bottom: 1px solid var(--divider);
 }
 
+.goals-grid {
+  display: grid;
+  grid-template-columns: minmax(60px, 1.05fr) 56px 56px minmax(78px, 0.95fr);
+  gap: 1px;
+  background: var(--divider);
+  border-bottom: 1px solid var(--divider);
+}
+
+.goals-grid > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 2px 8px;
+  background: #fbfdff;
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.goals-label {
+  min-width: 0;
+  color: var(--brand-deep);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.goals-odds {
+  justify-content: center;
+  color: var(--brand-deep);
+}
+
+.goals-meta {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.goals-meta b {
+  color: var(--brand-deep);
+}
+
+.goals-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cell {
   display: flex;
   align-items: center;
@@ -461,7 +540,8 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
   }
 
   .market-grid,
-  .grid-legend {
+  .grid-legend,
+  .goals-grid {
     grid-template-columns: minmax(52px, 1fr) 42px 46px minmax(52px, 0.85fr);
   }
 
@@ -474,7 +554,8 @@ const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.
 /* 极小屏(<=340px)兜底：再收紧网格列与字号，确保 4 列不溢出/裁切 */
 @media (max-width: 340px) {
   .market-grid,
-  .grid-legend {
+  .grid-legend,
+  .goals-grid {
     grid-template-columns: minmax(44px, 1fr) 38px 40px minmax(44px, 0.8fr);
   }
 

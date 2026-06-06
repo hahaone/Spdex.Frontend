@@ -891,7 +891,7 @@ export const useQuantilearnApi = () => {
       if (response.code === 401 && config.public.requireAuth) {
         redirectToLogin()
       }
-      throw new Error(response.message || `NewSpdex 接口返回错误码 ${response.code}`)
+      throw new Error(response.message || `接口返回错误码 ${response.code}`)
     }
 
     return response.data

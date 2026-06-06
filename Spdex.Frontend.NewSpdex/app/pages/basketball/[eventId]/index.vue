@@ -1,12 +1,59 @@
 <script setup lang="ts">
-import { ArrowLeft, BarChart3, RefreshCw, Table2 } from '@lucide/vue'
+import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Table2 } from '@lucide/vue'
+import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
 import type { MarketTab } from '~/types/market'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
+const basketballBackRoute = computed(() => {
+  const query: Record<string, string> = {}
+  for (const key of ['day', 'date', 'status', 'league']) {
+    const value = route.query[key]
+    if (typeof value === 'string' && value) query[key] = value
+  }
+  return Object.keys(query).length ? { path: '/basketball', query } : '/basketball'
+})
 
+const { entitlements } = useAuth()
 const { detail, access, pending, refresh } = useMatchDetail(eventId)
 const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
+const { fetchSnapshot } = useMatchSnapshot()
+
+const timeMachinePoints = [
+  { label: '现在', hours: 0 },
+  { label: '-1h', hours: -1 },
+  { label: '-2h', hours: -2 },
+  { label: '-6h', hours: -6 },
+  { label: '-12h', hours: -12 },
+  { label: '-24h', hours: -24 },
+]
+const activeTimeOffset = ref<number | null>(null)
+const snapshot = ref<MatchSnapshot | null>(null)
+const snapshotLoading = ref(false)
+const hasTimeMachine = computed(() => entitlements.value?.timeMachine === true)
+
+async function selectTimePoint(hours: number) {
+  if (hours === 0) {
+    activeTimeOffset.value = null
+    snapshot.value = null
+    return
+  }
+  if (!hasTimeMachine.value) return
+  if (!detail.value?.match) return
+
+  snapshotLoading.value = true
+  activeTimeOffset.value = hours
+  const matchTime = new Date(detail.value.match.matchTime)
+  const targetTime = new Date(matchTime.getTime() + hours * 3600 * 1000)
+  const iso = targetTime.toISOString().slice(0, 19)
+  snapshot.value = await fetchSnapshot(eventId.value, iso)
+  snapshotLoading.value = false
+}
+
+const effectiveStandard = computed(() => snapshot.value?.standard ?? detail.value?.standard ?? [])
+const effectiveGoals = computed(() => snapshot.value?.goals ?? detail.value?.goals ?? [])
+const effectiveHandicap = computed(() => snapshot.value?.handicap ?? detail.value?.handicap ?? [])
+const isSnapshotMode = computed(() => snapshot.value !== null)
 
 // 篮球去掉 Poly tab（NBA/WNBA 在 Polymarket 上的覆盖较少）
 const tab = ref<MarketTab>('all')
@@ -25,12 +72,16 @@ const sectionMode = computed<BasketballSectionKey | null>(() => {
 })
 const sectionRows = computed(() => {
   if (!sectionMode.value || !detail.value) return []
+  if (sectionMode.value === 'standard') return effectiveStandard.value
+  if (sectionMode.value === 'goals') return effectiveGoals.value
+  if (sectionMode.value === 'handicap') return effectiveHandicap.value
   return detail.value[sectionMode.value]
 })
 const sectionTitle = computed(() => {
-  if (sectionMode.value === 'standard') return '标盘核心'
-  if (sectionMode.value === 'goals') return '大小核心'
-  if (sectionMode.value === 'handicap') return '让分核心'
+  const suffix = isSnapshotMode.value ? `（${snapshot.value?.actualHoursOffset}h 前）` : ''
+  if (sectionMode.value === 'standard') return `标盘核心${suffix}`
+  if (sectionMode.value === 'goals') return `大小核心${suffix}`
+  if (sectionMode.value === 'handicap') return `让分核心${suffix}`
   return ''
 })
 
@@ -80,7 +131,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
 
     <template v-else-if="match">
       <section class="match-header">
-        <NuxtLink to="/basketball" class="back focus-ring">
+        <NuxtLink :to="basketballBackRoute" class="back focus-ring">
           <ArrowLeft :size="15" />
           <span>返回赛事</span>
         </NuxtLink>
@@ -114,30 +165,56 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
         </div>
       </section>
 
+      <section v-if="hasUnlockedData" class="time-machine-band">
+        <div class="tm-head">
+          <Clock :size="13" />
+          <b>时光机</b>
+          <span v-if="!hasTimeMachine" class="tm-lock">
+            <Lock :size="11" /> 黄金及以上可用
+          </span>
+          <span v-if="snapshotLoading" class="tm-active num">读取中...</span>
+          <span v-else-if="isSnapshotMode" class="tm-active num">
+            实际匹配偏移 {{ snapshot?.actualHoursOffset }}h
+          </span>
+        </div>
+        <div class="tm-buttons">
+          <button
+            v-for="pt in timeMachinePoints"
+            :key="pt.hours"
+            type="button"
+            :class="['tm-btn focus-ring', { active: pt.hours === 0 ? !isSnapshotMode : activeTimeOffset === pt.hours, disabled: !hasTimeMachine && pt.hours !== 0 }]"
+            :disabled="!hasTimeMachine && pt.hours !== 0"
+            @click="selectTimePoint(pt.hours)"
+          >
+            {{ pt.label }}
+          </button>
+        </div>
+      </section>
+
       <div v-if="hasUnlockedData" class="detail-grid">
         <div class="main-col">
           <section v-if="tab === 'all'" class="all-grid">
             <MarketSummaryCard
               v-if="access.standard"
-              title="标盘"
+              :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
               tone="standard"
-              :rows="detail.standard"
+              :rows="effectiveStandard"
               index-label="必指"
               @open="jumpTo('standard')"
             />
             <MarketSummaryCard
               v-if="access.goals"
-              title="大小"
+              :title="isSnapshotMode ? `大小（${snapshot?.actualHoursOffset}h 前）` : '大小'"
               tone="goals"
-              :rows="detail.goals"
+              :rows="effectiveGoals"
               index-label="必指"
               @open="jumpTo('goals')"
             />
             <MarketSummaryCard
               v-if="access.handicap"
-              title="让分"
+              :title="isSnapshotMode ? `让分（${snapshot?.actualHoursOffset}h 前）` : '让分'"
               tone="handicap"
-              :rows="detail.handicap"
+              :rows="effectiveHandicap"
               index-label="必指"
               @open="jumpTo('handicap')"
             />
@@ -334,6 +411,60 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
   font-weight: 800;
   color: var(--accent-deep);
 }
+.time-machine-band {
+  display: grid;
+  gap: 5px;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, #faf8fd 0%, #f3edf9 100%);
+  border-bottom: 1px solid var(--divider);
+}
+.tm-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-deep);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+.tm-head b {
+  font-weight: 800;
+}
+.tm-lock,
+.tm-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: #8a6212;
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+.tm-active {
+  color: var(--brand);
+}
+.tm-buttons {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+}
+.tm-btn {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--accent-deep);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.tm-btn.active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+.tm-btn.disabled {
+  color: var(--soft);
+  cursor: not-allowed;
+}
 .detail-grid { display: grid; }
 .all-grid {
   display: grid;
@@ -419,6 +550,11 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
     position: sticky;
     top: 56px;
     z-index: 6;
+  }
+  .time-machine-band {
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
   }
   .detail-grid {
     grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);

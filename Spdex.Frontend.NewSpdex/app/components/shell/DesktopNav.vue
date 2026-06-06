@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Bell, Moon, Search, Sun, UserCircle } from '@lucide/vue'
+import { membershipDisplayName } from '~/utils/membership'
 
 const route = useRoute()
-const { isLoggedIn, userName, tier, logout } = useAuth()
+const { isLoggedIn, user, userName, tier, logout } = useAuth()
 const { isDark, toggle } = useTheme()
 const { show: showCommand } = useCommandPalette()
 
@@ -24,7 +25,12 @@ const tierClass: Record<string, string> = {
   Platinum: 'tier-platinum',
 }
 
-const tierDisplay = computed(() => tierLabel[tier.value] ?? tier.value)
+const tierDisplay = computed(() => {
+  const roleName = user.value?.roleName?.trim()
+  if (roleName) return roleName
+  if (user.value?.roleId) return membershipDisplayName(user.value.roleId)
+  return tierLabel[tier.value] ?? tier.value
+})
 const tierToneClass = computed(() => tierClass[tier.value] ?? 'tier-free')
 
 const navItems = [

@@ -10,7 +10,7 @@ export const toQuantilearnUserError = (error: unknown) => {
   if (!text) return ''
 
   if (/请先登录|newspdex token is invalid|unauthorized|\b401\b/i.test(text)) {
-    return '登录状态已失效，请重新登录 NewSpdex。'
+    return '登录状态已失效，请重新登录。'
   }
 
   if (text.includes('/api/quantilearn')) {

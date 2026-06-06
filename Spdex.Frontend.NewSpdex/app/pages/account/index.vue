@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ReceiptText, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
 import type { OrderRecord } from '~/types/billing'
+import { membershipDisplayName } from '~/utils/membership'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +37,10 @@ const tierLabel: Record<string, string> = {
 }
 
 const tierDisplay = computed(() => {
+  const roleName = summary.value?.roleName?.trim() || user.value?.roleName?.trim()
+  if (roleName) return roleName
+  const roleId = summary.value?.roleId ?? user.value?.roleId
+  if (roleId) return membershipDisplayName(roleId)
   const t = summary.value?.tier ?? tier.value
   return tierLabel[t] ?? t
 })

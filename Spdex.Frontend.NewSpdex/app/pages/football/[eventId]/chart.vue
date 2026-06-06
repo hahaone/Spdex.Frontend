@@ -6,19 +6,39 @@ import { formatHandicapLine } from '~/utils/handicap'
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
-const market = ref('standard')
-const metric = ref('odds')
-const timeRange = ref('6h')
-const seriesOnly = ref<'home' | 'draw' | 'away' | null>(null)
+function queryString(name: string): string | null {
+  const value = route.query[name]
+  return typeof value === 'string' && value ? value : null
+}
+
+function initialMarket(): string {
+  const q = queryString('market')
+  return q && CHART_MARKETS.some(m => m.value === q) ? q : 'standard'
+}
+
+function initialRange(): string {
+  const q = queryString('range')
+  return q && ['2h', '6h', '24h', 'all'].includes(q) ? q : '6h'
+}
+
+function initialSeries(): 'home' | 'draw' | 'away' | null {
+  const q = queryString('series')
+  return q === 'home' || q === 'draw' || q === 'away' ? q : null
+}
+
+const market = ref(initialMarket())
+const metric = ref(queryString('metric') ?? 'odds')
+const timeRange = ref(initialRange())
+const seriesOnly = ref<'home' | 'draw' | 'away' | null>(initialSeries())
 
 const currentMarket = computed(() => CHART_MARKETS.find(m => m.value === market.value) ?? CHART_MARKETS[0]!)
 const metrics = computed(() => currentMarket.value.metrics)
 
-// 切换盘口后，若当前指标不在新盘口的指标集合里，回退到第一个
-watch(market, () => {
+// 切换盘口或 query 深链后，若当前指标不在新盘口的指标集合里，回退到第一个
+watch(metrics, () => {
   if (!metrics.value.some(m => m.value === metric.value))
     metric.value = metrics.value[0]?.value ?? 'odds'
-})
+}, { immediate: true })
 
 // 组合成后端的复合 type："standard.bfindex" 等
 const graphType = computed(() => `${market.value}.${metric.value}`)

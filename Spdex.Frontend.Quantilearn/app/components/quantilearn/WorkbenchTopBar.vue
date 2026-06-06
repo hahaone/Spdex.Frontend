@@ -33,7 +33,7 @@ const iconMap: Record<WorkspaceIcon, typeof Layers> = {
 
 <template>
   <header class="top-bar">
-    <a class="brand-area focus-ring" href="https://new.spdex.com" aria-label="返回 NewSPdex 首页">
+    <a class="brand-area focus-ring" href="https://new.spdex.com" aria-label="返回 SPdex 首页">
       <img class="brand-logo" src="/images/spdex_logo_s.png" alt="SPdex">
       <div class="brand-copy">
         <h1>量化模型</h1>

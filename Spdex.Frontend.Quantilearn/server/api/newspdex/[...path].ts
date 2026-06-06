@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
   const token = bearerFromRequest(event)
   if (!token) {
     setResponseStatus(event, 401)
-    return apiError(401, '请先登录 NewSpdex')
+    return apiError(401, '请先登录')
   }
 
   const config = useRuntimeConfig()

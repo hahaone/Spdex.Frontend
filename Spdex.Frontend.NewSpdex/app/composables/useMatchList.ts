@@ -42,6 +42,10 @@ interface BackendMatchSummary {
   bigBetAttr?: string
   bigBetOdds?: number
   bigBetAmount?: number
+  goalsLine?: string
+  goalsOdds?: number[]
+  goalsIndex?: number[]
+  goalsAmount?: number[]
   score?: string
   halfScore?: string
 }
@@ -60,7 +64,7 @@ export interface MatchListFilters {
   date?: string
   league?: string
   jc?: boolean
-  /** 仅胜负彩赛事（LotteryId>0） */
+  /** 仅足彩赛事（LotteryId>0） */
   lottery?: boolean
   status?: 'upcoming' | 'started' | 'finished' | 'all' | 'jc'
   page?: number
@@ -84,6 +88,21 @@ function distributeTurnover(total: number, indexes: [number, number, number]): [
   return [calc(indexes[0]), calc(indexes[1]), calc(indexes[2])]
 }
 
+function toPair(arr: number[] | undefined): [number, number] {
+  if (!arr || arr.length < 2) return [0, 0]
+  return [arr[0] ?? 0, arr[1] ?? 0]
+}
+
+function amountPair(arr: number[] | undefined): [number, number] {
+  const pair = toPair(arr)
+  return [pair[0] > 0 ? pair[0] : 0, pair[1] > 0 ? pair[1] : 0]
+}
+
+function formatAmountPair(arr: [number, number]): [string, string] {
+  const fmt = (value: number) => value > 0 ? Math.round(value).toLocaleString('en-US') : '-'
+  return [fmt(arr[0]), fmt(arr[1])]
+}
+
 function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const bfIndex = toTriple(item.bfIndex)
   const polyIndex = toTriple(item.polyIndex)
@@ -95,6 +114,13 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const hasKelly = kelly[0] > 0 || kelly[1] > 0 || kelly[2] > 0
   const kellyVar: [number, number, number] = [item.kellyVarHome ?? 0, item.kellyVarDraw ?? 0, item.kellyVarAway ?? 0]
   const hasKellyVar = kellyVar[0] > 0 || kellyVar[1] > 0 || kellyVar[2] > 0
+  const goalsOdds = toPair(item.goalsOdds)
+  const goalsIndex = toPair(item.goalsIndex)
+  const goalsAmount = amountPair(item.goalsAmount)
+  const hasGoalsMarket = Boolean(item.goalsLine)
+    || goalsOdds.some(value => value > 0)
+    || goalsIndex.some(value => value > 0)
+    || goalsAmount.some(value => value > 0)
 
   return {
     eventId: item.eventId,
@@ -122,6 +148,11 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     bigBetOdds: item.bigBetOdds || undefined,
     bigBetAmount: item.bigBetAmount || undefined,
     bfAmount: item.bfAmount,
+    goalsLine: hasGoalsMarket ? item.goalsLine || undefined : undefined,
+    goalsOdds: hasGoalsMarket ? goalsOdds : undefined,
+    goalsIndex: hasGoalsMarket ? goalsIndex : undefined,
+    goalsAmount: hasGoalsMarket ? goalsAmount : undefined,
+    goalsTurnovers: hasGoalsMarket ? formatAmountPair(goalsAmount) : undefined,
     scoreText: item.score || undefined,
     halfScoreText: item.halfScore || undefined,
   }

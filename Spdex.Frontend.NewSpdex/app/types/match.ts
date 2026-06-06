@@ -36,6 +36,16 @@ export interface MatchSummary {
   bigBetAmount?: number
   /** Betfair 总成交额（原始数值，前端格式化为 K/M）。 */
   bfAmount?: number
+  /** 大小盘口线（篮球总分线 / 足球进球线）。 */
+  goalsLine?: string
+  /** 大小赔率 [大, 小]。 */
+  goalsOdds?: [number, number]
+  /** 大小必指 [大, 小]。 */
+  goalsIndex?: [number, number]
+  /** 大小成交显示 [大, 小]。 */
+  goalsTurnovers?: [string, string]
+  /** 大小成交原始金额 [大, 小]。 */
+  goalsAmount?: [number, number]
   /** 全场比分文本（"2-1"），仅 started/finished 有值。 */
   scoreText?: string
   /** 半场比分文本（"1-0"）。 */

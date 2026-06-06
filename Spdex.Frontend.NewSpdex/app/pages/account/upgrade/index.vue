@@ -43,6 +43,13 @@ const availablePlans = computed(() =>
 
 const featuredPlans = computed(() => availablePlans.value.filter(p => p.hot > 0))
 const standardPlans = computed(() => availablePlans.value.filter(p => p.hot === 0))
+const compareMonths = [1, 3, 6, 12]
+const comparisonPlans = computed(() => availablePlans.value.filter(p => p.prices.length > 0))
+const comparisonRows = computed(() => comparisonPlans.value.map(plan => ({
+  plan,
+  unitPrice: stageUnitPrice(plan),
+  cells: compareMonths.map(month => stageForMonth(plan, month)),
+})))
 
 function pickStage(plan: PaymentPlan, stage: PriceStage) {
   if (!canPurchaseTarget(user.value, plan.roleId)) return
@@ -50,6 +57,40 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
     path: '/account/upgrade/result',
     query: { roleId: plan.roleId, stageId: stage.stageId, channel: 'choose' },
   })
+}
+
+function formatPrice(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '—'
+  const rounded = Math.round(value)
+  const digits = Math.abs(value - rounded) < 0.005 ? 0 : 2
+  return value.toLocaleString('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
+}
+
+function stageForMonth(plan: PaymentPlan, month: number): PriceStage | null {
+  return plan.prices.find(stage => Math.abs(stage.month - month) < 0.01) ?? null
+}
+
+function stageDurationLabel(stage: PriceStage): string {
+  if (stage.days > 0) return `${stage.days}天`
+  if (stage.month > 0) return `${Math.round(stage.month * 30)}天`
+  return stage.stageName
+}
+
+function durationLabelForMonth(month: number): string {
+  if (month === 12) return '365天'
+  return `${month * 30}天`
+}
+
+function stageUnitPrice(plan: PaymentPlan): string {
+  const monthly = stageForMonth(plan, 1) ?? plan.prices[0]
+  return monthly ? `¥${formatPrice(monthly.price)} / 30天` : plan.unit || '—'
+}
+
+function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
+  return `${plan.roleName}${stageDurationLabel(stage)}，${formatPrice(stage.price)}元`
 }
 </script>
 
@@ -91,10 +132,19 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
               :key="stage.stageId"
               class="price-row focus-ring"
               type="button"
+              :aria-label="stageAriaLabel(plan, stage)"
               @click="pickStage(plan, stage)"
             >
-              <span class="stage-name">{{ stage.stageName }}</span>
-              <span class="price-amount num">¥{{ stage.price }}</span>
+              <span class="stage-name">
+                {{ stageDurationLabel(stage) }}
+                <b v-if="stage.discountLabel" class="discount-chip">{{ stage.discountLabel }}</b>
+              </span>
+              <span class="price-stack">
+                <s v-if="stage.originalPrice && stage.originalPrice > stage.price" class="original-price num">
+                  ¥{{ formatPrice(stage.originalPrice) }}
+                </s>
+                <span class="price-amount num">¥{{ formatPrice(stage.price) }}</span>
+              </span>
             </button>
           </div>
           <p v-if="plan.discountDes" class="discount">{{ plan.discountDes }}</p>
@@ -119,10 +169,19 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
               :key="stage.stageId"
               class="price-row focus-ring"
               type="button"
+              :aria-label="stageAriaLabel(plan, stage)"
               @click="pickStage(plan, stage)"
             >
-              <span class="stage-name">{{ stage.stageName }}</span>
-              <span class="price-amount num">¥{{ stage.price }}</span>
+              <span class="stage-name">
+                {{ stageDurationLabel(stage) }}
+                <b v-if="stage.discountLabel" class="discount-chip">{{ stage.discountLabel }}</b>
+              </span>
+              <span class="price-stack">
+                <s v-if="stage.originalPrice && stage.originalPrice > stage.price" class="original-price num">
+                  ¥{{ formatPrice(stage.originalPrice) }}
+                </s>
+                <span class="price-amount num">¥{{ formatPrice(stage.price) }}</span>
+              </span>
             </button>
           </div>
           <p v-else class="free-hint">永久免费</p>
@@ -147,14 +206,54 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
         <h2>支持的支付方式</h2>
         <div class="pay-methods">
           <span class="pay-item"><CreditCard :size="13" /> 支付宝</span>
-          <span class="pay-item"><QrCode :size="13" /> 扫码支付</span>
+          <span class="pay-item"><QrCode :size="13" /> 扫码支付（微信/支付宝）</span>
           <span class="pay-item"><Coins :size="13" /> 锦囊扣点</span>
-          <span class="pay-item"><QrCode :size="13" /> 微信扫码</span>
+          <span class="pay-item muted"><QrCode :size="13" /> 微信扫码（限额）</span>
         </div>
         <p class="pay-hint">
           <CheckCircle :size="12" />
           <span>支付成功后请重新登录或停留 30 秒，会籍状态会自动刷新。</span>
         </p>
+      </section>
+
+      <section v-if="comparisonPlans.length" class="compare-band">
+        <div class="compare-head">
+          <h2>套餐对照</h2>
+          <span>按时长快速比较价格</span>
+        </div>
+        <div class="compare-scroll">
+          <table>
+            <thead>
+	              <tr>
+	                <th>会籍</th>
+	                <th>30天价</th>
+	                <th v-for="month in compareMonths" :key="month">{{ durationLabelForMonth(month) }}</th>
+	              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in comparisonRows" :key="row.plan.roleId">
+                <th>
+                  <span>{{ row.plan.roleName }}</span>
+                  <small>{{ row.plan.roleDescription || '—' }}</small>
+                </th>
+                <td>{{ row.unitPrice }}</td>
+                <td v-for="(stage, index) in row.cells" :key="compareMonths[index]">
+                  <template v-if="stage">
+                    <button
+                      class="compare-price focus-ring"
+                      type="button"
+                      @click="pickStage(row.plan, stage)"
+                    >
+                      <span class="num">¥{{ formatPrice(stage.price) }}</span>
+                      <b v-if="stage.discountLabel">{{ stage.discountLabel }}</b>
+                    </button>
+                  </template>
+                  <span v-else class="dash">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </template>
   </section>
@@ -302,7 +401,35 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
 
 .price-row:active { background: #f4f6fb; }
 
-.stage-name { color: var(--muted); }
+.stage-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.discount-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #fff3d2;
+  color: #9a650e;
+  font-size: 0.64rem;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.price-stack {
+  display: inline-grid;
+  justify-items: end;
+  gap: 1px;
+}
+
+.original-price {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 720;
+}
 
 .price-amount { color: #b1253c; font-weight: 820; }
 
@@ -396,6 +523,10 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   font-weight: 740;
 }
 
+.pay-item.muted {
+  color: #9aa4b2;
+}
+
 .pay-hint {
   display: flex;
   align-items: center;
@@ -405,6 +536,112 @@ function pickStage(plan: PaymentPlan, stage: PriceStage) {
   font-size: 0.72rem;
   font-weight: 720;
   line-height: 1.55;
+}
+
+/* ─── 套餐对照 ─── */
+.compare-band {
+  display: grid;
+  gap: 8px;
+  padding: 10px 11px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.compare-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.compare-head h2 {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 820;
+}
+
+.compare-head span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.compare-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.compare-scroll table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.compare-scroll th,
+.compare-scroll td {
+  padding: 8px 9px;
+  border-top: 1px solid var(--line);
+  text-align: right;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.compare-scroll thead th {
+  border-top: 0;
+  background: #f7f8fc;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.compare-scroll th:first-child,
+.compare-scroll td:first-child {
+  text-align: left;
+}
+
+.compare-scroll tbody th {
+  color: var(--ink);
+  font-weight: 820;
+}
+
+.compare-scroll tbody th span,
+.compare-scroll tbody th small {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-scroll tbody th small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 680;
+}
+
+.compare-price {
+  display: inline-grid;
+  justify-items: end;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b1253c;
+  font: inherit;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.compare-price b {
+  color: #9a650e;
+  font-size: 0.64rem;
+  font-weight: 820;
+}
+
+.dash {
+  color: var(--muted);
 }
 
 @media (min-width: 768px) {

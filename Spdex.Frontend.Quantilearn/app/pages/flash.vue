@@ -225,7 +225,7 @@ const isFreeFlashRole = computed(() => {
   )
 })
 const flashEntryBlocked = computed(() => isFreeFlashRole.value)
-const flashEntryBlockMessage = computed(() => '免费版暂未开放闪Q，请返回 NewSpdex 升级会籍后使用。')
+const flashEntryBlockMessage = computed(() => '免费版暂未开放闪Q，请升级会籍后使用。')
 
 const {
   data: flashSnapshot,

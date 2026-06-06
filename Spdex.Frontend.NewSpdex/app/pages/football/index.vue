@@ -6,14 +6,23 @@ const route = useRoute()
 const routeDay = route.query.day === 'yesterday' ? 'yesterday' : 'today'
 const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
 const routeLottery = ['all', 'jc', 'lottery'].includes(String(route.query.lottery)) ? String(route.query.lottery) as 'all' | 'jc' | 'lottery' : 'all'
+const archiveMinDate = '2012-08-01'
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const toLocalYmd = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+const isSelectableArchiveDate = (value: unknown): value is string => (
+  typeof value === 'string'
+  && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && value >= archiveMinDate
+)
+const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
 
 const day = ref(routeDay)
-// 状态筛选与「竞彩/胜负彩」拆成两组独立控件（G2/G3）
+// 状态筛选与「竞彩/足彩」拆成两组独立控件（G2/G3）
 const status = ref<'upcoming' | 'started' | 'all'>(routeStatus)
 const lottery = ref<'all' | 'jc' | 'lottery'>(routeLottery)
 const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 // 数据回查：自选日期，非空时覆盖「今日/昨日」
-const customDate = ref(typeof route.query.date === 'string' ? route.query.date : '')
+const customDate = ref(routeCustomDate)
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -29,7 +38,7 @@ const statusOptions = [
 const lotteryOptions = [
   { label: '不限', value: 'all' },
   { label: '竞彩', value: 'jc' },
-  { label: '胜负彩', value: 'lottery' },
+  { label: '足彩', value: 'lottery' },
 ]
 
 const dayToDate = (d: string): string | undefined => {
@@ -39,7 +48,7 @@ const dayToDate = (d: string): string | undefined => {
   if (d === 'yesterday') {
     const prev = new Date(now)
     prev.setDate(now.getDate() - 1)
-    return prev.toISOString().slice(0, 10)
+    return toLocalYmd(prev)
   }
   return undefined
 }
@@ -133,10 +142,10 @@ function detailRoute(eventId: number) {
       <!-- 日期：今日/昨日 快捷 + 任选日期回查，合并一行（今日含所有未来；前日直接选日期） -->
       <div class="date-row">
         <SegmentedControl v-model="daySeg" :options="dayOptions" dense />
-        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="选择日期">
+        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="选择日期" :min="archiveMinDate">
       </div>
 
-      <!-- 状态 + 竞彩/胜负彩 + 刷新 合并一行，按钮铺满横向 -->
+      <!-- 状态 + 竞彩/足彩 + 刷新 合并一行，按钮铺满横向 -->
       <div class="filters-row">
         <SegmentedControl v-model="status" :options="statusOptions" dense />
         <SegmentedControl v-model="lottery" :options="lotteryOptions" dense />
@@ -214,7 +223,7 @@ function detailRoute(eventId: number) {
   align-items: center;
 }
 
-/* 状态(0.9fr) + 彩种(1.1fr，"胜负彩"略宽) + 刷新；段控件按钮 flex:1 铺满，消除右侧留白 */
+/* 状态(0.9fr) + 彩种(1.1fr，"足彩"略宽) + 刷新；段控件按钮 flex:1 铺满，消除右侧留白 */
 .filters-row {
   display: grid;
   grid-template-columns: 0.9fr 1.1fr 32px;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** 首页固定模块「会员中心」：等级/到期 + 升级 CTA(免费/专家) + 账户入口 + 权益速览。 */
 import { Bot, ChevronRight, Crown } from '@lucide/vue'
+import { membershipDisplayName } from '~/utils/membership'
 
 const { user, tier } = useAuth()
 
@@ -13,7 +14,12 @@ const tierLabel: Record<string, string> = {
   Platinum: '白金版',
 }
 
-const tierDisplay = computed(() => tierLabel[tier.value] ?? tier.value)
+const tierDisplay = computed(() => {
+  const roleName = user.value?.roleName?.trim()
+  if (roleName) return roleName
+  if (user.value?.roleId) return membershipDisplayName(user.value.roleId)
+  return tierLabel[tier.value] ?? tier.value
+})
 const endDateDisplay = computed(() => {
   const raw = user.value?.endDate
   if (!raw) return '永久'
@@ -56,11 +62,39 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
         <span class="dot brand" />
         <h3>会员权益速览</h3>
       </div>
-      <ul>
-        <li>免费版：基础数据 + 20 锦囊/天</li>
-        <li>专家版：冷热指数 + 亚指 + 走势图</li>
-        <li>黄金以上：时光机、独立 Q 系统、必发明细</li>
-      </ul>
+      <div class="membership-table-wrap">
+        <table class="membership-table">
+          <thead>
+            <tr>
+              <th>会籍</th>
+              <th>核心能力</th>
+              <th>限制</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>免费版</td>
+              <td>基础赛事 / 每日锦囊</td>
+              <td>赛前 6 小时隐藏</td>
+            </tr>
+            <tr>
+              <td>专家版</td>
+              <td>冷热指数 / 亚指 / 走势图</td>
+              <td>部分明细锁定</td>
+            </tr>
+            <tr>
+              <td>黄金版</td>
+              <td>时光机 / 闪Q / 必发明细</td>
+              <td>高级盘口按级开放</td>
+            </tr>
+            <tr>
+              <td>白金以上</td>
+              <td>比分 / 角球 / 全量盘口</td>
+              <td>按具体套餐生效</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 </template>
@@ -155,7 +189,6 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
   color: var(--muted);
 }
 
-/* 权益速览卡 */
 .info-card {
   margin-top: 10px;
   padding: 10px 12px;
@@ -187,14 +220,35 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
   font-weight: 800;
 }
 
-.info-card ul {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-left: 14px;
+.membership-table-wrap {
+  overflow-x: auto;
+}
+
+.membership-table {
+  width: 100%;
+  min-width: 360px;
+  border-collapse: collapse;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 720;
-  line-height: 1.45;
+}
+
+.membership-table th,
+.membership-table td {
+  padding: 5px 6px;
+  border-top: 1px solid var(--divider);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.membership-table th {
+  color: var(--soft);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.membership-table td:first-child {
+  color: var(--ink);
+  font-weight: 800;
 }
 </style>

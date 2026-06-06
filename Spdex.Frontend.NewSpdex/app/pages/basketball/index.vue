@@ -2,9 +2,23 @@
 import { ChevronLeft, ChevronRight, Filter, Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
 
-const day = ref('today')
-const status = ref<'upcoming' | 'started' | 'all' | 'jc'>('upcoming')
-const league = ref('all')
+const route = useRoute()
+const routeDay = route.query.day === 'tomorrow' ? 'tomorrow' : route.query.day === 'yesterday' ? 'yesterday' : 'today'
+const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
+const archiveMinDate = '2012-08-01'
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const toLocalYmd = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+const isSelectableArchiveDate = (value: unknown): value is string => (
+  typeof value === 'string'
+  && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && value >= archiveMinDate
+)
+const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
+
+const day = ref(routeDay)
+const status = ref<'upcoming' | 'started' | 'all'>(routeStatus)
+const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
+const customDate = ref(routeCustomDate)
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -25,18 +39,61 @@ const dayToDate = (d: string): string | undefined => {
   if (d === 'tomorrow') {
     const next = new Date(now)
     next.setDate(now.getDate() + 1)
-    return next.toISOString().slice(0, 10)
+    return toLocalYmd(next)
   }
   if (d === 'yesterday') {
     const prev = new Date(now)
     prev.setDate(now.getDate() - 1)
-    return prev.toISOString().slice(0, 10)
+    return toLocalYmd(prev)
   }
   return undefined
 }
 
+const effectiveDate = computed(() => customDate.value || dayToDate(day.value))
+
+const daySeg = computed({
+  get: () => (customDate.value ? '' : day.value),
+  set: (v: string) => { customDate.value = ''; day.value = v },
+})
+
+function normalizeDayForDate(ymd: string): 'today' | 'tomorrow' | 'yesterday' | null {
+  const now = new Date()
+  const today = toLocalYmd(now)
+  const tomorrow = new Date(now)
+  tomorrow.setDate(now.getDate() + 1)
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (ymd === today) return 'today'
+  if (ymd === toLocalYmd(tomorrow)) return 'tomorrow'
+  if (ymd === toLocalYmd(yesterday)) return 'yesterday'
+  return null
+}
+
+function activeDateForShift(): Date {
+  if (customDate.value) return new Date(`${customDate.value}T00:00:00`)
+  const value = dayToDate(day.value)
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date()
+}
+
+function shiftDay(delta: number) {
+  const next = activeDateForShift()
+  next.setDate(next.getDate() + delta)
+  const ymd = toLocalYmd(next)
+  if (ymd < archiveMinDate) {
+    customDate.value = archiveMinDate
+    return
+  }
+  const shortcut = normalizeDayForDate(ymd)
+  if (shortcut) {
+    customDate.value = ''
+    day.value = shortcut
+    return
+  }
+  customDate.value = ymd
+}
+
 const filters = computed<MatchListFilters>(() => ({
-  date: dayToDate(day.value),
+  date: effectiveDate.value,
   league: league.value,
   status: status.value,
   sport: 'basketball',
@@ -53,6 +110,19 @@ const leagueOptions = computed(() => {
   }
   return opts
 })
+
+const listReturnQuery = computed(() => {
+  const query: Record<string, string> = {}
+  if (customDate.value) query.date = customDate.value
+  else if (day.value !== 'today') query.day = day.value
+  if (status.value !== 'upcoming') query.status = status.value
+  if (league.value !== 'all') query.league = league.value
+  return query
+})
+
+function detailRoute(eventId: number) {
+  return { path: `/basketball/${eventId}`, query: listReturnQuery.value }
+}
 </script>
 
 <template>
@@ -64,13 +134,14 @@ const leagueOptions = computed(() => {
       </div>
 
       <div class="date-row">
-        <button class="square-btn focus-ring" aria-label="上一日">
+        <button class="square-btn focus-ring" aria-label="上一日" @click="shiftDay(-1)">
           <ChevronLeft :size="16" />
         </button>
-        <SegmentedControl v-model="day" :options="dayOptions" dense />
-        <button class="square-btn focus-ring" aria-label="下一日">
+        <SegmentedControl v-model="daySeg" :options="dayOptions" dense />
+        <button class="square-btn focus-ring" aria-label="下一日" @click="shiftDay(1)">
           <ChevronRight :size="16" />
         </button>
+        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="选择日期" :min="archiveMinDate">
       </div>
 
       <div class="status-row">
@@ -108,7 +179,7 @@ const leagueOptions = computed(() => {
         :key="match.eventId"
         :match="match"
         :two-way="true"
-        :to="`/basketball/${match.eventId}`"
+        :to="detailRoute(match.eventId)"
         :show-flash-q="false"
       />
       <div v-if="!pending && !matches.length" class="empty" role="status">
@@ -148,6 +219,21 @@ const leagueOptions = computed(() => {
   grid-template-columns: 32px minmax(0, 1fr) 32px;
   gap: 6px;
   align-items: center;
+}
+
+.date-input {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
 }
 
 .status-row {

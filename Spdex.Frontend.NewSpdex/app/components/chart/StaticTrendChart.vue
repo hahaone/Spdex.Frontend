@@ -203,6 +203,23 @@ function fmtValue(v: number): string {
   }
 }
 
+function timeParts(point?: ChartPoint): { ymd?: string, hm: string } {
+  const raw = point?.ts || point?.time || ''
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+  if (match?.[1] && match[2]) return { ymd: match[1], hm: match[2] }
+  return { hm: point?.time || '' }
+}
+
+function fmtAxisTime(point?: ChartPoint): string {
+  const p = timeParts(point)
+  return p.ymd ? `${p.ymd.slice(5)} ${p.hm}` : p.hm
+}
+
+function fmtTipTime(point?: ChartPoint): string {
+  const p = timeParts(point)
+  return p.ymd ? `${p.ymd} ${p.hm}` : p.hm
+}
+
 const yTicks = computed(() => {
   const span = maxValue.value - minValue.value
   const step = span / 3
@@ -229,7 +246,7 @@ const tooltip = computed(() => {
   const frac = h.x / width.value
   const anchor = frac > 0.62 ? 'right' : frac < 0.2 ? 'left' : 'mid'
   return {
-    time: h.p.time,
+    time: fmtTipTime(h.p),
     volume: h.p.volume,
     price: priceVal(h.p),
     anchor,
@@ -280,7 +297,7 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
 
       <line :x1="pad.left" :x2="width - padRight" :y1="height - pad.bottom" :y2="height - pad.bottom" class="axis" />
 
-      <g v-for="(point, index) in points" :key="point.time">
+      <g v-for="(point, index) in points" :key="`${point.ts || point.time}-${index}`">
         <rect
           class="volume-bar"
           :x="xAt(index) - 5"
@@ -338,9 +355,9 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         </g>
       </template>
 
-      <text :x="pad.left" :y="height - 8" class="x-tick">{{ points[0]?.time }}</text>
-      <text :x="(pad.left + width - padRight) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ points[Math.floor(points.length / 2)]?.time }}</text>
-      <text :x="width - padRight" :y="height - 8" class="x-tick" text-anchor="end">{{ points[points.length - 1]?.time }}</text>
+      <text :x="pad.left" :y="height - 8" class="x-tick">{{ fmtAxisTime(points[0]) }}</text>
+      <text :x="(pad.left + width - padRight) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ fmtAxisTime(points[Math.floor(points.length / 2)]) }}</text>
+      <text :x="width - padRight" :y="height - 8" class="x-tick" text-anchor="end">{{ fmtAxisTime(points[points.length - 1]) }}</text>
 
       <g v-if="hover" class="cross">
         <line class="crosshair" :x1="hover.x" :x2="hover.x" :y1="pad.top" :y2="height - pad.bottom" />

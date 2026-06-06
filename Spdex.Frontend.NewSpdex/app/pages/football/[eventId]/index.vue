@@ -178,12 +178,44 @@ const sectionLabelMap: Record<SectionKey, string> = {
 const sectionLockLabel = computed(() => (sectionMode.value ? sectionLabelMap[sectionMode.value] : ''))
 
 const match = computed(() => detail.value?.match)
+const ladderMarket = ref<'standard' | 'goals' | 'cs'>('standard')
+const ladderAnchor = ref<HTMLElement | null>(null)
+
+function chartRoute(marketName: string, metricName: string, series?: 'home' | 'draw' | 'away') {
+  const query: Record<string, string> = { market: marketName, metric: metricName }
+  if (series) query.series = series
+  return { path: `/football/${eventId.value}/chart`, query }
+}
+
+function parseAmountText(value: string | undefined): number {
+  if (!value) return 0
+  const n = Number.parseFloat(value.replace(/[^\d.-]/g, ''))
+  return Number.isFinite(n) ? n : 0
+}
+
+function sumTurnover(rows: MarketMetricRow[]): number {
+  return rows.reduce((sum, row) => sum + parseAmountText(row.turnover), 0)
+}
+
+const goalsBalance = computed(() => {
+  const standard = sumTurnover(effectiveStandard.value)
+  const goals = sumTurnover(goalsRows.value)
+  if (standard <= 0 || goals <= 0) return ''
+  return ((goals / standard) * 10).toFixed(2)
+})
 
 function jumpTo(target: SectionKey) {
   tab.value = target
   if (typeof window !== 'undefined') {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+}
+
+function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
+  ladderMarket.value = target
+  nextTick(() => {
+    ladderAnchor.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  })
 }
 </script>
 
@@ -361,7 +393,7 @@ function jumpTo(target: SectionKey) {
             <div class="chart-title-row">
               <h2>走势图</h2>
               <div class="chart-actions">
-                <NuxtLink :to="`/football/${match.eventId}/chart`" class="more-link focus-ring">
+                <NuxtLink :to="chartRoute('standard', 'odds')" class="more-link focus-ring">
                   <span>更多</span>
                   <BarChart3 :size="14" />
                 </NuxtLink>
@@ -376,11 +408,30 @@ function jumpTo(target: SectionKey) {
             </div>
           </section>
 
+          <section class="quick-stats panel-shortcuts">
+            <h3>关键入口</h3>
+            <div class="shortcut-grid">
+              <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('standard')">必发明细</button>
+              <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('goals')">进球明细</button>
+              <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('cs')">比分明细</button>
+              <NuxtLink :to="chartRoute('standard', 'exchange')" class="shortcut-link focus-ring">挂牌倾向</NuxtLink>
+              <NuxtLink :to="chartRoute('goals', 'exchange')" class="shortcut-link focus-ring">进球挂牌</NuxtLink>
+              <NuxtLink :to="chartRoute('handicap', 'bfindex')" class="shortcut-link focus-ring">亚洲指数</NuxtLink>
+              <NuxtLink :to="chartRoute('cs', 'bfindex')" class="shortcut-link focus-ring">比分指数</NuxtLink>
+            </div>
+            <div v-if="goalsBalance" class="stat-row">
+              <span>进球均衡</span>
+              <b>{{ goalsBalance }}</b>
+            </div>
+          </section>
+
           <BigTradesSummary v-if="access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
 
           <EuroOddsTable v-if="access.euroOdds && euroOdds" class="panel-euro" :euro="euroOdds" />
 
-          <LadderPanel v-if="access.tradeDetails" class="panel-ladder" :event-id="match.eventId" />
+          <div v-if="access.tradeDetails" ref="ladderAnchor" class="panel-ladder">
+            <LadderPanel :event-id="match.eventId" :initial-market="ladderMarket" />
+          </div>
         </aside>
       </div>
 
@@ -710,6 +761,36 @@ function jumpTo(target: SectionKey) {
   font-weight: 780;
 }
 
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.shortcut-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 760;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shortcut-link:hover {
+  border-color: var(--brand);
+  color: var(--brand-deep);
+}
+
 @media (min-width: 1024px) {
   .detail-page {
     width: min(100%, 1180px);
@@ -766,8 +847,7 @@ function jumpTo(target: SectionKey) {
   }
 
   .detail-grid.all-mode {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-auto-flow: row dense;
+    grid-template-columns: minmax(0, 1fr) 340px;
   }
 
   .main-col,
@@ -777,12 +857,6 @@ function jumpTo(target: SectionKey) {
     gap: 12px;
   }
 
-  .detail-grid.all-mode .main-col,
-  .detail-grid.all-mode .side-col,
-  .detail-grid.all-mode .all-grid {
-    display: contents;
-  }
-
   /* 桌面：右侧信息栏(走势/成交/欧赔/盘口)吸顶，主栏滚动时保持可见(让开 sticky tab-band) */
   .side-col {
     position: sticky;
@@ -790,16 +864,11 @@ function jumpTo(target: SectionKey) {
     align-self: start;
   }
 
-  .detail-grid.all-mode .side-col {
-    position: static;
-    top: auto;
-    align-self: auto;
-  }
-
   .all-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
     background: transparent;
+    align-content: start;
   }
 
   .market-panel,
@@ -810,23 +879,7 @@ function jumpTo(target: SectionKey) {
     min-width: 0;
   }
 
-  .market-standard { order: 1; }
-  .market-poly { order: 2; }
-  .market-goals { order: 3; }
-  .market-handicap { order: 4; }
-  .panel-chart { order: 5; }
-  .market-cs { order: 6; }
-  .market-corner { order: 7; }
-  .panel-big-trades { order: 8; }
-  .panel-euro { order: 9; }
-  .panel-ladder { order: 10; }
-  .span-all { order: 20; }
-
-  .detail-grid.all-mode .panel-euro,
-  .detail-grid.all-mode .panel-ladder,
-  .detail-grid.all-mode .span-all {
-    grid-column: span 2;
-  }
+  .span-all { grid-column: 1 / -1; }
 
   .panel-euro {
     overflow: hidden;
@@ -851,16 +904,11 @@ function jumpTo(target: SectionKey) {
   }
 
   .detail-grid.all-mode {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) 380px;
   }
 
   .all-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .detail-grid.all-mode .panel-euro,
-  .detail-grid.all-mode .panel-ladder {
-    grid-column: span 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
