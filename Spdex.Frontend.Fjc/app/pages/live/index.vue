@@ -199,6 +199,7 @@ function tgSpark(eventId: number) {
   let pen = false
   let lastX = pad
   let lastY = H - pad
+  const marked = new Set<number>()
   vals.forEach((v, i) => {
     if (v == null) { pen = false; return }
     const x = xOf(series[i]?.minute ?? i)
@@ -207,11 +208,36 @@ function tgSpark(eventId: number) {
     pen = true
     lastX = x
     lastY = y
+    // 相邻两节点差异 >0.80 → 两个节点都标记并显示数值
+    const prev = vals[i - 1]
+    if (prev != null && Math.abs(v - prev) > 0.8) {
+      marked.add(i - 1)
+      marked.add(i)
+    }
   })
-  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: 'HT' }]
+  const labels = [...marked].sort((a, b) => a - b).map((i) => {
+    const v = vals[i]!
+    const x = xOf(series[i]?.minute ?? i)
+    const y = yOf(v)
+    const nearRight = x > W - 36
+    return {
+      x,
+      y,
+      textX: nearRight ? x - 4 : x + 4,
+      textY: Math.max(10, y - 6),
+      text: v.toFixed(2),
+      anchor: nearRight ? 'end' : 'start',
+    }
+  })
+  // 20 分钟虚线竖线 + 中场竖线（带标签）
+  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }]
     .filter(g => maxMinute >= g.minute)
-    .map(g => ({ x: xOf(g.minute), label: g.label }))
-  return { path, w: W, h: H, min: min.toFixed(1), max: max.toFixed(1), guides, lastX, lastY }
+    .map((g) => {
+      const x = xOf(g.minute)
+      const nearRight = x > W - 28
+      return { x, label: g.label, labelX: nearRight ? x - 3 : x + 3, labelY: H - 3, anchor: nearRight ? 'end' : 'start' }
+    })
+  return { path, w: W, h: H, min: min.toFixed(1), max: max.toFixed(1), guides, labels, lastX, lastY }
 }
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
@@ -810,16 +836,15 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       :viewBox="`0 0 ${spark.w} ${spark.h}`"
                       preserveAspectRatio="none"
                     >
-                      <line
-                        v-for="g in spark.guides"
-                        :key="g.label"
-                        class="tg-guide"
-                        :x1="g.x"
-                        y1="0"
-                        :x2="g.x"
-                        :y2="spark.h"
-                      />
+                      <g v-for="g in spark.guides" :key="g.label">
+                        <line class="tg-guide" :x1="g.x" y1="0" :x2="g.x" :y2="spark.h" />
+                        <text class="tg-guide-label" :x="g.labelX" :y="g.labelY" :text-anchor="g.anchor">{{ g.label }}</text>
+                      </g>
                       <path :d="spark.path" fill="none" class="tg-line" />
+                      <g v-for="(lb, li) in spark.labels" :key="`tgl-${li}`">
+                        <circle :cx="lb.x" :cy="lb.y" r="2.6" class="tg-mark" />
+                        <text class="tg-mark-label" :x="lb.textX" :y="lb.textY" :text-anchor="lb.anchor">{{ lb.text }}</text>
+                      </g>
                       <circle :cx="spark.lastX" :cy="spark.lastY" r="3" class="tg-dot" />
                     </svg>
                     <div v-else class="tg-empty">暂无预期总进球走势（数据积累中或非足球）</div>
@@ -1126,6 +1151,22 @@ th.col-tg {
 
 .tg-dot {
   fill: #2e9c5f;
+}
+
+.tg-guide-label {
+  fill: #9bb3a5;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.tg-mark {
+  fill: #2e9c5f;
+}
+
+.tg-mark-label {
+  fill: #1f7a45;
+  font-size: 8px;
+  font-weight: 800;
 }
 
 .tg-empty {
