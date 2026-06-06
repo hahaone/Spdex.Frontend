@@ -307,14 +307,26 @@ const totalGoalsSpark = computed(() => {
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
   const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
   if (nums.length < 2) return null
-  const W = tgW.value, H = 62, pad = 6
+  const W = tgW.value, H = 93, pad = 10
   const min = Math.min(...nums), max = Math.max(...nums)
   const span = max - min || 1
   const maxMinute = replayMaxMinute(series)
   const xOf = (p: AnalysisReplayPoint | undefined, i: number) => pad + (W - pad * 2) * (replayMinute(p, i) / maxMinute)
   const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
   let path = '', pen = false
-  const marked = new Set<number>()
+  const candidates: Array<{ index: number, priority: number, tone: 'jump' | 'extreme' | 'latest' | 'over' }> = []
+  const addCandidate = (index: number, priority: number, tone: 'jump' | 'extreme' | 'latest' | 'over') => {
+    if (vals[index] == null || !Number.isFinite(vals[index])) return
+    const existing = candidates.find(c => c.index === index)
+    if (!existing) {
+      candidates.push({ index, priority, tone })
+      return
+    }
+    if (priority > existing.priority) {
+      existing.priority = priority
+      existing.tone = tone
+    }
+  }
   vals.forEach((v, i) => {
     if (v == null) { pen = false; return }
     const x = xOf(series[i], i)
@@ -322,31 +334,61 @@ const totalGoalsSpark = computed(() => {
     pen = true
     const prev = vals[i - 1]
     if (prev != null && Math.abs(v - prev) > 0.9) {
-      marked.add(i - 1)
-      marked.add(i)
+      addCandidate(i - 1, 62, 'jump')
+      addCandidate(i, 64, 'jump')
     }
   })
-  const labels = [...marked].sort((a, b) => a - b).map(i => {
-    const v = vals[i]!
-    const x = xOf(series[i], i)
-    const nearRight = x > W - 30
-    return {
-      x,
-      y: yOf(v),
-      textX: nearRight ? x - 4 : x + 4,
-      textY: Math.max(10, yOf(v) - 5),
-      text: v.toFixed(2),
-      anchor: nearRight ? 'end' : 'start',
-    }
-  })
+
+  const validIndexes = vals
+    .map((v, index) => (v == null || !Number.isFinite(v) ? null : index))
+    .filter((index): index is number => index !== null)
+  const firstIndex = validIndexes[0]
+  if (firstIndex == null) return null
+  const lastIndex = validIndexes.at(-1)
+  if (lastIndex != null) addCandidate(lastIndex, 110, 'latest')
+  const minIndex = validIndexes.reduce((best, index) => (vals[index]! < vals[best]! ? index : best), firstIndex)
+  const maxIndex = validIndexes.reduce((best, index) => (vals[index]! > vals[best]! ? index : best), firstIndex)
+  addCandidate(minIndex, 86, 'extreme')
+  addCandidate(maxIndex, 88, 'extreme')
+
   const overMarkers = vals
     .map((v, i) => {
       const point = series[i]
       const edge = point?.edgePct
       if (!point || v == null || edge == null || edge <= 3) return null
-      return { x: xOf(point, i), y: yOf(v), minute: replayMinute(point, i) }
+      addCandidate(i, 76, 'over')
+      return { x: xOf(point, i), y: yOf(v), minute: replayMinute(point, i), text: v.toFixed(2) }
     })
-    .filter((m): m is { x: number, y: number, minute: number } => m !== null)
+    .filter((m): m is { x: number, y: number, minute: number, text: string } => m !== null)
+
+  const accepted: typeof candidates = []
+  const minLabelGap = Math.max(32, Math.min(54, W / 8))
+  candidates
+    .sort((a, b) => b.priority - a.priority || Math.abs(vals[b.index]! - max) - Math.abs(vals[a.index]! - max))
+    .forEach(candidate => {
+      const x = xOf(series[candidate.index], candidate.index)
+      const crowded = accepted.some(label => Math.abs(x - xOf(series[label.index], label.index)) < minLabelGap)
+      if (!crowded || candidate.tone === 'latest') accepted.push(candidate)
+    })
+
+  const labels = accepted.sort((a, b) => a.index - b.index).map(candidate => {
+    const i = candidate.index
+    const v = vals[i]!
+    const x = xOf(series[i], i)
+    const y = yOf(v)
+    const nearRight = x > W - 38
+    const nearTop = y < 18
+    return {
+      x,
+      y,
+      textX: nearRight ? x - 5 : x + 5,
+      textY: nearTop ? y + 12 : Math.max(12, y - 6),
+      text: v.toFixed(2),
+      anchor: nearRight ? 'end' : 'start',
+      tone: candidate.tone,
+    }
+  })
+  const yGuides = [0.33, 0.66].map(ratio => ({ y: pad + (H - pad * 2) * ratio }))
   return {
     path,
     w: W,
@@ -355,6 +397,7 @@ const totalGoalsSpark = computed(() => {
     max: max.toFixed(2),
     labels,
     overMarkers,
+    yGuides,
     guides: buildTimeGuides(series, W, H, pad),
   }
 })
@@ -437,21 +480,32 @@ function injStatus(s: string): { text: string, cls: string } {
           <span class="muted num">{{ totalGoalsSpark.min }} ~ {{ totalGoalsSpark.max }}</span>
         </div>
         <svg ref="tgSvg" class="tg-spark" :viewBox="`0 0 ${totalGoalsSpark.w} ${totalGoalsSpark.h}`" preserveAspectRatio="none">
+          <line
+            v-for="guide in totalGoalsSpark.yGuides"
+            :key="`tg-y-${guide.y}`"
+            class="tg-y-guide"
+            x1="0"
+            :y1="guide.y"
+            :x2="totalGoalsSpark.w"
+            :y2="guide.y"
+          />
           <g v-for="guide in totalGoalsSpark.guides" :key="`tg-guide-${guide.label}`">
             <line :class="['tg-guide', { dashed: guide.dashed }]" :x1="guide.x" y1="0" :x2="guide.x" :y2="totalGoalsSpark.h" />
             <text :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor" class="tg-guide-label">{{ guide.label }}</text>
           </g>
-          <path :d="totalGoalsSpark.path" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <path :d="totalGoalsSpark.path" class="tg-line" fill="none" />
           <circle
             v-for="marker in totalGoalsSpark.overMarkers"
             :key="`tg-over-${marker.minute}-${marker.x}`"
             :cx="marker.x"
             :cy="marker.y"
-            r="3"
+            r="2.7"
             class="tg-over-dot"
-          />
-          <g v-for="label in totalGoalsSpark.labels" :key="`${label.x}-${label.text}`">
-            <circle :cx="label.x" :cy="label.y" r="2.7" class="tg-dot" />
+          >
+            <title>大球价值 {{ marker.minute }}' · {{ marker.text }}</title>
+          </circle>
+          <g v-for="label in totalGoalsSpark.labels" :key="`${label.x}-${label.text}`" :class="['tg-label-point', label.tone]">
+            <circle :cx="label.x" :cy="label.y" r="2.5" class="tg-dot" />
             <text :x="label.textX" :y="label.textY" :text-anchor="label.anchor" class="tg-label">{{ label.text }}</text>
           </g>
         </svg>
@@ -1278,8 +1332,20 @@ section.compare {
 }
 .tg-head .muted { color: var(--muted); font-size: 0.68rem; font-weight: 720; }
 .tg-spark { display: block; width: 100%; height: 93px; margin-top: 4px; color: var(--brand-deep); }
+.tg-line {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.tg-y-guide {
+  stroke: rgba(148, 163, 184, 0.22);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
 .tg-guide {
-  stroke: rgba(107, 115, 133, 0.48);
+  stroke: rgba(107, 115, 133, 0.42);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
@@ -1293,20 +1359,38 @@ section.compare {
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
 }
-.tg-dot { fill: #fff; stroke: var(--sell); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.tg-dot {
+  fill: #fff;
+  stroke: var(--sell);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.tg-label-point.extreme .tg-dot {
+  stroke: var(--brand-deep);
+}
+.tg-label-point.latest .tg-dot {
+  fill: var(--brand-deep);
+  stroke: #fff;
+  stroke-width: 1.4;
+}
+.tg-label-point.over .tg-dot {
+  fill: var(--buy);
+  stroke: #fff;
+  stroke-width: 1.4;
+}
 .tg-over-dot {
   fill: var(--buy);
   stroke: #fff;
-  stroke-width: 1.5;
+  stroke-width: 1.4;
   vector-effect: non-scaling-stroke;
 }
 .tg-label {
   fill: var(--ink);
-  font-size: 9px;
+  font-size: 8.4px;
   font-weight: 800;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 2px;
+  stroke-width: 1.8px;
   vector-effect: non-scaling-stroke;
 }
 
