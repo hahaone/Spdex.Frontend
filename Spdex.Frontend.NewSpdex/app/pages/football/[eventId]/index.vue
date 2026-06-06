@@ -304,135 +304,132 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
       </section>
 
       <div v-if="hasUnlockedData" :class="['detail-grid', { 'all-mode': tab === 'all' }]">
-        <div class="main-col">
-          <section v-if="tab === 'all'" class="all-grid">
-            <MarketSummaryCard
-              v-if="access.standard"
-              class="market-panel market-standard"
-              :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
-              tone="standard"
-              :rows="effectiveStandard"
-              index-label="必指"
-              @open="jumpTo('standard')"
-            />
+        <template v-if="tab === 'all'">
+          <MarketSummaryCard
+            v-if="access.standard"
+            class="market-panel market-standard"
+            :title="isSnapshotMode ? `标盘（${snapshot?.actualHoursOffset}h 前）` : '标盘'"
+            tone="standard"
+            :rows="effectiveStandard"
+            index-label="必指"
+            @open="jumpTo('standard')"
+          />
 
-            <MarketSummaryCard
-              v-if="detail.poly.length"
-              class="market-panel market-poly"
-              title="Poly"
-              tone="poly"
-              :rows="detail.poly"
-              index-label="P指"
-              turnover-prefix="$"
-              @open="jumpTo('poly')"
-            />
+          <MarketSummaryCard
+            v-if="detail.poly.length"
+            class="market-panel market-poly"
+            title="Poly"
+            tone="poly"
+            :rows="detail.poly"
+            index-label="P指"
+            turnover-prefix="$"
+            @open="jumpTo('poly')"
+          />
 
-            <MarketSummaryCard
-              v-if="access.goals"
-              class="market-panel market-goals"
-              :title="goalsTitle"
-              tone="goals"
-              :rows="goalsRows"
-              index-label="必指"
-              @open="jumpTo('goals')"
-            />
+          <MarketSummaryCard
+            v-if="access.goals"
+            class="market-panel market-goals"
+            :title="goalsTitle"
+            tone="goals"
+            :rows="goalsRows"
+            index-label="必指"
+            @open="jumpTo('goals')"
+          />
 
-            <MarketSummaryCard
-              v-if="access.handicap"
-              class="market-panel market-handicap"
-              :title="handicapTitle"
-              tone="handicap"
-              :rows="handicapRows"
-              index-label="必指"
-              @open="jumpTo('handicap')"
-            />
+          <MarketSummaryCard
+            v-if="access.handicap"
+            class="market-panel market-handicap"
+            :title="handicapTitle"
+            tone="handicap"
+            :rows="handicapRows"
+            index-label="必指"
+            @open="jumpTo('handicap')"
+          />
 
-            <MarketSummaryCard
-              v-if="access.cs && detail.cs.length"
-              class="market-panel market-cs"
-              title="比分 CS"
-              tone="goals"
-              :rows="detail.cs.slice(0, 3)"
-              index-label="大注"
-              index-format="amount"
-              @open="jumpTo('cs')"
-            />
+          <MarketSummaryCard
+            v-if="access.cs && detail.cs.length"
+            class="market-panel market-cs"
+            title="比分 CS"
+            tone="goals"
+            :rows="detail.cs.slice(0, 3)"
+            index-label="大注"
+            index-format="amount"
+            @open="jumpTo('cs')"
+          />
 
-            <MarketSummaryCard
-              v-if="access.corner && detail.corner.length"
-              class="market-panel market-corner"
-              title="角球"
-              tone="goals"
-              :rows="detail.corner"
-              index-label="区间"
-              wide-option
-              @open="jumpTo('corner')"
-            />
+          <MarketSummaryCard
+            v-if="access.corner && detail.corner.length"
+            class="market-panel market-corner"
+            title="角球"
+            tone="goals"
+            :rows="detail.corner"
+            index-label="区间"
+            wide-option
+            @open="jumpTo('corner')"
+          />
+        </template>
 
-            <UpgradeUnlockCard
-              v-if="lockedFeatures.length"
-              class="span-all"
-              variant="inline"
-              :features="lockedFeatures"
-            />
-          </section>
+        <template v-else-if="sectionMode">
+          <UpgradeUnlockCard
+            v-if="sectionLockMessage"
+            class="panel-section"
+            variant="inline"
+            :features="sectionLockLabel ? [sectionLockLabel] : []"
+            :subline="sectionLockMessage"
+          />
+          <MarketMetricTable v-else class="panel-section" :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
+        </template>
 
-          <template v-else-if="sectionMode">
-            <UpgradeUnlockCard
-              v-if="sectionLockMessage"
-              variant="inline"
-              :features="sectionLockLabel ? [sectionLockLabel] : []"
-              :subline="sectionLockMessage"
-            />
-            <MarketMetricTable v-else :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
-          </template>
+        <section class="chart-preview panel-chart">
+          <div class="chart-title-row">
+            <h2>走势图</h2>
+            <div class="chart-actions">
+              <NuxtLink :to="chartRoute('standard', 'odds')" class="more-link focus-ring">
+                <span>更多</span>
+                <BarChart3 :size="14" />
+              </NuxtLink>
+              <button class="icon-link focus-ring" aria-label="刷新" @click="refresh(); refreshChart()">
+                <RefreshCw :size="15" />
+              </button>
+            </div>
+          </div>
+          <LazyStaticTrendChart v-if="chartPoints.length" :points="chartPoints" :height="180" />
+          <div v-else class="chart-empty">
+            {{ chartStatus === 'no-access' ? '走势图未对当前会籍开放' : chartStatus === 'pending' ? '走势图待接入' : '暂无走势' }}
+          </div>
+        </section>
+
+        <section class="quick-stats panel-shortcuts">
+          <h3>关键入口</h3>
+          <div class="shortcut-grid">
+            <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('standard')">必发明细</button>
+            <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('goals')">进球明细</button>
+            <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('cs')">比分明细</button>
+            <NuxtLink :to="chartRoute('standard', 'exchange')" class="shortcut-link focus-ring">挂牌倾向</NuxtLink>
+            <NuxtLink :to="chartRoute('goals', 'exchange')" class="shortcut-link focus-ring">进球挂牌</NuxtLink>
+            <NuxtLink :to="chartRoute('handicap', 'bfindex')" class="shortcut-link focus-ring">亚洲指数</NuxtLink>
+            <NuxtLink :to="chartRoute('cs', 'bfindex')" class="shortcut-link focus-ring">比分指数</NuxtLink>
+          </div>
+          <div v-if="goalsBalance" class="stat-row">
+            <span>进球均衡</span>
+            <b>{{ goalsBalance }}</b>
+          </div>
+        </section>
+
+        <BigTradesSummary v-if="access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
+
+        <EuroOddsTable v-if="access.euroOdds && euroOdds" class="panel-euro" :euro="euroOdds" />
+
+        <div v-if="access.tradeDetails" ref="ladderAnchor" class="panel-ladder">
+          <LadderPanel :event-id="match.eventId" :initial-market="ladderMarket" />
         </div>
 
-        <aside class="side-col">
-          <section class="chart-preview panel-chart">
-            <div class="chart-title-row">
-              <h2>走势图</h2>
-              <div class="chart-actions">
-                <NuxtLink :to="chartRoute('standard', 'odds')" class="more-link focus-ring">
-                  <span>更多</span>
-                  <BarChart3 :size="14" />
-                </NuxtLink>
-                <button class="icon-link focus-ring" aria-label="刷新" @click="refresh(); refreshChart()">
-                  <RefreshCw :size="15" />
-                </button>
-              </div>
-            </div>
-            <LazyStaticTrendChart v-if="chartPoints.length" :points="chartPoints" :height="180" />
-            <div v-else class="chart-empty">
-              {{ chartStatus === 'no-access' ? '走势图未对当前会籍开放' : chartStatus === 'pending' ? '走势图待接入' : '暂无走势' }}
-            </div>
-          </section>
-
-          <section class="quick-stats panel-shortcuts">
-            <h3>关键入口</h3>
-            <div class="shortcut-grid">
-              <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('standard')">必发明细</button>
-              <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('goals')">进球明细</button>
-              <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('cs')">比分明细</button>
-              <NuxtLink :to="chartRoute('standard', 'exchange')" class="shortcut-link focus-ring">挂牌倾向</NuxtLink>
-              <NuxtLink :to="chartRoute('goals', 'exchange')" class="shortcut-link focus-ring">进球挂牌</NuxtLink>
-              <NuxtLink :to="chartRoute('handicap', 'bfindex')" class="shortcut-link focus-ring">亚洲指数</NuxtLink>
-              <NuxtLink :to="chartRoute('cs', 'bfindex')" class="shortcut-link focus-ring">比分指数</NuxtLink>
-            </div>
-            <div v-if="goalsBalance" class="stat-row">
-              <span>进球均衡</span>
-              <b>{{ goalsBalance }}</b>
-            </div>
-          </section>
-
-          <BigTradesSummary v-if="access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
-
-          <EuroOddsTable v-if="access.euroOdds && euroOdds" class="panel-euro" :euro="euroOdds" />
-
-          <div v-if="access.tradeDetails" ref="ladderAnchor" class="panel-ladder">
-            <LadderPanel :event-id="match.eventId" :initial-market="ladderMarket" />
-          </div>
-        </aside>
+        <UpgradeUnlockCard
+          v-if="tab === 'all' && lockedFeatures.length"
+          class="span-all"
+          variant="inline"
+          :features="lockedFeatures"
+        />
       </div>
 
       <div v-else class="detail-locked">
@@ -636,24 +633,13 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
 
 .detail-grid {
   display: grid;
-  /* 移动端单列，桌面端在 @media(min-width:1024px) 改为双列。 */
-  grid-template-columns: minmax(0, 1fr);
-  /* 作为 .detail-page 的网格项，允许收缩到列宽，避免侧栏宽表格把整页撑出视口。 */
-  min-width: 0;
-}
-
-/* 主/侧两列允许收缩，避免内部宽内容把整列撑出视口。 */
-.main-col,
-.side-col {
-  min-width: 0;
-}
-
-.all-grid {
-  display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  padding: 10px 10px;
+  padding: 10px;
   background: var(--surface);
+  grid-auto-flow: dense;
+  align-items: start;
+  min-width: 0;
 }
 
 /* 合并升级条跨整行；全锁 hero 居中限宽，避免散落空卡 */
@@ -793,7 +779,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
 
 @media (min-width: 1024px) {
   .detail-page {
-    width: min(100%, 1180px);
+    width: min(100%, 1280px);
     margin: 0 auto;
     padding: 16px 0;
     gap: 12px;
@@ -841,42 +827,35 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
   }
 
   .detail-grid {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
-    align-items: start;
-  }
-
-  .detail-grid.all-mode {
-    grid-template-columns: minmax(0, 1fr) 340px;
-  }
-
-  .main-col,
-  .side-col {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  /* 桌面：右侧信息栏(走势/成交/欧赔/盘口)吸顶，主栏滚动时保持可见(让开 sticky tab-band) */
-  .side-col {
-    position: sticky;
-    top: 120px;
-    align-self: start;
-  }
-
-  .all-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
     background: transparent;
-    align-content: start;
   }
 
   .market-panel,
+  .panel-section,
+  .panel-shortcuts,
   .panel-chart,
   .panel-big-trades,
   .panel-euro,
   .panel-ladder {
     min-width: 0;
+  }
+
+  .panel-section {
+    grid-column: span 2;
+  }
+
+  .panel-chart,
+  .panel-shortcuts,
+  .panel-big-trades {
+    grid-column: span 1;
+  }
+
+  .panel-euro,
+  .panel-ladder {
+    grid-column: span 2;
   }
 
   .span-all { grid-column: 1 / -1; }
@@ -896,25 +875,38 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
   }
 }
 
-/* 超宽屏：保持两列盘口卡，避免少量卡片散成一行后留下大块空白。 */
+/* 超宽屏：使用四列密集网格，长表跨列，避免左侧大片空白、右侧单列过长。 */
 @media (min-width: 1440px) {
+  .detail-page {
+    width: min(100%, 1360px);
+  }
+
   .detail-grid {
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
   }
 
-  .detail-grid.all-mode {
-    grid-template-columns: minmax(0, 1fr) 380px;
+  .panel-section,
+  .panel-euro,
+  .panel-ladder {
+    grid-column: span 2;
   }
 
-  .all-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .panel-big-trades {
+    grid-column: span 1;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-  .all-grid {
+  .detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel-section,
+  .panel-euro,
+  .panel-ladder,
+  .span-all {
+    grid-column: 1 / -1;
   }
 }
 

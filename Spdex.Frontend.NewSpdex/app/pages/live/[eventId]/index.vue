@@ -719,6 +719,10 @@ function injStatus(s: string): { text: string, cls: string } {
   display: grid;
 }
 
+.content-grid {
+  display: grid;
+}
+
 .status-pill {
   padding: 1px 6px;
   border-radius: 2px;
@@ -1258,7 +1262,7 @@ section.compare {
 
 .total-goals-chart {
   margin: 2px 0 6px;
-  padding: 6px 8px 5px;
+  padding: 7px 8px 6px;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--panel);
@@ -1273,7 +1277,7 @@ section.compare {
   font-weight: 800;
 }
 .tg-head .muted { color: var(--muted); font-size: 0.68rem; font-weight: 720; }
-.tg-spark { display: block; width: 100%; height: 62px; margin-top: 3px; color: var(--brand-deep); }
+.tg-spark { display: block; width: 100%; height: 93px; margin-top: 4px; color: var(--brand-deep); }
 .tg-guide {
   stroke: rgba(107, 115, 133, 0.48);
   stroke-width: 1;
@@ -1350,7 +1354,7 @@ section.compare {
 
 @media (min-width: 1024px) {
   .live-detail {
-    width: min(100%, 1180px);
+    width: min(100%, 1280px);
     margin: 0 auto;
     padding: 16px 0;
     gap: 12px;
@@ -1380,9 +1384,9 @@ section.compare {
 
   .content-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
-    grid-auto-flow: row dense;
+    grid-auto-flow: dense;
     align-items: start;
   }
 
@@ -1395,58 +1399,55 @@ section.compare {
   section.stats,
   section.odds,
   section.compare {
+    min-width: 0;
     border-radius: 6px;
     border: 1px solid var(--line);
   }
 
-  .live-timeline-section {
-    grid-row: span 2;
+  .replay-card,
+  .replay-empty,
+  .injury-card,
+  .live-pending,
+  .price-compare-section {
+    grid-column: 1 / -1;
   }
 }
 
-/* 超宽屏：固定区域，避免数据块按 DOM 顺序散落。 */
+/* 宽屏：使用密集网格自然补位，避免左侧空置、右侧单列过长。 */
 @media (min-width: 1440px) {
+  .live-detail {
+    width: min(100%, 1360px);
+  }
+
   .content-grid {
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(320px, 0.86fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
   }
 
-  .model-card {
-    grid-column: 1;
+  .injury-card,
+  .price-compare-section {
+    grid-column: span 2;
   }
 
-  .analysis-card {
-    grid-column: 2;
+  .live-pending {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1700px) {
+  .live-detail {
+    width: min(100%, 1520px);
+  }
+
+  .content-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .replay-card,
-  .replay-empty {
-    grid-column: 3;
-    grid-row: span 2;
-  }
-
-  .injury-card {
-    grid-column: 1 / span 2;
-  }
-
-  .live-timeline-section {
-    grid-column: 1;
-    grid-row: span 4;
-  }
-
-  .live-stats-section {
-    grid-column: 2;
-  }
-
-  .live-odds-section {
-    grid-column: 3;
-  }
-
-  .prematch-odds-section {
-    grid-column: 2;
-  }
-
+  .replay-empty,
+  .injury-card,
   .price-compare-section {
-    grid-column: 3;
+    grid-column: span 2;
   }
 }
 
