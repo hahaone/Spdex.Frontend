@@ -321,7 +321,7 @@ const totalGoalsSpark = computed(() => {
     path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${yOf(v).toFixed(1)} `
     pen = true
     const prev = vals[i - 1]
-    if (prev != null && Math.abs(v - prev) > 0.5) {
+    if (prev != null && Math.abs(v - prev) > 0.9) {
       marked.add(i - 1)
       marked.add(i)
     }
@@ -1413,24 +1413,24 @@ section.compare {
   }
 }
 
-/* 宽屏：使用密集网格自然补位，避免左侧空置、右侧单列过长。 */
+/* 宽屏：切为看板式多列，避免 CSS Grid 同行高卡撑出大面积空白。 */
 @media (min-width: 1440px) {
   .live-detail {
     width: min(100%, 1360px);
   }
 
   .content-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    display: block;
+    column-count: 3;
+    column-gap: 14px;
   }
 
-  .injury-card,
-  .price-compare-section {
-    grid-column: span 2;
-  }
-
-  .live-pending {
-    grid-column: 1 / -1;
+  .content-grid > section {
+    display: inline-block;
+    width: 100%;
+    margin: 0 0 14px;
+    break-inside: avoid;
+    vertical-align: top;
   }
 }
 
@@ -1440,14 +1440,7 @@ section.compare {
   }
 
   .content-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .replay-card,
-  .replay-empty,
-  .injury-card,
-  .price-compare-section {
-    grid-column: span 2;
+    column-count: 4;
   }
 }
 

@@ -182,7 +182,9 @@ async function toggleXgExpand(eventId: number) {
   xgExpandedEventIds.value = next
 }
 
-// 预期总进球走势 sparkline（照搬 NewSpdex totalGoalsSpark：projectedTotalGoals + 时间轴 guide + 断点跳过）
+const TG_SPARK_MARK_DIFF_THRESHOLD = 0.9
+
+// 预期总进球走势 sparkline（projectedTotalGoals + 时间轴 guide + 断点跳过）
 function tgSpark(eventId: number) {
   const series = xgReplayByEventId.value.get(eventId)?.series ?? []
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
@@ -200,6 +202,7 @@ function tgSpark(eventId: number) {
   let lastX = pad
   let lastY = H - pad
   const marked = new Set<number>()
+  let previousValidIndex: number | null = null
   vals.forEach((v, i) => {
     if (v == null) { pen = false; return }
     const x = xOf(series[i]?.minute ?? i)
@@ -208,12 +211,13 @@ function tgSpark(eventId: number) {
     pen = true
     lastX = x
     lastY = y
-    // 相邻两节点差异 >0.80 → 两个节点都标记并显示数值
-    const prev = vals[i - 1]
-    if (prev != null && Math.abs(v - prev) > 0.8) {
-      marked.add(i - 1)
+    // 与上一个有效节点差异 >0.90 → 两个节点都标记并显示数值。
+    const prev = previousValidIndex == null ? null : vals[previousValidIndex]
+    if (previousValidIndex != null && prev != null && Math.abs(v - prev) > TG_SPARK_MARK_DIFF_THRESHOLD) {
+      marked.add(previousValidIndex)
       marked.add(i)
     }
+    previousValidIndex = i
   })
   const labels = [...marked].sort((a, b) => a - b).map((i) => {
     const v = vals[i]!
@@ -237,7 +241,7 @@ function tgSpark(eventId: number) {
       const nearRight = x > W - 28
       return { x, label: g.label, labelX: nearRight ? x - 3 : x + 3, labelY: H - 3, anchor: nearRight ? 'end' : 'start' }
     })
-  return { path, w: W, h: H, min: min.toFixed(1), max: max.toFixed(1), guides, labels, lastX, lastY }
+  return { path, w: W, h: H, min: min.toFixed(2), max: max.toFixed(2), guides, labels, lastX, lastY }
 }
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
