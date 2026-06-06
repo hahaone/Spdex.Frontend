@@ -314,14 +314,15 @@ const totalGoalsSpark = computed(() => {
   const xOf = (p: AnalysisReplayPoint | undefined, i: number) => pad + (W - pad * 2) * (replayMinute(p, i) / maxMinute)
   const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
   let path = '', pen = false
-  const candidates: Array<{ index: number, priority: number, tone: 'jump' | 'extreme' | 'latest' | 'over' }> = []
-  const addCandidate = (index: number, priority: number, tone: 'jump' | 'extreme' | 'latest' | 'over') => {
+  const candidates: Array<{ index: number, priority: number, tone: 'jump' | 'extreme' | 'latest', force?: boolean }> = []
+  const addCandidate = (index: number, priority: number, tone: 'jump' | 'extreme' | 'latest', force = false) => {
     if (vals[index] == null || !Number.isFinite(vals[index])) return
     const existing = candidates.find(c => c.index === index)
     if (!existing) {
-      candidates.push({ index, priority, tone })
+      candidates.push({ index, priority, tone, force })
       return
     }
+    existing.force ||= force
     if (priority > existing.priority) {
       existing.priority = priority
       existing.tone = tone
@@ -334,8 +335,8 @@ const totalGoalsSpark = computed(() => {
     pen = true
     const prev = vals[i - 1]
     if (prev != null && Math.abs(v - prev) > 0.9) {
-      addCandidate(i - 1, 62, 'jump')
-      addCandidate(i, 64, 'jump')
+      addCandidate(i - 1, 120, 'jump', true)
+      addCandidate(i, 121, 'jump', true)
     }
   })
 
@@ -356,7 +357,6 @@ const totalGoalsSpark = computed(() => {
       const point = series[i]
       const edge = point?.edgePct
       if (!point || v == null || edge == null || edge <= 3) return null
-      addCandidate(i, 76, 'over')
       return { x: xOf(point, i), y: yOf(v), minute: replayMinute(point, i), text: v.toFixed(2) }
     })
     .filter((m): m is { x: number, y: number, minute: number, text: string } => m !== null)
@@ -366,26 +366,32 @@ const totalGoalsSpark = computed(() => {
   candidates
     .sort((a, b) => b.priority - a.priority || Math.abs(vals[b.index]! - max) - Math.abs(vals[a.index]! - max))
     .forEach(candidate => {
+      if (candidate.force) {
+        accepted.push(candidate)
+        return
+      }
       const x = xOf(series[candidate.index], candidate.index)
       const crowded = accepted.some(label => Math.abs(x - xOf(series[label.index], label.index)) < minLabelGap)
       if (!crowded || candidate.tone === 'latest') accepted.push(candidate)
     })
 
-  const labels = accepted.sort((a, b) => a.index - b.index).map(candidate => {
+  const labels = accepted.sort((a, b) => a.index - b.index).map((candidate, order) => {
     const i = candidate.index
     const v = vals[i]!
     const x = xOf(series[i], i)
     const y = yOf(v)
     const nearRight = x > W - 38
     const nearTop = y < 18
+    const stagger = candidate.force ? (order % 2 === 0 ? 0 : 8) : 0
     return {
       x,
       y,
       textX: nearRight ? x - 5 : x + 5,
-      textY: nearTop ? y + 12 : Math.max(12, y - 6),
+      textY: nearTop ? y + 12 + stagger : Math.max(12, y - 6 - stagger),
       text: v.toFixed(2),
       anchor: nearRight ? 'end' : 'start',
       tone: candidate.tone,
+      force: candidate.force,
     }
   })
   const yGuides = [0.33, 0.66].map(ratio => ({ y: pad + (H - pad * 2) * ratio }))
@@ -1364,6 +1370,11 @@ section.compare {
   stroke: var(--sell);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+}
+.tg-label-point.jump .tg-dot {
+  fill: #fff7ed;
+  stroke: #d97706;
+  stroke-width: 1.6;
 }
 .tg-label-point.extreme .tg-dot {
   stroke: var(--brand-deep);
