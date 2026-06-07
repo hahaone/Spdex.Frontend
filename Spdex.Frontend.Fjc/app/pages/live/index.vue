@@ -153,36 +153,71 @@ function formatProjGoals(item: MatchListItem): string {
 // 「预期总进球」折叠（独立于 TOP10 大单展开）+ 走势序列懒加载
 const xgExpandedEventIds = ref<Set<number>>(new Set())
 const xgReplayByEventId = ref<Map<number, LiveXgReplay>>(new Map())
+const xgReplayRefreshingEventIds = ref<Set<number>>(new Set())
+const xgReplayRenderVersionByEventId = ref<Map<number, number>>(new Map())
 function isXgExpanded(eventId: number): boolean {
   return xgExpandedEventIds.value.has(eventId)
 }
 async function loadXgReplay(eventId: number) {
   if (!import.meta.client) return
+  const refreshing = new Set(xgReplayRefreshingEventIds.value)
+  refreshing.add(eventId)
+  xgReplayRefreshingEventIds.value = refreshing
   try {
     const headers: Record<string, string> = {}
     if (xgToken.value) headers.Authorization = `Bearer ${xgToken.value}`
-    const res = await $fetch<ApiResponse<LiveXgReplay>>(`/api/live/xg/${eventId}/replay`, { headers })
+    const res = await $fetch<ApiResponse<LiveXgReplay>>(`/api/live/xg/${eventId}/replay`, {
+      headers,
+      query: { t: Date.now() },
+      cache: 'no-store',
+    })
     if (res.code === 0 && res.data) {
       const map = new Map(xgReplayByEventId.value)
       map.set(eventId, res.data)
       xgReplayByEventId.value = map
+      bumpXgReplayRenderVersion(eventId)
     }
   }
   catch { /* 忽略 */ }
+  finally {
+    const nextRefreshing = new Set(xgReplayRefreshingEventIds.value)
+    nextRefreshing.delete(eventId)
+    xgReplayRefreshingEventIds.value = nextRefreshing
+  }
+}
+function bumpXgReplayRenderVersion(eventId: number) {
+  const next = new Map(xgReplayRenderVersionByEventId.value)
+  next.set(eventId, (next.get(eventId) ?? 0) + 1)
+  xgReplayRenderVersionByEventId.value = next
+}
+function xgReplayRenderVersion(eventId: number): number {
+  return xgReplayRenderVersionByEventId.value.get(eventId) ?? 0
+}
+function isXgReplayRefreshing(eventId: number): boolean {
+  return xgReplayRefreshingEventIds.value.has(eventId)
+}
+async function refreshExpandedXgReplays() {
+  const eventIds = [...xgExpandedEventIds.value]
+  if (eventIds.length === 0) return
+  await Promise.all(eventIds.map(eventId => loadXgReplay(eventId)))
 }
 async function toggleXgExpand(eventId: number) {
   const next = new Set(xgExpandedEventIds.value)
   if (next.has(eventId)) {
     next.delete(eventId)
+    xgExpandedEventIds.value = next
+    return
   }
-  else {
-    next.add(eventId)
-    if (!xgReplayByEventId.value.has(eventId)) await loadXgReplay(eventId)
-  }
+  next.add(eventId)
   xgExpandedEventIds.value = next
+  await loadXgReplay(eventId)
 }
 
 const TG_SPARK_MARK_DIFF_THRESHOLD = 0.9
+
+function formatTgSparkValue(value: number): string {
+  return value.toFixed(2)
+}
 
 // 预期总进球走势 sparkline（projectedTotalGoals + 时间轴 guide + 断点跳过）
 function tgSpark(eventId: number) {
@@ -229,7 +264,7 @@ function tgSpark(eventId: number) {
       y,
       textX: nearRight ? x - 4 : x + 4,
       textY: Math.max(10, y - 6),
-      text: v.toFixed(2),
+      text: formatTgSparkValue(v),
       anchor: nearRight ? 'end' : 'start',
     }
   })
@@ -241,7 +276,7 @@ function tgSpark(eventId: number) {
       const nearRight = x > W - 28
       return { x, label: g.label, labelX: nearRight ? x - 3 : x + 3, labelY: H - 3, anchor: nearRight ? 'end' : 'start' }
     })
-  return { path, w: W, h: H, min: min.toFixed(2), max: max.toFixed(2), guides, labels, lastX, lastY }
+  return { path, w: W, h: H, min: formatTgSparkValue(min), max: formatTgSparkValue(max), guides, labels, lastX, lastY }
 }
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
@@ -360,6 +395,8 @@ async function refreshAll(options?: RefreshOptions) {
   try {
     await manualRefresh(refreshOptions)
     await nextTick()
+    await liveXg.refresh()
+    await refreshExpandedXgReplays()
     await liveTrades.refresh(refreshOptions)
   }
   finally {
@@ -832,10 +869,12 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                   <div class="tg-chart">
                     <div class="tg-chart-head">
                       <span class="tg-title">预期总进球走势</span>
-                      <span v-if="spark" class="tg-range num">{{ spark.min }} ~ {{ spark.max }}</span>
+                      <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
+                      <span v-else-if="spark" class="tg-range num">{{ spark.min }} ~ {{ spark.max }}</span>
                     </div>
                     <svg
                       v-if="spark"
+                      :key="`tg-${item.match.eventId}-${xgReplayRenderVersion(item.match.eventId)}`"
                       class="tg-svg"
                       :viewBox="`0 0 ${spark.w} ${spark.h}`"
                       preserveAspectRatio="none"
@@ -851,7 +890,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       </g>
                       <circle :cx="spark.lastX" :cy="spark.lastY" r="3" class="tg-dot" />
                     </svg>
-                    <div v-else class="tg-empty">暂无预期总进球走势（数据积累中或非足球）</div>
+                    <div v-else class="tg-empty">{{ isXgReplayRefreshing(item.match.eventId) ? '走势刷新中...' : '暂无预期总进球走势（数据积累中或非足球）' }}</div>
                   </div>
                 </template>
               </td>
@@ -1131,6 +1170,12 @@ th.col-tg {
 .tg-range {
   font-size: 12px;
   color: #6b7a72;
+}
+
+.tg-refreshing {
+  font-size: 12px;
+  color: #7b8a82;
+  font-weight: 700;
 }
 
 .tg-svg {
