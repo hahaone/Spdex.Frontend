@@ -130,8 +130,6 @@ onBeforeUnmount(() => {
         <button type="button" class="tab-btn" :class="{ active: status === 'upcoming' }" @click="emit('update:status', 'upcoming')">未开赛</button>
         <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'lottery' }" @click="emit('update:lottery', 'lottery')">胜负彩赛事</button>
         <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'jc' }" @click="emit('update:lottery', 'jc')">竞彩赛事</button>
-        <button type="button" class="tab-btn muted-tab">简洁版</button>
-        <button type="button" class="tab-btn muted-tab">数据回查</button>
       </div>
 
       <div v-if="isMetricFiltered" class="metric-actions">
@@ -140,64 +138,66 @@ onBeforeUnmount(() => {
       <span v-else class="toolbar-count num">{{ count }} 场</span>
     </div>
 
-    <div v-if="!isMetricFiltered" class="toolbar-row filters">
-      <label class="classic-field">
-        <span>日期</span>
-        <select :value="daySeg || 'custom'" :disabled="backcheckLocked" @change="updateDay(($event.target as HTMLSelectElement).value)">
-          <option v-for="option in dayOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          <option value="custom">自选</option>
-        </select>
-      </label>
+    <div class="toolbar-row controls">
+      <template v-if="!isMetricFiltered">
+        <label class="classic-field">
+          <span>日期</span>
+          <select :value="daySeg || 'custom'" :disabled="backcheckLocked" @change="updateDay(($event.target as HTMLSelectElement).value)">
+            <option v-for="option in dayOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            <option value="custom">自选</option>
+          </select>
+        </label>
 
-      <label class="classic-field">
-        <span>回查</span>
-        <input
-          type="date"
-          :value="customDate"
-          :min="archiveMinDate"
-          :disabled="backcheckLocked"
-          @input="emit('update:customDate', ($event.target as HTMLInputElement).value)"
-        >
-      </label>
+        <label class="classic-field">
+          <span>回查</span>
+          <input
+            type="date"
+            :value="customDate"
+            :min="archiveMinDate"
+            :disabled="backcheckLocked"
+            @input="emit('update:customDate', ($event.target as HTMLInputElement).value)"
+          >
+        </label>
 
-      <label v-if="showLotteryFilters" class="classic-field">
-        <span>状态</span>
-        <select :value="status" @change="emit('update:status', ($event.target as HTMLSelectElement).value)">
-          <option v-for="option in statusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-      </label>
+        <label v-if="showLotteryFilters" class="classic-field">
+          <span>状态</span>
+          <select :value="status" @change="emit('update:status', ($event.target as HTMLSelectElement).value)">
+            <option v-for="option in statusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
 
-      <label class="classic-field">
-        <span>赛事</span>
-        <select :value="lottery" @change="emit('update:lottery', ($event.target as HTMLSelectElement).value)">
-          <option v-for="option in lotteryOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-      </label>
+        <label class="classic-field">
+          <span>赛事</span>
+          <select :value="lottery" @change="emit('update:lottery', ($event.target as HTMLSelectElement).value)">
+            <option v-for="option in lotteryOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
 
-      <button type="button" class="classic-btn icon" :disabled="pending" aria-label="刷新" @click="emit('refresh')">
-        <RefreshCw :size="14" :class="{ spinning: pending }" />
-        <span>刷新</span>
-      </button>
-    </div>
+        <button type="button" class="classic-btn icon" :disabled="pending" aria-label="刷新" @click="emit('refresh')">
+          <RefreshCw :size="14" :class="{ spinning: pending }" />
+          <span>刷新</span>
+        </button>
+      </template>
 
-    <div class="toolbar-row tools">
-      <button type="button" class="classic-btn" @click="emit('collapseAll')">收起所有</button>
-      <button type="button" class="classic-btn" @click="emit('expandAll')">展开所有</button>
-      <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('pinSelected')">置前</button>
-      <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('retainSelected')">保留</button>
-      <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('deleteSelected')">删除</button>
-      <button type="button" class="classic-btn" @click="emit('restore')">还原</button>
+      <div class="tools-group">
+        <button type="button" class="classic-btn" @click="emit('collapseAll')">收起所有</button>
+        <button type="button" class="classic-btn" @click="emit('expandAll')">展开所有</button>
+        <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('pinSelected')">置前</button>
+        <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('retainSelected')">保留</button>
+        <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('deleteSelected')">删除</button>
+        <button type="button" class="classic-btn" @click="emit('restore')">还原</button>
 
-      <label class="classic-field sort">
-        <span>排序</span>
-        <select :value="sortMode" @change="emit('update:sortMode', ($event.target as HTMLSelectElement).value)">
-          <option value="league">按赛事排序</option>
-          <option value="time">按时间排序</option>
-          <option value="amount">按成交量排序</option>
-        </select>
-      </label>
+        <label class="classic-field sort">
+          <span>排序</span>
+          <select :value="sortMode" @change="emit('update:sortMode', ($event.target as HTMLSelectElement).value)">
+            <option value="league">按赛事排序</option>
+            <option value="time">按时间排序</option>
+            <option value="amount">按成交量排序</option>
+          </select>
+        </label>
 
-      <span v-if="selectedCount" class="selected-count num">已选 {{ selectedCount }}</span>
+        <span v-if="selectedCount" class="selected-count num">已选 {{ selectedCount }}</span>
+      </div>
     </div>
 
     <Teleport to="body">
@@ -293,6 +293,19 @@ onBeforeUnmount(() => {
 }
 
 .classic-field.sort {
+  margin-left: 2px;
+}
+
+/* 第二行:筛选(左) + 工具(右)合并一行,优化纵向空间 */
+.toolbar-row.controls {
+  gap: 7px 8px;
+}
+
+.tools-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
 }
 
@@ -320,14 +333,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  width: 160px;
-  height: 42px;
+  width: 128px;
+  height: 38px;
   border: 0;
   border-right: 1px solid var(--classic-border);
   border-radius: 0;
   background: var(--classic-purple-soft);
   color: var(--classic-text);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 840;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
@@ -493,14 +506,14 @@ onBeforeUnmount(() => {
 }
 
 .tab-btn {
-  min-width: 116px;
-  height: 42px;
-  padding: 0 18px;
+  min-width: 100px;
+  height: 38px;
+  padding: 0 14px;
   border: 0;
   border-right: 1px solid var(--classic-border);
   background: transparent;
   color: var(--classic-text);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 840;
 }
 
@@ -516,10 +529,6 @@ onBeforeUnmount(() => {
   background: var(--classic-panel);
   color: var(--classic-link);
   box-shadow: inset 0 -3px 0 var(--classic-green);
-}
-
-.tab-btn.muted-tab {
-  color: var(--classic-text);
 }
 
 .classic-field.league select {
