@@ -15,6 +15,8 @@ const props = defineProps<{
   baseline?: number | null
   /** 柱状模式：序列值用柱子呈现（成交变化）。 */
   barMode?: boolean
+  /** 多价位线：同时画 主/平/客 三条价位线（成交「所有」），而非单条。 */
+  multiPrice?: boolean
 }>()
 
 // viewBox 宽度 = 容器实测宽度 → 1px viewBox = 1px 屏幕。
@@ -83,37 +85,48 @@ const maxValue = computed(() => {
   const span = hi - lo || Math.abs(hi) || 1
   return hi + span * 0.12
 })
-const maxVolume = computed(() => Math.max(...props.points.map(p => p.volume), 1))
 const chartH = computed(() => height.value - pad.top - pad.bottom)
 
-// ── 价位叠加（成交变化柱图）：跟随 only 取单选项价位，画在上方带，柱压到下方带 ──
-const PRICE_BAND = 0.4 // 价位带占图高的上方比例
-function priceVal(p: ChartPoint): number {
-  const f = props.only && fields.value.includes(props.only) ? props.only : 'home'
+// ── 价位叠加（成交柱图）：柱用左轴（成交量），价位线用右轴，全高单图层双轴叠加（不再上下分带）──
+function priceValOf(p: ChartPoint, f: Field): number {
   const v = f === 'home' ? p.priceHome : f === 'draw' ? p.priceDraw : p.priceAway
   return v ?? 0
 }
+function priceVal(p: ChartPoint): number {
+  const f = props.only && fields.value.includes(props.only) ? props.only : 'home'
+  return priceValOf(p, f)
+}
 const priceField = computed<Field>(() => (props.only && fields.value.includes(props.only)) ? props.only : 'home')
-const showPrice = computed(() => !!props.barMode && props.points.some(p => priceVal(p) > 0))
-const priceScaleVals = computed(() => props.points.map(priceVal).filter(v => v > 0))
-const priceMin = computed(() => (priceScaleVals.value.length ? Math.min(...priceScaleVals.value) : 0))
-const priceMax = computed(() => (priceScaleVals.value.length ? Math.max(...priceScaleVals.value) : 1))
+const showPrice = computed(() => props.multiPrice
+  ? props.points.some(p => fields.value.some(f => priceValOf(p, f) > 0))
+  : (!!props.barMode && props.points.some(p => priceVal(p) > 0)))
+const priceScaleVals = computed(() => props.multiPrice
+  ? props.points.flatMap(p => fields.value.map(f => priceValOf(p, f))).filter(v => v > 0)
+  : props.points.map(priceVal).filter(v => v > 0))
+// 价位标尺上下各留 12% 余量,避免最小值(如低赔的主价位)贴底、最大值贴顶,折线位置更舒展。
+const priceBounds = computed(() => {
+  const vals = priceScaleVals.value
+  if (!vals.length) return { min: 0, max: 1 }
+  const lo = Math.min(...vals)
+  const hi = Math.max(...vals)
+  const span = hi - lo || Math.abs(hi) || 1
+  return { min: lo - span * 0.12, max: hi + span * 0.12 }
+})
+const priceMin = computed(() => priceBounds.value.min)
+const priceMax = computed(() => priceBounds.value.max)
 const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 
 const padRight = computed(() => (showPrice.value ? 30 : pad.right))
 const chartW = computed(() => width.value - pad.left - padRight.value)
 
-// 柱顶可达的最高 y：叠加价位线时压到下方带，给上方价位带让位
-const barCeilY = computed(() => (showPrice.value ? pad.top + chartH.value * (PRICE_BAND + 0.06) : pad.top))
+// 柱子（成交量，左轴）始终用全高;价位线（右轴）单图层全高叠加,与柱重叠。
 function barTopY(value: number): number {
   const span = maxValue.value - minValue.value || 1
   const frac = Math.max(0, Math.min(1, (value - minValue.value) / span))
-  const baseY = pad.top + chartH.value
-  return baseY - frac * (baseY - barCeilY.value)
+  return pad.top + (1 - frac) * chartH.value
 }
 function priceYAt(p: number): number {
-  const bandH = chartH.value * PRICE_BAND
-  return pad.top + bandH * (1 - (p - priceMin.value) / priceRange.value)
+  return pad.top + chartH.value * (1 - (p - priceMin.value) / priceRange.value)
 }
 const pricePath = computed(() => {
   let d = ''
@@ -128,10 +141,21 @@ const pricePath = computed(() => {
 })
 const priceDots = computed(() =>
   props.points.map((point, index) => ({ index, v: priceVal(point) })).filter(d => d.v > 0))
+function pricePathFor(field: Field): string {
+  let d = ''
+  let pen = false
+  props.points.forEach((point, index) => {
+    const v = priceValOf(point, field)
+    if (!(v > 0)) { pen = false; return }
+    d += `${pen ? 'L' : 'M'} ${xAt(index).toFixed(2)} ${priceYAt(v).toFixed(2)} `
+    pen = true
+  })
+  return d.trim()
+}
 const priceTicks = computed(() => {
   if (!showPrice.value) return []
   return [0, 0.5, 1].map(f => ({
-    y: pad.top + chartH.value * PRICE_BAND * f,
+    y: pad.top + chartH.value * f,
     label: (priceMax.value - priceRange.value * f).toFixed(2),
   }))
 })
@@ -163,10 +187,6 @@ function visibleDots(field: Field) {
   return props.points
     .map((point, index) => ({ index, value: point[field] }))
     .filter(d => !isMissing(d.value) && Number.isFinite(d.value))
-}
-
-function barHeight(volume: number): number {
-  return Math.max(2, (volume / maxVolume.value) * 34)
 }
 
 const baselineY = computed(() => typeof props.baseline === 'number' ? yAt(props.baseline) : null)
@@ -252,6 +272,7 @@ const tooltip = computed(() => {
     anchor,
     leftPct: Math.max(0, Math.min(100, frac * 100)),
     rows: activeFields.value.map(f => ({ key: f, label: labels.value[f] ?? '', value: h.p[f], missing: isMissing(h.p[f]) })),
+    prices: fields.value.map(f => ({ key: f, label: labels.value[f] ?? '', v: priceValOf(h.p, f) })),
   }
 })
 
@@ -297,17 +318,6 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
 
       <line :x1="pad.left" :x2="width - padRight" :y1="height - pad.bottom" :y2="height - pad.bottom" class="axis" />
 
-      <g v-for="(point, index) in points" :key="`${point.ts || point.time}-${index}`">
-        <rect
-          class="volume-bar"
-          :x="xAt(index) - 5"
-          :y="height - pad.bottom - barHeight(point.volume)"
-          width="10"
-          :height="barHeight(point.volume)"
-          rx="1"
-        />
-      </g>
-
       <!-- 基线（模拟盈亏=60 / 冷热=0）+ 数值标记 -->
       <g v-if="baselineY != null">
         <line class="baseline" :x1="pad.left" :x2="width - padRight" :y1="baselineY" :y2="baselineY" />
@@ -324,8 +334,13 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
 
       <!-- 成交变化叠加价位线（上方带，跟随 only 单选项；右轴标价位）-->
       <template v-if="showPrice">
-        <path class="price-line" :d="pricePath" />
-        <circle v-for="(d, i) in priceDots" :key="`pd-${i}`" class="price-dot" :cx="xAt(d.index)" :cy="priceYAt(d.v)" r="1.8" />
+        <template v-if="multiPrice">
+          <path v-for="f in fields" :key="`pl-${f}`" :class="['price-line', f]" :d="pricePathFor(f)" />
+        </template>
+        <template v-else>
+          <path class="price-line" :d="pricePath" />
+          <circle v-for="(d, i) in priceDots" :key="`pd-${i}`" class="price-dot" :cx="xAt(d.index)" :cy="priceYAt(d.v)" r="1.8" />
+        </template>
         <text
           v-for="(t, i) in priceTicks"
           :key="`pt-${i}`"
@@ -379,18 +394,33 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         <span class="tl">成交量</span>
         <b class="tv">{{ fmtAmount(tooltip.volume) }}</b>
       </div>
-      <div v-if="showPrice" class="tip-row">
-        <i class="price" />
-        <span class="tl">{{ labels[priceField] }}价位</span>
-        <b class="tv">{{ tooltip.price > 0 ? tooltip.price.toFixed(2) : '-' }}</b>
-      </div>
+      <template v-if="showPrice">
+        <template v-if="multiPrice">
+          <div v-for="pr in tooltip.prices" :key="`tp-${pr.key}`" class="tip-row">
+            <i :class="['price', pr.key]" />
+            <span class="tl">{{ pr.label }}价位</span>
+            <b class="tv">{{ pr.v > 0 ? pr.v.toFixed(2) : '-' }}</b>
+          </div>
+        </template>
+        <div v-else class="tip-row">
+          <i class="price" />
+          <span class="tl">{{ labels[priceField] }}价位</span>
+          <b class="tv">{{ tooltip.price > 0 ? tooltip.price.toFixed(2) : '-' }}</b>
+        </div>
+      </template>
     </div>
     <div class="legend">
       <span><i class="home" />{{ labels.home }}</span>
       <span v-if="hasDraw"><i class="draw" />{{ labels.draw }}</span>
       <span><i class="away" />{{ labels.away }}</span>
-      <span><i class="volume" />成交量</span>
-      <span v-if="showPrice"><i class="price" />{{ labels[priceField] }}价位</span>
+      <template v-if="showPrice">
+        <template v-if="multiPrice">
+          <span><i class="price home" />{{ labels.home }}价位</span>
+          <span v-if="hasDraw"><i class="price draw" />{{ labels.draw }}价位</span>
+          <span><i class="price away" />{{ labels.away }}价位</span>
+        </template>
+        <span v-else><i class="price" />{{ labels[priceField] }}价位</span>
+      </template>
     </div>
   </div>
 </template>
@@ -529,10 +559,6 @@ svg {
   letter-spacing: 0;
 }
 
-.volume-bar {
-  fill: rgba(124, 92, 250, 0.16);
-}
-
 .baseline {
   stroke: var(--down);
   stroke-width: 1.2;
@@ -585,6 +611,17 @@ svg {
   background: #c79320;
 }
 
+/* 成交「所有」三条价位线:按方向上色(主/平/客),与柱同色系 */
+.price-line.home { stroke: var(--buy); }
+.price-line.draw { stroke: var(--sell); }
+.price-line.away { stroke: var(--brand); }
+.tip-row i.price.home,
+.legend .price.home { background: var(--buy); }
+.tip-row i.price.draw,
+.legend .price.draw { background: var(--sell); }
+.tip-row i.price.away,
+.legend .price.away { background: var(--brand); }
+
 .line {
   fill: none;
   stroke-width: 2.2;
@@ -615,12 +652,15 @@ svg {
 
 .legend {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 6px 2px 0;
+  justify-content: center;
+  gap: 2px 12px;
+  padding: 2px 2px 0;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 720;
+  line-height: 1.3;
 }
 
 .legend span {
@@ -635,9 +675,5 @@ svg {
   height: 8px;
   border-radius: 2px;
   background: currentColor;
-}
-
-.legend .volume {
-  background: rgba(124, 92, 250, 0.24);
 }
 </style>

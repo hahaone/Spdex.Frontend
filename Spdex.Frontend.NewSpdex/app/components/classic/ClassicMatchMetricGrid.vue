@@ -35,11 +35,10 @@ function odds(v: number | undefined): string { return v != null && v > 0 ? v.toF
 function num(v: number | undefined): string { return v != null && v !== 0 ? Math.round(v).toLocaleString('en-US') : (v === 0 ? '0' : '') }
 function intList(v: number | undefined): string { return v != null && v > 0 ? Math.round(v).toLocaleString('en-US') : '' }
 function signed(v: number | undefined): string { if (v == null) return ''; const r = Math.round(v); return r > 0 ? `+${r}` : String(r) }
-// 挂牌指数(可正负,加 %)、亚洲指数(1 位小数 %)、比分指数/进球均衡(2 位)、媒体指数(整数)。0 视作无数据→空。
+// 挂牌指数(可正负,加 %)、亚洲指数(1 位小数 %)、比分指数/进球均衡(2 位)。0 视作无数据→空。
 function pct2(v: number | undefined): string { return v != null && v !== 0 ? `${v.toFixed(2)}%` : '' }
 function pct1(v: number | undefined): string { return v != null && v !== 0 ? `${v.toFixed(1)}%` : '' }
 function ratio2(v: number | undefined): string { return v != null && v > 0 ? v.toFixed(2) : '' }
-function mediaVal(v: number | undefined): string { return v != null && v > 0 ? String(Math.round(v)) : '' }
 // 旧站着色:挂牌指数 正蓝/负绿;亚洲指数 正红/负紫。
 function guaClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-blue' : 'c-green') }
 function asianClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-red' : 'c-purple') }
@@ -79,7 +78,7 @@ const columns: Col[] = [
   { key: 'euroAvg', label: '欧洲平均', tone: 'deal', get: i => odds(std(i)?.euroAvg) || odds(props.match.euro?.[i]) },
   { key: 'kellyVar', label: '凯利方差', tone: 'deal', get: i => num(std(i)?.variance) || intList(props.match.kellyVar?.[i]) },
   // 进球(大小)
-  { key: 'goalTurnover', label: '进球成交', tone: 'goal', get: i => i === 1 ? (props.match.goalsLine || '') : (goal(i)?.turnover || props.match.goalsTurnovers?.[i === 0 ? 0 : 1] || '') },
+  { key: 'goalTurnover', label: '进球成交', tone: 'goal', get: i => i === 1 ? '> 2.5 >' : (goal(i)?.turnover || props.match.goalsTurnovers?.[i === 0 ? 0 : 1] || '') },
   { key: 'goalIndex', label: '进球指数', tone: 'goal', get: i => i === 1 ? '' : (num(goal(i)?.bfIndex) || intList(props.match.goalsIndex?.[i === 0 ? 0 : 1])) },
   { key: 'goalRatio', label: '进球比例', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.ratio || '') },
   { key: 'goalPrice', label: '进球价位', tone: 'goal', get: i => i === 1 ? (props.match.goalsLine || '') : (goal(i)?.price || odds(props.match.goalsOdds?.[i === 0 ? 0 : 1])) },
@@ -94,7 +93,6 @@ const columns: Col[] = [
   { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct1(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : '') },
   { key: 'csIndex', label: '比分指数', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.csIndex) : '') },
   { key: 'goalBalance', label: '进球均衡', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.goalBalance) : '') },
-  { key: 'media', label: '媒体指数', tone: 'extra', get: i => (i === 0 ? mediaVal(props.match.mediaIndex?.[0]) : i === 2 ? mediaVal(props.match.mediaIndex?.[1]) : '') },
 ]
 
 interface Cell { key: string, tone: Tone, value: string, strong: boolean, cls: string }

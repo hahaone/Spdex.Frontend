@@ -5,7 +5,7 @@ import type { RouteLocationRaw } from 'vue-router'
 /**
  * 经典工作台内嵌走势区(还原旧站 dcon):
  * - 默认「重大成交提示」(标准盘 + 大小球大单列表,来自 useBigTrades);
- * - 点右侧「走势图表」指标矩阵 → 切到对应走势图(useChartSeries/useTradeFlow,与详情页同一真实通道);
+ * - 点右侧「走势图表」指标矩阵 → 切到对应走势图(useChartSeries,与详情页同一真实通道):成交系=柱+价位线叠加 / 比例=堆叠面积 / 其余=折线;
  * - 「明细图表」走真实详情路由 / 就地切图。
  * 仅在赛事块滚入视口后由父组件 v-if 挂载,此时才发起这些请求。
  */
@@ -24,10 +24,17 @@ const view = ref<'tips' | 'chart'>('chart')
 const market = ref('standard')
 const metric = ref('tradeflow')
 const timeRange = ref('6h')
-const seriesOnly = ref<'home' | 'draw' | 'away' | 'all' | null>('home')
+const seriesOnly = ref<'home' | 'draw' | 'away' | 'all' | null>('all')
 
+// 渲染类别:traded(成交系=成交柱 + 价位线全高叠加) / ratio(比例=百分比堆叠面积) / line(其余=纯折线)
+const chartKind = computed<'traded' | 'ratio' | 'line'>(() =>
+  metric.value === 'tradeflow' ? 'traded' : metric.value === 'ratio' ? 'ratio' : 'line')
 const graphType = computed(() => `${market.value}.${metric.value}`)
-const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventIdRef, graphType)
+// 成交系(成交/进球成交/让分成交)统一走后端 .traded(全方向成交柱 + 主/平/客价位),柱线在同区双轴全高叠加。
+const chartType = computed(() => (chartKind.value === 'traded' ? `${market.value}.traded` : graphType.value))
+const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType } = useChartSeries(eventIdRef, chartType)
+// 已加载数据是否对应当前请求类型;切指标时旧数据 type 不匹配 → 先显「加载中」,不渲染陈旧序列。
+const chartReady = computed(() => loadedType.value === chartType.value)
 
 const RANGE_HOURS: Record<string, number> = { '3h': 3, '6h': 6, '12h': 12, '24h': 24 }
 const timeOptions = [
@@ -53,17 +60,18 @@ const baseline = computed<number | null>(() => {
   if (metric.value === 'hotcold') return 0
   return null
 })
-const barMode = computed(() => metric.value === 'traded')
+// 成交系=成交柱(全方向);比例=堆叠面积、其余=折线,均无柱。
+const barMode = computed(() => chartKind.value === 'traded')
+// 成交系选「所有」→ 主/平/客三条价位线;单方向→单条价位线。
+const multiPrice = computed(() => chartKind.value === 'traded' && seriesOnly.value === 'all')
+// 仅成交系有方向下拉(所有/主/平/客);比例与折线默认全部方向同呈现。
+const hasDirection = computed(() => chartKind.value === 'traded')
+// StaticTrendChart 的 only:成交系单方向取该方向,「所有」=null(全方向柱+多价位);非成交系恒 null(全部序列)。
+const trendOnly = computed<'home' | 'draw' | 'away' | null>(() =>
+  (chartKind.value === 'traded' && seriesOnly.value && seriesOnly.value !== 'all') ? seriesOnly.value : null)
 
-const isTradeFlow = computed(() => metric.value === 'tradeflow')
-const tradeSelection = computed<string>(() => seriesOnly.value ?? 'home')
-// 折线图(非 tradeflow)的方向：'all' 视作全部(null=三线)。非 tradeflow 时 seriesOnly 已被强制为 null。
-const trendOnly = computed<'home' | 'draw' | 'away' | null>(() => (seriesOnly.value === 'all' ? null : seriesOnly.value))
-const tfGranularity = computed(() => (timeRange.value === '3h' ? '5m' : timeRange.value === '6h' || timeRange.value === '12h' ? '15m' : '30m'))
-const { data: tradeFlow, status: tfStatus, pending: tfPending } = useTradeFlow(eventIdRef, market, tradeSelection, tfGranularity)
-
-// 仅「成交 / 让分成交」(tradeflow) 有方向选择;其余指标默认全部方向(主/平/客三条线同呈现),不给方向下拉。
-watch(isTradeFlow, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'home') : null }, { immediate: true })
+// 仅成交系保留方向(默认「所有」=柱线全高叠加);其余指标 seriesOnly 置 null。
+watch(hasDirection, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'all') : null }, { immediate: true })
 watch(seriesLabels, (l) => { if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = 'home' })
 
 const seriesOptions = computed(() => {
@@ -82,13 +90,8 @@ const statusLabel = computed(() => {
   if (status.value === 'pending') return '此场赛事暂无该市场数据'
   return null
 })
-const tfStatusLabel = computed(() => {
-  if (tfStatus.value === 'no-access') return '成交明细为专家版及以上专属'
-  if (tfStatus.value === 'pending') return '此场赛事暂无成交明细数据'
-  return null
-})
 const chartTitle = computed(() => {
-  if (isTradeFlow.value) return market.value === 'handicap' ? '让分成交' : '成交'
+  if (chartKind.value === 'traded') return market.value === 'handicap' ? '让分成交' : market.value === 'goals' ? '进球成交' : '成交'
   return metricLabel.value || '走势'
 })
 
@@ -120,7 +123,7 @@ const metricButtons: MetricBtn[] = [
   { label: '让分比例', market: 'handicap', metric: 'ratio' },
   { label: '让分价位', market: 'handicap', metric: 'odds' },
   { label: '让分挂牌', market: 'handicap', metric: 'exchange' },
-  { label: '进球均衡', market: '', metric: '', disabled: true },
+  { label: '进球均衡', market: 'goals', metric: 'balance' },
   { label: '亚洲指数', market: 'handicap', metric: 'bfindex' },
   { label: '比分指数', market: 'cs', metric: 'bfindex' },
 ]
@@ -134,14 +137,16 @@ function pickMetric(b: MetricBtn) {
 function isActive(b: MetricBtn) {
   return view.value === 'chart' && !b.disabled && market.value === b.market && metric.value === b.metric
 }
-function showChart(mk: string, mt: string) {
-  market.value = mk
-  metric.value = mt
-  view.value = 'chart'
-}
 
-const tradesTo = computed(() => `/football/${props.eventId}/trades`)
-const chartTo = computed(() => `/football/${props.eventId}/chart`)
+// 经典版「明细图表」(还原旧站):明细(标盘 Normal)/进球明细/比分明细(CorrectScore 矩阵页)。
+const detailFullTo = computed(() => `/football/${props.eventId}/detail`)
+const goalsDetailTo = computed(() => `/football/${props.eventId}/detail?market=goals`)
+// 比分明细指向独立的正确比分矩阵页(旧 /detail?market=cs 仍保留,未来可用)。
+const csScoreTo = computed(() => `/football/${props.eventId}/correct-score`)
+// 欧洲指数独立页(各公司即时/初盘赔率 + 凯利 + 返还率 + 凯利加权)。
+const euroTo = computed(() => `/football/${props.eventId}/euro-odds`)
+// 标盘/进球/正确比分 → BetFair 盘口阶梯页(选项下拉 + 已成交汇总 + 价格成交量走势 + 价位/买/卖/成交)。
+function ladderTo(mk: string) { return `/football/${props.eventId}/ladder?market=${mk}` }
 </script>
 
 <template>
@@ -188,7 +193,7 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
           <select v-model="timeRange" class="cd-select" aria-label="时间段">
             <option v-for="o in timeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
-          <select v-if="isTradeFlow" v-model="seriesOnly" class="cd-select" aria-label="方向筛选">
+          <select v-if="hasDirection" v-model="seriesOnly" class="cd-select" aria-label="方向筛选">
             <option v-for="o in seriesOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
           <button type="button" class="cd-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
@@ -198,25 +203,29 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
         </div>
 
         <div class="chart-canvas">
-          <template v-if="isTradeFlow">
-            <div v-if="tfStatusLabel" class="chart-state">{{ tfStatusLabel }}</div>
-            <LazyTradeFlowChart v-else-if="tradeFlow && tradeFlow.buckets.length" :result="tradeFlow" :height="200" />
-            <div v-else class="chart-state">{{ tfPending ? '加载中…' : '暂无成交明细数据' }}</div>
-          </template>
-          <template v-else>
-            <div v-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
+          <div v-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
+          <div v-else-if="!chartReady" class="chart-state">加载中…</div>
+          <template v-else-if="displayPoints.length">
+            <!-- 比例 → 百分比堆叠面积图;成交系/折线 → StaticTrendChart(成交=柱+价位线全高叠加,其余=纯折线) -->
+            <LazyStackedRatioChart
+              v-if="chartKind === 'ratio'"
+              :points="displayPoints"
+              :series-labels="seriesLabels"
+              :height="240"
+            />
             <LazyStaticTrendChart
-              v-else-if="displayPoints.length"
+              v-else
               :points="displayPoints"
               :series-labels="seriesLabels"
               :unit="unit"
               :only="trendOnly"
               :baseline="baseline"
               :bar-mode="barMode"
-              :height="200"
+              :multi-price="multiPrice"
+              :height="240"
             />
-            <div v-else class="chart-state">{{ pending ? '加载中…' : '暂无走势数据' }}</div>
           </template>
+          <div v-else class="chart-state">暂无走势数据</div>
         </div>
       </div>
     </section>
@@ -242,13 +251,13 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
       <div class="panel">
         <h4>明细图表</h4>
         <div class="detail-grid">
-          <NuxtLink :to="detailTo" class="detail-btn grey">完整明细</NuxtLink>
-          <NuxtLink :to="tradesTo" class="detail-btn grey">成交明细</NuxtLink>
-          <NuxtLink :to="chartTo" class="detail-btn blue">独立走势图</NuxtLink>
-          <button type="button" class="detail-btn green" @click="showChart('euro', 'europe')">欧洲指数</button>
-          <button type="button" class="detail-btn blue" @click="showChart('standard', 'tradeflow')">标盘</button>
-          <button type="button" class="detail-btn blue" @click="showChart('goals', 'tradeflow')">进球</button>
-          <button type="button" class="detail-btn blue" @click="showChart('cs', 'bfindex')">正确比分</button>
+          <NuxtLink :to="detailFullTo" class="detail-btn grey">明细</NuxtLink>
+          <NuxtLink :to="goalsDetailTo" class="detail-btn grey">进球明细</NuxtLink>
+          <NuxtLink :to="csScoreTo" class="detail-btn grey">比分明细</NuxtLink>
+          <NuxtLink :to="euroTo" class="detail-btn green">欧洲指数</NuxtLink>
+          <NuxtLink :to="ladderTo('standard')" class="detail-btn blue">标盘</NuxtLink>
+          <NuxtLink :to="ladderTo('goals')" class="detail-btn blue">进球</NuxtLink>
+          <NuxtLink :to="ladderTo('cs')" class="detail-btn blue">正确比分</NuxtLink>
         </div>
       </div>
     </section>
@@ -394,13 +403,13 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
 }
 
 .chart-canvas {
-  min-height: 200px;
+  min-height: 240px;
 }
 
 .chart-state {
   display: grid;
   place-items: center;
-  min-height: 200px;
+  min-height: 240px;
   color: var(--classic-title-muted);
   font-size: 0.78rem;
   font-weight: 720;

@@ -46,6 +46,8 @@ const pinnedIds = ref<Set<number>>(new Set())
 const deletedIds = ref<Set<number>>(new Set())
 const retainedIds = ref<Set<number>>(new Set())
 const sortMode = ref('time')
+// 联赛多选(客户端筛选):空数组 = 全部联赛。由工具栏「赛事选择」面板维护。
+const selectedLeagues = ref<string[]>([])
 
 const selectedCount = computed(() => selectedIds.value.size)
 
@@ -59,11 +61,26 @@ watch(activeIds, (ids) => {
   retainedIds.value = intersectSet(retainedIds.value, ids)
 })
 
+// 「赛事选择」多选面板可选项:取当前窗口比赛去重,带场次计数,按场次降序。
+const leagueChips = computed(() => {
+  const map = new Map<string, { code: string, name: string, count: number }>()
+  for (const m of props.matches) {
+    const code = m.leagueCode || m.leagueName
+    if (!code) continue
+    const cur = map.get(code)
+    if (cur) cur.count++
+    else map.set(code, { code, name: m.leagueName || code, count: 1 })
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+})
+
 const visibleMatches = computed(() => {
   const hasRetained = retainedIds.value.size > 0
+  const leagueSet = selectedLeagues.value.length ? new Set(selectedLeagues.value) : null
   const base = props.matches.filter((match) => {
     if (deletedIds.value.has(match.eventId)) return false
     if (hasRetained && !retainedIds.value.has(match.eventId)) return false
+    if (leagueSet && !leagueSet.has(match.leagueCode || match.leagueName)) return false
     return true
   })
 
@@ -82,13 +99,21 @@ const visibleMatches = computed(() => {
 })
 
 // 旧站式分页:把当前页赛事块数压到 PAGE_SIZE,从而把「视口懒加载详情/图表」的并发也一并压住。
-const PAGE_SIZE = 10
+const PAGE_SIZE = 5
 const page = ref(1)
 const pageCount = computed(() => Math.max(1, Math.ceil(visibleMatches.value.length / PAGE_SIZE)))
 const pagedMatches = computed(() => visibleMatches.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
 const pageList = computed(() => Array.from({ length: pageCount.value }, (_, i) => i + 1))
 watch(pageCount, (n) => { if (page.value > n) page.value = n })
 watch(sortMode, () => { page.value = 1 })
+watch(selectedLeagues, () => { page.value = 1 })
+// 数据切换(改日期/刷新)后,剔除已不在结果集中的联赛选择,避免残留筛选导致空列表(与 selectedIds 收敛口径一致)。
+watch(leagueChips, (chips) => {
+  if (!selectedLeagues.value.length) return
+  const avail = new Set(chips.map(c => c.code))
+  const next = selectedLeagues.value.filter(code => avail.has(code))
+  if (next.length !== selectedLeagues.value.length) selectedLeagues.value = next
+})
 function goPage(p: number) {
   page.value = Math.min(pageCount.value, Math.max(1, p))
   if (import.meta.client) window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -160,6 +185,8 @@ function restore() {
       :status-options="statusOptions"
       :lottery-options="lotteryOptions"
       :league-options="leagueOptions"
+      :league-chips="leagueChips"
+      :selected-leagues="selectedLeagues"
       :backcheck-locked="backcheckLocked"
       :show-lottery-filters="showLotteryFilters !== false"
       :is-metric-filtered="isMetricFiltered"
@@ -169,6 +196,7 @@ function restore() {
       @update:status="emit('update:status', $event)"
       @update:lottery="emit('update:lottery', $event)"
       @update:league="emit('update:league', $event)"
+      @update:selected-leagues="selectedLeagues = $event"
       @update:sort-mode="sortMode = $event"
       @refresh="emit('refresh')"
       @clear-metric="emit('clearMetric')"

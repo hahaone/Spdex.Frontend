@@ -6,6 +6,12 @@ interface Option {
   value: string
 }
 
+interface LeagueChip {
+  code: string
+  name: string
+  count: number
+}
+
 const props = withDefaults(defineProps<{
   count: number
   pending: boolean
@@ -21,6 +27,8 @@ const props = withDefaults(defineProps<{
   statusOptions: Option[]
   lotteryOptions: Option[]
   leagueOptions: Option[]
+  leagueChips?: LeagueChip[]
+  selectedLeagues?: string[]
   backcheckLocked?: boolean
   showLotteryFilters?: boolean
   isMetricFiltered?: boolean
@@ -29,6 +37,8 @@ const props = withDefaults(defineProps<{
   backcheckLocked: false,
   showLotteryFilters: true,
   metricLabel: '',
+  leagueChips: () => [],
+  selectedLeagues: () => [],
 })
 
 const emit = defineEmits<{
@@ -37,6 +47,7 @@ const emit = defineEmits<{
   'update:status': [value: string]
   'update:lottery': [value: string]
   'update:league': [value: string]
+  'update:selectedLeagues': [value: string[]]
   'update:sortMode': [value: string]
   refresh: []
   clearMetric: []
@@ -55,13 +66,66 @@ function updateDay(value: string) {
   if (value === 'custom') return
   emit('update:daySeg', value)
 }
+
+// ===== 赛事选择(联赛多选)弹层 =====
+// 用 Teleport 挂到 body,绕开 .classic-toolbar 的 overflow:hidden 裁剪;固定定位锚定按钮下方。
+const menuOpen = ref(false)
+const menuBtn = ref<HTMLElement | null>(null)
+const menuPos = ref({ top: 0, left: 0 })
+const draft = ref<Set<string>>(new Set())
+
+const selectedLeagueCount = computed(() => props.selectedLeagues?.length ?? 0)
+
+function openMenu() {
+  const el = menuBtn.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  menuPos.value = { top: r.bottom + 4, left: r.left }
+  draft.value = new Set(props.selectedLeagues ?? [])
+  menuOpen.value = true
+}
+function closeMenu() { menuOpen.value = false }
+function toggleMenu() { if (menuOpen.value) closeMenu(); else openMenu() }
+function toggleLeague(code: string) {
+  const next = new Set(draft.value)
+  if (next.has(code)) next.delete(code)
+  else next.add(code)
+  draft.value = next
+}
+function selectAllLeagues() { draft.value = new Set((props.leagueChips ?? []).map(c => c.code)) }
+function clearLeagues() { draft.value = new Set() }
+function applyLeagues() {
+  emit('update:selectedLeagues', [...draft.value])
+  closeMenu()
+}
+
+function onMenuScroll() { closeMenu() }
+function onMenuKey(e: KeyboardEvent) { if (e.key === 'Escape') closeMenu() }
+watch(menuOpen, (open) => {
+  if (!import.meta.client) return
+  if (open) {
+    window.addEventListener('scroll', onMenuScroll, true)
+    window.addEventListener('keydown', onMenuKey)
+  }
+  else {
+    window.removeEventListener('scroll', onMenuScroll, true)
+    window.removeEventListener('keydown', onMenuKey)
+  }
+})
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  window.removeEventListener('scroll', onMenuScroll, true)
+  window.removeEventListener('keydown', onMenuKey)
+})
 </script>
 
 <template>
   <section class="classic-toolbar">
     <div class="toolbar-row main">
       <div class="toolbar-title">
-        <button type="button" class="event-menu">赛事选择⌄</button>
+        <button ref="menuBtn" type="button" class="event-menu" :class="{ active: menuOpen || selectedLeagueCount }" @click="toggleMenu">
+          赛事选择<span v-if="selectedLeagueCount" class="em-badge num">{{ selectedLeagueCount }}</span><span class="em-caret">⌄</span>
+        </button>
         <button type="button" class="tab-btn" :class="{ active: status === 'all' && lottery === 'all' }" @click="emit('update:status', 'all'); emit('update:lottery', 'all')">全部赛事</button>
         <button type="button" class="tab-btn" :class="{ active: status === 'upcoming' }" @click="emit('update:status', 'upcoming')">未开赛</button>
         <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'lottery' }" @click="emit('update:lottery', 'lottery')">胜负彩赛事</button>
@@ -110,13 +174,6 @@ function updateDay(value: string) {
         </select>
       </label>
 
-      <label class="classic-field league">
-        <span>联赛</span>
-        <select :value="league" @change="emit('update:league', ($event.target as HTMLSelectElement).value)">
-          <option v-for="option in leagueOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-      </label>
-
       <button type="button" class="classic-btn icon" :disabled="pending" aria-label="刷新" @click="emit('refresh')">
         <RefreshCw :size="14" :class="{ spinning: pending }" />
         <span>刷新</span>
@@ -142,6 +199,33 @@ function updateDay(value: string) {
 
       <span v-if="selectedCount" class="selected-count num">已选 {{ selectedCount }}</span>
     </div>
+
+    <Teleport to="body">
+      <template v-if="menuOpen">
+        <div class="league-menu-backdrop" @click="closeMenu" />
+        <div class="league-menu classic-desktop" :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }">
+          <div class="league-menu-head">
+            <span>赛事选择 · 联赛</span>
+            <div class="lm-quick">
+              <button type="button" @click="selectAllLeagues">全选</button>
+              <button type="button" @click="clearLeagues">清空</button>
+            </div>
+          </div>
+          <div class="league-menu-body">
+            <label v-for="chip in leagueChips" :key="chip.code" class="lm-item">
+              <input type="checkbox" :checked="draft.has(chip.code)" @change="toggleLeague(chip.code)">
+              <span class="lm-name">{{ chip.name }}</span>
+              <span class="lm-count num">{{ chip.count }}</span>
+            </label>
+            <div v-if="!leagueChips.length" class="lm-empty">暂无联赛</div>
+          </div>
+          <div class="league-menu-foot">
+            <button type="button" class="lm-cancel" @click="closeMenu">关闭</button>
+            <button type="button" class="lm-ok" @click="applyLeagues">确定（{{ draft.size }}）</button>
+          </div>
+        </div>
+      </template>
+    </Teleport>
   </section>
 </template>
 
@@ -232,6 +316,10 @@ function updateDay(value: string) {
 }
 
 .event-menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   width: 160px;
   height: 42px;
   border: 0;
@@ -241,6 +329,167 @@ function updateDay(value: string) {
   color: var(--classic-text);
   font-size: 0.9rem;
   font-weight: 840;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.event-menu:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.event-menu.active {
+  background: var(--classic-panel);
+  color: var(--classic-link);
+}
+
+.em-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--classic-green);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 820;
+}
+
+.em-caret {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* 赛事选择多选弹层(Teleport 到 body) */
+.league-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.league-menu {
+  position: fixed;
+  z-index: 1201;
+  display: flex;
+  flex-direction: column;
+  width: 264px;
+  max-height: min(60vh, 460px);
+  border: 1px solid var(--classic-border);
+  border-radius: 6px;
+  background: var(--classic-panel);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.league-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--classic-border);
+  color: var(--classic-title);
+  font-size: 0.78rem;
+  font-weight: 860;
+}
+
+.lm-quick button {
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--classic-link);
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lm-quick button:hover {
+  text-decoration: underline;
+}
+
+.league-menu-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.lm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  color: var(--classic-text);
+  font-size: 0.78rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.lm-item:hover {
+  background: var(--classic-row-hover);
+}
+
+.lm-item input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--classic-green);
+  cursor: pointer;
+}
+
+.lm-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lm-count {
+  color: var(--classic-title-muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.lm-empty {
+  padding: 18px 12px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.league-menu-foot {
+  display: flex;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--classic-border);
+}
+
+.league-menu-foot button {
+  flex: 1;
+  height: 30px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.lm-cancel {
+  border: 1px solid var(--classic-border);
+  background: var(--classic-panel);
+  color: var(--classic-text);
+}
+
+.lm-cancel:hover {
+  background: var(--classic-row-hover);
+}
+
+.lm-ok {
+  border: 1px solid var(--classic-green);
+  background: var(--classic-green);
+  color: #fff;
+}
+
+.lm-ok:hover {
+  filter: brightness(1.05);
 }
 
 .tab-btn {

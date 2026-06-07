@@ -140,6 +140,8 @@ export function useChartSeries(eventId: MaybeRef<number>, type: MaybeRef<string>
   })
 
   const status = computed<ChartStatus>(() => result.data.value?.data?.status ?? 'pending')
+  // 当前已加载数据对应的 type（后端回显）。切换指标时,旧数据的 type ≠ 请求 type → 调用方据此显示「加载中」避免渲染陈旧序列。
+  const loadedType = computed<string | null>(() => result.data.value?.data?.type ?? null)
   const metricLabel = computed(() => result.data.value?.data?.metricLabel ?? '')
   const unit = computed(() => result.data.value?.data?.unit ?? 'odds')
   const seriesLabels = computed<ChartSeriesLabels>(() => result.data.value?.data?.seriesLabels ?? DEFAULT_LABELS)
@@ -147,6 +149,7 @@ export function useChartSeries(eventId: MaybeRef<number>, type: MaybeRef<string>
   return {
     points,
     status,
+    loadedType,
     metricLabel,
     unit,
     seriesLabels,
