@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
   showFlashQ?: boolean
 }>(), {
   twoWay: false,
+  to: undefined,
   showFlashQ: true,
 })
 

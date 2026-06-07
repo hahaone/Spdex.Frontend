@@ -20,6 +20,10 @@ const props = defineProps<{
   statusOptions: Option[]
   lotteryOptions: Option[]
   leagueOptions: Option[]
+  backcheckLocked?: boolean
+  twoWay?: boolean
+  showFlashQ?: boolean
+  showLotteryFilters?: boolean
   prematchSixHourLockApplied?: boolean
   isMetricFiltered?: boolean
   metricLabel?: string
@@ -41,7 +45,7 @@ const collapsedIds = ref<Set<number>>(new Set())
 const pinnedIds = ref<Set<number>>(new Set())
 const deletedIds = ref<Set<number>>(new Set())
 const retainedIds = ref<Set<number>>(new Set())
-const sortMode = ref('league')
+const sortMode = ref('time')
 
 const selectedCount = computed(() => selectedIds.value.size)
 
@@ -156,6 +160,8 @@ function restore() {
       :status-options="statusOptions"
       :lottery-options="lotteryOptions"
       :league-options="leagueOptions"
+      :backcheck-locked="backcheckLocked"
+      :show-lottery-filters="showLotteryFilters !== false"
       :is-metric-filtered="isMetricFiltered"
       :metric-label="metricLabel"
       @update:day-seg="emit('update:daySeg', $event)"
@@ -194,6 +200,8 @@ function restore() {
         :selected="selectedIds.has(match.eventId)"
         :collapsed="collapsedIds.has(match.eventId)"
         :detail-to="detailRoute(match.eventId)"
+        :two-way="twoWay"
+        :show-flash-q="showFlashQ !== false"
         @toggle-selected="toggleSelected"
         @toggle-collapsed="toggleCollapsed"
       />

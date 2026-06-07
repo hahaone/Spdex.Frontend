@@ -18,13 +18,13 @@ const props = defineProps<{
 
 const eventIdRef = computed(() => props.eventId)
 
-// tips=重大成交提示(默认) / chart=走势图
-const view = ref<'tips' | 'chart'>('tips')
+// 默认「成交」走势图(tradeflow);chart=走势图 / tips=重大成交提示(点「← 重大成交」切换)
+const view = ref<'tips' | 'chart'>('chart')
 
 const market = ref('standard')
 const metric = ref('tradeflow')
 const timeRange = ref('6h')
-const seriesOnly = ref<'home' | 'draw' | 'away' | null>('home')
+const seriesOnly = ref<'home' | 'draw' | 'away' | 'all' | null>('home')
 
 const graphType = computed(() => `${market.value}.${metric.value}`)
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventIdRef, graphType)
@@ -56,18 +56,22 @@ const baseline = computed<number | null>(() => {
 const barMode = computed(() => metric.value === 'traded')
 
 const isTradeFlow = computed(() => metric.value === 'tradeflow')
-const tradeSelection = computed<'home' | 'draw' | 'away'>(() => seriesOnly.value ?? 'home')
+const tradeSelection = computed<string>(() => seriesOnly.value ?? 'home')
+// 折线图(非 tradeflow)的方向：'all' 视作全部(null=三线)。非 tradeflow 时 seriesOnly 已被强制为 null。
+const trendOnly = computed<'home' | 'draw' | 'away' | null>(() => (seriesOnly.value === 'all' ? null : seriesOnly.value))
 const tfGranularity = computed(() => (timeRange.value === '3h' ? '5m' : timeRange.value === '6h' || timeRange.value === '12h' ? '15m' : '30m'))
 const { data: tradeFlow, status: tfStatus, pending: tfPending } = useTradeFlow(eventIdRef, market, tradeSelection, tfGranularity)
 
-watch(isTradeFlow, (on) => { if (on && seriesOnly.value === null) seriesOnly.value = 'home' })
-watch(seriesLabels, (l) => { if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = null })
+// 仅「成交 / 让分成交」(tradeflow) 有方向选择;其余指标默认全部方向(主/平/客三条线同呈现),不给方向下拉。
+watch(isTradeFlow, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'home') : null }, { immediate: true })
+watch(seriesLabels, (l) => { if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = 'home' })
 
 const seriesOptions = computed(() => {
   const l = seriesLabels.value
-  const opts: { label: string, value: 'home' | 'draw' | 'away' | null }[] = isTradeFlow.value
-    ? [{ label: `只看${l.home}`, value: 'home' }]
-    : [{ label: '全部', value: null }, { label: `只看${l.home}`, value: 'home' }]
+  const opts: { label: string, value: 'home' | 'draw' | 'away' | 'all' }[] = [
+    { label: '所有', value: 'all' },
+    { label: `只看${l.home}`, value: 'home' },
+  ]
   if (l.draw) opts.push({ label: `只看${l.draw}`, value: 'draw' })
   opts.push({ label: `只看${l.away}`, value: 'away' })
   return opts
@@ -83,7 +87,10 @@ const tfStatusLabel = computed(() => {
   if (tfStatus.value === 'pending') return '此场赛事暂无成交明细数据'
   return null
 })
-const chartTitle = computed(() => metricLabel.value || (isTradeFlow.value ? '成交明细' : '走势'))
+const chartTitle = computed(() => {
+  if (isTradeFlow.value) return market.value === 'handicap' ? '让分成交' : '成交'
+  return metricLabel.value || '走势'
+})
 
 // ── 重大成交提示(默认视图)──
 const { data: btData, group: bigGroup, pending: btPending } = useBigTrades(eventIdRef, 6)
@@ -108,7 +115,7 @@ const metricButtons: MetricBtn[] = [
   { label: '进球比例', market: 'goals', metric: 'ratio' },
   { label: '进球指数', market: 'goals', metric: 'bfindex' },
   { label: '进球挂牌', market: 'goals', metric: 'exchange' },
-  { label: '让分成交', market: 'handicap', metric: 'volume' },
+  { label: '让分成交', market: 'handicap', metric: 'tradeflow' },
   { label: '让分指数', market: 'handicap', metric: 'bfindex' },
   { label: '让分比例', market: 'handicap', metric: 'ratio' },
   { label: '让分价位', market: 'handicap', metric: 'odds' },
@@ -181,8 +188,8 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
           <select v-model="timeRange" class="cd-select" aria-label="时间段">
             <option v-for="o in timeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
-          <select v-model="seriesOnly" class="cd-select" aria-label="序列筛选">
-            <option v-for="o in seriesOptions" :key="String(o.value)" :value="o.value">{{ o.label }}</option>
+          <select v-if="isTradeFlow" v-model="seriesOnly" class="cd-select" aria-label="方向筛选">
+            <option v-for="o in seriesOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
           <button type="button" class="cd-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
             <RefreshCw :size="13" :class="{ spinning: pending }" />
@@ -203,7 +210,7 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
               :points="displayPoints"
               :series-labels="seriesLabels"
               :unit="unit"
-              :only="seriesOnly"
+              :only="trendOnly"
               :baseline="baseline"
               :bar-mode="barMode"
               :height="200"
@@ -426,21 +433,30 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
 .metric-btn {
   min-height: 30px;
   padding: 0 4px;
-  border: 1px solid var(--classic-grid);
-  border-radius: 2px;
-  background: #f3f3f3;
-  color: #5a6470;
+  border: 1px solid var(--classic-border);
+  border-radius: var(--classic-radius);
+  background: #eef1f5;
+  color: var(--classic-text);
   font-size: 0.74rem;
-  font-weight: 780;
+  font-weight: 740;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.metric-btn:hover:not(.active):not(.disabled) {
+  background: var(--classic-row-hover);
+  border-color: var(--classic-green);
+  color: var(--classic-green);
 }
 
 .metric-btn.active {
   background: var(--classic-green);
+  border-color: var(--classic-green);
   color: #fff;
+  font-weight: 820;
 }
 
 .metric-btn.disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -455,13 +471,16 @@ const chartTo = computed(() => `/football/${props.eventId}/chart`)
   justify-content: center;
   min-height: 30px;
   padding: 0 8px;
-  border: 1px solid var(--classic-grid);
-  border-radius: 2px;
-  font-size: 0.76rem;
-  font-weight: 800;
+  border: 1px solid var(--classic-border);
+  border-radius: var(--classic-radius);
+  font-size: 0.75rem;
+  font-weight: 760;
+  transition: filter 0.12s ease, border-color 0.12s ease;
 }
 
-.detail-btn.grey { background: #d7d7d7; color: #466b84; }
+.detail-btn:hover { filter: brightness(0.96); }
+
+.detail-btn.grey { background: #e7ebf0; color: #46586c; }
 .detail-btn.green { background: var(--classic-green-soft); color: #2d7e64; }
 .detail-btn.blue { background: var(--classic-blue-soft); color: #2e6b93; }
 

@@ -68,10 +68,10 @@ export function useClassicMatchEnrich(eventId: Ref<number>, active: Ref<boolean>
   let loadedId = 0
   let inflight = false
 
-  async function load() {
+  async function load(force = false) {
     const id = eventId.value
     if (inflight || id <= 0) return
-    if (enrich.value && loadedId === id) return
+    if (!force && enrich.value && loadedId === id) return
     inflight = true
     try {
       const res = await $apiFetch<ApiResponse<BackendDetail>>(`/api/newspdex/match-detail/${id}`)
@@ -98,6 +98,9 @@ export function useClassicMatchEnrich(eventId: Ref<number>, active: Ref<boolean>
 
   watch(active, (v) => { if (v) load() }, { immediate: true })
   watch(eventId, () => { enrich.value = null; loadedId = 0; if (active.value) load() })
+
+  // 30s 自动刷新（仅当前可见赛事），让模拟盈亏/冷热/让分等高阶列跟随实时变化，消除滞后。
+  usePolling(() => { if (active.value) load(true) }, 30_000)
 
   return { enrich }
 }

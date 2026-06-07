@@ -1,14 +1,10 @@
+import { isFreeMembership } from '~/utils/membership'
+
 export function useFlashQAccess() {
-  const { tier, user } = useAuth()
+  const { user } = useAuth()
 
   const isAnonymousFlashQUser = computed(() => !user.value)
-  const roleName = computed(() => user.value?.roleName?.trim() ?? '')
-  const isFreeFlashQUser = computed(() => Boolean(user.value) && (
-    user.value?.roleId === 2
-    || tier.value === 'Free'
-    || user.value?.tier === 'Free'
-    || roleName.value.includes('免费')
-  ))
+  const isFreeFlashQUser = computed(() => isFreeMembership(user.value))
   const canOpenFlashQ = computed(() => !isAnonymousFlashQUser.value && !isFreeFlashQUser.value)
   const flashQLockMessage = computed(() => (
     isAnonymousFlashQUser.value

@@ -1,34 +1,48 @@
 .classic-desktop {
-  --classic-bg: #e5e5e5;
+  /* 底/面板 */
+  --classic-bg: #eceff3;
   --classic-panel: #ffffff;
-  --classic-title: #353535;
-  --classic-title-muted: #8f8f8f;
-  --classic-green: #5cae91;
-  --classic-green-soft: #d9f2e8;
-  --classic-purple: #8f8cf7;
-  --classic-purple-soft: #eeeafd;
-  --classic-blue-soft: #d9ecf8;
-  --classic-yellow: #fff38a;
-  --classic-border: #d8d8d8;
-  --classic-grid: #e7e7e7;
-  --classic-text: #555c66;
-  --classic-link: #1b4feb;
+  /* 深色标题栏（冷调石板，比原暖灰更专业） */
+  --classic-title: #2b3342;
+  --classic-title-2: #333c4d;
+  --classic-title-muted: #9aa6b8;
+  /* 指标分区色（扁平、克制；表头实色，单元格浅底） */
+  --classic-green: #4aa888;
+  --classic-green-soft: #e6f5ef;
+  --classic-purple: #7d7aee;
+  --classic-purple-soft: #efedfd;
+  --classic-blue-soft: #e6f1fa;
+  --classic-yellow: #ffe98a;
+  /* 线条/网格（更淡，留出呼吸感） */
+  --classic-border: #dce1e8;
+  --classic-grid: #edf0f4;
+  /* 文字/强调 */
+  --classic-text: #44505f;
+  --classic-link: #2563eb;
+  /* 交互/层次 */
+  --classic-row-hover: #f4f8fc;
+  --classic-shadow: 0 1px 2px rgba(24, 38, 63, 0.06), 0 2px 6px rgba(24, 38, 63, 0.05);
+  --classic-radius: 4px;
 }
 
 .dark.classic-desktop,
 .dark .classic-desktop {
-  --classic-bg: #121722;
+  --classic-bg: #0f141d;
   --classic-panel: #1b2230;
-  --classic-title: #2b3342;
-  --classic-title-muted: #9aa3b4;
-  --classic-green: #377f68;
-  --classic-green-soft: #1c3b34;
-  --classic-purple: #706be3;
-  --classic-purple-soft: #272641;
-  --classic-blue-soft: #183447;
+  --classic-title: #232c3b;
+  --classic-title-2: #2a3343;
+  --classic-title-muted: #93a0b3;
+  --classic-green: #357f66;
+  --classic-green-soft: #18352e;
+  --classic-purple: #6a66dd;
+  --classic-purple-soft: #24233c;
+  --classic-blue-soft: #16314a;
   --classic-yellow: #5a4d18;
-  --classic-border: #303846;
-  --classic-grid: #2a3240;
+  --classic-border: #2d3543;
+  --classic-grid: #262e3b;
   --classic-text: #c7ceda;
   --classic-link: #8ea6ff;
+  --classic-row-hover: #222b39;
+  --classic-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.22);
+  --classic-radius: 4px;
 }

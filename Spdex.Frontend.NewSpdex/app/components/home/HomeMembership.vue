@@ -1,25 +1,11 @@
 <script setup lang="ts">
 /** 首页固定模块「会员中心」：等级/到期 + 升级 CTA(免费/专家) + 账户入口 + 权益速览。 */
 import { Bot, ChevronRight, Crown } from '@lucide/vue'
-import { membershipDisplayName } from '~/utils/membership'
+import { membershipDisplayNameForUser } from '~/utils/membership'
 
 const { user, tier } = useAuth()
 
-const tierLabel: Record<string, string> = {
-  Free: '免费版',
-  Expert: '专家版',
-  Gold: '黄金版',
-  Emerald: '翡翠版',
-  Ruby: '红宝石版',
-  Platinum: '白金版',
-}
-
-const tierDisplay = computed(() => {
-  const roleName = user.value?.roleName?.trim()
-  if (roleName) return roleName
-  if (user.value?.roleId) return membershipDisplayName(user.value.roleId)
-  return tierLabel[tier.value] ?? tier.value
-})
+const tierDisplay = computed(() => membershipDisplayNameForUser(user.value))
 const endDateDisplay = computed(() => {
   const raw = user.value?.endDate
   if (!raw) return '永久'
@@ -74,23 +60,28 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
           <tbody>
             <tr>
               <td>免费版</td>
-              <td>基础赛事 / 每日锦囊</td>
-              <td>赛前 6 小时隐藏</td>
+              <td>主流赛事 / 基础数据</td>
+              <td>无回查 / 无闪Q</td>
             </tr>
             <tr>
               <td>专家版</td>
-              <td>冷热指数 / 亚指 / 走势图</td>
-              <td>部分明细锁定</td>
+              <td>走势图 / 明细 / FlashQ 20 次</td>
+              <td>部分高级盘口锁定</td>
             </tr>
             <tr>
               <td>黄金版</td>
-              <td>时光机 / 闪Q / 必发明细</td>
-              <td>高级盘口按级开放</td>
+              <td>回查 / 时光机 / Q 系统</td>
+              <td>FlashQ 10 次</td>
             </tr>
             <tr>
-              <td>白金以上</td>
-              <td>比分 / 角球 / 全量盘口</td>
-              <td>按具体套餐生效</td>
+              <td>红宝石/翡翠</td>
+              <td>进球均衡 / 内外盘 / 高级 Q 权限</td>
+              <td>FlashQ 按锦囊</td>
+            </tr>
+            <tr>
+              <td>白金版</td>
+              <td>比分 / 角球 / 全量盘口 / FlashQ</td>
+              <td>不限量</td>
             </tr>
           </tbody>
         </table>

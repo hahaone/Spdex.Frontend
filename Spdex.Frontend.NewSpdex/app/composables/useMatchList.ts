@@ -48,6 +48,13 @@ interface BackendMatchSummary {
   goalsAmount?: number[]
   score?: string
   halfScore?: string
+  stockStd?: number[]
+  stockGoals?: number[]
+  stockHandicap?: number[]
+  asianIndex?: number
+  csIndex?: number
+  goalBalance?: number
+  mediaIndex?: number[]
 }
 
 interface BackendMatchListResult {
@@ -155,6 +162,13 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     goalsTurnovers: hasGoalsMarket ? formatAmountPair(goalsAmount) : undefined,
     scoreText: item.score || undefined,
     halfScoreText: item.halfScore || undefined,
+    stockStd: toTriple(item.stockStd),
+    stockGoals: toPair(item.stockGoals),
+    stockHandicap: toTriple(item.stockHandicap),
+    asianIndex: item.asianIndex ?? 0,
+    csIndex: item.csIndex ?? 0,
+    goalBalance: item.goalBalance ?? 0,
+    mediaIndex: toPair(item.mediaIndex),
   }
 }
 

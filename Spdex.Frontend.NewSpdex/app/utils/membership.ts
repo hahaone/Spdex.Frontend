@@ -28,6 +28,21 @@ const roleNames: Record<number, string> = {
   16: '赢在 Q 群',
 }
 
+const tierNames: Record<string, string> = {
+  Reserved: '保留帐号',
+  Free: '免费版',
+  Basic: '基础版',
+  Expert: '专家版',
+  Professional: '专业版',
+  Gold: '黄金版',
+  Emerald: '翡翠版',
+  Ruby: '红宝石版',
+  Platinum: '白金版',
+  Lottery: '彩店会员',
+  QGroup: '赢在 Q 群',
+  Studio: '工作室版',
+}
+
 const mainlinePaidRoleIds = new Set([4, 9, 10, 11, 12, 5])
 
 function roleRank(roleId: number): number {
@@ -40,8 +55,40 @@ function isExpired(endDate: string | null | undefined, now: Date): boolean {
   return Number.isFinite(time) && time < now.getTime()
 }
 
-export function membershipDisplayName(roleId: number): string {
-  return roleNames[roleId] ?? '当前会籍'
+function normalizedRawRoleName(rawName: string | null | undefined): string {
+  const name = rawName?.trim() ?? ''
+  if (!name) return ''
+  if (/^role\s*\d+$/i.test(name)) return ''
+  return name
+}
+
+export function membershipDisplayName(
+  roleId: number | null | undefined,
+  rawName?: string | null,
+  tier?: string | null,
+): string {
+  const normalized = normalizedRawRoleName(rawName)
+  if (normalized) return normalized
+  if (roleId && roleNames[roleId]) return roleNames[roleId]
+  if (tier && tierNames[tier]) return tierNames[tier]
+  return '当前会籍'
+}
+
+export function membershipDisplayNameForUser(user: AuthUser | null | undefined): string {
+  return membershipDisplayName(user?.roleId, user?.roleName, user?.tier)
+}
+
+export function isFreeMembership(user: AuthUser | null | undefined): boolean {
+  if (!user) return false
+  return user.roleId === 2
+    || user.tier === 'Free'
+    || membershipDisplayNameForUser(user).includes('免费')
+}
+
+export function canUseDataReplay(user: AuthUser | null | undefined, now = new Date()): boolean {
+  if (!user || isExpired(user.endDate, now)) return false
+  if (user.entitlements?.dataReplay !== undefined) return user.entitlements.dataReplay
+  return !isFreeMembership(user)
 }
 
 export function isActivePaidMembership(user: AuthUser | null | undefined, now = new Date()): boolean {

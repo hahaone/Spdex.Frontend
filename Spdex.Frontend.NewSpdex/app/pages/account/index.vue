@@ -37,12 +37,10 @@ const tierLabel: Record<string, string> = {
 }
 
 const tierDisplay = computed(() => {
-  const roleName = summary.value?.roleName?.trim() || user.value?.roleName?.trim()
-  if (roleName) return roleName
   const roleId = summary.value?.roleId ?? user.value?.roleId
-  if (roleId) return membershipDisplayName(roleId)
+  const roleName = summary.value?.roleName ?? user.value?.roleName
   const t = summary.value?.tier ?? tier.value
-  return tierLabel[t] ?? t
+  return membershipDisplayName(roleId, roleName, t) || tierLabel[t] || t
 })
 
 const endDate = computed(() => {

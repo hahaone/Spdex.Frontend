@@ -3,12 +3,17 @@ import { ChevronDown, ChevronUp, Zap } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { MatchSummary } from '~/types/match'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   match: MatchSummary
   selected: boolean
   collapsed: boolean
   detailTo: RouteLocationRaw
-}>()
+  twoWay?: boolean
+  showFlashQ?: boolean
+}>(), {
+  twoWay: false,
+  showFlashQ: true,
+})
 
 const emit = defineEmits<{
   toggleSelected: [eventId: number]
@@ -82,11 +87,11 @@ const bigBetText = computed(() => {
         <span class="score num">{{ scoreText }}</span>
       </div>
 
-      <a v-if="canOpenFlashQ" :href="flashQUrl" class="flashq classic-action" aria-label="使用闪Q分析">
+      <a v-if="showFlashQ && canOpenFlashQ" :href="flashQUrl" class="flashq classic-action" aria-label="使用闪Q分析">
         <Zap :size="13" />
         <span>闪Q分析</span>
       </a>
-      <button v-else type="button" class="flashq classic-action locked" :title="flashQLockMessage" disabled>
+      <button v-else-if="showFlashQ" type="button" class="flashq classic-action locked" :title="flashQLockMessage" disabled>
         <Zap :size="13" />
         <span>闪Q分析</span>
       </button>
@@ -98,7 +103,7 @@ const bigBetText = computed(() => {
     </header>
 
     <template v-if="!collapsed">
-      <ClassicMatchMetricGrid :match="match" :enrich="enrich" />
+      <ClassicMatchMetricGrid :match="match" :enrich="enrich" :two-way="twoWay" />
 
       <div class="classic-total-row">
         <span>交易所重大成交提示</span>
@@ -109,7 +114,7 @@ const bigBetText = computed(() => {
       </div>
 
       <ClassicMatchChartArea
-        v-if="visible"
+        v-if="visible && !twoWay"
         :event-id="match.eventId"
         :home-team="match.homeTeam"
         :away-team="match.awayTeam"
@@ -122,7 +127,10 @@ const bigBetText = computed(() => {
 <style scoped>
 .classic-match-card {
   border: 1px solid var(--classic-border);
+  border-radius: var(--classic-radius);
+  overflow: hidden;
   background: var(--classic-panel);
+  box-shadow: var(--classic-shadow);
 }
 
 .classic-card-head {

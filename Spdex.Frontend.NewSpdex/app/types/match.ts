@@ -50,6 +50,20 @@ export interface MatchSummary {
   scoreText?: string
   /** 半场比分文本（"1-0"）。 */
   halfScoreText?: string
+  /** 标盘挂牌指数 [主,平,客]，0=无数据（VendorBase.BfStock）。 */
+  stockStd?: [number, number, number]
+  /** 进球挂牌指数 [大,小]（VendorBase.UoStock）。 */
+  stockGoals?: [number, number]
+  /** 让分挂牌指数 [主,平,客]（VendorBase.ElStock）。 */
+  stockHandicap?: [number, number, number]
+  /** 亚洲指数（VendorBase.AsianIndex）。 */
+  asianIndex?: number
+  /** 比分指数（VendorBase.CsIndex）。 */
+  csIndex?: number
+  /** 进球均衡 = 大小成交/标盘成交×10。 */
+  goalBalance?: number
+  /** 媒体指数 [主,客]（VendorBase.MediaIndex，多为 0）。 */
+  mediaIndex?: [number, number]
 }
 
 export interface MatchListResult {

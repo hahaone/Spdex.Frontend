@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight, Filter, Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
+import { isFreeMembership } from '~/utils/membership'
 
 const route = useRoute()
+const { user } = useAuth()
 const routeDay = route.query.day === 'tomorrow' ? 'tomorrow' : route.query.day === 'yesterday' ? 'yesterday' : 'today'
 const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
 const archiveMinDate = '2012-08-01'
@@ -19,6 +21,8 @@ const day = ref(routeDay)
 const status = ref<'upcoming' | 'started' | 'all'>(routeStatus)
 const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 const customDate = ref(routeCustomDate)
+const lottery = ref('all')
+const backcheckLocked = computed(() => isFreeMembership(user.value))
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -31,6 +35,7 @@ const statusOptions = [
   { label: '已开', value: 'started' },
   { label: '全部', value: 'all' },
 ]
+const lotteryOptions = [{ label: '不限', value: 'all' }]
 
 const dayToDate = (d: string): string | undefined => {
   const now = new Date()
@@ -49,11 +54,21 @@ const dayToDate = (d: string): string | undefined => {
   return undefined
 }
 
-const effectiveDate = computed(() => customDate.value || dayToDate(day.value))
+const effectiveDate = computed(() => backcheckLocked.value ? dayToDate('today') : customDate.value || dayToDate(day.value))
 
 const daySeg = computed({
   get: () => (customDate.value ? '' : day.value),
-  set: (v: string) => { customDate.value = ''; day.value = v },
+  set: (v: string) => {
+    if (backcheckLocked.value) return
+    customDate.value = ''
+    day.value = v
+  },
+})
+
+watch(backcheckLocked, (locked) => {
+  if (!locked) return
+  customDate.value = ''
+  day.value = 'today'
 })
 
 function normalizeDayForDate(ymd: string): 'today' | 'tomorrow' | 'yesterday' | null {
@@ -76,6 +91,7 @@ function activeDateForShift(): Date {
 }
 
 function shiftDay(delta: number) {
+  if (backcheckLocked.value) return
   const next = activeDateForShift()
   next.setDate(next.getDate() + delta)
   const ymd = toLocalYmd(next)
@@ -102,6 +118,7 @@ const filters = computed<MatchListFilters>(() => ({
 }))
 
 const { items: matches, leagues, prematchSixHourLockApplied, pending, refresh } = useMatchList(filters)
+const { isClassicDesktop } = useDesktopViewMode()
 
 const leagueOptions = computed(() => {
   const opts = [{ label: '全部联赛', value: 'all' }]
@@ -113,8 +130,8 @@ const leagueOptions = computed(() => {
 
 const listReturnQuery = computed(() => {
   const query: Record<string, string> = {}
-  if (customDate.value) query.date = customDate.value
-  else if (day.value !== 'today') query.day = day.value
+  if (!backcheckLocked.value && customDate.value) query.date = customDate.value
+  else if (!backcheckLocked.value && day.value !== 'today') query.day = day.value
   if (status.value !== 'upcoming') query.status = status.value
   if (league.value !== 'all') query.league = league.value
   return query
@@ -126,22 +143,55 @@ function detailRoute(eventId: number) {
 </script>
 
 <template>
-  <div class="basketball-page">
+  <ClassicMatchWorkbenchList
+    v-if="isClassicDesktop"
+    v-model:day-seg="daySeg"
+    v-model:custom-date="customDate"
+    v-model:status="status"
+    v-model:lottery="lottery"
+    v-model:league="league"
+    :matches="matches"
+    :pending="pending"
+    :archive-min-date="archiveMinDate"
+    :day-options="dayOptions"
+    :status-options="statusOptions"
+    :lottery-options="lotteryOptions"
+    :league-options="leagueOptions"
+    :backcheck-locked="backcheckLocked"
+    :prematch-six-hour-lock-applied="prematchSixHourLockApplied"
+    :detail-route="detailRoute"
+    :two-way="true"
+    :show-flash-q="false"
+    :show-lottery-filters="false"
+    @refresh="refresh()"
+  />
+
+  <div v-else class="basketball-page">
     <aside class="filter-band">
       <div class="filter-head">
         <h2>今日篮球</h2>
         <span class="muted num">{{ matches.length }} 场</span>
       </div>
 
-      <div class="date-row">
-        <button class="square-btn focus-ring" aria-label="上一日" @click="shiftDay(-1)">
+      <div
+        :class="['date-row', { locked: backcheckLocked }]"
+        :title="backcheckLocked ? '当前会籍未开放回查' : undefined"
+      >
+        <button class="square-btn focus-ring" aria-label="上一日" :disabled="backcheckLocked" @click="shiftDay(-1)">
           <ChevronLeft :size="16" />
         </button>
         <SegmentedControl v-model="daySeg" :options="dayOptions" dense />
-        <button class="square-btn focus-ring" aria-label="下一日" @click="shiftDay(1)">
+        <button class="square-btn focus-ring" aria-label="下一日" :disabled="backcheckLocked" @click="shiftDay(1)">
           <ChevronRight :size="16" />
         </button>
-        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="选择日期" :min="archiveMinDate">
+        <input
+          v-model="customDate"
+          type="date"
+          class="date-input focus-ring"
+          aria-label="选择日期"
+          :min="archiveMinDate"
+          :disabled="backcheckLocked"
+        >
       </div>
 
       <div class="status-row">
@@ -234,6 +284,19 @@ function detailRoute(eventId: number) {
   font-size: 0.8rem;
   font-weight: 720;
   font-variant-numeric: tabular-nums;
+}
+
+.date-row.locked {
+  opacity: 0.58;
+}
+
+.date-row.locked :deep(.segmented) {
+  pointer-events: none;
+}
+
+.date-row.locked .date-input,
+.date-row.locked .square-btn {
+  cursor: not-allowed;
 }
 
 .status-row {

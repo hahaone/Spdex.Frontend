@@ -1,20 +1,11 @@
 <script setup lang="ts">
 import { Bell, Moon, Search, Sun, UserCircle } from '@lucide/vue'
-import { membershipDisplayName } from '~/utils/membership'
+import { membershipDisplayNameForUser } from '~/utils/membership'
 
 const route = useRoute()
 const { isLoggedIn, user, userName, tier, logout } = useAuth()
 const { isDark, toggle } = useTheme()
 const { show: showCommand } = useCommandPalette()
-
-const tierLabel: Record<string, string> = {
-  Free: '免费版',
-  Expert: '专家版',
-  Gold: '黄金版',
-  Emerald: '翡翠版',
-  Ruby: '红宝石版',
-  Platinum: '白金版',
-}
 
 const tierClass: Record<string, string> = {
   Free: 'tier-free',
@@ -25,12 +16,7 @@ const tierClass: Record<string, string> = {
   Platinum: 'tier-platinum',
 }
 
-const tierDisplay = computed(() => {
-  const roleName = user.value?.roleName?.trim()
-  if (roleName) return roleName
-  if (user.value?.roleId) return membershipDisplayName(user.value.roleId)
-  return tierLabel[tier.value] ?? tier.value
-})
+const tierDisplay = computed(() => membershipDisplayNameForUser(user.value))
 const tierToneClass = computed(() => tierClass[tier.value] ?? 'tier-free')
 
 const navItems = [

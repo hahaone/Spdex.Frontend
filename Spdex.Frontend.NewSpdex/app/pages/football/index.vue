@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
+import { isFreeMembership } from '~/utils/membership'
 
 const route = useRoute()
+const { user } = useAuth()
 const routeDay = route.query.day === 'yesterday' ? 'yesterday' : 'today'
 const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
 const routeLottery = ['all', 'jc', 'lottery'].includes(String(route.query.lottery)) ? String(route.query.lottery) as 'all' | 'jc' | 'lottery' : 'all'
@@ -23,6 +25,7 @@ const lottery = ref<'all' | 'jc' | 'lottery'>(routeLottery)
 const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 // 数据回查：自选日期，非空时覆盖「今日/昨日」
 const customDate = ref(routeCustomDate)
+const backcheckLocked = computed(() => isFreeMembership(user.value))
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -43,8 +46,8 @@ const lotteryOptions = [
 
 const dayToDate = (d: string): string | undefined => {
   const now = new Date()
-  // "today" = 今日及所有未来赛事（后端 today-onward 窗口：过去 4h ~ +14 天）
-  if (d === 'today') return 'today-onward'
+  // "today" = 过去 4h ~ 明天中午 12:00（后端 today-window 窗口；与今日篮球一致，不再纳入 +14 天的远期赛事）
+  if (d === 'today') return 'today-window'
   if (d === 'yesterday') {
     const prev = new Date(now)
     prev.setDate(now.getDate() - 1)
@@ -54,12 +57,22 @@ const dayToDate = (d: string): string | undefined => {
 }
 
 /** 当前生效日期：自选日期优先，否则按快捷「今日/昨日」。 */
-const effectiveDate = computed(() => customDate.value || dayToDate(day.value))
+const effectiveDate = computed(() => backcheckLocked.value ? dayToDate('today') : customDate.value || dayToDate(day.value))
 
 /** 快捷段控件：选了自选日期时不高亮今日/昨日；点今日/昨日则清空自选日期（今日即回到默认）。 */
 const daySeg = computed({
   get: () => (customDate.value ? '' : day.value),
-  set: (v: string) => { customDate.value = ''; day.value = v },
+  set: (v: string) => {
+    if (backcheckLocked.value) return
+    customDate.value = ''
+    day.value = v
+  },
+})
+
+watch(backcheckLocked, (locked) => {
+  if (!locked) return
+  customDate.value = ''
+  day.value = 'today'
 })
 
 // ── 首页异动指标点击落地：?metric=xxx&events=1,2,3 → 只显示命中的这些比赛 ──
@@ -98,10 +111,12 @@ const filters = computed<MatchListFilters>(() => {
 const { items: matches, leagues, prematchSixHourLockApplied, pending, refresh } = useMatchList(filters)
 const { isClassicDesktop } = useDesktopViewMode()
 
-/** 异动筛选生效时只显示命中的比赛 */
+/** 异动筛选生效时只显示命中的比赛；统一按开赛时间升序（最早在前） */
 const displayMatches = computed(() => {
-  if (!isMetricFiltered.value) return matches.value
-  return matches.value.filter(m => eventIdSet.value.has(m.eventId))
+  const list = isMetricFiltered.value
+    ? matches.value.filter(m => eventIdSet.value.has(m.eventId))
+    : matches.value
+  return [...list].sort((a, b) => a.matchTime.localeCompare(b.matchTime))
 })
 
 /** 联赛筛选选项：「全部联赛」+ 后端实际返回的联赛代码 */
@@ -115,8 +130,8 @@ const leagueOptions = computed(() => {
 
 const listReturnQuery = computed(() => {
   const query: Record<string, string> = {}
-  if (customDate.value) query.date = customDate.value
-  else if (day.value !== 'today') query.day = day.value
+  if (!backcheckLocked.value && customDate.value) query.date = customDate.value
+  else if (!backcheckLocked.value && day.value !== 'today') query.day = day.value
   if (status.value !== 'upcoming') query.status = status.value
   if (lottery.value !== 'all') query.lottery = lottery.value
   if (league.value !== 'all') query.league = league.value
@@ -147,6 +162,7 @@ function detailRoute(eventId: number) {
     :status-options="statusOptions"
     :lottery-options="lotteryOptions"
     :league-options="leagueOptions"
+    :backcheck-locked="backcheckLocked"
     :prematch-six-hour-lock-applied="prematchSixHourLockApplied"
     :is-metric-filtered="isMetricFiltered"
     :metric-label="metricLabel"
@@ -163,9 +179,19 @@ function detailRoute(eventId: number) {
       </div>
 
       <!-- 日期：今日/昨日 快捷 + 任选日期回查，合并一行（今日含所有未来；前日直接选日期） -->
-      <div class="date-row">
+      <div
+        :class="['date-row', { locked: backcheckLocked }]"
+        :title="backcheckLocked ? '当前会籍未开放回查' : undefined"
+      >
         <SegmentedControl v-model="daySeg" :options="dayOptions" dense />
-        <input v-model="customDate" type="date" class="date-input focus-ring" aria-label="选择日期" :min="archiveMinDate">
+        <input
+          v-model="customDate"
+          type="date"
+          class="date-input focus-ring"
+          aria-label="选择日期"
+          :min="archiveMinDate"
+          :disabled="backcheckLocked"
+        >
       </div>
 
       <!-- 状态 + 竞彩/足彩 + 刷新 合并一行，按钮铺满横向 -->
@@ -283,6 +309,18 @@ function detailRoute(eventId: number) {
   font-size: 0.8rem;
   font-weight: 720;
   font-variant-numeric: tabular-nums;
+}
+
+.date-row.locked {
+  opacity: 0.58;
+}
+
+.date-row.locked :deep(.segmented) {
+  pointer-events: none;
+}
+
+.date-row.locked .date-input {
+  cursor: not-allowed;
 }
 
 .square-btn,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Zap } from '@lucide/vue'
 import type { ApiResponse } from '~/types/auth'
+import { isFreeMembership } from '~/utils/membership'
 
 interface QuantilearnTicket {
   ticket: string
@@ -12,12 +13,6 @@ const { user, refreshToken } = useAuth()
 const error = ref('')
 const blockedByPlan = ref(false)
 const freeFlashQMessage = '免费版暂未开放闪Q，请升级会籍后使用'
-
-function isFreeFlashQUser() {
-  return user.value?.roleId === 2
-    || user.value?.tier === 'Free'
-    || user.value?.roleName === '免费版'
-}
 
 function appendQuery(url: string, params: Record<string, string>) {
   const separator = url.includes('?') ? '&' : '?'
@@ -54,7 +49,7 @@ onMounted(async () => {
       return
     }
 
-    if (isFreeFlashQUser()) {
+    if (isFreeMembership(user.value)) {
       blockedByPlan.value = true
       error.value = freeFlashQMessage
       return

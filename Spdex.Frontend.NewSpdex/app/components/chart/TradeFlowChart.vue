@@ -24,13 +24,30 @@ function attrColor(a: string): string {
 
 const PAD_TOP = 8
 const PAD_BOTTOM = 4
-const BUCKET_W = 22
+const BUCKET_W_MIN = 22
 
 const buckets = computed(() => props.result?.buckets ?? [])
 const attrs = computed(() => props.result?.attrs ?? [])
 
+// 测量中部可视宽度：桶少时把桶宽撑开填满容器（消除右侧空白），桶多时回落到最小桶宽并横向滚动。
+const scrollRef = ref<HTMLElement | null>(null)
+const measuredWidth = ref(320)
+onMounted(() => {
+  const el = scrollRef.value
+  if (!el) return
+  const sync = () => { const w = el.clientWidth; if (w > 0) measuredWidth.value = w }
+  sync()
+  const ro = new ResizeObserver(sync)
+  ro.observe(el)
+  onScopeDispose(() => ro.disconnect())
+})
+const bucketW = computed(() => {
+  const n = buckets.value.length
+  return n > 0 ? Math.max(BUCKET_W_MIN, measuredWidth.value / n) : BUCKET_W_MIN
+})
+
 const chartH = computed(() => Math.max(props.height - PAD_TOP - PAD_BOTTOM, 40))
-const svgW = computed(() => Math.max(buckets.value.length * BUCKET_W, 10))
+const svgW = computed(() => Math.max(buckets.value.length * bucketW.value, measuredWidth.value, 10))
 
 const maxVol = computed(() => {
   let m = 0
@@ -66,9 +83,6 @@ function volH(v: number): number {
   if (v <= 0) return 0
   return volBandH.value * Math.sqrt(v) / Math.sqrt(maxVol.value)
 }
-function volY(v: number): number {
-  return volBase.value - volH(v)
-}
 function priceY(p: number): number {
   return PAD_TOP + priceBandH.value * (1 - (p - priceMin.value) / priceRange.value)
 }
@@ -77,10 +91,11 @@ interface Bar { x: number, y: number, w: number, h: number, color: string }
 const bars = computed<Bar[]>(() => {
   const out: Bar[] = []
   const aN = Math.max(attrs.value.length, 1)
-  const groupW = BUCKET_W - 5
+  const bw = bucketW.value
+  const groupW = bw - 5
   const barW = groupW / aN
   buckets.value.forEach((b, i) => {
-    const x0 = i * BUCKET_W + 2.5
+    const x0 = i * bw + 2.5
     attrs.value.forEach((a, j) => {
       const v = b.items[a] ?? 0
       if (v <= 0) return
@@ -99,9 +114,10 @@ const bars = computed<Bar[]>(() => {
 
 const pricePts = computed(() => {
   const pts: { x: number, y: number }[] = []
+  const bw = bucketW.value
   buckets.value.forEach((b, i) => {
     if (b.price != null && b.price > 0)
-      pts.push({ x: i * BUCKET_W + BUCKET_W / 2, y: priceY(b.price) })
+      pts.push({ x: i * bw + bw / 2, y: priceY(b.price) })
   })
   return pts
 })
@@ -133,7 +149,8 @@ const timeLabels = computed(() => {
   const bs = buckets.value
   if (!bs.length) return []
   const idxs = bs.length <= 3 ? bs.map((_, i) => i) : [0, Math.floor(bs.length / 2), bs.length - 1]
-  return idxs.map(i => ({ x: i * BUCKET_W + BUCKET_W / 2, label: hm(bs[i]!.time) }))
+  const bw = bucketW.value
+  return idxs.map(i => ({ x: i * bw + bw / 2, label: hm(bs[i]!.time) }))
 })
 function hm(iso: string): string {
   const t = iso.indexOf('T')
@@ -141,10 +158,41 @@ function hm(iso: string): string {
 }
 
 const totalH = computed(() => props.height)
+
+// ── 交互:十字准线 + 悬浮提示(对齐旧站成交走势图) ──
+const chartRef = ref<HTMLElement | null>(null)
+const hoverIndex = ref<number | null>(null)
+const tipLeft = ref(0)
+function onMove(e: PointerEvent) {
+  const el = scrollRef.value
+  const n = buckets.value.length
+  if (!el || n === 0) return
+  const rect = el.getBoundingClientRect()
+  if (rect.width === 0) return
+  const svgX = (e.clientX - rect.left) + el.scrollLeft
+  hoverIndex.value = Math.max(0, Math.min(n - 1, Math.floor(svgX / bucketW.value)))
+  const chartRect = chartRef.value?.getBoundingClientRect()
+  tipLeft.value = chartRect ? e.clientX - chartRect.left : 0
+}
+function onLeave() { hoverIndex.value = null }
+const crosshairX = computed(() => (hoverIndex.value == null ? 0 : hoverIndex.value * bucketW.value + bucketW.value / 2))
+const tip = computed(() => {
+  const i = hoverIndex.value
+  if (i == null) return null
+  const b = buckets.value[i]
+  if (!b) return null
+  const chartW = chartRef.value?.clientWidth ?? 320
+  return {
+    time: hm(b.time),
+    rows: attrs.value.map(a => ({ label: a, value: b.items[a] ?? 0, color: attrColor(a) })).filter(r => r.value > 0),
+    price: b.price,
+    rightSide: tipLeft.value > chartW * 0.58,
+  }
+})
 </script>
 
 <template>
-  <div class="tf-chart">
+  <div ref="chartRef" class="tf-chart">
     <div class="tf-body" :style="{ height: `${totalH + 16}px` }">
       <!-- 左轴：成交 -->
       <svg class="tf-axis tf-axis-l" :width="36" :height="totalH" :viewBox="`0 0 36 ${totalH}`">
@@ -159,8 +207,8 @@ const totalH = computed(() => props.height)
       </svg>
 
       <!-- 中部：可横向滚动的柱状 + 价位线 -->
-      <div class="tf-scroll scrollbar-thin">
-        <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none">
+      <div ref="scrollRef" class="tf-scroll scrollbar-thin">
+        <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none" @pointermove="onMove" @pointerleave="onLeave">
           <!-- 网格线：成交带 + 价位带 -->
           <line
             v-for="(t, i) in volTicks"
@@ -209,6 +257,8 @@ const totalH = computed(() => props.height)
             class="tf-axis-text"
             text-anchor="middle"
           >{{ t.label }}</text>
+          <!-- 十字准线 -->
+          <line v-if="hoverIndex != null" :x1="crosshairX" :x2="crosshairX" y1="0" :y2="totalH - 12" class="tf-crosshair" />
         </svg>
       </div>
 
@@ -225,6 +275,21 @@ const totalH = computed(() => props.height)
       </svg>
     </div>
 
+    <!-- 悬浮提示 -->
+    <div v-if="tip" class="tf-tip" :class="{ right: tip.rightSide }" :style="{ left: `${tipLeft}px` }">
+      <div class="tf-tip-time">{{ tip.time }}</div>
+      <div v-for="r in tip.rows" :key="r.label" class="tf-tip-row">
+        <i class="sw" :style="{ background: r.color }" />
+        <span>{{ result?.selectionLabel }}-{{ r.label }}</span>
+        <b>{{ fmtVol(r.value) }}</b>
+      </div>
+      <div v-if="tip.price" class="tf-tip-row">
+        <i class="sw line" :style="{ background: PRICE_COLOR }" />
+        <span>{{ result?.selectionLabel }}价位</span>
+        <b>{{ tip.price.toFixed(2) }}</b>
+      </div>
+    </div>
+
     <!-- 图例 -->
     <div class="tf-legend scrollbar-none">
       <span v-for="a in attrs" :key="a" class="tf-lg">
@@ -239,8 +304,67 @@ const totalH = computed(() => props.height)
 
 <style scoped>
 .tf-chart {
+  position: relative;
   display: grid;
   gap: 6px;
+}
+
+.tf-crosshair {
+  stroke: #9aa3af;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.tf-tip {
+  position: absolute;
+  top: 4px;
+  z-index: 6;
+  min-width: 92px;
+  transform: translateX(8px);
+  padding: 5px 8px;
+  border: 1px solid var(--classic-border, #dce1e8);
+  border-radius: 4px;
+  background: var(--classic-panel, #fff);
+  box-shadow: 0 2px 10px rgba(20, 30, 50, 0.16);
+  font-size: 0.7rem;
+  pointer-events: none;
+}
+
+.tf-tip.right {
+  transform: translateX(calc(-100% - 8px));
+}
+
+.tf-tip-time {
+  margin-bottom: 3px;
+  color: var(--classic-title-muted, #8f8f8f);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tf-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.55;
+  color: var(--classic-text, #444);
+}
+
+.tf-tip-row .sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.tf-tip-row .sw.line {
+  height: 3px;
+}
+
+.tf-tip-row b {
+  margin-left: auto;
+  padding-left: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .tf-body {

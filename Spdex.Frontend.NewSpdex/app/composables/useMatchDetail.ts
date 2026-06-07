@@ -4,7 +4,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
-import type { MarketDetail, MarketMetricRow } from '~/types/market'
+import type { MarketMetricRow } from '~/types/market'
 import type { MatchStatus, MatchSummary } from '~/types/match'
 
 interface BackendMarketRow {

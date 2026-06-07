@@ -43,13 +43,23 @@ const availablePlans = computed(() =>
 
 const featuredPlans = computed(() => availablePlans.value.filter(p => p.hot > 0))
 const standardPlans = computed(() => availablePlans.value.filter(p => p.hot === 0))
-const compareMonths = [1, 3, 6, 12]
+const compareMonths = [2, 3, 6, 12]
 const comparisonPlans = computed(() => availablePlans.value.filter(p => p.prices.length > 0))
 const comparisonRows = computed(() => comparisonPlans.value.map(plan => ({
   plan,
   unitPrice: stageUnitPrice(plan),
   cells: compareMonths.map(month => stageForMonth(plan, month)),
 })))
+
+const benefitRows = [
+  { feature: '基础赛事', free: '主流赛事', expert: '全部开放', gold: '全部开放', ruby: '全部开放', emerald: '全部开放', platinum: '全部开放' },
+  { feature: '数据回查', free: '不可用', expert: '可用', gold: '可用', ruby: '可用', emerald: '可用', platinum: '可用' },
+  { feature: '经典版', free: '基础列表', expert: '走势图/明细', gold: '时光机/明细', ruby: '增强指数', emerald: '增强指数', platinum: '全量盘口' },
+  { feature: '走势图', free: '未开放', expert: '标盘/指数', gold: '标盘/指数', ruby: '完整走势', emerald: '完整走势', platinum: '完整走势' },
+  { feature: 'FlashQ', free: '不可用', expert: '20 次/天', gold: '10 次/天', ruby: '按锦囊', emerald: '按锦囊', platinum: '不限量' },
+  { feature: 'Q 系统', free: '不可用', expert: '不可用', gold: '5 模型', ruby: '5 模型/内外盘', emerald: '5 模型/进球均衡', platinum: '10 模型/全量' },
+  { feature: '比分/角球', free: '不可用', expert: '不可用', gold: '不可用', ruby: '不可用', emerald: '不可用', platinum: '开放' },
+]
 
 function pickStage(plan: PaymentPlan, stage: PriceStage) {
   if (!canPurchaseTarget(user.value, plan.roleId)) return
@@ -73,15 +83,32 @@ function stageForMonth(plan: PaymentPlan, month: number): PriceStage | null {
   return plan.prices.find(stage => Math.abs(stage.month - month) < 0.01) ?? null
 }
 
+function monthDurationDays(month: number): number {
+  if (Math.abs(month - 12) < 0.01) return 365
+  return Math.round(month * 30)
+}
+
+function displayStageDays(stage: PriceStage): number | null {
+  if (stage.month > 0) return monthDurationDays(stage.month)
+  if (stage.days <= 0) return null
+  return [30, 60, 90, 180, 365].find(days => stage.days >= days && stage.days <= days + 3) ?? stage.days
+}
+
 function stageDurationLabel(stage: PriceStage): string {
-  if (stage.days > 0) return `${stage.days}天`
-  if (stage.month > 0) return `${Math.round(stage.month * 30)}天`
+  const days = displayStageDays(stage)
+  if (days) return `${days}天`
   return stage.stageName
 }
 
 function durationLabelForMonth(month: number): string {
-  if (month === 12) return '365天'
-  return `${month * 30}天`
+  return `${monthDurationDays(month)}天`
+}
+
+function stageDiscountLabel(plan: PaymentPlan, stage: PriceStage): string {
+  if (stage.discountLabel) return stage.discountLabel
+  const days = displayStageDays(stage)
+  if (plan.roleId === 12 && days && days >= 365) return '7折'
+  return ''
 }
 
 function stageUnitPrice(plan: PaymentPlan): string {
@@ -137,7 +164,7 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
             >
               <span class="stage-name">
                 {{ stageDurationLabel(stage) }}
-                <b v-if="stage.discountLabel" class="discount-chip">{{ stage.discountLabel }}</b>
+                <b v-if="stageDiscountLabel(plan, stage)" class="discount-chip">{{ stageDiscountLabel(plan, stage) }}</b>
               </span>
               <span class="price-stack">
                 <s v-if="stage.originalPrice && stage.originalPrice > stage.price" class="original-price num">
@@ -174,7 +201,7 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
             >
               <span class="stage-name">
                 {{ stageDurationLabel(stage) }}
-                <b v-if="stage.discountLabel" class="discount-chip">{{ stage.discountLabel }}</b>
+                <b v-if="stageDiscountLabel(plan, stage)" class="discount-chip">{{ stageDiscountLabel(plan, stage) }}</b>
               </span>
               <span class="price-stack">
                 <s v-if="stage.originalPrice && stage.originalPrice > stage.price" class="original-price num">
@@ -224,11 +251,11 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
         <div class="compare-scroll">
           <table>
             <thead>
-	              <tr>
-	                <th>会籍</th>
-	                <th>30天价</th>
-	                <th v-for="month in compareMonths" :key="month">{{ durationLabelForMonth(month) }}</th>
-	              </tr>
+              <tr>
+                <th>会籍</th>
+                <th>30天价</th>
+                <th v-for="month in compareMonths" :key="month">{{ durationLabelForMonth(month) }}</th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="row in comparisonRows" :key="row.plan.roleId">
@@ -245,11 +272,44 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
                       @click="pickStage(row.plan, stage)"
                     >
                       <span class="num">¥{{ formatPrice(stage.price) }}</span>
-                      <b v-if="stage.discountLabel">{{ stage.discountLabel }}</b>
+                      <b v-if="stageDiscountLabel(row.plan, stage)">{{ stageDiscountLabel(row.plan, stage) }}</b>
                     </button>
                   </template>
                   <span v-else class="dash">—</span>
                 </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="benefits-band">
+        <div class="compare-head">
+          <h2>会籍权益说明</h2>
+          <span>按当前开放能力展示</span>
+        </div>
+        <div class="benefits-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>能力</th>
+                <th>免费</th>
+                <th>专家</th>
+                <th>黄金</th>
+                <th>红宝石</th>
+                <th>翡翠</th>
+                <th>白金</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in benefitRows" :key="row.feature">
+                <th>{{ row.feature }}</th>
+                <td>{{ row.free }}</td>
+                <td>{{ row.expert }}</td>
+                <td>{{ row.gold }}</td>
+                <td>{{ row.ruby }}</td>
+                <td>{{ row.emerald }}</td>
+                <td>{{ row.platinum }}</td>
               </tr>
             </tbody>
           </table>
@@ -539,7 +599,8 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
 }
 
 /* ─── 套餐对照 ─── */
-.compare-band {
+.compare-band,
+.benefits-band {
   display: grid;
   gap: 8px;
   padding: 10px 11px 12px;
@@ -567,13 +628,15 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
   font-weight: 720;
 }
 
-.compare-scroll {
+.compare-scroll,
+.benefits-scroll {
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 5px;
 }
 
-.compare-scroll table {
+.compare-scroll table,
+.benefits-scroll table {
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
@@ -581,7 +644,9 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
 }
 
 .compare-scroll th,
-.compare-scroll td {
+.compare-scroll td,
+.benefits-scroll th,
+.benefits-scroll td {
   padding: 8px 9px;
   border-top: 1px solid var(--line);
   text-align: right;
@@ -589,7 +654,8 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
   white-space: nowrap;
 }
 
-.compare-scroll thead th {
+.compare-scroll thead th,
+.benefits-scroll thead th {
   border-top: 0;
   background: #f7f8fc;
   color: var(--muted);
@@ -597,11 +663,14 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
 }
 
 .compare-scroll th:first-child,
-.compare-scroll td:first-child {
+.compare-scroll td:first-child,
+.benefits-scroll th:first-child,
+.benefits-scroll td:first-child {
   text-align: left;
 }
 
-.compare-scroll tbody th {
+.compare-scroll tbody th,
+.benefits-scroll tbody th {
   color: var(--ink);
   font-weight: 820;
 }

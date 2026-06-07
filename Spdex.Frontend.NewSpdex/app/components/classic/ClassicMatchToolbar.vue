@@ -6,7 +6,7 @@ interface Option {
   value: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   count: number
   pending: boolean
   selectedCount: number
@@ -21,9 +21,15 @@ const props = defineProps<{
   statusOptions: Option[]
   lotteryOptions: Option[]
   leagueOptions: Option[]
+  backcheckLocked?: boolean
+  showLotteryFilters?: boolean
   isMetricFiltered?: boolean
   metricLabel?: string
-}>()
+}>(), {
+  backcheckLocked: false,
+  showLotteryFilters: true,
+  metricLabel: '',
+})
 
 const emit = defineEmits<{
   'update:daySeg': [value: string]
@@ -45,6 +51,7 @@ const emit = defineEmits<{
 const hasSelection = computed(() => props.selectedCount > 0)
 
 function updateDay(value: string) {
+  if (props.backcheckLocked) return
   if (value === 'custom') return
   emit('update:daySeg', value)
 }
@@ -57,8 +64,8 @@ function updateDay(value: string) {
         <button type="button" class="event-menu">赛事选择⌄</button>
         <button type="button" class="tab-btn" :class="{ active: status === 'all' && lottery === 'all' }" @click="emit('update:status', 'all'); emit('update:lottery', 'all')">全部赛事</button>
         <button type="button" class="tab-btn" :class="{ active: status === 'upcoming' }" @click="emit('update:status', 'upcoming')">未开赛</button>
-        <button type="button" class="tab-btn" :class="{ active: lottery === 'lottery' }" @click="emit('update:lottery', 'lottery')">胜负彩赛事</button>
-        <button type="button" class="tab-btn" :class="{ active: lottery === 'jc' }" @click="emit('update:lottery', 'jc')">竞彩赛事</button>
+        <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'lottery' }" @click="emit('update:lottery', 'lottery')">胜负彩赛事</button>
+        <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'jc' }" @click="emit('update:lottery', 'jc')">竞彩赛事</button>
         <button type="button" class="tab-btn muted-tab">简洁版</button>
         <button type="button" class="tab-btn muted-tab">数据回查</button>
       </div>
@@ -72,7 +79,7 @@ function updateDay(value: string) {
     <div v-if="!isMetricFiltered" class="toolbar-row filters">
       <label class="classic-field">
         <span>日期</span>
-        <select :value="daySeg || 'custom'" @change="updateDay(($event.target as HTMLSelectElement).value)">
+        <select :value="daySeg || 'custom'" :disabled="backcheckLocked" @change="updateDay(($event.target as HTMLSelectElement).value)">
           <option v-for="option in dayOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
           <option value="custom">自选</option>
         </select>
@@ -84,11 +91,12 @@ function updateDay(value: string) {
           type="date"
           :value="customDate"
           :min="archiveMinDate"
+          :disabled="backcheckLocked"
           @input="emit('update:customDate', ($event.target as HTMLInputElement).value)"
         >
       </label>
 
-      <label class="classic-field">
+      <label v-if="showLotteryFilters" class="classic-field">
         <span>状态</span>
         <select :value="status" @change="emit('update:status', ($event.target as HTMLSelectElement).value)">
           <option v-for="option in statusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -142,7 +150,10 @@ function updateDay(value: string) {
   display: grid;
   gap: 0;
   border: 1px solid var(--classic-border);
+  border-radius: var(--classic-radius);
+  overflow: hidden;
   background: var(--classic-panel);
+  box-shadow: var(--classic-shadow);
 }
 
 .toolbar-row {
@@ -214,6 +225,12 @@ function updateDay(value: string) {
   font-weight: 740;
 }
 
+.classic-field select:disabled,
+.classic-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .event-menu {
   width: 160px;
   height: 42px;
@@ -238,8 +255,18 @@ function updateDay(value: string) {
   font-weight: 840;
 }
 
+.tab-btn {
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.tab-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.45);
+}
+
 .tab-btn.active {
   background: var(--classic-panel);
+  color: var(--classic-link);
+  box-shadow: inset 0 -3px 0 var(--classic-green);
 }
 
 .tab-btn.muted-tab {
