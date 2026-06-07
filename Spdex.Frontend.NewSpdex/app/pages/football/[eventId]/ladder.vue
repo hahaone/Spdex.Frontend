@@ -4,6 +4,7 @@ import { useMatchLadder, LADDER_MARKETS, type LadderPoint } from '~/composables/
 
 // 经典版盘口明细（还原旧站 Match/View/BetFair）：某市场选一个选项 → 已成交汇总 + 价格/成交量走势 + 价位/买/卖/成交 阶梯。
 // 标盘 / 进球 / 正确比分 由 ?market= 决定。
+// 入口：分类列表赛事卡「明细图表」面板的 标盘 / 进球 / 正确比分 按钮（已在经典模式 → 满宽渲染）。
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 const queryMarket = computed(() => (typeof route.query.market === 'string' ? route.query.market : 'standard'))
