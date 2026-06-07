@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Bell, Moon, Search, Sun, Zap } from '@lucide/vue'
+import { Bell, Moon, Search, Sun } from '@lucide/vue'
 
 const route = useRoute()
 const { isDark, toggle } = useTheme()
+const { show: showCommand } = useCommandPalette()
 
 const title = computed(() => {
   if (route.path.startsWith('/football')) return '今日足球'
@@ -26,15 +27,12 @@ const title = computed(() => {
     </div>
 
     <div class="top-actions" aria-label="页面工具">
-      <button class="icon-btn focus-ring" aria-label="搜索">
+      <button class="icon-btn focus-ring" aria-label="搜索" @click="showCommand()">
         <Search :size="17" />
       </button>
-      <button class="icon-btn focus-ring" aria-label="闪Q分析">
-        <Zap :size="17" />
-      </button>
-      <button class="icon-btn focus-ring" aria-label="消息">
+      <NuxtLink to="/push" class="icon-btn focus-ring" aria-label="消息推送">
         <Bell :size="17" />
-      </button>
+      </NuxtLink>
       <button class="icon-btn focus-ring" :aria-label="isDark ? '日间模式' : '夜间模式'" @click="toggle()">
         <Sun v-if="isDark" :size="17" />
         <Moon v-else :size="17" />
