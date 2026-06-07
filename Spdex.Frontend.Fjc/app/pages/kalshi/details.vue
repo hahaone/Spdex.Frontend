@@ -199,15 +199,22 @@ function localizeRunner(name: string | null | undefined): string {
   return raw
 }
 
-function formatProbability(value: number | null | undefined): string {
+function formatDecimalOdds(value: number | null | undefined): string {
   if (value == null) return '-'
-  return `${Math.round(clampProbability(value) * 100)}%`
+  const price = clampProbability(value)
+  if (price <= 0) return '-'
+  return (1 / price).toFixed(2)
 }
 
 function formatSignedDelta(value: number | null | undefined): string {
   if (value == null) return '-'
   const signed = value >= 0 ? '+' : ''
-  return `${signed}${(value * 100).toFixed(1)}`
+  return `${signed}${(value * 100).toFixed(2)}`
+}
+
+function deltaClass(value: number | null | undefined): string {
+  if (value == null || value === 0) return 'delta-neutral'
+  return value > 0 ? 'delta-positive' : 'delta-negative'
 }
 
 function formatTime(value: string | null | undefined): string {
@@ -280,7 +287,7 @@ useHead({
           <div class="side-stack">
             <div v-for="s in graphSeries" :key="s.key" class="side-card">
               <div class="side-label" :style="{ color: s.color }">{{ s.label }}</div>
-              <div class="side-price">{{ formatProbability(s.lastPct) }}</div>
+              <div class="side-price">{{ formatDecimalOdds(s.lastPct) }}</div>
             </div>
           </div>
         </div>
@@ -322,7 +329,7 @@ useHead({
             @click="selectedMarketTicker = market.marketTicker"
           >
             <span>{{ localizeRunner(market.label) }}</span>
-            <span>{{ formatProbability(market.lastYesPrice) }}</span>
+            <span>{{ formatDecimalOdds(market.lastYesPrice) }}</span>
           </button>
         </div>
 
@@ -336,7 +343,7 @@ useHead({
                   <thead><tr><th>价格</th><th>数量</th></tr></thead>
                   <tbody>
                     <tr v-for="level in orderbook.yesBids" :key="`yes-${level.price}-${level.size}`">
-                      <td>{{ formatProbability(level.price) }}</td>
+                      <td>{{ formatDecimalOdds(level.price) }}</td>
                       <td>{{ level.size.toFixed(0) }}</td>
                     </tr>
                   </tbody>
@@ -348,7 +355,7 @@ useHead({
                   <thead><tr><th>价格</th><th>数量</th></tr></thead>
                   <tbody>
                     <tr v-for="level in orderbook.noBids" :key="`no-${level.price}-${level.size}`">
-                      <td>{{ formatProbability(level.price) }}</td>
+                      <td>{{ formatDecimalOdds(level.price) }}</td>
                       <td>{{ level.size.toFixed(0) }}</td>
                     </tr>
                   </tbody>
@@ -367,17 +374,17 @@ useHead({
                   <th>价格</th>
                   <th>数量</th>
                   <th>金额</th>
-                  <th>Δ</th>
+                  <th>价差</th>
                   <th>时间</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="trade in selectedTrades" :key="trade.tradeId">
                   <td :class="trade.outcomeSide.toLowerCase() === 'yes' ? 'yes-cell' : 'no-cell'">{{ trade.outcomeSide }}</td>
-                  <td>{{ formatProbability(trade.price) }}</td>
+                  <td>{{ formatDecimalOdds(trade.price) }}</td>
                   <td>{{ trade.count.toFixed(0) }}</td>
                   <td>{{ formatCompactCurrency(trade.notional) }}</td>
-                  <td>{{ formatSignedDelta(trade.priceDelta) }}</td>
+                  <td :class="deltaClass(trade.priceDelta)">{{ formatSignedDelta(trade.priceDelta) }}</td>
                   <td>{{ formatTime(trade.createdAtUtc) }}</td>
                 </tr>
               </tbody>
@@ -684,6 +691,17 @@ useHead({
 .no-cell {
   color: #b91c1c;
   font-weight: 700;
+}
+.delta-positive {
+  color: #16a34a;
+  font-weight: 700;
+}
+.delta-negative {
+  color: #dc2626;
+  font-weight: 700;
+}
+.delta-neutral {
+  color: #9ca3af;
 }
 .empty-line {
   padding: 20px 8px;

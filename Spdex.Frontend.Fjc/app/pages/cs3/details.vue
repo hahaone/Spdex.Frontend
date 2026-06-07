@@ -26,7 +26,7 @@ const { tradeWindowStats: polyWindowStatsFromApi, loading: polyLoading } = usePo
 // ── Kalshi 数据（延迟加载，点击按钮后才请求） ──
 const kalshiEnabled = ref(false)
 const kalshiEventId = computed(() => kalshiEnabled.value ? eventId.value : null)
-const { tradeWindowStats: kalshiWindowStatsFromApi, loading: kalshiLoading } = useKalshiData(kalshiEventId)
+const { primaryLink: kalshiPrimaryLink, trades: kalshiTrades, tradeWindowStats: kalshiWindowStatsFromApi, loading: kalshiLoading } = useKalshiData(kalshiEventId)
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
@@ -150,12 +150,14 @@ const kalshiWindowStats = computed<PolyWindowStats[]>(() => {
   const ws = windows.value
   if (ws.length === 0) return []
   const apiData = kalshiWindowStatsFromApi.value
-  if (!apiData?.windows?.length) {
-    return ws.map(() => ({ volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }))
+  const apiWindows = apiData?.windows ?? []
+  const hasApiStats = apiWindows.some(w => w.volume > 0)
+  if (!hasApiStats) {
+    return buildKalshiWindowStatsFromTrades()
   }
 
-  const byOffset = new Map<number, typeof apiData.windows[0]>()
-  for (const w of apiData.windows) {
+  const byOffset = new Map<number, typeof apiWindows[0]>()
+  for (const w of apiWindows) {
     byOffset.set(w.hoursOffset, w)
   }
 
@@ -171,6 +173,76 @@ const kalshiWindowStats = computed<PolyWindowStats[]>(() => {
     }
   })
 })
+
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function classifyKalshiRunner(runner: string | null | undefined, marketTicker: string, fallbackIndex: number): 'home' | 'draw' | 'away' {
+  const raw = normalizeName(runner)
+  if (!raw) return fallbackIndex === 1 ? 'draw' : fallbackIndex === 2 ? 'away' : 'home'
+  if (raw === 'draw' || raw === 'tie' || raw.includes('平局') || raw === '平') return 'draw'
+
+  const link = kalshiPrimaryLink.value
+  const homeNames = [matchInfo.value?.homeTeam, link?.betsapiHomeTeam, link?.kalshiHomeTeam].map(normalizeName).filter(Boolean)
+  const awayNames = [matchInfo.value?.guestTeam, link?.betsapiAwayTeam, link?.kalshiAwayTeam].map(normalizeName).filter(Boolean)
+  if (homeNames.some(name => raw === name)) return 'home'
+  if (awayNames.some(name => raw === name)) return 'away'
+
+  const marketIndex = kalshiTrades.value?.trades?.markets?.findIndex(m => m.marketTicker === marketTicker) ?? fallbackIndex
+  return marketIndex === 1 ? 'draw' : marketIndex === 2 ? 'away' : 'home'
+}
+
+function kalshiWindowCutoffMs(w: TimeWindowData): number {
+  if (w.hoursOffset === 0) return Number.POSITIVE_INFINITY
+  const base = new Date(matchInfo.value?.matchTime ?? '').getTime()
+  if (!Number.isFinite(base)) return Number.POSITIVE_INFINITY
+  return base + w.hoursOffset * 60 * 60 * 1000
+}
+
+function buildKalshiWindowStatsFromTrades(): PolyWindowStats[] {
+  const ws = windows.value
+  const aggregate = kalshiTrades.value?.trades
+  if (!aggregate?.outcomeSeries?.length) {
+    return ws.map(() => ({ volume: 0, indexHome: 0, indexDraw: 0, indexAway: 0, pctChange: null }))
+  }
+
+  const marketIndex = new Map<string, number>()
+  aggregate.markets?.forEach((market, index) => marketIndex.set(market.marketTicker, index))
+
+  const stats = ws.map((w) => {
+    const cutoffMs = kalshiWindowCutoffMs(w)
+    const totals = { home: 0, draw: 0, away: 0 }
+
+    for (const series of aggregate.outcomeSeries) {
+      const side = classifyKalshiRunner(series.runner, series.marketTicker, marketIndex.get(series.marketTicker) ?? 0)
+      for (const trade of series.trades ?? []) {
+        const ts = new Date(trade.createdAtUtc).getTime()
+        if (!Number.isFinite(ts) || ts > cutoffMs) continue
+        const notional = Number(trade.notional)
+        if (!Number.isFinite(notional) || notional <= 0) continue
+        totals[side] += notional
+      }
+    }
+
+    const volume = totals.home + totals.draw + totals.away
+    return {
+      volume,
+      indexHome: volume > 0 ? totals.home / volume * 100 : 0,
+      indexDraw: volume > 0 ? totals.draw / volume * 100 : 0,
+      indexAway: volume > 0 ? totals.away / volume * 100 : 0,
+      pctChange: null,
+    }
+  })
+
+  return stats.map((stat, index) => {
+    const previous = stats[index + 1]
+    return {
+      ...stat,
+      pctChange: previous && previous.volume > 0 ? stat.volume / previous.volume * 100 : null,
+    }
+  })
+}
 
 /** 格式化 Poly 成交量 */
 function formatPolyVol(vol: number): string {
