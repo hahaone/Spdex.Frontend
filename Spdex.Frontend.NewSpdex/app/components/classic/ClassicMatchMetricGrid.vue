@@ -62,6 +62,18 @@ function hcpShare(i: number): string {
   if (v == null || hcpSum.value <= 0) return ''
   return `${Math.round((v / hcpSum.value) * 100)}%`
 }
+// 进球比例(篮球):大/小主点线成交额占比（= 旧站 Per）。
+function goalShare(i: number): string {
+  const a = props.match.goalsAmount ?? [0, 0]
+  const tot = (a[0] ?? 0) + (a[1] ?? 0)
+  if (tot <= 0) return ''
+  return `${Math.round(((a[i === 0 ? 0 : 1] ?? 0) / tot) * 100)}%`
+}
+// 亚盘线显示:整数原样,否则一位小数;0 视为无值。
+function lineStr(v: number | undefined): string {
+  if (v == null || v === 0) return ''
+  return Number.isInteger(v) ? String(v) : v.toFixed(1)
+}
 
 interface Col { key: string, label: string, tone: Tone, get: (i: number) => string, strong?: (i: number) => boolean, cls?: (i: number) => string }
 
@@ -106,13 +118,17 @@ const basketballColumns: Col[] = [
   { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => i === 1 ? '' : signed(std(i)?.pnl) },
   { key: 'price', label: '价位', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.price || odds(props.match.bfPrice?.[i])) },
   { key: 'stockStd', label: '挂牌指数', tone: 'deal', get: i => i === 1 ? '' : pct2(props.match.stockStd?.[i]), cls: i => i === 1 ? '' : guaClass(props.match.stockStd?.[i]) },
+  // 篮球进球各列取后端「主点线」快照(payload),不走 enrich —— VendorBase 的 Uo* 会指向过期线、对不上显示的线。
   { key: 'goalLine', label: '进球分界', tone: 'goal', get: i => i === 0 ? 'Over' : i === 2 ? 'Under' : (props.match.goalsLine ? `${props.match.goalsLine}分` : '') },
-  { key: 'goalTurnover', label: '进球成交', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.turnover || props.match.goalsTurnovers?.[i === 0 ? 0 : 1] || '') },
-  { key: 'goalRatio', label: '进球比例', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.ratio || '') },
-  { key: 'goalPrice', label: '进球价位', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.price || odds(props.match.goalsOdds?.[i === 0 ? 0 : 1])) },
-  { key: 'goalIndex', label: '进球指数', tone: 'goal', get: i => i === 1 ? '' : (num(goal(i)?.bfIndex) || intList(props.match.goalsIndex?.[i === 0 ? 0 : 1])) },
+  { key: 'goalTurnover', label: '进球成交', tone: 'goal', get: i => i === 1 ? '' : intList(props.match.goalsAmount?.[i === 0 ? 0 : 1]) },
+  { key: 'goalRatio', label: '进球比例', tone: 'goal', get: i => i === 1 ? '' : goalShare(i) },
+  { key: 'goalPrice', label: '进球价位', tone: 'goal', get: i => i === 1 ? '' : odds(props.match.goalsOdds?.[i === 0 ? 0 : 1]) },
+  { key: 'goalIndex', label: '进球指数', tone: 'goal', get: i => i === 1 ? '' : intList(props.match.goalsIndex?.[i === 0 ? 0 : 1]) },
   { key: 'goalStock', label: '挂牌指数', tone: 'goal', get: i => i === 1 ? '' : pct2(props.match.stockGoals?.[i === 0 ? 0 : 1]), cls: i => i === 1 ? '' : guaClass(props.match.stockGoals?.[i === 0 ? 0 : 1]) },
-  { key: 'goalPnl', label: '进球盈亏', tone: 'goal', get: i => i === 1 ? '' : signed(goal(i)?.pnl) },
+  { key: 'goalPnl', label: '进球盈亏', tone: 'goal', get: i => i === 1 ? '' : signed(props.match.goalsPnl?.[i === 0 ? 0 : 1]) },
+  // 亚盘让球/亚盘总进球:BetFair 最平衡线的 HK 赔率(中间行放线);来自后端 asianLet/asianTotal。
+  { key: 'asianLet', label: '亚盘让球', tone: 'extra', get: i => i === 1 ? lineStr(props.match.asianLetLine) : odds(props.match.asianLet?.[i === 0 ? 0 : 1]) },
+  { key: 'asianTotal', label: '亚盘总进球', tone: 'extra', get: i => i === 1 ? lineStr(props.match.asianTotalLine) : odds(props.match.asianTotal?.[i === 0 ? 0 : 1]) },
 ]
 
 interface Cell { key: string, tone: Tone, value: string, strong: boolean, cls: string }

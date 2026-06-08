@@ -46,6 +46,16 @@ export interface MatchSummary {
   goalsTurnovers?: [string, string]
   /** 大小成交原始金额 [大, 小]。 */
   goalsAmount?: [number, number]
+  /** 大小球模拟盈亏 [大, 小]（篮球取主点线 Payout;足球为 0,走 enrich）。 */
+  goalsPnl?: [number, number]
+  /** 亚盘让球 HK 赔率 [主, 客]（篮球 BetFair 最平衡让分线）。 */
+  asianLet?: [number, number]
+  /** 亚盘让球线(正=主队让)。 */
+  asianLetLine?: number
+  /** 亚盘总进球 HK 赔率 [大, 小]（篮球 BetFair 最平衡总分线）。 */
+  asianTotal?: [number, number]
+  /** 亚盘总进球线。 */
+  asianTotalLine?: number
   /** 全场比分文本（"2-1"），仅 started/finished 有值。 */
   scoreText?: string
   /** 半场比分文本（"1-0"）。 */

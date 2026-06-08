@@ -22,6 +22,8 @@ const props = withDefaults(defineProps<{
 const eventIdRef = computed(() => props.eventId)
 const isBasket = computed(() => props.sport === 'basketball')
 const basePath = computed(() => `/${props.sport}`)
+// 篮球走势矩阵按钮更少 → 右侧标签组更矮;走势图相应压低,与右侧高度看齐。足球保持 240。
+const chartHeight = computed(() => (isBasket.value ? 180 : 240))
 
 // 默认「成交」走势图(tradeflow);chart=走势图 / tips=重大成交提示(点「← 重大成交」切换)
 const view = ref<'tips' | 'chart'>('chart')
@@ -232,7 +234,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
           <span class="chart-title num">{{ chartTitle }}走势图</span>
         </div>
 
-        <div class="chart-canvas">
+        <div class="chart-canvas" :style="{ '--cc-h': `${chartHeight}px` }">
           <div v-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
           <div v-else-if="!chartReady" class="chart-state">加载中…</div>
           <template v-else-if="displayPoints.length">
@@ -241,7 +243,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
               v-if="chartKind === 'ratio'"
               :points="displayPoints"
               :series-labels="seriesLabels"
-              :height="240"
+              :height="chartHeight"
             />
             <LazyStaticTrendChart
               v-else
@@ -252,7 +254,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
               :baseline="baseline"
               :bar-mode="barMode"
               :multi-price="multiPrice"
-              :height="240"
+              :height="chartHeight"
             />
           </template>
           <div v-else class="chart-state">暂无走势数据</div>
@@ -427,13 +429,13 @@ const detailButtons = computed<DetailBtn[]>(() => {
 }
 
 .chart-canvas {
-  min-height: 240px;
+  min-height: var(--cc-h, 240px);
 }
 
 .chart-state {
   display: grid;
   place-items: center;
-  min-height: 240px;
+  min-height: var(--cc-h, 240px);
   color: var(--classic-title-muted);
   font-size: 0.78rem;
   font-weight: 720;
