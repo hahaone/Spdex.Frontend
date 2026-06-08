@@ -497,9 +497,10 @@ const goalsTurnoverText = computed(() => {
 
 .m-chip {
   padding: 1px 6px;
+  border: 1px solid transparent;
   border-radius: 3px;
-  background: #f1f4f9;
-  color: var(--muted);
+  background: var(--chip-mute-bg);
+  color: var(--chip-mute-fg);
 }
 
 .m-chip b { font-weight: 800; color: var(--ink); }
@@ -507,8 +508,8 @@ const goalsTurnoverText = computed(() => {
 .m-chip.kelly b { color: var(--sell); }
 .m-chip.poly { background: #efeaf8; color: #5a3fa0; }
 .m-chip.poly b { color: #5a3fa0; }
-.m-chip.euro { background: var(--away-bg); color: #8a6212; }
-.m-chip.euro b { color: #8a6212; }
+.m-chip.euro { background: var(--away-bg); color: var(--warn); }
+.m-chip.euro b { color: var(--warn); }
 
 .big-bet {
   padding: 1px 6px;

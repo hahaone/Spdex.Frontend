@@ -89,7 +89,9 @@ function indexValue(row: MarketMetricRow): string {
   padding: 6px 9px;
 }
 
-.summary-card.standard .summary-head {
+.summary-card.standard .summary-head,
+.summary-card.goals .summary-head,
+.summary-card.handicap .summary-head {
   background: linear-gradient(180deg, var(--brand-tint) 0%, var(--brand-tint-strong) 100%);
   color: var(--brand-deep);
 }
@@ -97,16 +99,6 @@ function indexValue(row: MarketMetricRow): string {
 .summary-card.poly .summary-head {
   background: linear-gradient(180deg, var(--lavender) 0%, var(--lavender-strong) 100%);
   color: var(--accent-deep);
-}
-
-.summary-card.goals .summary-head {
-  background: linear-gradient(180deg, var(--draw-bg) 0%, #d0e9d0 100%);
-  color: var(--sell);
-}
-
-.summary-card.handicap .summary-head {
-  background: linear-gradient(180deg, var(--away-bg) 0%, #ffe7b0 100%);
-  color: #8a6212;
 }
 
 .summary-head .title {
