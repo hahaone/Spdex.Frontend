@@ -132,9 +132,15 @@ const allMetricButtons: MetricBtn[] = [
   { label: '亚洲指数', market: 'handicap', metric: 'bfindex' },
   { label: '比分指数', market: 'cs', metric: 'bfindex' },
 ]
-// 篮球无博彩欧赔(euro)与正确比分(cs)数据 → 隐去 凯利/欧洲平均/比分指数。
-const metricButtons = computed<MetricBtn[]>(() =>
-  isBasket.value ? allMetricButtons.filter(b => b.market !== 'euro' && b.market !== 'cs') : allMetricButtons)
+// 篮球走势矩阵对齐旧站:去掉 凯利/欧洲平均(euro,无博彩数据)、比分指数(cs)、冷热、进球均衡(balance)、
+// 亚洲指数(与让分指数同为 handicap.bfindex,重复)。保留 标盘/进球/让分 各指标。
+const metricButtons = computed<MetricBtn[]>(() => {
+  if (!isBasket.value) return allMetricButtons
+  return allMetricButtons.filter(b =>
+    b.market !== 'euro' && b.market !== 'cs'
+    && b.metric !== 'hotcold' && b.metric !== 'balance'
+    && b.label !== '亚洲指数')
+})
 
 function pickMetric(b: MetricBtn) {
   if (b.disabled) return

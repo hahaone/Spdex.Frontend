@@ -65,7 +65,7 @@ function hcpShare(i: number): string {
 
 interface Col { key: string, label: string, tone: Tone, get: (i: number) => string, strong?: (i: number) => boolean, cls?: (i: number) => string }
 
-const columns: Col[] = [
+const footballColumns: Col[] = [
   { key: 'team', label: '队名', tone: 'team', get: optionLabel, strong: () => true },
   // 标盘必发
   { key: 'turnover', label: '成交', tone: 'deal', get: i => std(i)?.turnover || props.match.turnovers[i] || '' },
@@ -95,9 +95,32 @@ const columns: Col[] = [
   { key: 'goalBalance', label: '进球均衡', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.goalBalance) : '') },
 ]
 
+// 篮球(旧 NBAToday)列集:2-way 无平、进球用总分大小(中间行放分界线/VS,标盘列留空)。
+// 去掉足球专属/无篮球数据列:冷热/欧洲平均/凯利方差/让分四列/亚洲指数/比分指数/进球均衡;
+// 亚盘让分/亚盘总进球(~0.9 亚式赔率)同欧洲指数无数据源,暂不呈现。
+const basketballColumns: Col[] = [
+  { key: 'team', label: '队名', tone: 'team', get: i => i === 0 ? props.match.homeTeam : i === 2 ? props.match.awayTeam : 'VS', strong: () => true },
+  { key: 'index', label: '指数', tone: 'deal', get: i => i === 1 ? '' : (num(std(i)?.bfIndex) || intList(props.match.bfIndex[i])), strong: () => true },
+  { key: 'turnover', label: '成交', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.turnover || props.match.turnovers[i] || '') },
+  { key: 'ratio', label: '比例', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.ratio || listShare(i)) },
+  { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => i === 1 ? '' : signed(std(i)?.pnl) },
+  { key: 'price', label: '价位', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.price || odds(props.match.bfPrice?.[i])) },
+  { key: 'stockStd', label: '挂牌指数', tone: 'deal', get: i => i === 1 ? '' : pct2(props.match.stockStd?.[i]), cls: i => i === 1 ? '' : guaClass(props.match.stockStd?.[i]) },
+  { key: 'goalLine', label: '进球分界', tone: 'goal', get: i => i === 0 ? 'Over' : i === 2 ? 'Under' : (props.match.goalsLine ? `${props.match.goalsLine}分` : '') },
+  { key: 'goalTurnover', label: '进球成交', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.turnover || props.match.goalsTurnovers?.[i === 0 ? 0 : 1] || '') },
+  { key: 'goalRatio', label: '进球比例', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.ratio || '') },
+  { key: 'goalPrice', label: '进球价位', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.price || odds(props.match.goalsOdds?.[i === 0 ? 0 : 1])) },
+  { key: 'goalIndex', label: '进球指数', tone: 'goal', get: i => i === 1 ? '' : (num(goal(i)?.bfIndex) || intList(props.match.goalsIndex?.[i === 0 ? 0 : 1])) },
+  { key: 'goalStock', label: '挂牌指数', tone: 'goal', get: i => i === 1 ? '' : pct2(props.match.stockGoals?.[i === 0 ? 0 : 1]), cls: i => i === 1 ? '' : guaClass(props.match.stockGoals?.[i === 0 ? 0 : 1]) },
+  { key: 'goalPnl', label: '进球盈亏', tone: 'goal', get: i => i === 1 ? '' : signed(goal(i)?.pnl) },
+]
+
 interface Cell { key: string, tone: Tone, value: string, strong: boolean, cls: string }
-const rowIndexes = computed(() => props.twoWay ? [0, 2] : [0, 1, 2])
-const rows = computed<Cell[][]>(() => rowIndexes.value.map(i => columns.map(c => ({
+// 足球用宽表;篮球用旧 NBAToday 列集(twoWay 即篮球)。
+const columns = computed<Col[]>(() => props.twoWay ? basketballColumns : footballColumns)
+// 均 3 行;篮球中间行只承载 进球分界(线)/VS,标盘列留空(2-way 无平)。
+const rowIndexes = [0, 1, 2]
+const rows = computed<Cell[][]>(() => rowIndexes.map(i => columns.value.map(c => ({
   key: c.key,
   tone: c.tone,
   value: c.get(i),
