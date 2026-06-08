@@ -17,6 +17,10 @@ interface BackendMatchSummary {
   awayTeam: string
   status: MatchStatus
   isJc: boolean
+  jcIssue?: number
+  jcOrder?: number
+  sfcIssue?: number
+  sfcOrder?: number
   marketType: string
   handicap: string
   bfIndex: number[]
@@ -144,6 +148,10 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     awayTeam: item.awayTeam,
     status: item.status,
     isJc: item.isJc,
+    jcIssue: item.jcIssue ?? 0,
+    jcOrder: item.jcOrder ?? 0,
+    sfcIssue: item.sfcIssue ?? 0,
+    sfcOrder: item.sfcOrder ?? 0,
     marketType: item.marketType || '胜负',
     handicap: formatHandicapLine(item.handicap),
     prices: [0, 0, 0],  // 后端 list 不返回 odds，详情页才有

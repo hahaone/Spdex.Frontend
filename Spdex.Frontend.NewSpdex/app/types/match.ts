@@ -7,6 +7,12 @@ export interface MatchSummary {
   matchTime: string
   status: MatchStatus
   isJc: boolean
+  /** 竞彩期号(如 20260608)+ 场次序号(如 201);非竞彩/缺省为 0 或省略。 */
+  jcIssue?: number
+  jcOrder?: number
+  /** 足彩(胜负彩)期号(如 26083)+ 场次序号(如 5);非足彩/缺省为 0 或省略。 */
+  sfcIssue?: number
+  sfcOrder?: number
   marketType: string
   homeTeam: string
   awayTeam: string

@@ -51,6 +51,8 @@ onMounted(() => {
 onBeforeUnmount(() => { io?.disconnect(); io = null })
 
 const kickOff = computed(() => props.match.matchTime.slice(11, 16))
+// 竞彩场次序号补足 3 位(对齐旧站「第 001 场」);足彩序号不补位。
+const jcOrderText = computed(() => String(props.match.jcOrder ?? 0).padStart(3, '0'))
 const scoreText = computed(() => props.match.scoreText || '0-0')
 const totalTurnover = computed(() => Math.round(props.match.bfAmount ?? 0).toLocaleString('en-US'))
 const goalsTotal = computed(() => {
@@ -81,7 +83,8 @@ const bigBetText = computed(() => {
       <div class="head-main">
         <span class="league">{{ match.leagueCode || match.leagueName }}</span>
         <span class="teams">{{ match.homeTeam }} <b>VS</b> {{ match.awayTeam }}</span>
-        <span v-if="match.isJc" class="mini-tag">竞彩</span>
+        <span v-if="match.sfcOrder" class="lottery-tag sfc">足彩 {{ match.sfcIssue }} 期 第 {{ match.sfcOrder }} 场</span>
+        <span v-if="match.jcOrder" class="lottery-tag jc">竞彩 {{ match.jcIssue }} 期 第 {{ jcOrderText }} 场</span>
       </div>
 
       <div class="head-meta">
@@ -191,6 +194,22 @@ const bigBetText = computed(() => {
   background: var(--classic-green);
   color: #fff;
   font-size: 0.68rem;
+}
+
+/* 竞彩/足彩 期号+序号标签(对齐旧站):竞彩绿、足彩金,深色头部上清晰可读。 */
+.lottery-tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.lottery-tag.jc {
+  color: #9bf0b9;
+}
+
+.lottery-tag.sfc {
+  color: #ffd479;
 }
 
 .head-meta {
