@@ -10,9 +10,11 @@ const props = withDefaults(defineProps<{
   detailTo: RouteLocationRaw
   twoWay?: boolean
   showFlashQ?: boolean
+  sport?: 'football' | 'basketball'
 }>(), {
   twoWay: false,
   showFlashQ: true,
+  sport: 'football',
 })
 
 const emit = defineEmits<{
@@ -114,11 +116,12 @@ const bigBetText = computed(() => {
       </div>
 
       <ClassicMatchChartArea
-        v-if="visible && !twoWay"
+        v-if="visible"
         :event-id="match.eventId"
         :home-team="match.homeTeam"
         :away-team="match.awayTeam"
         :detail-to="detailTo"
+        :sport="sport"
       />
     </template>
   </article>

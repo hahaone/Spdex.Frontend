@@ -9,14 +9,19 @@ import type { RouteLocationRaw } from 'vue-router'
  * - 「明细图表」走真实详情路由 / 就地切图。
  * 仅在赛事块滚入视口后由父组件 v-if 挂载,此时才发起这些请求。
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   eventId: number
   homeTeam: string
   awayTeam: string
   detailTo: RouteLocationRaw
-}>()
+  sport?: 'football' | 'basketball'
+}>(), {
+  sport: 'football',
+})
 
 const eventIdRef = computed(() => props.eventId)
+const isBasket = computed(() => props.sport === 'basketball')
+const basePath = computed(() => `/${props.sport}`)
 
 // 默认「成交」走势图(tradeflow);chart=走势图 / tips=重大成交提示(点「← 重大成交」切换)
 const view = ref<'tips' | 'chart'>('chart')
@@ -104,7 +109,7 @@ function fmtPer(p: number) { return `${(p * 100).toFixed(2)}%` }
 
 // ── 走势图表矩阵:旧站标签 → 后端复合 type(market.metric)。无对应指标的置 disabled。──
 interface MetricBtn { label: string, market: string, metric: string, disabled?: boolean }
-const metricButtons: MetricBtn[] = [
+const allMetricButtons: MetricBtn[] = [
   { label: '指数', market: 'standard', metric: 'bfindex' },
   { label: '成交', market: 'standard', metric: 'tradeflow' },
   { label: '比例', market: 'standard', metric: 'ratio' },
@@ -127,6 +132,9 @@ const metricButtons: MetricBtn[] = [
   { label: '亚洲指数', market: 'handicap', metric: 'bfindex' },
   { label: '比分指数', market: 'cs', metric: 'bfindex' },
 ]
+// 篮球无博彩欧赔(euro)与正确比分(cs)数据 → 隐去 凯利/欧洲平均/比分指数。
+const metricButtons = computed<MetricBtn[]>(() =>
+  isBasket.value ? allMetricButtons.filter(b => b.market !== 'euro' && b.market !== 'cs') : allMetricButtons)
 
 function pickMetric(b: MetricBtn) {
   if (b.disabled) return
@@ -138,15 +146,31 @@ function isActive(b: MetricBtn) {
   return view.value === 'chart' && !b.disabled && market.value === b.market && metric.value === b.metric
 }
 
-// 经典版「明细图表」(还原旧站):明细(标盘 Normal)/进球明细/比分明细(CorrectScore 矩阵页)。
-const detailFullTo = computed(() => `/football/${props.eventId}/detail`)
-const goalsDetailTo = computed(() => `/football/${props.eventId}/detail?market=goals`)
-// 比分明细指向独立的正确比分矩阵页(旧 /detail?market=cs 仍保留,未来可用)。
-const csScoreTo = computed(() => `/football/${props.eventId}/correct-score`)
-// 欧洲指数独立页(各公司即时/初盘赔率 + 凯利 + 返还率 + 凯利加权)。
-const euroTo = computed(() => `/football/${props.eventId}/euro-odds`)
-// 标盘/进球/正确比分 → BetFair 盘口阶梯页(选项下拉 + 已成交汇总 + 价格成交量走势 + 价位/买/卖/成交)。
-function ladderTo(mk: string) { return `/football/${props.eventId}/ladder?market=${mk}` }
+// 经典版「明细图表」入口(还原旧站),按运动分流:
+// 足球:明细 / 进球明细 / 比分明细 / 欧洲指数 / 标盘 / 进球 / 正确比分;
+// 篮球:明细 / 大球明细 / 小球明细 / 标盘 / 进球(2-way、总分大小;无欧赔/比分/正确比分)。
+interface DetailBtn { label: string, to: string, tone: 'grey' | 'green' | 'blue' }
+const detailButtons = computed<DetailBtn[]>(() => {
+  const base = `${basePath.value}/${props.eventId}`
+  if (isBasket.value) {
+    return [
+      { label: '明细', to: `${base}/detail`, tone: 'grey' },
+      { label: '大球明细', to: `${base}/detail?market=goals&side=over`, tone: 'grey' },
+      { label: '小球明细', to: `${base}/detail?market=goals&side=under`, tone: 'grey' },
+      { label: '标盘', to: `${base}/ladder?market=standard`, tone: 'blue' },
+      { label: '进球', to: `${base}/ladder?market=goals`, tone: 'blue' },
+    ]
+  }
+  return [
+    { label: '明细', to: `${base}/detail`, tone: 'grey' },
+    { label: '进球明细', to: `${base}/detail?market=goals`, tone: 'grey' },
+    { label: '比分明细', to: `${base}/correct-score`, tone: 'grey' },
+    { label: '欧洲指数', to: `${base}/euro-odds`, tone: 'green' },
+    { label: '标盘', to: `${base}/ladder?market=standard`, tone: 'blue' },
+    { label: '进球', to: `${base}/ladder?market=goals`, tone: 'blue' },
+    { label: '正确比分', to: `${base}/ladder?market=cs`, tone: 'blue' },
+  ]
+})
 </script>
 
 <template>
@@ -251,13 +275,7 @@ function ladderTo(mk: string) { return `/football/${props.eventId}/ladder?market
       <div class="panel">
         <h4>明细图表</h4>
         <div class="detail-grid">
-          <NuxtLink :to="detailFullTo" class="detail-btn grey">明细</NuxtLink>
-          <NuxtLink :to="goalsDetailTo" class="detail-btn grey">进球明细</NuxtLink>
-          <NuxtLink :to="csScoreTo" class="detail-btn grey">比分明细</NuxtLink>
-          <NuxtLink :to="euroTo" class="detail-btn green">欧洲指数</NuxtLink>
-          <NuxtLink :to="ladderTo('standard')" class="detail-btn blue">标盘</NuxtLink>
-          <NuxtLink :to="ladderTo('goals')" class="detail-btn blue">进球</NuxtLink>
-          <NuxtLink :to="ladderTo('cs')" class="detail-btn blue">正确比分</NuxtLink>
+          <NuxtLink v-for="b in detailButtons" :key="b.label" :to="b.to" :class="['detail-btn', b.tone]">{{ b.label }}</NuxtLink>
         </div>
       </div>
     </section>

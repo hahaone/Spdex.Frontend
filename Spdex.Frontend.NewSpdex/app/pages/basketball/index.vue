@@ -161,6 +161,7 @@ function detailRoute(eventId: number) {
     :prematch-six-hour-lock-applied="prematchSixHourLockApplied"
     :detail-route="detailRoute"
     :two-way="true"
+    :sport="'basketball'"
     :show-flash-q="false"
     :show-lottery-filters="false"
     @refresh="refresh()"

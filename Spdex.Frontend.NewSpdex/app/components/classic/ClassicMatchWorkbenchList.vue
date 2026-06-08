@@ -22,6 +22,7 @@ const props = defineProps<{
   leagueOptions: Option[]
   backcheckLocked?: boolean
   twoWay?: boolean
+  sport?: 'football' | 'basketball'
   showFlashQ?: boolean
   showLotteryFilters?: boolean
   prematchSixHourLockApplied?: boolean
@@ -229,6 +230,7 @@ function restore() {
         :collapsed="collapsedIds.has(match.eventId)"
         :detail-to="detailRoute(match.eventId)"
         :two-way="twoWay"
+        :sport="sport ?? 'football'"
         :show-flash-q="showFlashQ !== false"
         @toggle-selected="toggleSelected"
         @toggle-collapsed="toggleCollapsed"
