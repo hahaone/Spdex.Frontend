@@ -218,8 +218,7 @@ const flashAccessStatus = computed(() => flashAccess.value ?? permissions.value?
 const isFreeFlashRole = computed(() => {
   const role = String(permissions.value?.role || '').toLowerCase()
   return Boolean(
-    flashAccessStatus.value?.isFreeRole
-    || permissions.value?.roleId === 2
+    permissions.value?.roleId === 2
     || role.includes('free')
     || role.includes('免费')
   )
