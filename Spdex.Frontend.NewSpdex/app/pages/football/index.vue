@@ -167,6 +167,7 @@ function detailRoute(eventId: number) {
     :is-metric-filtered="isMetricFiltered"
     :metric-label="metricLabel"
     :detail-route="detailRoute"
+    :show-flash-q="true"
     @refresh="refresh()"
     @clear-metric="navigateTo('/football')"
   />
