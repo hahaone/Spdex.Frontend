@@ -42,18 +42,32 @@ export interface OrderDetailData {
   lockMessage: string | null
   selections: OrderSelection[]
   rows: OrderRow[]
+  /** 当前页码（1 起）。 */
+  page: number
+  /** 每页条数。 */
+  pageSize: number
+  /** 当前视图总条数（综合=不同刷新时刻数；单选项=该选项总行数），供分页器。 */
+  total: number
 }
 
-export function useOrderDetail(eventId: MaybeRef<number>, market: MaybeRef<string> = 'standard') {
+// side：'all'（综合）或某选项 key（home/over/cs{id}…），与 page 一起做服务端分页（去掉旧 360 截断）。
+export function useOrderDetail(
+  eventId: MaybeRef<number>,
+  market: MaybeRef<string> = 'standard',
+  side: MaybeRef<string> = 'all',
+  page: MaybeRef<number> = 1,
+) {
   const idRef = computed(() => unref(eventId))
   const mktRef = computed(() => unref(market) || 'standard')
+  const sideRef = computed(() => unref(side) || 'all')
+  const pageRef = computed(() => unref(page) || 1)
 
   const result = useApiFetch<ApiResponse<OrderDetailData>>(
-    () => `/api/newspdex/order-detail/${idRef.value}?market=${mktRef.value}`,
+    () => `/api/newspdex/order-detail/${idRef.value}?market=${mktRef.value}&side=${sideRef.value}&page=${pageRef.value}&pageSize=30`,
     {
-      key: () => `newspdex-orderdetail-${idRef.value}-${mktRef.value}`,
+      key: () => `newspdex-orderdetail-${idRef.value}-${mktRef.value}-${sideRef.value}-${pageRef.value}`,
       server: false,
-      watch: [idRef, mktRef],
+      watch: [idRef, mktRef, sideRef, pageRef],
     },
   )
 

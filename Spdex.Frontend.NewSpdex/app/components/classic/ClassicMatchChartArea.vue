@@ -131,17 +131,16 @@ const allMetricButtons: MetricBtn[] = [
   { label: '让分价位', market: 'handicap', metric: 'odds' },
   { label: '让分挂牌', market: 'handicap', metric: 'exchange' },
   { label: '进球均衡', market: 'goals', metric: 'balance' },
-  { label: '亚洲指数', market: 'handicap', metric: 'bfindex' },
+  { label: '亚洲指数', market: 'asianindex', metric: 'index' },
   { label: '比分指数', market: 'cs', metric: 'bfindex' },
 ]
 // 篮球走势矩阵对齐旧站:去掉 凯利/欧洲平均(euro,无博彩数据)、比分指数(cs)、冷热、进球均衡(balance)、
-// 亚洲指数(与让分指数同为 handicap.bfindex,重复)。保留 标盘/进球/让分 各指标。
+// 亚洲指数(足球专属,源 Win007 亚盘+欧赔;篮球用亚盘让球/总分)。保留 标盘/进球/让分 各指标。
 const metricButtons = computed<MetricBtn[]>(() => {
   if (!isBasket.value) return allMetricButtons
   return allMetricButtons.filter(b =>
-    b.market !== 'euro' && b.market !== 'cs'
-    && b.metric !== 'hotcold' && b.metric !== 'balance'
-    && b.label !== '亚洲指数')
+    b.market !== 'euro' && b.market !== 'cs' && b.market !== 'asianindex'
+    && b.metric !== 'hotcold' && b.metric !== 'balance')
 })
 
 function pickMetric(b: MetricBtn) {

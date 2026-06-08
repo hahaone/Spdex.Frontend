@@ -85,18 +85,15 @@ const bigBetText = computed(() => {
       </div>
 
       <div class="head-meta">
+        <a v-if="showFlashQ && canOpenFlashQ" :href="flashQUrl" class="flashq-inline" aria-label="使用闪Q分析">
+          <Zap :size="12" /><span>闪Q</span>
+        </a>
+        <button v-else-if="showFlashQ" type="button" class="flashq-inline locked" :title="flashQLockMessage" aria-label="免费版暂未开放闪Q" disabled>
+          <Zap :size="12" /><span>闪Q</span>
+        </button>
         <span class="num">开赛时间：{{ match.matchTime.slice(0, 10).replaceAll('-', '/') }} {{ kickOff }}</span>
         <span class="score num">{{ scoreText }}</span>
       </div>
-
-      <a v-if="showFlashQ && canOpenFlashQ" :href="flashQUrl" class="flashq classic-action" aria-label="使用闪Q分析">
-        <Zap :size="13" />
-        <span>闪Q分析</span>
-      </a>
-      <button v-else-if="showFlashQ" type="button" class="flashq classic-action locked" :title="flashQLockMessage" disabled>
-        <Zap :size="13" />
-        <span>闪Q分析</span>
-      </button>
 
       <button type="button" class="collapse-btn" :aria-label="collapsed ? '展开赛事' : '收起赛事'" @click="emit('toggleCollapsed', match.eventId)">
         <ChevronDown v-if="collapsed" :size="15" />
@@ -138,7 +135,7 @@ const bigBetText = computed(() => {
 
 .classic-card-head {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto auto 28px;
+  grid-template-columns: 26px minmax(0, 1fr) auto 28px;
   align-items: center;
   gap: 8px;
   min-height: 32px;
@@ -161,8 +158,7 @@ const bigBetText = computed(() => {
 }
 
 .head-main,
-.head-meta,
-.classic-action {
+.head-meta {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -207,20 +203,24 @@ const bigBetText = computed(() => {
   color: #9bf0b9;
 }
 
-.classic-action {
-  justify-content: center;
-  gap: 3px;
-  min-height: 28px;
-  padding: 0 8px;
+/* 闪Q 入口:置于卡片标题「开赛时间」左侧的小号品牌黄按钮,各屏宽常驻。 */
+.flashq-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
   border: 0;
+  border-radius: 3px;
   background: var(--classic-yellow);
   color: #202020;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 840;
+  cursor: pointer;
 }
 
-.classic-action.locked {
-  opacity: 0.64;
+.flashq-inline.locked {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .collapse-btn {
@@ -266,10 +266,6 @@ const bigBetText = computed(() => {
 @media (max-width: 1320px) {
   .classic-card-head {
     grid-template-columns: 24px minmax(0, 1fr) auto 28px;
-  }
-
-  .classic-action {
-    display: none;
   }
 }
 </style>

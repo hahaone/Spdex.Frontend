@@ -18,15 +18,17 @@ const market = computed(() => (typeof route.query.market === 'string' ? route.qu
 const side = computed(() => (typeof route.query.side === 'string' ? route.query.side : ''))
 const basePath = computed(() => `/${props.sport}`)
 
-const { data, pending, refresh } = useOrderDetail(eventId, market)
+// tab：'all'（综合）或某选项 key，同时作为服务端分页的 side；page：服务端分页页码。
+const tab = ref<string>(side.value === 'over' || side.value === 'under' ? side.value : 'all')
+const page = ref(1)
+
+const { data, pending, refresh } = useOrderDetail(eventId, market, tab, page)
 
 const status = computed(() => data.value?.status ?? 'pending')
 const locked = computed(() => status.value === 'no-access')
 const rows = computed<OrderRow[]>(() => data.value?.rows ?? [])
 const selections = computed<OrderSelection[]>(() => data.value?.selections ?? [])
 
-// tab：'all'（综合）或某选项 key；带 side 参数时初始定位到该选项。
-const tab = ref<string>(side.value === 'over' || side.value === 'under' ? side.value : 'all')
 const tabs = computed(() => [
   { key: 'all', label: '综合明细' },
   ...selections.value.map(s => ({ key: s.key, label: `${s.tab}明细` })),
@@ -59,13 +61,12 @@ const combined = computed<CombinedRow[]>(() => {
 
 const sideRows = computed<OrderRow[]>(() => (tab.value === 'all' ? [] : rows.value.filter(r => r.side === tab.value)))
 
-// 分页（旧站每页约 30 行）
+// 服务端分页：rows 即当前页(综合按刷新时刻 / 单选项按行),total/页数用后端返回的 total。
 const PAGE_SIZE = 30
-const page = ref(1)
-const total = computed(() => (tab.value === 'all' ? combined.value.length : sideRows.value.length))
+const total = computed(() => data.value?.total ?? 0)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
-const pagedCombined = computed(() => combined.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
-const pagedSide = computed(() => sideRows.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+const pagedCombined = computed(() => combined.value)
+const pagedSide = computed(() => sideRows.value)
 const pageList = computed(() => Array.from({ length: pageCount.value }, (_, i) => i + 1))
 watch(tab, () => { page.value = 1 })
 watch(market, () => { tab.value = 'all'; page.value = 1 })
