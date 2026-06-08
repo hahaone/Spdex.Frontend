@@ -46,6 +46,11 @@ interface BackendMatchSummary {
   goalsOdds?: number[]
   goalsIndex?: number[]
   goalsAmount?: number[]
+  goalsPnl?: number[]
+  asianLet?: number[]
+  asianLetLine?: number
+  asianTotal?: number[]
+  asianTotalLine?: number
   score?: string
   halfScore?: string
   stockStd?: number[]
@@ -160,6 +165,12 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     goalsIndex: hasGoalsMarket ? goalsIndex : undefined,
     goalsAmount: hasGoalsMarket ? goalsAmount : undefined,
     goalsTurnovers: hasGoalsMarket ? formatAmountPair(goalsAmount) : undefined,
+    goalsPnl: hasGoalsMarket ? toPair(item.goalsPnl) : undefined,
+    // 篮球亚盘让球/亚盘总进球(BetFair 最平衡线 + HK 赔率);无数据时为 [0,0]/0,网格按 0 显示空。
+    asianLet: toPair(item.asianLet),
+    asianLetLine: item.asianLetLine ?? 0,
+    asianTotal: toPair(item.asianTotal),
+    asianTotalLine: item.asianTotalLine ?? 0,
     scoreText: item.score || undefined,
     halfScoreText: item.halfScore || undefined,
     stockStd: toTriple(item.stockStd),
