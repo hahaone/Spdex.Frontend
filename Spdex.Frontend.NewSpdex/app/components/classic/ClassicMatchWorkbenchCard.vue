@@ -232,8 +232,9 @@ const bigBetText = computed(() => {
   padding: 1px 6px;
   border: 0;
   border-radius: 3px;
-  background: var(--classic-yellow);
-  color: #202020;
+  /* 固定亮金(不用 var(--classic-yellow):深色主题下它是暗橄榄 #5a4d18,与深色卡头撞色看不见)。 */
+  background: #f6c343;
+  color: #1f2430;
   font-size: 0.7rem;
   font-weight: 840;
   cursor: pointer;
