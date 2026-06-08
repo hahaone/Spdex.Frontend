@@ -81,6 +81,42 @@ function formatPercent(raw: number | null): string {
   return `${Math.round(raw * 100)}%`
 }
 
+const chartOpenPrices = ref<Record<string, number | null>>({})
+const chartHoverPrices = ref<Record<string, number | null> | null>(null)
+
+function handleChartOpenPrices(value: Record<string, number | null>) {
+  chartOpenPrices.value = value
+}
+
+function handleChartHoverPrices(value: Record<string, number | null> | null) {
+  chartHoverPrices.value = value
+}
+
+function seriesReferencePrice(s: TrendChartSeries): number | null {
+  if (chartHoverPrices.value && s.key in chartHoverPrices.value) return chartHoverPrices.value[s.key] ?? null
+  if (s.key in chartOpenPrices.value) return chartOpenPrices.value[s.key] ?? null
+  return s.dataPoints[0]?.price ?? null
+}
+
+function seriesPriceDelta(s: TrendChartSeries): number | null {
+  const latest = s.lastPct
+  const reference = seriesReferencePrice(s)
+  if (latest == null || reference == null) return null
+  return latest - reference
+}
+
+function formatPercentDelta(delta: number | null): string {
+  if (delta == null) return ''
+  const points = Math.round(delta * 100)
+  if (points === 0) return '(0%)'
+  return `(${points > 0 ? '+' : ''}${points}%)`
+}
+
+function percentDeltaClass(delta: number | null): string {
+  if (delta == null || Math.round(delta * 100) === 0) return 'text-gray-400'
+  return delta > 0 ? 'text-green-600' : 'text-red-500'
+}
+
 function teamShortCode(name: string | null | undefined): string {
   const raw = (name ?? '').trim()
   if (!raw) return '--'
@@ -306,12 +342,28 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
       <div v-if="visibleSeries.length > 0" class="grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-3">
         <div class="rounded-xl border border-gray-200 bg-gray-50/40 p-3">
           <div class="text-xs font-semibold text-gray-400 mb-1">概率及走势</div>
-          <PolyTrendChart :series="visibleSeries" :volume-buckets="volumeBuckets" :volume-max="volumeMaxNotional" :time-range="graphTimeline" :chart-scale="chartScale" :height="160" />
+          <PolyTrendChart
+            :series="visibleSeries"
+            :volume-buckets="volumeBuckets"
+            :volume-max="volumeMaxNotional"
+            :time-range="graphTimeline"
+            :chart-scale="chartScale"
+            :height="160"
+            @range-open-prices="handleChartOpenPrices"
+            @hover-prices="handleChartHoverPrices"
+          />
         </div>
         <div class="rounded-xl border border-gray-200 bg-gray-50/35 p-3 flex flex-col gap-2">
           <div v-for="s in visibleSeries" :key="`top-side-${s.key}`" class="rounded-lg bg-white px-3 py-2">
             <div class="text-xs font-semibold" :style="{ color: s.color }">{{ s.label }}</div>
-            <div class="text-3xl leading-tight font-bold tabular-nums text-gray-900">{{ formatPercent(s.lastPct) }}</div>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-3xl leading-tight font-bold tabular-nums text-gray-900">{{ formatPercent(s.lastPct) }}</span>
+              <span
+                v-if="isExactScoreFamily && seriesPriceDelta(s) !== null"
+                class="text-xs font-bold tabular-nums"
+                :class="percentDeltaClass(seriesPriceDelta(s))"
+              >{{ formatPercentDelta(seriesPriceDelta(s)) }}</span>
+            </div>
           </div>
           <div v-if="hiddenSeriesCount > 0" class="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-400">
             其余 {{ hiddenSeriesCount }} 个选项已折叠

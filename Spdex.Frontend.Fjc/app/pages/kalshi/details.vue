@@ -42,6 +42,11 @@ const selectedMarket = computed(() => {
 const selectedYesSeries = computed(() => findOutcomeSeries(selectedMarket.value?.marketTicker, 'Yes'))
 const selectedNoSeries = computed(() => findOutcomeSeries(selectedMarket.value?.marketTicker, 'No'))
 
+const kickoffUtc = computed(() => {
+  const link = primaryLink.value
+  return link?.betsapiKickoffUtc ?? link?.kalshiKickoffUtc ?? eventTrades.value?.kickoffUtc ?? null
+})
+
 const selectedTrades = computed(() => {
   const all = [
     ...(selectedYesSeries.value?.trades ?? []),
@@ -81,7 +86,7 @@ const matchMeta = computed(() => {
   if (cnLeague.value) parts.push(cnLeague.value)
   else if (link?.betsapiLeagueName) parts.push(link.betsapiLeagueName)
 
-  const kickoff = link?.betsapiKickoffUtc ?? link?.kalshiKickoffUtc ?? eventTrades.value?.kickoffUtc
+  const kickoff = kickoffUtc.value
   if (kickoff) parts.push(dayjs(kickoff).format('MM-DD HH:mm'))
   if (link && link.matchConfidence > 0) parts.push(`匹配度 ${Math.round(link.matchConfidence * 100)}%`)
   return parts.join(' · ')
@@ -206,6 +211,16 @@ function formatDecimalOdds(value: number | null | undefined): string {
   return (1 / price).toFixed(2)
 }
 
+function formatProbability(value: number | null | undefined): string {
+  if (value == null) return '-'
+  return `${(clampProbability(value) * 100).toFixed(1)}%`
+}
+
+function formatSideProbability(value: number | null | undefined): string {
+  if (value == null) return '-'
+  return `${Math.round(clampProbability(value) * 100)}%`
+}
+
 function formatSignedDelta(value: number | null | undefined): string {
   if (value == null) return '-'
   const signed = value >= 0 ? '+' : ''
@@ -219,6 +234,26 @@ function deltaClass(value: number | null | undefined): string {
 
 function formatTime(value: string | null | undefined): string {
   return value ? dayjs(value).format('MM-DD HH:mm:ss') : '-'
+}
+
+function getTimeMark(tradeUtc: string | null | undefined): string {
+  if (!tradeUtc || !kickoffUtc.value) return ''
+  const tradeMs = new Date(tradeUtc).getTime()
+  const kickoffMs = new Date(kickoffUtc.value).getTime()
+  if (!Number.isFinite(tradeMs) || !Number.isFinite(kickoffMs)) return ''
+  const diffMin = (kickoffMs - tradeMs) / 60000
+  if (diffMin < 0) return 'LIVE'
+  if (diffMin <= 2) return 'PP'
+  if (diffMin < 30) return 'P'
+  if (diffMin >= 50 && diffMin <= 65) return 'PS'
+  if (diffMin < 60) return 'P0'
+  if (diffMin < 120) return 'P1'
+  if (diffMin < 180) return 'P2'
+  if (diffMin < 360) return 'P3'
+  if (diffMin < 720) return 'P6'
+  if (diffMin < 1440) return 'P12'
+  if (diffMin < 2880) return 'P24'
+  return 'P48'
 }
 
 function teamShortCode(name: string | null | undefined): string {
@@ -287,7 +322,7 @@ useHead({
           <div class="side-stack">
             <div v-for="s in graphSeries" :key="s.key" class="side-card">
               <div class="side-label" :style="{ color: s.color }">{{ s.label }}</div>
-              <div class="side-price">{{ formatDecimalOdds(s.lastPct) }}</div>
+              <div class="side-price">{{ formatSideProbability(s.lastPct) }}</div>
             </div>
           </div>
         </div>
@@ -343,7 +378,7 @@ useHead({
                   <thead><tr><th>价格</th><th>数量</th></tr></thead>
                   <tbody>
                     <tr v-for="level in orderbook.yesBids" :key="`yes-${level.price}-${level.size}`">
-                      <td>{{ formatDecimalOdds(level.price) }}</td>
+                      <td>{{ formatProbability(level.price) }}</td>
                       <td>{{ level.size.toFixed(0) }}</td>
                     </tr>
                   </tbody>
@@ -355,7 +390,7 @@ useHead({
                   <thead><tr><th>价格</th><th>数量</th></tr></thead>
                   <tbody>
                     <tr v-for="level in orderbook.noBids" :key="`no-${level.price}-${level.size}`">
-                      <td>{{ formatDecimalOdds(level.price) }}</td>
+                      <td>{{ formatProbability(level.price) }}</td>
                       <td>{{ level.size.toFixed(0) }}</td>
                     </tr>
                   </tbody>
@@ -381,11 +416,16 @@ useHead({
               <tbody>
                 <tr v-for="trade in selectedTrades" :key="trade.tradeId">
                   <td :class="trade.outcomeSide.toLowerCase() === 'yes' ? 'yes-cell' : 'no-cell'">{{ trade.outcomeSide }}</td>
-                  <td>{{ formatDecimalOdds(trade.price) }}</td>
+                  <td>{{ formatProbability(trade.price) }}</td>
                   <td>{{ trade.count.toFixed(0) }}</td>
                   <td>{{ formatCompactCurrency(trade.notional) }}</td>
                   <td :class="deltaClass(trade.priceDelta)">{{ formatSignedDelta(trade.priceDelta) }}</td>
-                  <td>{{ formatTime(trade.createdAtUtc) }}</td>
+                  <td>
+                    <span class="trade-time-cell">
+                      <span v-if="getTimeMark(trade.createdAtUtc)" class="time-mark">{{ getTimeMark(trade.createdAtUtc) }}</span>
+                      <span>{{ formatTime(trade.createdAtUtc) }}</span>
+                    </span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -702,6 +742,23 @@ useHead({
 }
 .delta-neutral {
   color: #9ca3af;
+}
+.trade-time-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.time-mark {
+  min-width: 24px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  padding: 1px 4px;
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 .empty-line {
   padding: 20px 8px;

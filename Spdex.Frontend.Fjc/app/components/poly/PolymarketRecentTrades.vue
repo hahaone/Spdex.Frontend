@@ -273,7 +273,7 @@ function tickY(value: number): number {
 
     <!-- Trade table -->
     <div class="trade-grid px-2 py-1 text-[10px] text-gray-400 uppercase tracking-wider">
-      <span>时间</span><span>方向</span><span>交易者</span><span class="text-right">价格</span><span class="text-right">价差</span><span class="text-right">成交量</span><span v-if="kickoffUtc" class="text-center">标记</span>
+      <span>时间</span><span>方向</span><span>交易者</span><span class="text-right">价格</span><span class="text-right">价差</span><span class="text-right">成交量</span>
     </div>
     <div
       v-for="(trade, i) in visibleTrades" :key="i"
@@ -283,7 +283,10 @@ function tickY(value: number): number {
       @mouseenter="onHover(trade)" @mouseleave="onHover(null)"
     >
       <div class="absolute right-0 top-0 bottom-0 rounded-r transition-all duration-200" :class="trade.side === 'BUY' ? 'bg-green-500/[0.08]' : 'bg-red-500/[0.08]'" :style="{ width: barWidth(trade.size) }" />
-      <span class="relative tabular-nums text-gray-400">{{ formatTime(trade.timestampUtc) }}</span>
+      <span class="relative flex items-center gap-1 tabular-nums text-gray-400">
+        <span v-if="kickoffUtc" class="time-mark">{{ getTimeMark(trade.timestampUtc) }}</span>
+        <span>{{ formatTime(trade.timestampUtc) }}</span>
+      </span>
       <span class="relative">
         <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold" :class="trade.side === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ trade.side }}</span>
         <span class="ml-1 text-gray-400">{{ displayOutcome(trade) }}</span>
@@ -295,7 +298,6 @@ function tickY(value: number): number {
       <span class="relative text-right tabular-nums font-semibold text-gray-900">{{ (trade.price * 100).toFixed(1) }}%</span>
       <span class="relative text-right tabular-nums text-[11px] font-medium" :style="deltaColor(getDelta(trade))">{{ formatDelta(getDelta(trade)) }}</span>
       <span class="relative text-right tabular-nums font-medium text-gray-600">{{ formatSize(trade.size) }}</span>
-      <span v-if="kickoffUtc" class="relative text-center text-[10px] text-gray-400 font-medium">{{ getTimeMark(trade.timestampUtc) }}</span>
     </div>
 
     <button v-if="hasMore" class="w-full text-center text-xs text-blue-500 hover:underline py-2" @click="showMore">
@@ -307,7 +309,18 @@ function tickY(value: number): number {
 </template>
 
 <style scoped>
-.trade-grid { display: grid; grid-template-columns: 64px 1fr minmax(0, 90px) 52px 42px 52px 36px; gap: 4px; align-items: center; }
+.trade-grid { display: grid; grid-template-columns: 96px 1fr minmax(0, 90px) 52px 42px 52px; gap: 4px; align-items: center; }
+.time-mark {
+  min-width: 24px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 1px 4px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
 .bubble { transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .bubble:hover, .bubble-active { transform: translate(-50%, -50%) scale(1.25); }
 .tooltip-fade-enter-active { transition: opacity 0.1s ease; }

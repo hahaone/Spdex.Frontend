@@ -21,6 +21,11 @@ const props = withDefaults(
   { height: 400, volumeMax: 0 },
 )
 
+const emit = defineEmits<{
+  (e: 'range-open-prices', value: Record<string, number | null>): void
+  (e: 'hover-prices', value: Record<string, number | null> | null): void
+}>()
+
 // ─── Hover state ───
 interface LabelInfo { label: string; color: string; pct: number }
 interface FloatInfo { label: string; color: string; pct: number; x: number; y: number }
@@ -69,6 +74,27 @@ function findPriceAtTime(points: TrendDataPoint[], targetMs: number): number | n
     else hi = mid - 1
   }
   return points[lo]!.price
+}
+
+function currentRangeStartMs(): number {
+  if (activePreset.value === 'ALL') return props.timeRange.minTs || 0
+  return Date.now() - PRESET_MS[activePreset.value]
+}
+
+function firstPriceInRange(points: TrendDataPoint[], startMs: number): number | null {
+  if (!points.length) return null
+  const sorted = [...points].sort((a, b) => a.ts - b.ts)
+  const firstInRange = sorted.find(point => point.ts >= startMs)
+  return firstInRange?.price ?? sorted[0]?.price ?? null
+}
+
+function emitRangeOpenPrices() {
+  const startMs = currentRangeStartMs()
+  const prices: Record<string, number | null> = {}
+  for (const sr of seriesList) {
+    prices[sr.meta.key] = firstPriceInRange(sr.points, startMs)
+  }
+  emit('range-open-prices', prices)
 }
 
 const tzOffsetSec = -new Date().getTimezoneOffset() * 60
@@ -141,6 +167,7 @@ function buildChart() {
       hoverLabels.length = 0
       floats.length = 0
       fadeLeft.value = 0
+      emit('hover-prices', null)
       return
     }
 
@@ -155,8 +182,10 @@ function buildChart() {
 
     hoverLabels.length = 0
     floats.length = 0
+    const hoverPrices: Record<string, number | null> = {}
     for (const sr of seriesList) {
       const price = findPriceAtTime(sr.points, realMs)
+      hoverPrices[sr.meta.key] = price
       if (price !== null) {
         const pct = Math.round(price * 100)
         hoverLabels.push({ label: sr.meta.label, color: sr.meta.color, pct })
@@ -167,6 +196,7 @@ function buildChart() {
         floats.push({ label: sr.meta.label, color: sr.meta.color, pct, x: px, y: py })
       }
     }
+    emit('hover-prices', hoverPrices)
   })
 
   const obs = new ResizeObserver(() => {
@@ -178,7 +208,7 @@ function buildChart() {
 
 function applyTimeRange() {
   if (!chart || !seriesList.length) return
-  if (activePreset.value === 'ALL') { chart.timeScale().fitContent(); return }
+  if (activePreset.value === 'ALL') { chart.timeScale().fitContent(); emitRangeOpenPrices(); return }
   const ms = PRESET_MS[activePreset.value]
   const now = Date.now()
   try {
@@ -188,6 +218,7 @@ function applyTimeRange() {
     })
   }
   catch { chart.timeScale().fitContent() }
+  emitRangeOpenPrices()
 }
 
 onMounted(() => nextTick(buildChart))
