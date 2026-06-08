@@ -68,6 +68,8 @@ export interface MatchSummary {
   scoreText?: string
   /** 半场比分文本（"1-0"）。 */
   halfScoreText?: string
+  /** 进行中赛事的近似进行时间("67'"/"90+");仅 started 有值,upcoming/finished 为空。 */
+  liveMinute?: string
   /** 标盘挂牌指数 [主,平,客]，0=无数据（VendorBase.BfStock）。 */
   stockStd?: [number, number, number]
   /** 进球挂牌指数 [大,小]（VendorBase.UoStock）。 */

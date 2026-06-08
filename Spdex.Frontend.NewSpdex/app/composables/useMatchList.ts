@@ -58,6 +58,7 @@ interface BackendMatchSummary {
   asianTotalLine?: number
   score?: string
   halfScore?: string
+  liveMinute?: string
   stockStd?: number[]
   stockGoals?: number[]
   stockHandicap?: number[]
@@ -183,6 +184,7 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     asianTotalLine: item.asianTotalLine ?? 0,
     scoreText: item.score || undefined,
     halfScoreText: item.halfScore || undefined,
+    liveMinute: item.liveMinute || undefined,
     stockStd: toTriple(item.stockStd),
     stockGoals: toPair(item.stockGoals),
     stockHandicap: toTriple(item.stockHandicap),
