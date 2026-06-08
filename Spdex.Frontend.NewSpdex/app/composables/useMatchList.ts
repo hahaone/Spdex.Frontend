@@ -22,6 +22,7 @@ interface BackendMatchSummary {
   bfIndex: number[]
   polyIndex: number[]
   bfAmount: number
+  bfAmounts?: number[]
   polyAmount: number
   flags: string[]
   pMark: string | null
@@ -147,6 +148,7 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     handicap: formatHandicapLine(item.handicap),
     prices: [0, 0, 0],  // 后端 list 不返回 odds，详情页才有
     turnovers: distributeTurnover(item.bfAmount, bfIndex),
+    bfAmounts: toTriple(item.bfAmounts),
     bfIndex,
     polyIndex,
     flags: item.flags ?? [],

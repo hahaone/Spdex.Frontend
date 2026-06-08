@@ -36,6 +36,8 @@ export interface MatchSummary {
   bigBetAmount?: number
   /** Betfair 总成交额（原始数值，前端格式化为 K/M）。 */
   bfAmount?: number
+  /** 标盘各侧真实成交额 [主, 平, 客]（旧站口径,优于「总额×指数占比」近似）。 */
+  bfAmounts?: [number, number, number]
   /** 大小盘口线（篮球总分线 / 足球进球线）。 */
   goalsLine?: string
   /** 大小赔率 [大, 小]。 */

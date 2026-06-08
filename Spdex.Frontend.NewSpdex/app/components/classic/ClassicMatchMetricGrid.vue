@@ -113,7 +113,7 @@ const footballColumns: Col[] = [
 const basketballColumns: Col[] = [
   { key: 'team', label: '队名', tone: 'team', get: i => i === 0 ? props.match.homeTeam : i === 2 ? props.match.awayTeam : 'VS', strong: () => true },
   { key: 'index', label: '指数', tone: 'deal', get: i => i === 1 ? '' : (num(std(i)?.bfIndex) || intList(props.match.bfIndex[i])), strong: () => true },
-  { key: 'turnover', label: '成交', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.turnover || props.match.turnovers[i] || '') },
+  { key: 'turnover', label: '成交', tone: 'deal', get: i => i === 1 ? '' : (intList(props.match.bfAmounts?.[i]) || std(i)?.turnover || props.match.turnovers[i] || '') },
   { key: 'ratio', label: '比例', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.ratio || listShare(i)) },
   { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => i === 1 ? '' : signed(std(i)?.pnl) },
   { key: 'price', label: '价位', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.price || odds(props.match.bfPrice?.[i])) },
