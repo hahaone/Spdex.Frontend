@@ -153,6 +153,10 @@ function isActive(b: MetricBtn) {
   return view.value === 'chart' && !b.disabled && market.value === b.market && metric.value === b.metric
 }
 
+// 由父级「交易所重大成交提示」标题点击触发,切回重大成交提示视图(替代原图表区「← 重大成交」按钮)。
+function showTips() { view.value = 'tips' }
+defineExpose({ showTips })
+
 // 经典版「明细图表」入口(还原旧站),按运动分流:
 // 足球:明细 / 进球明细 / 比分明细 / 欧洲指数 / 标盘 / 进球 / 正确比分;
 // 篮球:明细 / 大球明细 / 小球明细 / 标盘 / 进球(2-way、总分大小;无欧赔/比分/正确比分)。
@@ -220,7 +224,6 @@ const detailButtons = computed<DetailBtn[]>(() => {
       <!-- 走势图 -->
       <div v-else class="chart-dock">
         <div class="chart-tools">
-          <button type="button" class="back-tips" @click="view = 'tips'">← 重大成交</button>
           <select v-model="timeRange" class="cd-select" aria-label="时间段">
             <option v-for="o in timeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>

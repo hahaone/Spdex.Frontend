@@ -29,6 +29,7 @@ const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 // visible 驱动「整行补全(enrich)」与「内嵌走势图」的懒加载,避免整页 N 场并发拉详情。
 const rootEl = ref<HTMLElement | null>(null)
 const visible = ref(false)
+const chartAreaRef = ref<{ showTips: () => void } | null>(null)
 const eventIdRef = computed(() => props.match.eventId)
 const active = computed(() => visible.value && !props.collapsed)
 const { enrich } = useClassicMatchEnrich(eventIdRef, active)
@@ -108,7 +109,7 @@ const bigBetText = computed(() => {
       <ClassicMatchMetricGrid :match="match" :enrich="enrich" :two-way="twoWay" />
 
       <div class="classic-total-row">
-        <span>交易所重大成交提示</span>
+        <span class="tips-trigger" role="button" tabindex="0" title="查看交易所重大成交提示" @click="chartAreaRef?.showTips()" @keydown.enter="chartAreaRef?.showTips()">交易所重大成交提示</span>
         <span>标盘总成交：<b class="num">{{ totalTurnover }}</b></span>
         <span>进球总成交：<b class="num">{{ goalsTotal }}</b></span>
         <span>让分总成交：<b class="num">{{ handicapTotal }}</b></span>
@@ -117,6 +118,7 @@ const bigBetText = computed(() => {
 
       <ClassicMatchChartArea
         v-if="visible"
+        ref="chartAreaRef"
         :event-id="match.eventId"
         :home-team="match.homeTeam"
         :away-team="match.awayTeam"
@@ -271,6 +273,16 @@ const bigBetText = computed(() => {
   justify-content: center;
   padding: 0 8px;
   border-right: 1px solid var(--classic-grid);
+}
+
+/* 「交易所重大成交提示」可点击,触发图表区显示重大成交提示(替代原图表区按钮)。 */
+.tips-trigger {
+  cursor: pointer;
+  color: var(--classic-link);
+}
+
+.tips-trigger:hover {
+  text-decoration: underline;
 }
 
 .classic-total-row span:last-child {
