@@ -68,23 +68,20 @@ const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 const hasPrice = computed(() => prices.value.length > 0)
 
 /**
- * 价 + 量分带布局（行情图常见）：价位线占上方带、成交柱占下方带，互不挤压。
- * 成交柱在带内用「平方根标度」——单笔大单常是普通桶 10×+，线性会把普通柱压成贴地短条，
+ * 价位 + 成交「全高叠加」(双轴,与经典 StaticTrendChart 统一):成交柱与价位线同占整图高、上下叠加;
+ * 左轴=成交、右轴=价位。成交柱用「平方根标度」——单笔大单常是普通桶 10×+,线性会把普通柱压成贴地短条,
  * sqrt 让中小柱清晰可见且大单仍最高、顺序不变。
  */
-const VOL_BAND = 0.5 // 成交柱占图高的下方比例
-const BAND_GAP = 0.06 // 上下带之间的留白
-const volBandH = computed(() => chartH.value * VOL_BAND)
+const volBandH = computed(() => chartH.value) // 成交柱占整图高(与价位线叠加)
 const volBase = computed(() => PAD_TOP + chartH.value) // 柱底 = 图底
-const volTop = computed(() => volBase.value - volBandH.value) // 柱区顶 = 分带线
-const priceBandH = computed(() => chartH.value * (1 - VOL_BAND - BAND_GAP)) // 价位带高（上方）
+const volTop = computed(() => PAD_TOP) // 柱区顶 = 图顶(全高)
 
 function volH(v: number): number {
   if (v <= 0) return 0
   return volBandH.value * Math.sqrt(v) / Math.sqrt(maxVol.value)
 }
 function priceY(p: number): number {
-  return PAD_TOP + priceBandH.value * (1 - (p - priceMin.value) / priceRange.value)
+  return PAD_TOP + chartH.value * (1 - (p - priceMin.value) / priceRange.value)
 }
 
 interface Bar { x: number, y: number, w: number, h: number, color: string }
@@ -139,7 +136,7 @@ function fmtVol(v: number): string {
 const priceTicks = computed(() => {
   if (!hasPrice.value) return []
   return [0, 0.5, 1].map(f => ({
-    y: PAD_TOP + priceBandH.value * f,
+    y: PAD_TOP + chartH.value * f,
     label: (priceMax.value - priceRange.value * f).toFixed(2),
   }))
 })
@@ -412,6 +409,7 @@ const tip = computed(() => {
 .tf-legend {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 4px 10px;
   padding-top: 2px;
 }
