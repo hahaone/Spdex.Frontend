@@ -11,6 +11,11 @@ const { data, market, activeKey, setMarket, setSelection, pending, refresh } = u
 const active = computed(() => data.value?.active ?? null)
 const selections = computed(() => data.value?.selections ?? [])
 const locked = computed(() => data.value?.accessLocked === true)
+const availableMarkets = computed(() => {
+  const markets = data.value?.markets
+  if (!markets?.length) return LADDER_MARKETS
+  return LADDER_MARKETS.filter(item => markets.includes(item.value))
+})
 
 watch(() => props.initialMarket, (m) => {
   if (m && LADDER_MARKETS.some(item => item.value === m))
@@ -193,7 +198,7 @@ watch(() => active.value?.key, () => {
 
     <div class="lp-tabs">
       <button
-        v-for="m in LADDER_MARKETS"
+        v-for="m in availableMarkets"
         :key="m.value"
         type="button"
         :class="['lp-tab focus-ring', { active: market === m.value }]"

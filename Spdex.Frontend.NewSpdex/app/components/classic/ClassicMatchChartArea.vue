@@ -24,6 +24,9 @@ const isBasket = computed(() => props.sport === 'basketball')
 const basePath = computed(() => `/${props.sport}`)
 // 篮球走势矩阵按钮更少 → 右侧标签组更矮;走势图相应压低,与右侧高度看齐。足球保持 240。
 const chartHeight = computed(() => (isBasket.value ? 180 : 240))
+const { entitlements } = useAuth()
+const canViewScoreMarkets = computed(() =>
+  entitlements.value?.csData === true && entitlements.value?.correctScoreIndex === true)
 
 // 默认「成交」走势图(tradeflow);chart=走势图 / tips=重大成交提示(点「← 重大成交」切换)
 const view = ref<'tips' | 'chart'>('chart')
@@ -137,11 +140,23 @@ const allMetricButtons: MetricBtn[] = [
 // 篮球走势矩阵对齐旧站:去掉 凯利/欧洲平均(euro,无博彩数据)、比分指数(cs)、冷热、进球均衡(balance)、
 // 亚洲指数(足球专属,源 Win007 亚盘+欧赔;篮球用亚盘让球/总分)。保留 标盘/进球/让分 各指标。
 const metricButtons = computed<MetricBtn[]>(() => {
-  if (!isBasket.value) return allMetricButtons
-  return allMetricButtons.filter(b =>
-    b.market !== 'euro' && b.market !== 'cs' && b.market !== 'asianindex'
-    && b.metric !== 'hotcold' && b.metric !== 'balance')
+  let buttons = allMetricButtons
+  if (isBasket.value) {
+    buttons = buttons.filter(b =>
+      b.market !== 'euro' && b.market !== 'cs' && b.market !== 'asianindex'
+      && b.metric !== 'hotcold' && b.metric !== 'balance')
+  }
+  if (!canViewScoreMarkets.value)
+    buttons = buttons.filter(b => b.market !== 'cs')
+  return buttons
 })
+
+watch(canViewScoreMarkets, (canView) => {
+  if (!canView && market.value === 'cs') {
+    market.value = 'standard'
+    metric.value = 'tradeflow'
+  }
+}, { immediate: true })
 
 function pickMetric(b: MetricBtn) {
   if (b.disabled) return
@@ -172,15 +187,18 @@ const detailButtons = computed<DetailBtn[]>(() => {
       { label: '进球', to: `${base}/ladder?market=goals`, tone: 'blue' },
     ]
   }
-  return [
+  const buttons: DetailBtn[] = [
     { label: '明细', to: `${base}/detail`, tone: 'grey' },
     { label: '进球明细', to: `${base}/detail?market=goals`, tone: 'grey' },
-    { label: '比分明细', to: `${base}/correct-score`, tone: 'grey' },
     { label: '欧洲指数', to: `${base}/euro-odds`, tone: 'green' },
     { label: '标盘', to: `${base}/ladder?market=standard`, tone: 'blue' },
     { label: '进球', to: `${base}/ladder?market=goals`, tone: 'blue' },
-    { label: '正确比分', to: `${base}/ladder?market=cs`, tone: 'blue' },
   ]
+  if (canViewScoreMarkets.value) {
+    buttons.splice(2, 0, { label: '比分明细', to: `${base}/correct-score`, tone: 'grey' })
+    buttons.push({ label: '正确比分', to: `${base}/ladder?market=cs`, tone: 'blue' })
+  }
+  return buttons
 })
 </script>
 

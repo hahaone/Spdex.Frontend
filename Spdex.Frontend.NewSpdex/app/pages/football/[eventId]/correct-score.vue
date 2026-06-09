@@ -84,7 +84,7 @@ function money(n: number): string { return Math.round(n).toLocaleString('en-US')
       </div>
 
       <div v-if="locked" class="cs-state lock">
-        <Lock :size="14" /><span>{{ data?.lockMessage || '正确比分明细为专家版及以上会籍专属' }}</span>
+        <Lock :size="14" /><span>{{ data?.lockMessage || '正确比分明细为白金会员专属' }}</span>
       </div>
       <div v-else-if="!blocks.length" class="cs-state">{{ pending ? '加载中…' : '暂无比分明细数据' }}</div>
 

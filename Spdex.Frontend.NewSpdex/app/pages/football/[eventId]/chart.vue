@@ -31,10 +31,21 @@ const metric = ref(queryString('metric') ?? 'odds')
 const timeRange = ref(initialRange())
 const seriesOnly = ref<'home' | 'draw' | 'away' | null>(initialSeries())
 
-const currentMarket = computed(() => CHART_MARKETS.find(m => m.value === market.value) ?? CHART_MARKETS[0]!)
+const { detail, access } = useMatchDetail(eventId)
+const visibleChartMarkets = computed(() => {
+  if (!detail.value) return CHART_MARKETS
+  return CHART_MARKETS.filter(m => m.value !== 'cs' || access.value.cs)
+})
+const currentMarket = computed(() =>
+  visibleChartMarkets.value.find(m => m.value === market.value) ?? visibleChartMarkets.value[0] ?? CHART_MARKETS[0]!)
 const metrics = computed(() => currentMarket.value.metrics)
 
 // 切换盘口或 query 深链后，若当前指标不在新盘口的指标集合里，回退到第一个
+watch(visibleChartMarkets, (markets) => {
+  if (!markets.some(m => m.value === market.value))
+    market.value = 'standard'
+}, { immediate: true })
+
 watch(metrics, () => {
   if (!metrics.value.some(m => m.value === metric.value))
     metric.value = metrics.value[0]?.value ?? 'odds'
@@ -50,7 +61,6 @@ const timeOptions = [
   { label: '全部', value: 'all' },
 ]
 
-const { detail } = useMatchDetail(eventId)
 const match = computed(() => detail.value?.match)
 const matchHandicap = computed(() => formatHandicapLine(match.value?.handicap))
 
@@ -151,7 +161,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
         <span class="group-label">盘口</span>
         <div class="group-buttons scrollbar-none">
           <button
-            v-for="m in CHART_MARKETS"
+            v-for="m in visibleChartMarkets"
             :key="m.value"
             type="button"
             :class="['group-btn focus-ring', { active: market === m.value }]"

@@ -7,6 +7,8 @@ export interface Entitlements {
   goalsEquilibrium: boolean
   asianIndex: boolean
   correctScoreIndex: boolean
+  csData: boolean
+  cornerData: boolean
   dataReplay: boolean
   standardChart: boolean
   indexTrendChart: boolean

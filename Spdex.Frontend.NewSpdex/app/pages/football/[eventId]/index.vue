@@ -404,11 +404,11 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
           <div class="shortcut-grid">
             <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('standard')">必发明细</button>
             <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('goals')">进球明细</button>
-            <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('cs')">比分明细</button>
+            <button v-if="access.cs" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('cs')">比分明细</button>
             <NuxtLink :to="chartRoute('standard', 'exchange')" class="shortcut-link focus-ring">挂牌倾向</NuxtLink>
             <NuxtLink :to="chartRoute('goals', 'exchange')" class="shortcut-link focus-ring">进球挂牌</NuxtLink>
             <NuxtLink :to="chartRoute('handicap', 'bfindex')" class="shortcut-link focus-ring">亚洲指数</NuxtLink>
-            <NuxtLink :to="chartRoute('cs', 'bfindex')" class="shortcut-link focus-ring">比分指数</NuxtLink>
+            <NuxtLink v-if="access.cs" :to="chartRoute('cs', 'bfindex')" class="shortcut-link focus-ring">比分指数</NuxtLink>
           </div>
           <div v-if="goalsBalance" class="stat-row">
             <span>进球均衡</span>

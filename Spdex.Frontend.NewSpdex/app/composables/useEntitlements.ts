@@ -12,6 +12,8 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   goalsEquilibrium: false,
   asianIndex: false,
   correctScoreIndex: false,
+  csData: false,
+  cornerData: false,
   dataReplay: false,
   standardChart: false,
   indexTrendChart: false,
