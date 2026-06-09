@@ -348,7 +348,7 @@ const factorPeerGroups = [
 const sectionDefinitions = [
   { id: 'bf-core', title: '必发标准盘', shortTitle: '标准盘', subtitle: '成交 / 指数 / 价位', ids: ['f01', 'f02', 'f03', 'f04', 'f05', 'f06', 'f07', 'f08', 'f09', 'f10', 'f11', 'f12', 'f13', 'f14', 'f15', 'f16', 'f17', 'f18'] },
   { id: 'market-index', title: '市场指数', shortTitle: '市场', subtitle: '冷热 / 欧赔 / 凯利', ids: ['f19', 'f20', 'f21', 'f22', 'f23', 'f24', 'f25', 'f26', 'f27'] },
-  { id: 'goals', title: '进球盘', shortTitle: '进球', subtitle: '大小球 / 均衡 / 仓位', ids: ['f28', 'f29', 'f30', 'f31', 'f32', 'f33', 'f34', 'f35', 'f36', 'f37', 'f38', 'f39', 'f40'] },
+  { id: 'goals', title: '进球盘及总成交', shortTitle: '进球/总成', subtitle: '大小球 / 均衡 / 仓位', ids: ['f28', 'f29', 'f30', 'f31', 'f32', 'f33', 'f34', 'f35', 'f36', 'f37', 'f38', 'f39', 'f40'] },
   { id: 'inner-outer-sfp', title: '标准盘内外盘', shortTitle: '标盘内外', subtitle: '成交拆分 / 盈亏拆分', ids: ['f41', 'f42', 'f43', 'f44', 'f45', 'f46', 'f47', 'f48', 'f49', 'f50', 'f51', 'f52'] },
   { id: 'inner-outer-goals', title: '进球盘内外盘', shortTitle: '进球内外', subtitle: '进球成交 / 进球盈亏', ids: ['f53', 'f54', 'f55', 'f56', 'f57', 'f58', 'f59', 'f60'] },
 ]
@@ -1383,7 +1383,7 @@ const refreshFlash = async () => {
 
             <section class="big-trades-board">
               <div class="report-table-title">
-                <strong>超级大注</strong>
+                <strong>今日超级大注</strong>
                 <span>{{ bigTradesState === 'running' ? '读取中' : bigTradesResult?.accessLocked ? '权限锁定' : `命中 ${superBigTradeEvents.length} 场 / 扫描 ${bigTradesResult?.scannedEvents ?? 0} 场` }}</span>
               </div>
               <div v-if="bigTradesError" class="state-panel danger inline-state">
@@ -1399,7 +1399,7 @@ const refreshFlash = async () => {
                 <span>正在读取重大成交</span>
               </div>
               <div v-else-if="!superBigTradeEvents.length" class="empty-match">
-                当前未完场赛事暂无符合条件的超级大注。
+                当前未完场赛事暂无符合条件的今日超级大注。
               </div>
               <div v-else class="super-trade-list">
                 <article v-for="event in superBigTradeEvents" :key="event.eventId" class="super-trade-event">
@@ -2874,6 +2874,13 @@ h1 {
 
 .super-trade-row:last-child {
   border-bottom: 0;
+}
+
+.super-trade-row.table-head {
+  border-bottom-color: rgba(255, 255, 255, 0.18);
+  background: #7d7aee;
+  color: #ffffff;
+  font-weight: 820;
 }
 
 .super-trade-row span,

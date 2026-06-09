@@ -305,7 +305,7 @@ export const factorGroups: FactorGroup[] = [
   { id: 'odds', label: '价位', summary: '赔率价位' },
   { id: 'euro', label: '欧洲平均', summary: '欧赔均值' },
   { id: 'kelly', label: '凯利方差', summary: '凯利偏差' },
-  { id: 'goals', label: '进球盘', summary: '大小球维度' },
+  { id: 'goals', label: '进球盘及总成交', summary: '大小球维度' },
   { id: 'inside', label: '内外盘', summary: '内外盘拆分' },
 ]
 
