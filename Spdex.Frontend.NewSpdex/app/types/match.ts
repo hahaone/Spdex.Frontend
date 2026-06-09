@@ -76,6 +76,10 @@ export interface MatchSummary {
   stockGoals?: [number, number]
   /** 让分挂牌指数 [主,平,客]（VendorBase.ElStock）。 */
   stockHandicap?: [number, number, number]
+  /** 让分成交/指数/价位 [主,平,客]（VendorBase.El*，必发欧式让球胜平负，非标盘 1X2）。 */
+  handicapAmount?: [number, number, number]
+  handicapIndex?: [number, number, number]
+  handicapOdds?: [number, number, number]
   /** 亚洲指数（VendorBase.AsianIndex）。 */
   asianIndex?: number
   /** 比分指数（VendorBase.CsIndex）。 */

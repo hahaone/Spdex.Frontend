@@ -22,10 +22,6 @@ function std(i: number) {
   const key = SEL[i]
   return key ? props.enrich?.standard?.[key] : undefined
 }
-function hcp(i: number) {
-  const key = SEL[i]
-  return key ? props.enrich?.handicap?.[key] : undefined
-}
 function goal(i: number) {
   const k = i === 0 ? 'over' : i === 2 ? 'under' : ''
   return k ? props.enrich?.goals?.[k] : undefined
@@ -58,12 +54,11 @@ function listShare(i: number): string {
   const v = props.match.bfIndex[i] ?? 0
   return bfSum.value > 0 ? `${Math.round((v / bfSum.value) * 100)}%` : ''
 }
-// 让分比例:让分行 bfIndex(=1X2 权重)占比
-const hcpSum = computed(() => SEL.reduce((s, k) => s + (props.enrich?.handicap?.[k]?.bfIndex ?? 0), 0))
+// 让分比例:让分成交(VendorBase.ElAmount=必发欧式让球胜平负)各侧占比。
+const hcpSum = computed(() => (props.match.handicapAmount ?? []).reduce((s, v) => s + (v ?? 0), 0))
 function hcpShare(i: number): string {
-  const v = hcp(i)?.bfIndex
-  if (v == null || hcpSum.value <= 0) return ''
-  return `${Math.round((v / hcpSum.value) * 100)}%`
+  const v = props.match.handicapAmount?.[i] ?? 0
+  return hcpSum.value > 0 ? `${Math.round((v / hcpSum.value) * 100)}%` : ''
 }
 // 进球比例(篮球):大/小主点线成交额占比（= 旧站 Per）。
 function goalShare(i: number): string {
@@ -98,11 +93,11 @@ const footballColumns: Col[] = [
   { key: 'goalRatio', label: '进球比例', tone: 'goal', get: i => i === 1 ? '' : (goal(i)?.ratio || '') },
   { key: 'goalPrice', label: '进球价位', tone: 'goal', get: i => i === 1 ? (props.match.goalsLine || '') : (goal(i)?.price || odds(props.match.goalsOdds?.[i === 0 ? 0 : 1])) },
   { key: 'listing2', label: '挂牌指数', tone: 'goal', get: i => i === 1 ? '' : pct2(props.match.stockGoals?.[i === 0 ? 0 : 1]), cls: i => i === 1 ? '' : guaClass(props.match.stockGoals?.[i === 0 ? 0 : 1]) },
-  // 让分
-  { key: 'hcpTurnover', label: '让分成交', tone: 'handicap', get: i => hcp(i)?.turnover || '' },
-  { key: 'hcpIndex', label: '让分指数', tone: 'handicap', get: i => num(hcp(i)?.bfIndex) },
+  // 让分 = 必发「欧式让球胜平负」(VendorBase.El*,3 路含平局,固定 -1/+1 让球线),非标盘 1X2。
+  { key: 'hcpTurnover', label: '让分成交', tone: 'handicap', get: i => intList(props.match.handicapAmount?.[i]) },
+  { key: 'hcpIndex', label: '让分指数', tone: 'handicap', get: i => intList(props.match.handicapIndex?.[i]) },
   { key: 'hcpRatio', label: '让分比例', tone: 'handicap', get: hcpShare },
-  { key: 'hcpPrice', label: '让分价位', tone: 'handicap', get: i => hcp(i)?.price || '' },
+  { key: 'hcpPrice', label: '让分价位', tone: 'handicap', get: i => odds(props.match.handicapOdds?.[i]) },
   { key: 'listing3', label: '挂牌指数', tone: 'handicap', get: i => pct2(props.match.stockHandicap?.[i]), cls: i => guaClass(props.match.stockHandicap?.[i]) },
   // 其他(VendorBase 同源)
   { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct1(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : '') },

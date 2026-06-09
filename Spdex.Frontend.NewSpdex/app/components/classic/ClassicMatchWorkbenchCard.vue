@@ -271,6 +271,8 @@ const bigBetText = computed(() => {
   display: grid;
   grid-template-columns: 1.1fr 1fr 1fr 1fr 1.4fr;
   min-height: 28px;
+  /* #4 与上方网格末行(白色队名)之间补分隔线,避免两段白底糊在一起。 */
+  border-top: 1px solid var(--classic-grid);
   border-right: 1px solid var(--classic-grid);
   border-bottom: 2px solid var(--classic-green);
   border-left: 1px solid var(--classic-grid);

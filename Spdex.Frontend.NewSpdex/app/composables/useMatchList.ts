@@ -62,6 +62,9 @@ interface BackendMatchSummary {
   stockStd?: number[]
   stockGoals?: number[]
   stockHandicap?: number[]
+  handicapAmount?: number[]
+  handicapIndex?: number[]
+  handicapOdds?: number[]
   asianIndex?: number
   csIndex?: number
   goalBalance?: number
@@ -188,6 +191,9 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     stockStd: toTriple(item.stockStd),
     stockGoals: toPair(item.stockGoals),
     stockHandicap: toTriple(item.stockHandicap),
+    handicapAmount: toTriple(item.handicapAmount),
+    handicapIndex: toTriple(item.handicapIndex),
+    handicapOdds: toTriple(item.handicapOdds),
     asianIndex: item.asianIndex ?? 0,
     csIndex: item.csIndex ?? 0,
     goalBalance: item.goalBalance ?? 0,
