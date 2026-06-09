@@ -291,6 +291,17 @@ jobs:
             cp inventory/production.ini.example inventory/production.ini
           fi
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          inventory = Path("inventory/production.ini")
+          home = Path.home()
+          text = inventory.read_text(encoding="utf-8")
+          text = text.replace("~/.ssh/config", str(home / ".ssh" / "config"))
+          text = text.replace("~/.ssh/id_rsa", str(home / ".ssh" / "id_rsa"))
+          inventory.write_text(text, encoding="utf-8")
+          PY
+
           if [ -n "${WEB_ANSIBLE_GROUP_VARS_ALL:-}" ]; then
             printf '%s\n' "$WEB_ANSIBLE_GROUP_VARS_ALL" > group_vars/all.yml
           else
