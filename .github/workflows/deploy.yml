@@ -294,6 +294,18 @@ jobs:
               "web_acr_username": os.environ.get("ACR_USERNAME", ""),
               "web_acr_password": os.environ.get("ACR_PASSWORD", ""),
               "web_image_tag": os.environ["GITHUB_SHA"],
+              "web_image_fjc": os.environ["IMAGE_FJC"],
+              "web_image_2026": os.environ["IMAGE_2026"],
+              "web_image_newspdex": os.environ["IMAGE_NEWSPDEX"],
+              "web_image_quantilearn": os.environ["IMAGE_QUANTILEARN"],
+              "web_image_admin": os.environ["IMAGE_ADMIN"],
+              "web_image_refs": [
+                  f"{os.environ['IMAGE_FJC']}:{os.environ['GITHUB_SHA']}",
+                  f"{os.environ['IMAGE_2026']}:{os.environ['GITHUB_SHA']}",
+                  f"{os.environ['IMAGE_NEWSPDEX']}:{os.environ['GITHUB_SHA']}",
+                  f"{os.environ['IMAGE_QUANTILEARN']}:{os.environ['GITHUB_SHA']}",
+                  f"{os.environ['IMAGE_ADMIN']}:{os.environ['GITHUB_SHA']}",
+              ],
               "web_image_archive_local": f"/tmp/spdex-web-images-{os.environ['GITHUB_SHA']}.tar.gz",
               "web_image_archive_remote": f"/tmp/spdex-web-images-{os.environ['GITHUB_SHA']}.tar.gz",
               "spdex_api_internal_url": os.environ["SPDEX_BACKEND_PRIVATE_BASE_URL"],
@@ -312,6 +324,8 @@ jobs:
           ansible-playbook \
             -i inventory/production.ini \
             playbooks/sync-images-from-source.yml \
+            --extra-vars @group_vars/all.yml \
+            --extra-vars @group_vars/web_nodes.yml \
             --extra-vars @group_vars/runtime.auto.json
 
       - name: Deploy Web nodes
@@ -329,6 +343,8 @@ jobs:
           ansible-playbook \
             -i inventory/production.ini \
             playbooks/web-node.yml \
+            --extra-vars @group_vars/all.yml \
+            --extra-vars @group_vars/web_nodes.yml \
             --extra-vars @group_vars/runtime.auto.json \
             --extra-vars "web_image_distribution=${deploy_distribution}"
 
@@ -339,6 +355,8 @@ jobs:
           ansible-playbook \
             -i inventory/production.ini \
             playbooks/verify-web-node.yml \
+            --extra-vars @group_vars/all.yml \
+            --extra-vars @group_vars/web_nodes.yml \
             --extra-vars @group_vars/runtime.auto.json
 
       - name: Verify public ALB routes
