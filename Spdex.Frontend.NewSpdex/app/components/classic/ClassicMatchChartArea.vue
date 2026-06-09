@@ -5,7 +5,7 @@ import type { RouteLocationRaw } from 'vue-router'
 /**
  * 经典工作台内嵌走势区(还原旧站 dcon):
  * - 默认「重大成交提示」(标准盘 + 大小球大单列表,来自 useBigTrades);
- * - 点右侧「走势图表」指标矩阵 → 切到对应走势图(useChartSeries,与详情页同一真实通道):成交系=柱+价位线叠加 / 比例=堆叠面积 / 其余=折线;
+ * - 点右侧「走势图表」指标矩阵 → 切到对应走势图:成交系单方向=买/卖属性明细,所有=方向汇总柱+价位线 / 比例=堆叠面积 / 其余=折线;
  * - 「明细图表」走真实详情路由 / 就地切图。
  * 仅在赛事块滚入视口后由父组件 v-if 挂载,此时才发起这些请求。
  */
@@ -34,13 +34,13 @@ const view = ref<'tips' | 'chart'>('chart')
 const market = ref('standard')
 const metric = ref('tradeflow')
 const timeRange = ref('6h')
-const seriesOnly = ref<'home' | 'draw' | 'away' | 'all' | null>('all')
+const seriesOnly = ref<'home' | 'draw' | 'away' | 'all' | null>('home')
 
 // 渲染类别:traded(成交系=成交柱 + 价位线全高叠加) / ratio(比例=百分比堆叠面积) / line(其余=纯折线)
 const chartKind = computed<'traded' | 'ratio' | 'line'>(() =>
   metric.value === 'tradeflow' ? 'traded' : metric.value === 'ratio' ? 'ratio' : 'line')
 const graphType = computed(() => `${market.value}.${metric.value}`)
-// 成交系(成交/进球成交/让分成交)统一走后端 .traded(全方向成交柱 + 主/平/客价位),柱线在同区双轴全高叠加。
+// 成交系「所有」走后端 .traded(全方向成交柱 + 主/平/客价位),单方向则改走 tradeflow 属性明细。
 const chartType = computed(() => (chartKind.value === 'traded' ? `${market.value}.traded` : graphType.value))
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType } = useChartSeries(eventIdRef, chartType)
 // 已加载数据是否对应当前请求类型;切指标时旧数据 type 不匹配 → 先显「加载中」,不渲染陈旧序列。
@@ -79,9 +79,29 @@ const hasDirection = computed(() => chartKind.value === 'traded')
 // StaticTrendChart 的 only:成交系单方向取该方向,「所有」=null(全方向柱+多价位);非成交系恒 null(全部序列)。
 const trendOnly = computed<'home' | 'draw' | 'away' | null>(() =>
   (chartKind.value === 'traded' && seriesOnly.value && seriesOnly.value !== 'all') ? seriesOnly.value : null)
+const useAttributeTradeFlow = computed(() => chartKind.value === 'traded' && seriesOnly.value !== 'all')
+const tradeSelection = computed<'home' | 'draw' | 'away'>(() => {
+  if (seriesOnly.value === 'draw' || seriesOnly.value === 'away') return seriesOnly.value
+  return 'home'
+})
+const tradeGranularity = computed(() => {
+  if (timeRange.value === '3h') return '5m'
+  if (timeRange.value === '6h') return '15m'
+  return '30m'
+})
+const { data: tradeFlow, status: tradeFlowStatus, pending: tradeFlowPending, refresh: refreshTradeFlow } = useTradeFlow(
+  eventIdRef,
+  market,
+  tradeSelection,
+  tradeGranularity,
+  useAttributeTradeFlow,
+)
+const tradeFlowReady = computed(() =>
+  !!tradeFlow.value && tradeFlow.value.market === market.value && tradeFlow.value.selection === tradeSelection.value)
+const activePending = computed(() => useAttributeTradeFlow.value ? tradeFlowPending.value : pending.value)
 
-// 仅成交系保留方向(默认「所有」=柱线全高叠加);其余指标 seriesOnly 置 null。
-watch(hasDirection, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'all') : null }, { immediate: true })
+// 仅成交系保留方向(默认单方向属性图,以还原旧站买/卖/冲/买+/卖+/换图例);其余指标 seriesOnly 置 null。
+watch(hasDirection, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'home') : null }, { immediate: true })
 watch(seriesLabels, (l) => { if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = 'home' })
 
 const seriesOptions = computed(() => {
@@ -100,10 +120,21 @@ const statusLabel = computed(() => {
   if (status.value === 'pending') return '此场赛事暂无该市场数据'
   return null
 })
+const tradeFlowStatusLabel = computed(() => {
+  if (!tradeFlowReady.value) return null
+  if (tradeFlowStatus.value === 'no-access') return '成交明细为专家版及以上专属'
+  if (tradeFlowStatus.value === 'pending' && !tradeFlowPending.value) return '此场赛事暂无成交明细数据'
+  return null
+})
+const activeStatusLabel = computed(() => useAttributeTradeFlow.value ? tradeFlowStatusLabel.value : statusLabel.value)
 const chartTitle = computed(() => {
   if (chartKind.value === 'traded') return market.value === 'handicap' ? '让分成交' : market.value === 'goals' ? '进球成交' : '成交'
   return metricLabel.value || '走势'
 })
+function refreshActiveChart() {
+  if (useAttributeTradeFlow.value) refreshTradeFlow()
+  else refresh()
+}
 
 // ── 重大成交提示(默认视图)──
 const { data: btData, group: bigGroup, pending: btPending } = useBigTrades(eventIdRef, 6)
@@ -248,14 +279,22 @@ const detailButtons = computed<DetailBtn[]>(() => {
           <select v-if="hasDirection" v-model="seriesOnly" class="cd-select" aria-label="方向筛选">
             <option v-for="o in seriesOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
-          <button type="button" class="cd-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
-            <RefreshCw :size="13" :class="{ spinning: pending }" />
+          <button type="button" class="cd-refresh" :disabled="activePending" aria-label="刷新" @click="refreshActiveChart()">
+            <RefreshCw :size="13" :class="{ spinning: activePending }" />
           </button>
           <span class="chart-title num">{{ chartTitle }}走势图</span>
         </div>
 
         <div class="chart-canvas" :style="{ '--cc-h': `${chartHeight}px` }">
-          <div v-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
+          <div v-if="activeStatusLabel" class="chart-state">{{ activeStatusLabel }}</div>
+          <template v-else-if="useAttributeTradeFlow">
+            <LazyTradeFlowChart
+              v-if="tradeFlowReady && tradeFlow && tradeFlow.buckets.length"
+              :result="tradeFlow"
+              :height="chartHeight"
+            />
+            <div v-else class="chart-state">{{ tradeFlowPending || !tradeFlowReady ? '加载中…' : '暂无成交明细数据' }}</div>
+          </template>
           <div v-else-if="!chartReady" class="chart-state">加载中…</div>
           <template v-else-if="displayPoints.length">
             <!-- 比例 → 百分比堆叠面积图;成交系/折线 → StaticTrendChart(成交=柱+价位线全高叠加,其余=纯折线) -->
