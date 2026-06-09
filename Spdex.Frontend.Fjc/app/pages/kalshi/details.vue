@@ -164,15 +164,36 @@ const chartScale = computed(() => {
   }
 })
 
+const eventVolume = computed(() => {
+  const totalSize = eventTrades.value?.totalSize
+  if (totalSize != null && totalSize > 0) return totalSize
+  const marketTotal = markets.value.reduce((sum, market) => sum + marketVolume(market), 0)
+  return marketTotal > 0 ? marketTotal : (eventTrades.value?.totalNotional ?? 0)
+})
+
 const ksIndex = computed(() => {
-  const total = markets.value.reduce((sum, market) => sum + market.totalNotional, 0)
-  return markets.value.map((market, index) => ({
-    market,
-    label: localizeRunner(market.label),
-    color: graphColors[index % graphColors.length]!,
-    index: total > 0 ? market.totalNotional / total * 100 : 0,
+  const rows = markets.value.map((market, index) => {
+    const volume = marketVolume(market)
+    return {
+      market,
+      label: localizeRunner(market.label),
+      color: graphColors[index % graphColors.length]!,
+      volume,
+      index: 0,
+    }
+  })
+  const total = rows.reduce((sum, row) => sum + row.volume, 0)
+  return rows.map(row => ({
+    ...row,
+    index: total > 0 ? row.volume / total * 100 : 0,
   }))
 })
+
+function marketVolume(market: KalshiMarketTradesAggregate | null | undefined): number {
+  if (!market) return 0
+  if (market.totalSize > 0) return market.totalSize
+  return market.totalNotional
+}
 
 function findOutcomeSeries(marketTicker: string | undefined, side: 'Yes' | 'No'): KalshiOutcomeTradeSeries | null {
   if (!marketTicker) return null
@@ -300,7 +321,7 @@ useHead({
             <div class="team-name">{{ cnHome || primaryLink?.kalshiHomeTeam || 'Home' }}</div>
           </div>
           <div class="event-stat">
-            <div class="event-volume">{{ formatCompactCurrency(eventTrades?.totalNotional) }}</div>
+            <div class="event-volume">{{ formatCompactCurrency(eventVolume) }}</div>
             <div class="event-label">Ks Vol. · {{ eventTrades?.tradeCount ?? 0 }} 笔</div>
           </div>
           <div class="team-card away">
@@ -336,7 +357,7 @@ useHead({
               </div>
               <div class="bar-value">{{ Math.round(entry.index) }}</div>
               <div class="bar-label" :title="entry.label">{{ entry.label }}</div>
-              <div class="bar-volume">{{ formatCompactCurrency(entry.market.totalNotional) }}</div>
+              <div class="bar-volume">{{ formatCompactCurrency(entry.volume) }}</div>
             </div>
           </div>
         </div>
@@ -347,7 +368,7 @@ useHead({
           <div>
             <div class="market-title">{{ localizeRunner(selectedMarket?.label) }}</div>
             <div class="market-subtitle">
-              {{ formatCompactCurrency(selectedMarket?.totalNotional) }} 交易量 · {{ selectedMarket?.tradeCount ?? 0 }} 笔
+              {{ formatCompactCurrency(marketVolume(selectedMarket)) }} 交易量 · {{ selectedMarket?.tradeCount ?? 0 }} 笔
             </div>
           </div>
           <span v-if="orderbookLoading" class="loading-pill">盘口加载中...</span>
