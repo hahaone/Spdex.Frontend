@@ -266,6 +266,25 @@ jobs:
           printf '%s\n' "$WEB_DEPLOY_SSH_KEY" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
 
+          cat > "$HOME/.ssh/config" <<'EOF'
+          Host spdex-jump 139.129.208.138
+            HostName 139.129.208.138
+            User root
+            IdentityFile ~/.ssh/id_rsa
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+
+          Host 10.111.*
+            User root
+            IdentityFile ~/.ssh/id_rsa
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ProxyCommand ssh spdex-jump "bash -c 'exec 3<>/dev/tcp/%h/%p; cat <&3 & cat >&3; wait'"
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
           if [ -n "${WEB_ANSIBLE_INVENTORY:-}" ]; then
             printf '%s\n' "$WEB_ANSIBLE_INVENTORY" > inventory/production.ini
           else
