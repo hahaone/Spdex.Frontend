@@ -27,13 +27,11 @@ export function useTradeFlow(
   market: MaybeRef<string>,
   selection: MaybeRef<string>,
   granularity: MaybeRef<string> = ref('15m'),
-  enabled: MaybeRef<boolean> = true,
 ) {
   const idRef = computed(() => unref(eventId))
   const marketRef = computed(() => unref(market))
   const selectionRef = computed(() => unref(selection))
   const granRef = computed(() => unref(granularity))
-  const enabledRef = computed(() => unref(enabled))
 
   const query = computed(() => ({
     market: marketRef.value,
@@ -47,17 +45,12 @@ export function useTradeFlow(
       key: () => `newspdex-tradeflow-${idRef.value}-${marketRef.value}-${selectionRef.value}-${granRef.value}`,
       server: false,
       query,
-      immediate: false,
-      watch: false,
+      watch: [idRef, marketRef, selectionRef, granRef],
     },
   )
 
-  watch([idRef, marketRef, selectionRef, granRef, enabledRef], () => {
-    if (import.meta.client && enabledRef.value) result.refresh()
-  }, { immediate: true })
-
   // 60s 自动刷新
-  usePolling(() => result.refresh(), 60_000, { enabled: enabledRef, errorRef: result.error })
+  usePolling(() => result.refresh(), 60_000, { errorRef: result.error })
 
   const data = computed<TradeFlowResult | null>(() => result.data.value?.data ?? null)
   const status = computed<'ok' | 'pending' | 'no-access'>(() => data.value?.status ?? 'pending')
