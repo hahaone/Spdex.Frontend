@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ApiResponse } from '~/types/api'
 import type { MatchListItem, MatchListResult } from '~/types/match'
-import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary } from '~/types/live'
+import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary, LiveXgItem, LiveXgReplay } from '~/types/live'
+import type { LiveXgRef } from '~/composables/useLiveXg'
 import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatMoney } from '~/utils/formatters'
 
 const MATCH_REFRESH_INTERVAL_MS = 30_000
@@ -120,6 +121,156 @@ const liveMarkets = computed(() => matchCandidates.value.map(item => ({
 })))
 const liveTrades = useLiveMatchOddsTopTrades(liveMarkets)
 const liveByEventId = computed(() => liveTrades.byEventId.value)
+
+// ── 现场频道 BSW xG（B+：预期总进球统一 BSW 网关）──
+const xgToken = useCookie('spdex_token')
+const xgRefs = computed<LiveXgRef[]>(() => matchCandidates.value.map(item => ({
+  eventId: item.match.eventId,
+  homeTeamName: item.match.homeTeamName,
+  guestTeamName: item.match.guestTeamName,
+})))
+const liveXg = useLiveXg(xgRefs)
+function getXg(item: MatchListItem): LiveXgItem | null {
+  return liveXg.byEventId.value.get(item.match.eventId) ?? null
+}
+function formatXg(item: MatchListItem): string {
+  const xg = getXg(item)
+  return xg ? `${xg.xgHome.toFixed(2)}-${xg.xgAway.toFixed(2)}` : '-'
+}
+function formatProjGoals(item: MatchListItem): string {
+  const xg = getXg(item)
+  return xg ? xg.projectedTotalGoals.toFixed(2) : '-'
+}
+
+// 「预期总进球」折叠（独立于 TOP10 大单展开）+ 走势序列懒加载
+const xgExpandedEventIds = ref<Set<number>>(new Set())
+const xgReplayByEventId = ref<Map<number, LiveXgReplay>>(new Map())
+const xgReplayRefreshingEventIds = ref<Set<number>>(new Set())
+const xgReplayRenderVersionByEventId = ref<Map<number, number>>(new Map())
+function isXgExpanded(eventId: number): boolean {
+  return xgExpandedEventIds.value.has(eventId)
+}
+async function loadXgReplay(eventId: number) {
+  if (!import.meta.client) return
+  const refreshing = new Set(xgReplayRefreshingEventIds.value)
+  refreshing.add(eventId)
+  xgReplayRefreshingEventIds.value = refreshing
+  try {
+    const headers: Record<string, string> = {}
+    if (xgToken.value) headers.Authorization = `Bearer ${xgToken.value}`
+    const res = await $fetch<ApiResponse<LiveXgReplay>>(`/api/live/xg/${eventId}/replay`, {
+      headers,
+      query: { t: Date.now() },
+      cache: 'no-store',
+    })
+    if (res.code === 0 && res.data) {
+      const map = new Map(xgReplayByEventId.value)
+      map.set(eventId, res.data)
+      xgReplayByEventId.value = map
+      bumpXgReplayRenderVersion(eventId)
+    }
+  }
+  catch { /* 忽略 */ }
+  finally {
+    const nextRefreshing = new Set(xgReplayRefreshingEventIds.value)
+    nextRefreshing.delete(eventId)
+    xgReplayRefreshingEventIds.value = nextRefreshing
+  }
+}
+function bumpXgReplayRenderVersion(eventId: number) {
+  const next = new Map(xgReplayRenderVersionByEventId.value)
+  next.set(eventId, (next.get(eventId) ?? 0) + 1)
+  xgReplayRenderVersionByEventId.value = next
+}
+function xgReplayRenderVersion(eventId: number): number {
+  return xgReplayRenderVersionByEventId.value.get(eventId) ?? 0
+}
+function isXgReplayRefreshing(eventId: number): boolean {
+  return xgReplayRefreshingEventIds.value.has(eventId)
+}
+async function refreshExpandedXgReplays() {
+  const eventIds = [...xgExpandedEventIds.value]
+  if (eventIds.length === 0) return
+  await Promise.all(eventIds.map(eventId => loadXgReplay(eventId)))
+}
+async function toggleXgExpand(eventId: number) {
+  const next = new Set(xgExpandedEventIds.value)
+  if (next.has(eventId)) {
+    next.delete(eventId)
+    xgExpandedEventIds.value = next
+    return
+  }
+  next.add(eventId)
+  xgExpandedEventIds.value = next
+  await loadXgReplay(eventId)
+}
+
+const TG_SPARK_MARK_DIFF_THRESHOLD = 0.9
+
+function formatTgSparkValue(value: number): string {
+  return value.toFixed(2)
+}
+
+// 预期总进球走势 sparkline（projectedTotalGoals + 时间轴 guide + 断点跳过）
+function tgSpark(eventId: number) {
+  const series = xgReplayByEventId.value.get(eventId)?.series ?? []
+  const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
+  const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
+  if (nums.length < 2) return null
+  const W = 320, H = 64, pad = 8
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const span = max - min || 1
+  const maxMinute = Math.max(90, ...series.map(p => p.minute || 0))
+  const xOf = (m: number) => pad + (W - pad * 2) * (Math.max(0, m) / maxMinute)
+  const yOf = (v: number) => pad + (H - pad * 2) * (1 - (v - min) / span)
+  let path = ''
+  let pen = false
+  let lastX = pad
+  let lastY = H - pad
+  const marked = new Set<number>()
+  let previousValidIndex: number | null = null
+  vals.forEach((v, i) => {
+    if (v == null) { pen = false; return }
+    const x = xOf(series[i]?.minute ?? i)
+    const y = yOf(v)
+    path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `
+    pen = true
+    lastX = x
+    lastY = y
+    const prev = previousValidIndex == null ? null : vals[previousValidIndex]
+    if (previousValidIndex != null && prev != null && Math.abs(v - prev) > TG_SPARK_MARK_DIFF_THRESHOLD) {
+      marked.add(previousValidIndex)
+      marked.add(i)
+    }
+    previousValidIndex = i
+  })
+  const labels = [...marked].sort((a, b) => a - b).map((i) => {
+    const v = vals[i]!
+    const x = xOf(series[i]?.minute ?? i)
+    const y = yOf(v)
+    const nearRight = x > W - 36
+    return {
+      x,
+      y,
+      textX: nearRight ? x - 4 : x + 4,
+      textY: Math.max(10, y - 6),
+      text: formatTgSparkValue(v),
+      anchor: nearRight ? 'end' : 'start',
+    }
+  })
+  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }]
+    .filter(g => maxMinute >= g.minute)
+    .map((g) => {
+      const x = xOf(g.minute)
+      const nearRight = x > W - 28
+      return { x, label: g.label, labelX: nearRight ? x - 3 : x + 3, labelY: H - 3, anchor: nearRight ? 'end' : 'start' }
+    })
+  const yGuides = [1, 2]
+    .filter(value => value >= min && value <= max)
+    .map(value => ({ value, y: yOf(value) }))
+  return { path, w: W, h: H, min: formatTgSparkValue(min), max: formatTgSparkValue(max), guides, yGuides, labels, lastX, lastY }
+}
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
 
@@ -237,6 +388,8 @@ async function refreshAll(options?: RefreshOptions) {
   try {
     await manualRefresh(refreshOptions)
     await nextTick()
+    await liveXg.refresh()
+    await refreshExpandedXgReplays()
     await liveTrades.refresh(refreshOptions)
   }
   finally {
@@ -594,6 +747,8 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <th class="col-live-total">现场总成交</th>
             <th class="col-live-ltp">现场价位</th>
             <th class="col-live">现场最大单</th>
+            <th class="col-xg">xG</th>
+            <th class="col-tg">预期总进球</th>
             <th class="col-action" />
           </tr>
         </thead>
@@ -639,6 +794,17 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
               </td>
+              <td class="xg-cell">{{ formatXg(item) }}</td>
+              <td class="tg-cell">
+                <button
+                  class="tg-toggle"
+                  :class="{ open: isXgExpanded(item.match.eventId) }"
+                  @click.stop="toggleXgExpand(item.match.eventId)"
+                >
+                  <span class="num">{{ formatProjGoals(item) }}</span>
+                  <i class="tg-arrow">{{ isXgExpanded(item.match.eventId) ? '⌃' : '⌄' }}</i>
+                </button>
+              </td>
               <td class="action-cell">
                 <button
                   :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
@@ -649,7 +815,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
-              <td colspan="12">
+              <td colspan="14">
                 <table class="top-table">
                   <thead>
                     <tr>
@@ -685,6 +851,47 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                     </tr>
                   </tbody>
                 </table>
+              </td>
+            </tr>
+            <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
+              <td colspan="14">
+                <template v-for="(spark, sparkIdx) in [tgSpark(item.match.eventId)]" :key="sparkIdx">
+                  <div class="tg-chart">
+                    <div class="tg-chart-head">
+                      <span class="tg-title">预期总进球走势</span>
+                      <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
+                      <span v-else-if="spark" class="tg-range num">{{ spark.min }} ~ {{ spark.max }}</span>
+                    </div>
+                    <svg
+                      v-if="spark"
+                      :key="`tg-${item.match.eventId}-${xgReplayRenderVersion(item.match.eventId)}`"
+                      class="tg-svg"
+                      :viewBox="`0 0 ${spark.w} ${spark.h}`"
+                      preserveAspectRatio="none"
+                    >
+                      <line
+                        v-for="guide in spark.yGuides"
+                        :key="`tg-y-${guide.value}`"
+                        class="tg-y-guide"
+                        x1="0"
+                        :y1="guide.y"
+                        :x2="spark.w"
+                        :y2="guide.y"
+                      />
+                      <g v-for="g in spark.guides" :key="g.label">
+                        <line class="tg-guide" :x1="g.x" y1="0" :x2="g.x" :y2="spark.h" />
+                        <text class="tg-guide-label" :x="g.labelX" :y="g.labelY" :text-anchor="g.anchor">{{ g.label }}</text>
+                      </g>
+                      <path :d="spark.path" fill="none" class="tg-line" />
+                      <g v-for="(lb, li) in spark.labels" :key="`tgl-${li}`">
+                        <circle :cx="lb.x" :cy="lb.y" r="2.6" class="tg-mark" />
+                        <text class="tg-mark-label" :x="lb.textX" :y="lb.textY" :text-anchor="lb.anchor">{{ lb.text }}</text>
+                      </g>
+                      <circle :cx="spark.lastX" :cy="spark.lastY" r="3" class="tg-dot" />
+                    </svg>
+                    <div v-else class="tg-empty">{{ isXgReplayRefreshing(item.match.eventId) ? '走势刷新中...' : '暂无预期总进球走势（数据积累中或非足球）' }}</div>
+                  </div>
+                </template>
               </td>
             </tr>
           </template>
@@ -893,6 +1100,132 @@ th.col-live {
   background: #f1f8ff;
 }
 
+/* xG 组（赛中 BSW，薄荷绿，区别于赛前白 + 必发毫秒/现场蓝） */
+th.col-xg,
+th.col-tg {
+  background: #e9f7ef;
+}
+
+.match-row td.xg-cell,
+.match-row td.tg-cell {
+  background: #f4fbf6;
+}
+
+.match-row:nth-child(4n + 1) td.xg-cell,
+.match-row:nth-child(4n + 1) td.tg-cell {
+  background: #eef9f1;
+}
+
+/* 预期总进球折叠按钮（同现场最大单的展开交互） */
+.tg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px solid #cde7d6;
+  border-radius: 5px;
+  background: #fff;
+  color: #1f7a45;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tg-toggle.open {
+  background: #e9f7ef;
+}
+
+.tg-arrow {
+  font-style: normal;
+  color: #4a9968;
+}
+
+/* xG 预期总进球走势图（独立展开行） */
+.xg-detail-row td {
+  background: #f4fbf6;
+  padding: 12px 16px;
+}
+
+.tg-chart {
+  max-width: 420px;
+}
+
+.tg-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.tg-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1f7a45;
+}
+
+.tg-range {
+  font-size: 12px;
+  color: #6b7a72;
+}
+
+.tg-refreshing {
+  font-size: 12px;
+  color: #7b8a82;
+  font-weight: 700;
+}
+
+.tg-svg {
+  width: 100%;
+  height: 64px;
+  color: #2e9c5f;
+}
+
+.tg-y-guide {
+  stroke: #d1d5db;
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.tg-guide {
+  stroke: #cfe6d8;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.tg-line {
+  stroke: #2e9c5f;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.tg-dot {
+  fill: #2e9c5f;
+}
+
+.tg-guide-label {
+  fill: #9bb3a5;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.tg-mark {
+  fill: #2e9c5f;
+}
+
+.tg-mark-label {
+  fill: #1f7a45;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.tg-empty {
+  padding: 16px 0;
+  color: #8a958f;
+  font-size: 13px;
+}
+
 .match-row td.live-total-cell.live-latest,
 .match-row td.live-ltp-cell.live-latest,
 .match-row td.live-cell.live-latest,
@@ -930,6 +1263,14 @@ th.col-live {
   width: 122px;
 }
 
+.col-xg {
+  width: 86px;
+}
+
+.col-tg {
+  width: 112px;
+}
+
 .col-action {
   width: 50px;
 }
@@ -965,7 +1306,9 @@ th.col-live {
 .money-cell,
 .index-cell,
 .live-total-cell,
-.live-ltp-cell {
+.live-ltp-cell,
+.xg-cell,
+.tg-cell {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -1115,7 +1458,7 @@ th.col-live {
   }
 
   .live-table {
-    min-width: 1080px;
+    min-width: 1240px;
   }
 
   .teams-cell {
