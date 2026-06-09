@@ -80,6 +80,9 @@ const hasDirection = computed(() => chartKind.value === 'traded')
 const trendOnly = computed<'home' | 'draw' | 'away' | null>(() =>
   (chartKind.value === 'traded' && seriesOnly.value && seriesOnly.value !== 'all') ? seriesOnly.value : null)
 
+// 成交系 + 只看单方向(主/客/平)→ 切「成交明细」(买/卖/买+/卖+/冲/换 attr 拆分,复刻旧站单株走势图);「所有」保持方向图。
+const isTradeFlowDetail = computed(() => trendOnly.value !== null)
+
 // 仅成交系保留方向(默认「所有」=柱线全高叠加);其余指标 seriesOnly 置 null。
 watch(hasDirection, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'all') : null }, { immediate: true })
 watch(seriesLabels, (l) => { if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = 'home' })
@@ -255,7 +258,16 @@ const detailButtons = computed<DetailBtn[]>(() => {
         </div>
 
         <div class="chart-canvas" :style="{ '--cc-h': `${chartHeight}px` }">
-          <div v-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
+          <!-- 成交系单方向(只看主/客/平)→ 成交明细:买/卖/买+/卖+/冲/换 堆叠柱 + 价位线(复刻旧站) -->
+          <ClassicTradeFlowPanel
+            v-if="isTradeFlowDetail"
+            :event-id="eventId"
+            :market="market"
+            :selection="seriesOnly || 'home'"
+            :time-range="timeRange"
+            :height="chartHeight"
+          />
+          <div v-else-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
           <div v-else-if="!chartReady" class="chart-state">加载中…</div>
           <template v-else-if="displayPoints.length">
             <!-- 比例 → 百分比堆叠面积图;成交系/折线 → StaticTrendChart(成交=柱+价位线全高叠加,其余=纯折线) -->

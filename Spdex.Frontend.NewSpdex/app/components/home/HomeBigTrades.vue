@@ -133,11 +133,12 @@ function tickerSideClass(selection: string): string {
   .ticker-scroll {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-auto-rows: min-content;
+    grid-auto-rows: 46px;
     gap: 6px;
     overflow-x: hidden;
     overflow-y: auto;
-    max-height: 174px;
+    /* 只显 3 行(高度与右侧「快速入口」看齐),其余可滚动:3×46 + 2×6 gap = 150。 */
+    max-height: 150px;
   }
 
   .ticker-item {
