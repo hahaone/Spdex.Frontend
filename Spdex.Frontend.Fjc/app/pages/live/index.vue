@@ -276,7 +276,10 @@ function tgSpark(eventId: number) {
       const nearRight = x > W - 28
       return { x, label: g.label, labelX: nearRight ? x - 3 : x + 3, labelY: H - 3, anchor: nearRight ? 'end' : 'start' }
     })
-  return { path, w: W, h: H, min: formatTgSparkValue(min), max: formatTgSparkValue(max), guides, labels, lastX, lastY }
+  const yGuides = [1, 2]
+    .filter(value => value >= min && value <= max)
+    .map(value => ({ value, y: yOf(value) }))
+  return { path, w: W, h: H, min: formatTgSparkValue(min), max: formatTgSparkValue(max), guides, yGuides, labels, lastX, lastY }
 }
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
@@ -879,6 +882,15 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       :viewBox="`0 0 ${spark.w} ${spark.h}`"
                       preserveAspectRatio="none"
                     >
+                      <line
+                        v-for="guide in spark.yGuides"
+                        :key="`tg-y-${guide.value}`"
+                        class="tg-y-guide"
+                        x1="0"
+                        :y1="guide.y"
+                        :x2="spark.w"
+                        :y2="guide.y"
+                      />
                       <g v-for="g in spark.guides" :key="g.label">
                         <line class="tg-guide" :x1="g.x" y1="0" :x2="g.x" :y2="spark.h" />
                         <text class="tg-guide-label" :x="g.labelX" :y="g.labelY" :text-anchor="g.anchor">{{ g.label }}</text>
@@ -1182,6 +1194,12 @@ th.col-tg {
   width: 100%;
   height: 64px;
   color: #2e9c5f;
+}
+
+.tg-y-guide {
+  stroke: #d1d5db;
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
 }
 
 .tg-guide {
