@@ -83,3 +83,7 @@ coverage/
 .claude/
 **/.claude/
 docs/新版SPdex/
+deploy/web/ansible/inventory/*.ini
+deploy/web/ansible/group_vars/*.yml
+deploy/web/ansible/group_vars/*.json
+deploy/web/ansible/.vault-password

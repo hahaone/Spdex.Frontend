@@ -1,0 +1,127 @@
+---
+- name: Configure and deploy SPdex Web node
+  hosts: web_nodes
+  become: true
+  serial: "{{ web_deploy_serial | default(1) }}"
+
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - spdex_web_root is defined
+          - spdex_api_internal_url is defined
+          - quantilearn_api_internal_url is defined
+          - web_image_fjc is defined
+          - web_image_2026 is defined
+          - web_image_newspdex is defined
+          - web_image_quantilearn is defined
+          - web_image_admin is defined
+          - web_image_distribution in ['pull', 'archive', 'skip']
+        fail_msg: "Missing required SPdex Web deployment variables."
+
+    - name: Install base packages when requested
+      ansible.builtin.apt:
+        name: "{{ web_packages }}"
+        state: present
+        update_cache: true
+      when: web_install_packages | default(false) | bool
+
+    - name: Check Docker availability
+      ansible.builtin.command: docker --version
+      changed_when: false
+
+    - name: Check Docker Compose availability
+      ansible.builtin.command: docker compose version
+      changed_when: false
+
+  tasks:
+    - name: Create Web deployment directory
+      ansible.builtin.file:
+        path: "{{ spdex_web_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Check existing compose environment file
+      ansible.builtin.stat:
+        path: "{{ spdex_web_root }}/.env"
+      register: web_env_file
+
+    - name: Create compose environment file when missing
+      ansible.builtin.template:
+        src: ../templates/env.web.j2
+        dest: "{{ spdex_web_root }}/.env"
+        mode: "0600"
+      no_log: true
+      when: (not web_env_file.stat.exists) or (web_env_force_update | default(false) | bool)
+
+    - name: Deploy Docker Compose file
+      ansible.builtin.template:
+        src: ../templates/docker-compose.yml.j2
+        dest: "{{ spdex_web_root }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Deploy Nginx Web config
+      ansible.builtin.template:
+        src: ../templates/spdex-web.conf.j2
+        dest: "{{ web_nginx_conf_path }}"
+        mode: "0644"
+      notify: Reload nginx
+
+    - name: Validate Nginx config
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Login to ACR on Web node
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo "{{ web_acr_password }}" | docker login "{{ web_acr_registry }}" -u "{{ web_acr_username }}" --password-stdin
+      args:
+        executable: /bin/bash
+      no_log: true
+      when:
+        - web_image_distribution == 'pull'
+        - (web_acr_registry | default('') | length) > 0
+        - (web_acr_username | default('') | length) > 0
+        - (web_acr_password | default('') | length) > 0
+
+    - name: Pull Web images from registry
+      ansible.builtin.command: docker compose pull
+      args:
+        chdir: "{{ spdex_web_root }}"
+      register: compose_pull
+      retries: "{{ web_compose_pull_retries | default(2) }}"
+      delay: 5
+      until: compose_pull.rc == 0
+      when: web_image_distribution == 'pull'
+
+    - name: Copy Web image archive to node
+      ansible.builtin.copy:
+        src: "{{ web_image_archive_local }}"
+        dest: "{{ web_image_archive_remote }}"
+        mode: "0644"
+      when: web_image_distribution == 'archive'
+
+    - name: Load Web images from archive
+      ansible.builtin.command: "docker load -i {{ web_image_archive_remote }}"
+      when: web_image_distribution == 'archive'
+
+    - name: Start or update Web containers
+      ansible.builtin.command: docker compose up -d --remove-orphans
+      args:
+        chdir: "{{ spdex_web_root }}"
+      register: compose_up
+      retries: "{{ web_compose_up_retries | default(2) }}"
+      delay: 5
+      until: compose_up.rc == 0
+
+    - name: Show Web container state
+      ansible.builtin.command: docker compose ps
+      args:
+        chdir: "{{ spdex_web_root }}"
+      changed_when: false
+
+  handlers:
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

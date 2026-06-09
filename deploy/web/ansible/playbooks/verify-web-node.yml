@@ -1,0 +1,31 @@
+---
+- name: Verify SPdex Web node
+  hosts: web_nodes
+  become: false
+  tasks:
+    - name: Check ALB health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1{{ web_alb_health_path }}"
+        return_content: true
+        status_code: 200
+
+    - name: Check host-routed frontend pages
+      ansible.builtin.uri:
+        url: "http://127.0.0.1{{ item.path }}"
+        headers:
+          Host: "{{ item.host }}"
+        status_code: "{{ item.status_code }}"
+        return_content: false
+      loop:
+        - { host: "fjcx.spdex.com", path: "/", status_code: [200, 302] }
+        - { host: "2026.spdex.com", path: "/login", status_code: 200 }
+        - { host: "new.spdex.com", path: "/login", status_code: 200 }
+        - { host: "new.spdex.com", path: "/", status_code: [200, 302] }
+        - { host: "ql.spdex.com", path: "/", status_code: [200, 302] }
+        - { host: "admin2026.spdex.com", path: "/login", status_code: 200 }
+
+    - name: Check NewSpdex SSR internal API bridge
+      ansible.builtin.uri:
+        url: "http://{{ web_internal_api_listen }}/api/newspdex/auth/me"
+        status_code: 401
+        return_content: true

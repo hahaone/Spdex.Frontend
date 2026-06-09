@@ -1,0 +1,74 @@
+services:
+  frontend:
+    image: {{ web_image_fjc }}:{{ web_image_tag }}
+    container_name: spdex-web-frontend
+    network_mode: host
+    environment:
+      - NUXT_PUBLIC_API_BASE=
+      - API_INTERNAL_URL=${SPDEX_API_INTERNAL_URL}
+      - NUXT_PORT=3000
+      - PORT=3000
+      - NITRO_PORT=3000
+    restart: unless-stopped
+
+  frontend2026:
+    image: {{ web_image_2026 }}:{{ web_image_tag }}
+    container_name: spdex-web-frontend-2026
+    network_mode: host
+    environment:
+      - NUXT_PUBLIC_API_BASE=
+      - API_INTERNAL_URL=${SPDEX_API_INTERNAL_URL}
+      - NUXT_PORT=3001
+      - PORT=3001
+      - NITRO_PORT=3001
+    restart: unless-stopped
+
+  frontend-newspdex:
+    image: {{ web_image_newspdex }}:{{ web_image_tag }}
+    container_name: spdex-web-frontend-newspdex
+    network_mode: host
+    environment:
+      - NUXT_PUBLIC_API_BASE=
+      - API_INTERNAL_URL=${SPDEX_API_INTERNAL_URL}
+      - NUXT_PORT=3002
+      - PORT=3002
+      - NITRO_PORT=3002
+      - NUXT_PUBLIC_CAPTCHA_ENABLED=${CAPTCHA_ENABLED:-false}
+      - NUXT_PUBLIC_CAPTCHA_SCENE_ID=${CAPTCHA_SCENE_ID:-}
+      - NUXT_PUBLIC_CAPTCHA_PREFIX=${CAPTCHA_PREFIX:-}
+      - NUXT_PUBLIC_CAPTCHA_REGION=${CAPTCHA_REGION:-cn}
+      - NUXT_PUBLIC_AUTH_COOKIE_DOMAIN=${NEWSPDEX_AUTH_COOKIE_DOMAIN:-}
+    restart: unless-stopped
+
+  frontend-quantilearn:
+    image: {{ web_image_quantilearn }}:{{ web_image_tag }}
+    container_name: spdex-web-frontend-quantilearn
+    network_mode: host
+    environment:
+      - NUXT_PUBLIC_QUANTILEARN_API_BASE=
+      - NUXT_PUBLIC_QUANTILEARN_PUBLIC_BASE_URL=https://ql.spdex.com
+      - NUXT_PUBLIC_REQUIRE_AUTH=true
+      - NUXT_PUBLIC_NEWSPDEX_LOGIN_URL=https://new.spdex.com/login
+      - QUANTILEARN_API_INTERNAL_URL=${QUANTILEARN_API_INTERNAL_URL}
+      - SPDEX_API_INTERNAL_URL=${SPDEX_API_INTERNAL_URL}
+      - SPDEX_API_KEY=${SPDEX_API_KEY}
+      - API_INTERNAL_URL=${QUANTILEARN_API_INTERNAL_URL}
+      - QuantilearnAuth__SharedSecret=${QUANTILEARN_AUTH_SHARED_SECRET:-}
+      - QUANTILEARN_AUTH_SHARED_SECRET=${QUANTILEARN_AUTH_SHARED_SECRET:-}
+      - NUXT_PORT=3004
+      - PORT=3004
+      - NITRO_PORT=3004
+    restart: unless-stopped
+
+  frontend-admin:
+    image: {{ web_image_admin }}:{{ web_image_tag }}
+    container_name: spdex-web-frontend-admin
+    network_mode: host
+    environment:
+      - NUXT_PUBLIC_REQUIRE_AUTH=true
+      - ADMIN_API_INTERNAL_URL=${SPDEX_API_INTERNAL_URL}
+      - API_INTERNAL_URL=${SPDEX_API_INTERNAL_URL}
+      - NUXT_PORT=3005
+      - PORT=3005
+      - NITRO_PORT=3005
+    restart: unless-stopped

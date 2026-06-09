@@ -1,0 +1,52 @@
+---
+- name: Build Web image archive on image source host
+  hosts: image_source
+  become: true
+  tasks:
+    - name: Validate image list
+      ansible.builtin.assert:
+        that:
+          - web_image_refs is defined
+          - web_image_refs | length > 0
+
+    - name: Login to ACR on image source host
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo "{{ web_acr_password }}" | docker login "{{ web_acr_registry }}" -u "{{ web_acr_username }}" --password-stdin
+      args:
+        executable: /bin/bash
+      no_log: true
+      when:
+        - (web_acr_registry | default('') | length) > 0
+        - (web_acr_username | default('') | length) > 0
+        - (web_acr_password | default('') | length) > 0
+
+    - name: Pull Web images onto image source host
+      ansible.builtin.command: "docker pull {{ item }}"
+      loop: "{{ web_image_refs }}"
+
+    - name: Create image archive
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker save {{ web_image_refs | join(' ') }} | gzip -1 > {{ web_image_archive_remote }}
+      args:
+        executable: /bin/bash
+
+    - name: Fetch image archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ web_image_archive_remote }}"
+        dest: "{{ web_image_archive_local }}"
+        flat: true
+
+- name: Load Web image archive on Web nodes
+  hosts: web_nodes
+  become: true
+  tasks:
+    - name: Copy image archive to Web node
+      ansible.builtin.copy:
+        src: "{{ web_image_archive_local }}"
+        dest: "{{ web_image_archive_remote }}"
+        mode: "0644"
+
+    - name: Load images
+      ansible.builtin.command: "docker load -i {{ web_image_archive_remote }}"

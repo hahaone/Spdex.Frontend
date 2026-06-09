@@ -9,6 +9,13 @@ on:
         description: '部署到服务器'
         type: boolean
         default: true
+      image_distribution:
+        description: 'Web 镜像分发方式'
+        type: choice
+        options:
+          - archive
+          - pull
+        default: archive
 
 env:
   ACR_REGISTRY: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com
@@ -43,6 +50,8 @@ jobs:
       - name: Detect changed frontend projects
         id: detect
         shell: bash
+        env:
+          IS_DEPLOY_RELEASE: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy]') }}
         run: |
           set -euo pipefail
 
@@ -52,8 +61,8 @@ jobs:
           quantilearn=false
           admin=false
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 手动触发保留原来的全量构建语义。
+          if [ "$IS_DEPLOY_RELEASE" = "true" ]; then
+            # 部署发布使用同一个 Git SHA 作为所有前端镜像 tag，因此必须全量构建。
             fjc=true
             frontend2026=true
             newspdex=true
@@ -213,7 +222,7 @@ jobs:
             ${{ env.IMAGE_ADMIN }}:${{ github.sha }}
 
   deploy:
-    name: Deploy changed frontend services
+    name: Deploy frontend release to Web nodes
     needs: [changes, build]
     # push 含 [deploy] 时自动部署；手动触发时根据 deploy 参数决定
     if: >-
@@ -223,93 +232,136 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: ACR_USERNAME,ACR_PASSWORD,DEPLOY_FJC,DEPLOY_2026,DEPLOY_NEWSPDEX,DEPLOY_QUANTILEARN,DEPLOY_ADMIN
-          script: |
-            set -eu
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            echo "$ACR_PASSWORD" | docker login crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com -u "$ACR_USERNAME" --password-stdin
-            cd /home/spdex/core
+      - name: Install Ansible
+        run: |
+          python3 -m pip install --user ansible
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-            wait_for_compose_service() {
-              service="$1"
-              for attempt in $(seq 1 30); do
-                if docker compose config --services | grep -qx "$service"; then
-                  return 0
-                fi
-                echo "Waiting for $service service in docker-compose.yml... ($attempt/30)"
-                sleep 10
-              done
-              echo "$service service not found in docker-compose.yml; deploy Spdex.Core first."
-              exit 1
-            }
-
-            deploy_compose_service() {
-              service="$1"
-              container_name="$2"
-              port="${3:-}"
-              health_url="${4:-}"
-
-              wait_for_compose_service "$service"
-              docker compose pull "$service"
-              docker compose up -d "$service"
-              sleep 3
-
-              docker ps --filter "name=$container_name"
-              if [ -n "$port" ]; then
-                command -v ss >/dev/null 2>&1 && ss -ltnp | grep ":$port" || true
-              fi
-              if [ -n "$health_url" ] && ! curl -fsS --max-time 10 "$health_url" >/dev/null; then
-                echo "$service health check failed; recent container logs:"
-                docker logs --tail 200 "$container_name" || true
-                exit 1
-              fi
-            }
-
-            if [ "$DEPLOY_FJC" = "true" ]; then
-              deploy_compose_service frontend spdex-frontend
-            fi
-
-            if [ "$DEPLOY_2026" = "true" ]; then
-              deploy_compose_service frontend2026 spdex-frontend-2026 3001 http://127.0.0.1:3001/login
-
-              if ! curl -fsS --max-time 10 http://127.0.0.1:3001/tc26-9xq4v7 >/dev/null; then
-                echo "frontend2026 management page health check failed; recent container logs:"
-                docker logs --tail 200 spdex-frontend-2026 || true
-                exit 1
-              fi
-
-              api_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:3001/api/admin/teaching2026/opened || true)
-              if [ -z "$api_status" ] || [ "$api_status" = "000" ] || [ "$api_status" -ge 500 ]; then
-                echo "frontend2026 API proxy health check failed with status $api_status; recent container logs:"
-                docker logs --tail 200 spdex-frontend-2026 || true
-                exit 1
-              fi
-            fi
-
-            if [ "$DEPLOY_NEWSPDEX" = "true" ]; then
-              deploy_compose_service frontend-newspdex spdex-frontend-newspdex 3002 http://127.0.0.1:3002/login
-            fi
-
-            if [ "$DEPLOY_QUANTILEARN" = "true" ]; then
-              deploy_compose_service frontend-quantilearn spdex-frontend-quantilearn 3004 http://127.0.0.1:3004/
-            fi
-
-            if [ "$DEPLOY_ADMIN" = "true" ]; then
-              deploy_compose_service frontend-admin spdex-frontend-admin 3005 http://127.0.0.1:3005/login
-            fi
-
-            docker image prune -f
+      - name: Prepare Ansible inventory and runtime vars
+        working-directory: deploy/web/ansible
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-          DEPLOY_FJC: ${{ needs.changes.outputs.fjc }}
-          DEPLOY_2026: ${{ needs.changes.outputs.frontend2026 }}
-          DEPLOY_NEWSPDEX: ${{ needs.changes.outputs.newspdex }}
-          DEPLOY_QUANTILEARN: ${{ needs.changes.outputs.quantilearn }}
-          DEPLOY_ADMIN: ${{ needs.changes.outputs.admin }}
+          WEB_DEPLOY_SSH_KEY: ${{ secrets.WEB_DEPLOY_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
+          WEB_ANSIBLE_INVENTORY: ${{ secrets.WEB_ANSIBLE_INVENTORY }}
+          WEB_ANSIBLE_GROUP_VARS_ALL: ${{ secrets.WEB_ANSIBLE_GROUP_VARS_ALL }}
+          WEB_ANSIBLE_GROUP_VARS_WEB_NODES: ${{ secrets.WEB_ANSIBLE_GROUP_VARS_WEB_NODES }}
+          SPDEX_BACKEND_PRIVATE_BASE_URL: ${{ secrets.SPDEX_BACKEND_PRIVATE_BASE_URL || vars.SPDEX_BACKEND_PRIVATE_BASE_URL || 'http://10.28.23.149:5000' }}
+          QUANTILEARN_PRIVATE_BASE_URL: ${{ secrets.QUANTILEARN_PRIVATE_BASE_URL || vars.QUANTILEARN_PRIVATE_BASE_URL || 'http://10.28.23.149:5015' }}
+          SPDEX_API_KEY: ${{ secrets.SPDEX_API_KEY }}
+          QUANTILEARN_AUTH_SHARED_SECRET: ${{ secrets.QUANTILEARN_AUTH_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.ssh" inventory group_vars
+          chmod 700 "$HOME/.ssh"
+
+          if [ -z "${WEB_DEPLOY_SSH_KEY:-}" ]; then
+            echo "Missing WEB_DEPLOY_SSH_KEY or DEPLOY_SSH_KEY secret."
+            exit 1
+          fi
+          printf '%s\n' "$WEB_DEPLOY_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+
+          if [ -n "${WEB_ANSIBLE_INVENTORY:-}" ]; then
+            printf '%s\n' "$WEB_ANSIBLE_INVENTORY" > inventory/production.ini
+          else
+            cp inventory/production.ini.example inventory/production.ini
+          fi
+
+          if [ -n "${WEB_ANSIBLE_GROUP_VARS_ALL:-}" ]; then
+            printf '%s\n' "$WEB_ANSIBLE_GROUP_VARS_ALL" > group_vars/all.yml
+          else
+            cp group_vars/all.yml.example group_vars/all.yml
+          fi
+
+          if [ -n "${WEB_ANSIBLE_GROUP_VARS_WEB_NODES:-}" ]; then
+            printf '%s\n' "$WEB_ANSIBLE_GROUP_VARS_WEB_NODES" > group_vars/web_nodes.yml
+          else
+            cp group_vars/web_nodes.yml.example group_vars/web_nodes.yml
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          data = {
+              "web_acr_registry": os.environ["ACR_REGISTRY"],
+              "web_acr_username": os.environ.get("ACR_USERNAME", ""),
+              "web_acr_password": os.environ.get("ACR_PASSWORD", ""),
+              "web_image_tag": os.environ["GITHUB_SHA"],
+              "web_image_archive_local": f"/tmp/spdex-web-images-{os.environ['GITHUB_SHA']}.tar.gz",
+              "web_image_archive_remote": f"/tmp/spdex-web-images-{os.environ['GITHUB_SHA']}.tar.gz",
+              "spdex_api_internal_url": os.environ["SPDEX_BACKEND_PRIVATE_BASE_URL"],
+              "quantilearn_api_internal_url": os.environ["QUANTILEARN_PRIVATE_BASE_URL"],
+              "spdex_api_key": os.environ.get("SPDEX_API_KEY", ""),
+              "quantilearn_auth_shared_secret": os.environ.get("QUANTILEARN_AUTH_SHARED_SECRET", ""),
+          }
+          Path("group_vars/runtime.auto.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+          PY
+
+      - name: Sync Web images through source host
+        if: ${{ (github.event.inputs.image_distribution || vars.WEB_IMAGE_DISTRIBUTION || 'archive') == 'archive' }}
+        working-directory: deploy/web/ansible
+        run: |
+          set -euo pipefail
+          ansible-playbook \
+            -i inventory/production.ini \
+            playbooks/sync-images-from-source.yml \
+            --extra-vars @group_vars/runtime.auto.json
+
+      - name: Deploy Web nodes
+        working-directory: deploy/web/ansible
+        env:
+          WEB_IMAGE_DISTRIBUTION: ${{ github.event.inputs.image_distribution || vars.WEB_IMAGE_DISTRIBUTION || 'archive' }}
+        run: |
+          set -euo pipefail
+
+          deploy_distribution="$WEB_IMAGE_DISTRIBUTION"
+          if [ "$deploy_distribution" = "archive" ]; then
+            deploy_distribution="skip"
+          fi
+
+          ansible-playbook \
+            -i inventory/production.ini \
+            playbooks/web-node.yml \
+            --extra-vars @group_vars/runtime.auto.json \
+            --extra-vars "web_image_distribution=${deploy_distribution}"
+
+      - name: Verify Web nodes
+        working-directory: deploy/web/ansible
+        run: |
+          set -euo pipefail
+          ansible-playbook \
+            -i inventory/production.ini \
+            playbooks/verify-web-node.yml \
+            --extra-vars @group_vars/runtime.auto.json
+
+      - name: Verify public ALB routes
+        run: |
+          set -euo pipefail
+
+          check_any() {
+            url="$1"
+            shift
+            code="$(curl -k -sS -o /dev/null -w "%{http_code}" --max-time 20 "$url" || echo 000)"
+            for expected in "$@"; do
+              if [ "$code" = "$expected" ]; then
+                echo "$url -> $code"
+                return 0
+              fi
+            done
+            echo "$url -> unexpected HTTP $code; expected one of: $*"
+            exit 1
+          }
+
+          check_any https://new.spdex.com/login 200
+          check_any https://2026.spdex.com/login 200
+          check_any https://fjcx.spdex.com/ 200 302
+          check_any https://ql.spdex.com/ 200 302
+          check_any https://admin2026.spdex.com/login 200 302 403
+          check_any http://new.spdex.com/login 301 302

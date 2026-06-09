@@ -1,0 +1,40 @@
+# Copy to all.yml and keep the real file out of git.
+
+spdex_api_internal_url: http://10.28.23.149:5000
+quantilearn_api_internal_url: http://10.28.23.149:5015
+
+web_image_tag: latest
+web_image_fjc: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend
+web_image_2026: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.2026
+web_image_newspdex: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex
+web_image_quantilearn: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn
+web_image_admin: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.admin
+
+web_acr_registry: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com
+web_acr_username: ""
+web_acr_password: ""
+
+web_image_refs:
+  - "{{ web_image_fjc }}:{{ web_image_tag }}"
+  - "{{ web_image_2026 }}:{{ web_image_tag }}"
+  - "{{ web_image_newspdex }}:{{ web_image_tag }}"
+  - "{{ web_image_quantilearn }}:{{ web_image_tag }}"
+  - "{{ web_image_admin }}:{{ web_image_tag }}"
+
+# Use "pull" when Web ECS can access ACR; use "archive" after running sync-images-from-source.yml;
+# use "skip" when the instance image already contains the application images.
+web_image_distribution: skip
+web_image_archive_local: /tmp/spdex-web-images-latest.tar.gz
+web_image_archive_remote: /tmp/spdex-web-images-latest.tar.gz
+
+spdex_api_key: ""
+quantilearn_auth_shared_secret: ""
+
+captcha_enabled: true
+captcha_scene_id: 1esnrsc3
+captcha_prefix: 6eoq6p
+captcha_region: cn
+
+# This is only the frontend session hint cookie domain. The backend HttpOnly session uses __Host-*
+# and remains host-only by browser design.
+newspdex_auth_cookie_domain: .spdex.com

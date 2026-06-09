@@ -1,0 +1,12 @@
+# Copy to production.ini and keep the real file out of git.
+#
+# GitHub Actions writes the private key to ~/.ssh/id_rsa and uses this inventory.
+# If Ansible runs from your laptop, keep ProxyJump enabled.
+# If Ansible runs on the jump/backend server itself, remove ansible_ssh_common_args.
+
+[web_nodes]
+web1 ansible_host=10.111.0.64 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o ProxyJump=root@139.129.208.138 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+web2 ansible_host=10.111.1.136 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o ProxyJump=root@139.129.208.138 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+[image_source]
+backend1 ansible_host=139.129.208.138 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'

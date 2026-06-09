@@ -1,0 +1,24 @@
+# Copy to web_nodes.yml and keep the real file out of git.
+
+spdex_web_root: /home/spdex/web
+web_nginx_conf_path: /etc/nginx/conf.d/spdex-web.conf
+
+# The standard image should already include Docker, Docker Compose plugin, and Nginx.
+# Set true only for a fresh ECS that has package repository access.
+web_install_packages: false
+web_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - nginx
+  - docker.io
+  - docker-compose-v2
+
+web_internal_api_listen: 127.0.0.1:5000
+web_internal_api_host_header: new.spdex.com
+web_alb_health_path: /__alb_health
+web_env_force_update: false
+
+web_deploy_serial: 1
+web_compose_pull_retries: 2
+web_compose_up_retries: 2
