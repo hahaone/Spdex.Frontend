@@ -23,7 +23,7 @@ function attrColor(a: string): string {
 }
 
 const PAD_TOP = 8
-const PAD_BOTTOM = 4
+const PAD_BOTTOM = 24 // 底部留白:x 轴时间标签落在 0 线下方,不与柱/0 线重叠(对齐 StaticTrendChart)
 const BUCKET_W_MIN = 22
 
 const buckets = computed(() => props.result?.buckets ?? [])
@@ -62,8 +62,16 @@ const maxVol = computed(() => {
 
 const prices = computed(() =>
   buckets.value.map(b => b.price).filter((p): p is number => p != null && p > 0))
-const priceMin = computed(() => (prices.value.length ? Math.min(...prices.value) : 0))
-const priceMax = computed(() => (prices.value.length ? Math.max(...prices.value) : 1))
+// 价位标尺上下各留 12% 余量(对齐 StaticTrendChart),避免折线触顶/触底。
+const priceBounds = computed(() => {
+  if (!prices.value.length) return { min: 0, max: 1 }
+  const lo = Math.min(...prices.value)
+  const hi = Math.max(...prices.value)
+  const span = hi - lo || Math.abs(hi) || 1
+  return { min: lo - span * 0.12, max: hi + span * 0.12 }
+})
+const priceMin = computed(() => priceBounds.value.min)
+const priceMax = computed(() => priceBounds.value.max)
 const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 const hasPrice = computed(() => prices.value.length > 0)
 
@@ -190,7 +198,7 @@ const tip = computed(() => {
 
 <template>
   <div ref="chartRef" class="tf-chart">
-    <div class="tf-body" :style="{ height: `${totalH + 16}px` }">
+    <div class="tf-body" :style="{ height: `${totalH}px` }">
       <!-- 左轴：成交 -->
       <svg class="tf-axis tf-axis-l" :width="36" :height="totalH" :viewBox="`0 0 36 ${totalH}`">
         <text
@@ -250,12 +258,12 @@ const tip = computed(() => {
             v-for="(t, i) in timeLabels"
             :key="`t${i}`"
             :x="t.x"
-            :y="totalH - 2"
+            :y="totalH - 8"
             class="tf-axis-text"
             text-anchor="middle"
           >{{ t.label }}</text>
           <!-- 十字准线 -->
-          <line v-if="hoverIndex != null" :x1="crosshairX" :x2="crosshairX" y1="0" :y2="totalH - 12" class="tf-crosshair" />
+          <line v-if="hoverIndex != null" :x1="crosshairX" :x2="crosshairX" :y1="PAD_TOP" :y2="volBase" class="tf-crosshair" />
         </svg>
       </div>
 
@@ -303,7 +311,7 @@ const tip = computed(() => {
 .tf-chart {
   position: relative;
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .tf-crosshair {
@@ -368,6 +376,11 @@ const tip = computed(() => {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 32px;
   align-items: stretch;
+  /* 与其他图表统一:浅灰渐变背景 + 细边框圆角。 */
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+  overflow: hidden;
 }
 
 .tf-axis {
@@ -409,9 +422,11 @@ const tip = computed(() => {
 .tf-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 4px 10px;
-  padding-top: 2px;
+  gap: 2px 12px;
+  padding: 2px 2px 0;
+  line-height: 1.3;
 }
 
 .tf-lg {
