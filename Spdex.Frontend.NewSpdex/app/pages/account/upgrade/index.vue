@@ -213,19 +213,26 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
           </div>
           <p v-else class="free-hint">永久免费</p>
         </article>
-      </section>
 
-      <!-- 工作室版客服联系（V3 等价） -->
-      <section class="studio-band">
-        <div class="studio-head">
-          <Sparkles :size="14" />
-          <b>工作室版需联系客服开通</b>
-        </div>
-        <div class="studio-body">
-          <span>客服 QQ：</span>
-          <b class="num">{{ customerQQ }}</b>
-        </div>
-        <p class="studio-hint">工作室版含定制研究群、专属信号、独立 Q 系统。请添加客服 QQ 沟通。</p>
+        <!-- #14 工作室版:纯展示卡(并列于套餐卡),仅联系客服开通、不在线下单,不进套餐体系。 -->
+        <article class="plan-card standard studio-card">
+          <div class="card-head">
+            <h3><Sparkles :size="13" /> 工作室版</h3>
+            <p class="desc">联系客服了解开通</p>
+          </div>
+          <ul class="studio-feats">
+            <li>日金版全功能</li>
+            <li>毫秒现场</li>
+            <li>专属模型</li>
+            <li>Poly 明细</li>
+            <li>Kalshi 明细</li>
+          </ul>
+          <div class="studio-contact">
+            <span>联系客服 QQ</span>
+            <b class="num">{{ customerQQ }}</b>
+            <span>了解开通</span>
+          </div>
+        </article>
       </section>
 
       <!-- 支付方式说明 -->
@@ -510,42 +517,54 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
 }
 
 /* ─── 工作室版 ─── */
-.studio-band {
-  display: grid;
-  gap: 4px;
-  padding: 11px 12px 12px;
-  border: 1px dashed var(--accent);
-  border-radius: 5px;
-  background: #faf8fd;
-}
-
-.studio-head {
+/* #14 工作室版纯展示卡(并列于套餐卡;沿用 .plan-card.standard 卡框)。 */
+.studio-card .card-head h3 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.studio-feats {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.studio-feats li {
+  position: relative;
+  padding-left: 15px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.studio-feats li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
   color: var(--accent-deep);
-  font-size: 0.86rem;
   font-weight: 820;
 }
 
-.studio-body {
+.studio-contact {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 5px;
+  background: #faf8fd;
+  text-align: center;
   color: var(--ink);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 740;
 }
 
-.studio-body b {
+.studio-contact b {
+  margin: 0 5px;
   color: var(--accent-deep);
   font-weight: 820;
   letter-spacing: 0.02em;
-}
-
-.studio-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 720;
-  line-height: 1.55;
 }
 
 /* ─── 支付方式说明 ─── */

@@ -56,6 +56,8 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 const jcOrderText = computed(() => String(props.match.jcOrder ?? 0).padStart(3, '0'))
 // 未开赛不显示比分(原来固定 0-0);已开赛/已结束才显示。进行中额外显示近似进行时间(后端 liveMinute)。
 const scoreText = computed(() => (props.match.status === 'upcoming' ? '' : (props.match.scoreText || '')))
+// 半场比分(回查/已结束多有值):非空才显,拼成 全场(半场) 如 2-1(0-0);无源不补(铁律)。
+const halfText = computed(() => (props.match.status === 'upcoming' ? '' : (props.match.halfScoreText || '')))
 const liveMinute = computed(() => props.match.liveMinute || '')
 const totalTurnover = computed(() => Math.round(props.match.bfAmount ?? 0).toLocaleString('en-US'))
 const goalsTotal = computed(() => {
@@ -99,7 +101,7 @@ const bigBetText = computed(() => {
         </button>
         <span class="num">开赛时间：{{ match.matchTime.slice(0, 10).replaceAll('-', '/') }} {{ kickOff }}</span>
         <span v-if="liveMinute" class="live-min num" title="近似进行时间(开赛至今;精确分钟见实时赛事)">{{ liveMinute }}</span>
-        <span v-if="scoreText" class="score num">{{ scoreText }}</span>
+        <span v-if="scoreText" class="score num">{{ scoreText }}<template v-if="halfText">({{ halfText }})</template></span>
       </div>
 
       <button type="button" class="collapse-btn" :aria-label="collapsed ? '展开赛事' : '收起赛事'" @click="emit('toggleCollapsed', match.eventId)">

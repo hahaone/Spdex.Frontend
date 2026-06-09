@@ -59,7 +59,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: '新版 SPdex',
+      title: 'SPdex_超级指数网提供免费必发交易量、PolyMarket预测市场成交明细、Kalshi成交量等超级指数分析',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },

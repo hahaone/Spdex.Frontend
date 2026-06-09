@@ -264,7 +264,8 @@ const tooltip = computed(() => {
   const h = hover.value
   if (!h) return null
   const frac = h.x / width.value
-  const anchor = frac > 0.62 ? 'right' : frac < 0.2 ? 'left' : 'mid'
+  // 框始终移到光标侧旁(左半→框在右、右半→框在左),不再居中盖住十字准线/数据点。
+  const anchor = frac > 0.5 ? 'right' : 'left'
   return {
     time: fmtTipTime(h.p),
     volume: h.p.volume,
@@ -483,12 +484,13 @@ svg {
   pointer-events: none;
 }
 
+/* 提示框移到光标侧旁并留 9px 间隙,避免盖住十字准线/数据点(原 a-mid 居中会遮挡光标)。 */
 .tip.a-left {
-  transform: translateX(0);
+  transform: translateX(9px);
 }
 
 .tip.a-right {
-  transform: translateX(-100%);
+  transform: translateX(calc(-100% - 9px));
 }
 
 .tip-time {

@@ -6,7 +6,6 @@ import { isFreeMembership } from '~/utils/membership'
 const route = useRoute()
 const { user } = useAuth()
 const routeDay = route.query.day === 'yesterday' ? 'yesterday' : 'today'
-const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
 const routeLottery = ['all', 'jc', 'lottery'].includes(String(route.query.lottery)) ? String(route.query.lottery) as 'all' | 'jc' | 'lottery' : 'all'
 const archiveMinDate = '2012-08-01'
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -17,6 +16,10 @@ const isSelectableArchiveDate = (value: unknown): value is string => (
   && value >= archiveMinDate
 )
 const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
+// 回查(自选过去日期)默认「全部赛事」:过去日期无「未开」,默认停在未开会空;显式带 ?status 时仍尊重。
+const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status))
+  ? String(route.query.status) as 'upcoming' | 'started' | 'all'
+  : (routeCustomDate ? 'all' : 'upcoming')
 
 const day = ref(routeDay)
 // 状态筛选与「竞彩/足彩」拆成两组独立控件（G2/G3）
@@ -73,6 +76,11 @@ watch(backcheckLocked, (locked) => {
   if (!locked) return
   customDate.value = ''
   day.value = 'today'
+})
+
+// 回查:点选自选(过去)日期时,状态默认跳「全部赛事」(过去日期无「未开」会空)。
+watch(customDate, (d) => {
+  if (d) status.value = 'all'
 })
 
 // ── 首页异动指标点击落地：?metric=xxx&events=1,2,3 → 只显示命中的这些比赛 ──

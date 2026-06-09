@@ -42,6 +42,9 @@ function ratio2(v: number | undefined): string { return v != null && v > 0 ? v.t
 // 旧站着色:挂牌指数 正蓝/负绿;亚洲指数 正红/负紫。
 function guaClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-blue' : 'c-green') }
 function asianClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-red' : 'c-purple') }
+// 旧站阈值:模拟盈亏 >60 标红、冷热指数 <0 标红(#5/#6)。
+function pnlClass(v: number | undefined): string { return v != null && v > 60 ? 'c-red' : '' }
+function heatClass(v: number | undefined): string { return v != null && v < 0 ? 'c-red' : '' }
 
 function optionLabel(i: number): string {
   if (i === 0) return props.match.homeTeam
@@ -83,10 +86,10 @@ const footballColumns: Col[] = [
   { key: 'turnover', label: '成交', tone: 'deal', get: i => std(i)?.turnover || props.match.turnovers[i] || '' },
   { key: 'index', label: '指数', tone: 'deal', get: i => num(std(i)?.bfIndex) || intList(props.match.bfIndex[i]), strong: () => true },
   { key: 'ratio', label: '比例', tone: 'deal', get: i => std(i)?.ratio || listShare(i) },
-  { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => signed(std(i)?.pnl) },
+  { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => signed(std(i)?.pnl), cls: i => pnlClass(std(i)?.pnl) },
   { key: 'price', label: '价位', tone: 'deal', get: i => std(i)?.price || odds(props.match.bfPrice?.[i]) },
   { key: 'listing1', label: '挂牌指数', tone: 'deal', get: i => pct2(props.match.stockStd?.[i]), cls: i => guaClass(props.match.stockStd?.[i]) },
-  { key: 'heat', label: '冷热指数', tone: 'deal', get: i => signed(std(i)?.heat) },
+  { key: 'heat', label: '冷热指数', tone: 'deal', get: i => signed(std(i)?.heat), cls: i => heatClass(std(i)?.heat) },
   { key: 'euroAvg', label: '欧洲平均', tone: 'deal', get: i => odds(std(i)?.euroAvg) || odds(props.match.euro?.[i]) },
   { key: 'kellyVar', label: '凯利方差', tone: 'deal', get: i => num(std(i)?.variance) || intList(props.match.kellyVar?.[i]) },
   // 进球(大小)
@@ -115,7 +118,7 @@ const basketballColumns: Col[] = [
   { key: 'index', label: '指数', tone: 'deal', get: i => i === 1 ? '' : (num(std(i)?.bfIndex) || intList(props.match.bfIndex[i])), strong: () => true },
   { key: 'turnover', label: '成交', tone: 'deal', get: i => i === 1 ? '' : (intList(props.match.bfAmounts?.[i]) || std(i)?.turnover || props.match.turnovers[i] || '') },
   { key: 'ratio', label: '比例', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.ratio || listShare(i)) },
-  { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => i === 1 ? '' : signed(std(i)?.pnl) },
+  { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => i === 1 ? '' : signed(std(i)?.pnl), cls: i => i === 1 ? '' : pnlClass(std(i)?.pnl) },
   { key: 'price', label: '价位', tone: 'deal', get: i => i === 1 ? '' : (std(i)?.price || odds(props.match.bfPrice?.[i])) },
   { key: 'stockStd', label: '挂牌指数', tone: 'deal', get: i => i === 1 ? '' : pct2(props.match.stockStd?.[i]), cls: i => i === 1 ? '' : guaClass(props.match.stockStd?.[i]) },
   // 篮球进球各列取后端「主点线」快照(payload),不走 enrich —— VendorBase 的 Uo* 会指向过期线、对不上显示的线。
@@ -150,7 +153,7 @@ const rows = computed<Cell[][]>(() => rowIndexes.map(i => columns.value.map(c =>
     <table class="classic-metric-grid">
       <thead>
         <tr>
-          <th v-for="c in columns" :key="c.key" :class="[`tone-${c.tone}`, { team: c.key === 'team' }]">{{ c.label }}</th>
+          <th v-for="c in columns" :key="c.key" :class="[`tone-${c.tone}`, `col-${c.key}`, { team: c.key === 'team' }]">{{ c.label }}</th>
         </tr>
       </thead>
       <tbody>
@@ -158,7 +161,7 @@ const rows = computed<Cell[][]>(() => rowIndexes.map(i => columns.value.map(c =>
           <td
             v-for="cell in row"
             :key="cell.key"
-            :class="[`tone-${cell.tone}`, cell.cls, { strong: cell.strong, blank: !cell.value }]"
+            :class="[`tone-${cell.tone}`, `col-${cell.key}`, cell.cls, { strong: cell.strong, blank: !cell.value }]"
           >
             <span class="num">{{ cell.value || '-' }}</span>
           </td>
@@ -219,6 +222,14 @@ td.tone-deal { background: var(--classic-green-soft); }
 td.tone-goal,
 td.tone-handicap { background: var(--classic-purple-soft); }
 td.tone-extra { background: var(--classic-blue-soft); }
+
+/* #3 成交列(标盘/进球/让分成交)整列紫底白字,复刻旧站对「成交」列的突出(旧站 spec 列 th #9999FF / td #f0e9ff,此处按新主题紫 + 白字更醒目)。放在 tone-* 之后以同特异性覆盖。 */
+th.col-turnover,
+th.col-goalTurnover,
+th.col-hcpTurnover { background: var(--classic-purple); }
+td.col-turnover,
+td.col-goalTurnover,
+td.col-hcpTurnover { background: var(--classic-purple); color: #fff; font-weight: 760; }
 
 /* 整行悬停：半透明蓝色叠层，保留分区底色又给出扫读焦点 */
 tbody tr:hover td {

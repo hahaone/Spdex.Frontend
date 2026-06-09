@@ -23,7 +23,8 @@ export interface LiveModel {
   modelOverPct?: number | null
   bookOverPct?: number | null
   edgePct?: number | null
-  lean: string
+  /** 价值倾向;null/缺省=无大小球盘口或未计算 edge,前端不显示结论。 */
+  lean?: string | null
 }
 
 export interface LiveBigBet { amountText: string, side: string, odd: number, attr: string }

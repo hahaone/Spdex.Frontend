@@ -86,8 +86,8 @@ const oddsMarketLine = computed(() => {
 
       <!-- 模型 -->
       <div v-if="model" class="pv-model">
-        <div class="pv-mrow">
-          <span :class="['pv-lean', leanClass]">{{ model.lean }}</span>
+        <div v-if="model.lean || model.edgePct != null" class="pv-mrow">
+          <span v-if="model.lean" :class="['pv-lean', leanClass]">{{ model.lean }}</span>
           <span v-if="model.edgePct != null" class="num pv-edge" :class="model.edgePct > 3 ? 'pos' : model.edgePct < -3 ? 'neg' : ''">
             Edge {{ model.edgePct > 0 ? '+' : '' }}{{ model.edgePct }}%
           </span>

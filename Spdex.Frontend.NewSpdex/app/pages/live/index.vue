@@ -48,7 +48,8 @@ function hasOdds(lo: LiveOdds | null): boolean {
   return !!lo?.markets?.length
 }
 /** 模型价值倾向 → 配色类（大球价值 / 小球价值 / 中性）。 */
-function leanCls(lean: string): string {
+function leanCls(lean?: string | null): string {
+  if (!lean) return 'neutral'
   if (lean.includes('大')) return 'over'
   if (lean.includes('小')) return 'under'
   return 'neutral'
@@ -172,7 +173,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 
           <!-- 赛中模型分析（进行中）：价值倾向 + xG + 预测总进球 -->
           <div v-if="m.status === 'running' && m.model" class="c-model">
-            <span class="lean" :class="leanCls(m.model.lean)">
+            <span v-if="m.model.lean" class="lean" :class="leanCls(m.model.lean)">
               {{ m.model.lean }}<i v-if="m.model.goalLine && m.model.edgePct != null" class="edge num"> {{ fmtEdge(m.model.edgePct) }}</i>
             </span>
             <span class="ms">xG <b class="num">{{ m.model.xgHome.toFixed(2) }}-{{ m.model.xgAway.toFixed(2) }}</b></span>

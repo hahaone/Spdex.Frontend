@@ -104,7 +104,7 @@ const tooltip = computed(() => {
   const h = hover.value
   if (!h || !h.n) return null
   const frac = h.x / width.value
-  const anchor = frac > 0.62 ? 'right' : frac < 0.2 ? 'left' : 'mid'
+  const anchor = frac > 0.5 ? 'right' : 'left' // 框移到光标侧旁,不居中盖住光标列/数据点
   return {
     time: fmtTime(props.points[h.i]),
     anchor,
@@ -277,8 +277,9 @@ svg {
   pointer-events: none;
 }
 
-.tip.a-left { transform: translateX(0); }
-.tip.a-right { transform: translateX(-100%); }
+/* 提示框移到光标侧旁留 9px 间隙,避免盖住十字准线/数据点。 */
+.tip.a-left { transform: translateX(9px); }
+.tip.a-right { transform: translateX(calc(-100% - 9px)); }
 
 .tip-time {
   margin-bottom: 3px;

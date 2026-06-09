@@ -212,10 +212,9 @@ onScopeDispose(() => {
     clearChartTimer(key)
 })
 
-function tipAnchor(x: number, width: number): 'left' | 'mid' | 'right' {
-  if (x < width * 0.28) return 'left'
-  if (x > width * 0.72) return 'right'
-  return 'mid'
+function tipAnchor(x: number, width: number): 'left' | 'right' {
+  // 框始终移到光标侧旁(左半→右、右半→左),不再居中盖住光标列/数据点。
+  return x < width * 0.5 ? 'left' : 'right'
 }
 function tipLeftPct(x: number, width: number): number {
   return Math.max(4, Math.min(96, (x / Math.max(width, 1)) * 100))
@@ -699,7 +698,7 @@ function injStatus(s: string): { text: string, cls: string } {
     <section v-if="model" class="model-card">
       <div class="section-title brand">
         <span>赛中分析</span>
-        <span :class="['lean', leanClass]">{{ model.lean }}</span>
+        <span v-if="model.lean" :class="['lean', leanClass]">{{ model.lean }}</span>
       </div>
       <div class="model-twin">
         <div class="m-pair">
@@ -1784,9 +1783,10 @@ section.compare {
   color: var(--ink);
   pointer-events: none;
 }
-.chart-tip.a-left { transform: translateX(0); }
+/* 提示框移到光标侧旁留 9px 间隙,避免盖住十字准线/数据点(原 a-mid 居中会遮挡)。 */
+.chart-tip.a-left { transform: translateX(9px); }
 .chart-tip.a-mid { transform: translateX(-50%); }
-.chart-tip.a-right { transform: translateX(-100%); }
+.chart-tip.a-right { transform: translateX(calc(-100% - 9px)); }
 .chart-tip-title {
   margin-bottom: 4px;
   color: var(--muted);

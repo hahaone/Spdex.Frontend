@@ -10,7 +10,8 @@ function isDesktopViewMode(value: unknown): value is DesktopViewMode {
 export function useDesktopViewMode() {
   const route = useRoute()
   const router = useRouter()
-  const storedMode = useState<DesktopViewMode>('newspdex-desktop-view-mode', () => 'modern')
+  // null = 用户未显式选择过(无 localStorage / 无 ?view);大屏下默认走「经典」,小屏始终 modern。
+  const storedMode = useState<DesktopViewMode | null>('newspdex-desktop-view-mode', () => null)
   const isDesktopModeAvailable = useState<boolean>('newspdex-desktop-mode-available', () => false)
 
   const queryMode = computed<DesktopViewMode | null>(() => {
@@ -20,7 +21,8 @@ export function useDesktopViewMode() {
 
   const desktopViewMode = computed<DesktopViewMode>(() => {
     if (!isDesktopModeAvailable.value) return 'modern'
-    return queryMode.value ?? storedMode.value
+    // 优先级:URL ?view → 用户显式偏好(localStorage)→ 大屏默认「经典」(老用户过渡心智)。
+    return queryMode.value ?? storedMode.value ?? 'classic'
   })
 
   const isClassicDesktop = computed(() => desktopViewMode.value === 'classic')

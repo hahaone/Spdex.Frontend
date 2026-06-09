@@ -459,6 +459,8 @@ const detailButtons = computed<DetailBtn[]>(() => {
   color: var(--accent-deep);
   font-size: 0.82rem;
   font-weight: 840;
+  /* #7 两个按钮区(走势图表/明细图表)标题下加分隔线,便于定位不同数据(复刻旧站 section 分隔)。 */
+  border-bottom: 2px solid var(--classic-green);
 }
 
 .metric-grid {
@@ -475,7 +477,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
   background: #eef1f5;
   color: var(--classic-text);
   font-size: 0.74rem;
-  font-weight: 740;
+  font-weight: 520;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
@@ -489,7 +491,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
   background: var(--classic-green);
   border-color: var(--classic-green);
   color: #fff;
-  font-weight: 820;
+  font-weight: 640;
 }
 
 .metric-btn.disabled {
@@ -511,7 +513,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
   border: 1px solid var(--classic-border);
   border-radius: var(--classic-radius);
   font-size: 0.75rem;
-  font-weight: 760;
+  font-weight: 520;
   transition: filter 0.12s ease, border-color 0.12s ease;
 }
 

@@ -123,4 +123,25 @@ function tickerSideClass(selection: string): string {
 .t-side { padding: 0 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.6); font-weight: 800; }
 .t-odds { opacity: 0.86; }
 .t-time { opacity: 0.7; font-size: 0.68rem; }
+
+/* #2 宽屏:大单从单行横向跑马灯改 3 列网格 + 纵向滚动,便于查看全部(仅宽屏 ≥1200px;窄屏维持横向跑马灯)。 */
+@media (min-width: 1200px) {
+  .ticker-band {
+    align-items: start;
+  }
+
+  .ticker-scroll {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: min-content;
+    gap: 6px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: 174px;
+  }
+
+  .ticker-item {
+    overflow: hidden;
+  }
+}
 </style>
