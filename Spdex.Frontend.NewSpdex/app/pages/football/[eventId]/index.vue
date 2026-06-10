@@ -98,11 +98,19 @@ const baseOptions = [
   { label: '比分', value: 'cs' },
   { label: '角球', value: 'corner' },
 ]
-const options = computed(() => baseOptions.filter(option =>
-  option.value !== 'poly' || (detail.value?.poly.length ?? 0) > 0))
+const options = computed(() => baseOptions.filter((option) => {
+  if (option.value === 'poly') return (detail.value?.poly.length ?? 0) > 0
+  // 时光机:让分(El* 必发欧式让球胜平负)只有当前快照、无历史时间窗 → 回看历史时刻时不提供"让分"分段
+  if (option.value === 'handicap') return !isSnapshotMode.value
+  return true
+}))
 
 watchEffect(() => {
   if (tab.value === 'poly' && !(detail.value?.poly.length)) {
+    tab.value = 'all'
+  }
+  // 时光机模式下"让分"分段不可用(让分无历史快照)→ 回退到"全部"
+  if (tab.value === 'handicap' && isSnapshotMode.value) {
     tab.value = 'all'
   }
 })
@@ -337,7 +345,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
           />
 
           <MarketSummaryCard
-            v-if="access.handicap"
+            v-if="access.handicap && !isSnapshotMode"
             class="market-panel market-handicap"
             :title="handicapTitle"
             tone="handicap"

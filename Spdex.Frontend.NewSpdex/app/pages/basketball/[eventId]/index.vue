@@ -52,17 +52,26 @@ async function selectTimePoint(hours: number) {
 
 const effectiveStandard = computed(() => snapshot.value?.standard ?? detail.value?.standard ?? [])
 const effectiveGoals = computed(() => snapshot.value?.goals ?? detail.value?.goals ?? [])
-const effectiveHandicap = computed(() => snapshot.value?.handicap ?? detail.value?.handicap ?? [])
+const effectiveHandicap = computed(() => snapshot.value ? (snapshot.value.handicap ?? []) : (detail.value?.handicap ?? []))
 const isSnapshotMode = computed(() => snapshot.value !== null)
 
 // 篮球去掉 Poly tab（NBA/WNBA 在 Polymarket 上的覆盖较少）
 const tab = ref<MarketTab>('all')
-const options = [
+const baseOptions = [
   { label: '全部', value: 'all' },
   { label: '标盘', value: 'standard' },
   { label: '大小', value: 'goals' },
   { label: '让分', value: 'handicap' },
 ]
+// 时光机:让分(El* 必发欧式让球胜平负)只有当前快照、无历史时间窗 → 回看历史时刻时不提供"让分"分段
+const options = computed(() => baseOptions.filter(o => !(o.value === 'handicap' && isSnapshotMode.value)))
+
+watchEffect(() => {
+  // 时光机模式下"让分"分段不可用(让分无历史快照)→ 回退到"全部"
+  if (tab.value === 'handicap' && isSnapshotMode.value) {
+    tab.value = 'all'
+  }
+})
 
 type BasketballSectionKey = 'standard' | 'poly' | 'goals' | 'handicap'
 const sectionMode = computed<BasketballSectionKey | null>(() => {
@@ -211,7 +220,7 @@ function jumpTo(target: 'standard' | 'poly' | 'goals' | 'handicap') {
               @open="jumpTo('goals')"
             />
             <MarketSummaryCard
-              v-if="access.handicap"
+              v-if="access.handicap && !isSnapshotMode"
               :title="isSnapshotMode ? `让分（${snapshot?.actualHoursOffset}h 前）` : '让分'"
               tone="handicap"
               :rows="effectiveHandicap"

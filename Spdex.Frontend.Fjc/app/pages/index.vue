@@ -458,13 +458,13 @@ onUnmounted(() => {
                 &#9733;
               </button>
             </td>
-            <td class="col-league">
+            <td class="col-league" :title="item.match.sortName">
               <span class="league-tag">{{ item.match.sortName }}</span>
             </td>
             <td class="col-time">
               {{ formatMatchTime(item.match.matchTime) }}
             </td>
-            <td class="col-teams">
+            <td class="col-teams" :title="`${item.match.homeTeam} vs ${item.match.guestTeam}`">
               <span class="team-home">{{ item.match.homeTeam }}</span>
               <span class="team-vs">vs</span>
               <span class="team-away">{{ item.match.guestTeam }}</span>
@@ -477,6 +477,7 @@ onUnmounted(() => {
                 v-if="item.maxBet > 0"
                 class="maxbet-cell"
                 :class="{ highlight: isMaxBetHighlight(item) }"
+                :title="`${formatMoney(item.maxBet)} ${formatMaxBetSuffix(item)}`"
                 @click="openMaxBetPopover($event, item)"
               >
                 <b>{{ formatMoney(item.maxBet) }}</b> {{ formatMaxBetSuffix(item) }}
@@ -488,6 +489,7 @@ onUnmounted(() => {
                 v-if="item.bfMaxBet > 0"
                 class="maxbet-cell"
                 :class="{ highlight: isBfMaxBetHighlight(item) }"
+                :title="`${formatMoney(item.bfMaxBet)} ${formatBfMaxBetSuffix(item)}`"
                 @click="openBfMaxBetPopover($event, item)"
               >
                 <b>{{ formatMoney(item.bfMaxBet) }}</b> {{ formatBfMaxBetSuffix(item) }}
@@ -966,7 +968,7 @@ onUnmounted(() => {
 
 /* --- 表格 --- */
 .table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
@@ -974,9 +976,10 @@ onUnmounted(() => {
 
 .match-table {
   width: 100%;
-  min-width: 1280px;
+  min-width: 0;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  table-layout: fixed;
+  font-size: 0.86rem;
 }
 
 .match-table thead {
@@ -984,18 +987,22 @@ onUnmounted(() => {
 }
 
 .match-table th {
-  padding: 0.6rem 0.75rem;
+  padding: 0.55rem 0.45rem;
   text-align: left;
   font-weight: 600;
   color: #475569;
   border-bottom: 2px solid #e2e8f0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .match-table td {
-  padding: 0.55rem 0.75rem;
+  padding: 0.5rem 0.45rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .match-table tbody tr:hover {
@@ -1003,7 +1010,7 @@ onUnmounted(() => {
 }
 
 /* --- 关注列 --- */
-.col-pin { width: 36px; text-align: center; }
+.col-pin { width: 3%; text-align: center; }
 
 .pin-btn {
   background: none;
@@ -1033,28 +1040,33 @@ onUnmounted(() => {
   background: #fef3c7 !important;
 }
 
-.col-league { width: 90px; }
-.col-time { width: 110px; white-space: nowrap; }
-.col-teams { min-width: 200px; }
-.col-let { width: 60px; text-align: center; }
-.col-maxbet { min-width: 220px; }
-.col-bf-maxbet { min-width: 200px; }
-.col-score { width: 90px; white-space: nowrap; }
-.col-bf { width: 65px; text-align: right; white-space: nowrap; }
-.col-asian { width: 65px; text-align: right; white-space: nowrap; }
-.col-detail { width: 190px; white-space: nowrap; }
+.col-league { width: 6%; }
+.col-time { width: 7%; white-space: nowrap; }
+.col-teams { width: 16%; white-space: nowrap; }
+.col-let { width: 4.5%; text-align: center; white-space: nowrap; }
+.col-maxbet { width: 15%; white-space: nowrap; }
+.col-bf-maxbet { width: 17%; white-space: nowrap; }
+.col-score { width: 4.5%; white-space: nowrap; }
+.col-bf { width: 6%; text-align: right; white-space: nowrap; }
+.col-asian { width: 6%; text-align: right; white-space: nowrap; }
+.col-detail { width: 15%; white-space: nowrap; }
 
 .league-tag {
   display: inline-block;
+  max-width: 100%;
   padding: 0.15rem 0.5rem;
   background: #f1f5f9;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   color: #475569;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .team-home {
+  display: inline;
   font-weight: 500;
 }
 
@@ -1065,6 +1077,7 @@ onUnmounted(() => {
 }
 
 .team-away {
+  display: inline;
   color: #475569;
 }
 
@@ -1087,9 +1100,15 @@ onUnmounted(() => {
 
 /* --- 最大单注 --- */
 .maxbet-cell {
+  display: inline-block;
+  max-width: 100%;
   cursor: pointer;
   border-bottom: 1px dashed #94a3b8;
   transition: color 0.15s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .maxbet-cell:hover {
@@ -1179,7 +1198,8 @@ onUnmounted(() => {
 /* --- 明细链接 --- */
 .detail-links {
   display: flex;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 2px;
   flex-wrap: nowrap;
 }
 
@@ -1187,12 +1207,12 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 20px;
-  padding: 0 4px;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 3px;
   border-radius: 3px;
   color: #fff;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-decoration: none;
   opacity: 0.8;
@@ -1202,7 +1222,18 @@ onUnmounted(() => {
 
 .detail-btn:hover {
   opacity: 1;
-  transform: scale(1.15);
+  transform: scale(1.08);
+}
+
+@media (max-width: 1120px) {
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  .match-table {
+    min-width: 1080px;
+    table-layout: fixed;
+  }
 }
 
 /* --- 分页 --- */
