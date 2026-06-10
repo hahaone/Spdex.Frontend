@@ -3,6 +3,19 @@
   hosts: web_nodes
   become: true
   serial: "{{ web_deploy_serial | default(1) }}"
+  vars:
+    web_compose_services:
+      - service: frontend
+        container: spdex-web-frontend
+      - service: frontend2026
+        container: spdex-web-frontend-2026
+      - service: frontend-newspdex
+        container: spdex-web-frontend-newspdex
+      - service: frontend-quantilearn
+        container: spdex-web-frontend-quantilearn
+      - service: frontend-admin
+        container: spdex-web-frontend-admin
+    web_all_compose_service_names: "{{ web_compose_services | map(attribute='service') | list }}"
 
   pre_tasks:
     - name: Validate required variables
@@ -16,6 +29,10 @@
           - web_image_newspdex is defined
           - web_image_quantilearn is defined
           - web_image_admin is defined
+          - web_deploy_service_names is defined
+          - web_deploy_service_names | length > 0
+          - web_updated_service_images is defined
+          - (web_deploy_service_names | difference(web_all_compose_service_names)) | length == 0
           - web_image_distribution in ['pull', 'archive', 'skip']
         fail_msg: "Missing required SPdex Web deployment variables."
 
@@ -40,6 +57,37 @@
         path: "{{ spdex_web_root }}"
         state: directory
         mode: "0755"
+
+    - name: Inspect existing Web container images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - "--format={{ '{{' }} index .Config.Image {{ '}}' }}"
+          - "{{ item.container }}"
+      register: web_existing_image_inspect
+      changed_when: false
+      failed_when: false
+      loop: "{{ web_compose_services }}"
+
+    - name: Build existing Web service image map
+      ansible.builtin.set_fact:
+        web_existing_service_images: "{{ web_existing_service_images | default({}) | combine({item.item.service: item.stdout | trim}) }}"
+      loop: "{{ web_existing_image_inspect.results }}"
+      when:
+        - item.rc == 0
+        - (item.stdout | trim | length) > 0
+
+    - name: Validate unchanged Web services have existing images
+      ansible.builtin.assert:
+        that:
+          - ((web_all_compose_service_names | difference(web_deploy_service_names)) | difference((web_existing_service_images | default({})).keys() | list)) | length == 0
+        fail_msg: "Incremental deploy cannot find existing image refs for unchanged services; run a manual full release first."
+
+    - name: Build desired Web service image map
+      ansible.builtin.set_fact:
+        web_desired_service_images: "{{ web_desired_service_images | default({}) | combine({item: ((web_updated_service_images[item]) if (item in web_updated_service_images) else (web_existing_service_images[item]))}) }}"
+      loop: "{{ web_all_compose_service_names }}"
 
     - name: Check existing compose environment file
       ansible.builtin.stat:
@@ -85,7 +133,7 @@
         - (web_acr_password | default('') | length) > 0
 
     - name: Pull Web images from registry
-      ansible.builtin.command: docker compose pull
+      ansible.builtin.command: "docker compose pull {{ web_deploy_service_names | join(' ') }}"
       args:
         chdir: "{{ spdex_web_root }}"
       register: compose_pull
@@ -106,7 +154,7 @@
       when: web_image_distribution == 'archive'
 
     - name: Start or update Web containers
-      ansible.builtin.command: docker compose up -d --remove-orphans
+      ansible.builtin.command: "docker compose up -d --remove-orphans {{ web_deploy_service_names | join(' ') }}"
       args:
         chdir: "{{ spdex_web_root }}"
       register: compose_up

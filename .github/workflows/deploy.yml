@@ -16,6 +16,13 @@ on:
           - archive
           - pull
         default: archive
+      release_scope:
+        description: 'Web 发布范围'
+        type: choice
+        options:
+          - changed
+          - all
+        default: changed
 
 env:
   ACR_REGISTRY: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com
@@ -51,7 +58,7 @@ jobs:
         id: detect
         shell: bash
         env:
-          IS_DEPLOY_RELEASE: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy]') }}
+          IS_FULL_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_scope == 'all' }}
         run: |
           set -euo pipefail
 
@@ -61,8 +68,8 @@ jobs:
           quantilearn=false
           admin=false
 
-          if [ "$IS_DEPLOY_RELEASE" = "true" ]; then
-            # 部署发布使用同一个 Git SHA 作为所有前端镜像 tag，因此必须全量构建。
+          if [ "$IS_FULL_RELEASE" = "true" ]; then
+            # 手动全量发布用于初始化新节点或做整体验证；日常 [deploy] 走增量发布。
             fjc=true
             frontend2026=true
             newspdex=true
@@ -110,6 +117,14 @@ jobs:
                   quantilearn=true
                   admin=true
                   ;;
+                deploy/web/ansible/*|deploy/web/ansible/**/*)
+                  # 部署编排变化可能影响全部 Web 服务，使用全量镜像验证新编排。
+                  fjc=true
+                  frontend2026=true
+                  newspdex=true
+                  quantilearn=true
+                  admin=true
+                  ;;
               esac
             done
           fi
@@ -130,6 +145,7 @@ jobs:
 
           {
             echo "### Frontend change detection"
+            echo "- Full release: $IS_FULL_RELEASE"
             echo "- FJCX: $fjc"
             echo "- 2026: $frontend2026"
             echo "- NewSpdex: $newspdex"
@@ -253,6 +269,11 @@ jobs:
           QUANTILEARN_PRIVATE_BASE_URL: ${{ secrets.QUANTILEARN_PRIVATE_BASE_URL || vars.QUANTILEARN_PRIVATE_BASE_URL || 'http://10.28.23.149:5015' }}
           SPDEX_API_KEY: ${{ secrets.SPDEX_API_KEY }}
           QUANTILEARN_AUTH_SHARED_SECRET: ${{ secrets.QUANTILEARN_AUTH_SHARED_SECRET }}
+          BUILD_FJC: ${{ needs.changes.outputs.fjc }}
+          BUILD_2026: ${{ needs.changes.outputs.frontend2026 }}
+          BUILD_NEWSPDEX: ${{ needs.changes.outputs.newspdex }}
+          BUILD_QUANTILEARN: ${{ needs.changes.outputs.quantilearn }}
+          BUILD_ADMIN: ${{ needs.changes.outputs.admin }}
         run: |
           set -euo pipefail
 
@@ -319,6 +340,28 @@ jobs:
           import os
           from pathlib import Path
 
+          services = [
+              ("fjc", "frontend", "IMAGE_FJC", "BUILD_FJC"),
+              ("frontend2026", "frontend2026", "IMAGE_2026", "BUILD_2026"),
+              ("newspdex", "frontend-newspdex", "IMAGE_NEWSPDEX", "BUILD_NEWSPDEX"),
+              ("quantilearn", "frontend-quantilearn", "IMAGE_QUANTILEARN", "BUILD_QUANTILEARN"),
+              ("admin", "frontend-admin", "IMAGE_ADMIN", "BUILD_ADMIN"),
+          ]
+
+          web_image_refs = []
+          web_deploy_service_names = []
+          web_updated_service_images = {}
+
+          for _, compose_service, image_env, build_env in services:
+              if os.environ.get(build_env, "false") == "true":
+                  image_ref = f"{os.environ[image_env]}:{os.environ['GITHUB_SHA']}"
+                  web_image_refs.append(image_ref)
+                  web_deploy_service_names.append(compose_service)
+                  web_updated_service_images[compose_service] = image_ref
+
+          if not web_deploy_service_names:
+              raise SystemExit("No frontend services selected for deployment.")
+
           data = {
               "web_acr_registry": os.environ["ACR_REGISTRY"],
               "web_acr_username": os.environ.get("ACR_USERNAME", ""),
@@ -329,13 +372,9 @@ jobs:
               "web_image_newspdex": os.environ["IMAGE_NEWSPDEX"],
               "web_image_quantilearn": os.environ["IMAGE_QUANTILEARN"],
               "web_image_admin": os.environ["IMAGE_ADMIN"],
-              "web_image_refs": [
-                  f"{os.environ['IMAGE_FJC']}:{os.environ['GITHUB_SHA']}",
-                  f"{os.environ['IMAGE_2026']}:{os.environ['GITHUB_SHA']}",
-                  f"{os.environ['IMAGE_NEWSPDEX']}:{os.environ['GITHUB_SHA']}",
-                  f"{os.environ['IMAGE_QUANTILEARN']}:{os.environ['GITHUB_SHA']}",
-                  f"{os.environ['IMAGE_ADMIN']}:{os.environ['GITHUB_SHA']}",
-              ],
+              "web_image_refs": web_image_refs,
+              "web_deploy_service_names": web_deploy_service_names,
+              "web_updated_service_images": web_updated_service_images,
               "web_image_archive_local": f"/tmp/spdex-web-images-{os.environ['GITHUB_SHA']}.tar.gz",
               "web_image_archive_remote": f"/tmp/spdex-web-images-{os.environ['GITHUB_SHA']}.tar.gz",
               "spdex_api_internal_url": os.environ["SPDEX_BACKEND_PRIVATE_BASE_URL"],

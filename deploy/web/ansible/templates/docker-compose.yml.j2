@@ -1,6 +1,6 @@
 services:
   frontend:
-    image: {{ web_image_fjc }}:{{ web_image_tag }}
+    image: {{ web_desired_service_images['frontend'] }}
     container_name: spdex-web-frontend
     network_mode: host
     environment:
@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 
   frontend2026:
-    image: {{ web_image_2026 }}:{{ web_image_tag }}
+    image: {{ web_desired_service_images['frontend2026'] }}
     container_name: spdex-web-frontend-2026
     network_mode: host
     environment:
@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   frontend-newspdex:
-    image: {{ web_image_newspdex }}:{{ web_image_tag }}
+    image: {{ web_desired_service_images['frontend-newspdex'] }}
     container_name: spdex-web-frontend-newspdex
     network_mode: host
     environment:
@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   frontend-quantilearn:
-    image: {{ web_image_quantilearn }}:{{ web_image_tag }}
+    image: {{ web_desired_service_images['frontend-quantilearn'] }}
     container_name: spdex-web-frontend-quantilearn
     network_mode: host
     environment:
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   frontend-admin:
-    image: {{ web_image_admin }}:{{ web_image_tag }}
+    image: {{ web_desired_service_images['frontend-admin'] }}
     container_name: spdex-web-frontend-admin
     network_mode: host
     environment:
