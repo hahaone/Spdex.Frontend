@@ -16,6 +16,7 @@
           Host: "{{ item.host }}"
         status_code: "{{ item.status_code }}"
         return_content: false
+        follow_redirects: none
       loop:
         - { host: "fjcx.spdex.com", path: "/", status_code: [200, 302] }
         - { host: "2026.spdex.com", path: "/login", status_code: 200 }
