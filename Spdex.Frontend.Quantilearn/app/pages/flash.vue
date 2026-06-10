@@ -74,6 +74,22 @@ interface SelectedFactorGroup {
   factors: SelectedFlashFactor[]
 }
 
+interface ClassicBacktestBar {
+  label: string
+  count: number
+  percent: number
+  average?: number
+  probability?: number
+  yearReturn?: number
+}
+
+interface ClassicBacktestChart {
+  id: string
+  title: string
+  bars: ClassicBacktestBar[]
+  wide?: boolean
+}
+
 const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
 const quantilearnApi = useQuantilearnApi()
@@ -124,7 +140,8 @@ const bigTradesState = ref<'idle' | 'running' | 'done'>('idle')
 const bigTradesResult = ref<QuantilearnApiSuperBigTradesResult | null>(null)
 const bigTradesError = ref('')
 
-const eventId = computed(() => String(route.query.eid || route.query.eventId || '35675743').trim())
+const eventId = computed(() => String(route.query.eid || route.query.eventId || '').trim())
+const hasValidEventId = computed(() => /^\d+$/.test(eventId.value))
 const newspdexOrigin = computed(() => {
   try {
     return new URL(String(runtimeConfig.public.newspdexLoginUrl || 'https://new.spdex.com/login')).origin
@@ -218,13 +235,19 @@ const flashAccessStatus = computed(() => flashAccess.value ?? permissions.value?
 const isFreeFlashRole = computed(() => {
   const role = String(permissions.value?.role || '').toLowerCase()
   return Boolean(
-    permissions.value?.roleId === 2
+    (permissions.value?.roleId !== undefined && permissions.value.roleId <= 2)
     || role.includes('free')
     || role.includes('免费')
   )
 })
 const flashEntryBlocked = computed(() => isFreeFlashRole.value)
 const flashEntryBlockMessage = computed(() => '免费版暂未开放闪Q，请升级会籍后使用。')
+const eventEntryError = computed(() => (
+  hasValidEventId.value
+    ? ''
+    : '缺少有效赛事 ID，请从赛事详情页进入闪Q单场分析。'
+))
+const canUseFlashWorkspace = computed(() => !flashEntryBlocked.value && hasValidEventId.value)
 
 const {
   data: flashSnapshot,
@@ -233,11 +256,11 @@ const {
   refresh: refreshSnapshot,
 } = await useAsyncData(
   'quantilearn-flash-snapshot',
-  () => eventId.value && !flashEntryBlocked.value
+  () => hasValidEventId.value && !flashEntryBlocked.value
     ? quantilearnApi.getFlashEventSnapshot(eventId.value, { snapshot: activeSnapshot.value })
     : Promise.resolve(null),
   {
-    watch: [eventId, activeSnapshot, flashEntryBlocked],
+    watch: [eventId, activeSnapshot, flashEntryBlocked, hasValidEventId],
     default: () => null,
   },
 )
@@ -252,10 +275,15 @@ const canUseInnerOuter = computed(() => permissions.value?.flashQCanUseInnerOute
 const canUseLogics = computed(() => permissions.value?.flashQCanUseLogics ?? true)
 const canUseInnerOuterLogics = computed(() => permissions.value?.flashQCanUseInnerOuterLogics ?? true)
 const canAddFactor = computed(() => selectedFactors.value.length < selectedLimit.value)
-const flashError = computed(() => flashEntryBlocked.value ? '' : errorMessage(snapshotError.value))
+const flashError = computed(() => {
+  if (flashEntryBlocked.value) return ''
+  if (eventEntryError.value) return eventEntryError.value
+  return errorMessage(snapshotError.value)
+})
 const permissionError = computed(() => errorMessage(permissionsError.value || accessError.value))
 const snapshotSourceLabel = computed(() => {
   if (snapshotPending.value) return '读取快照'
+  if (eventEntryError.value) return '等待赛事'
   if (flashError.value) return '快照错误'
   if (!snapshot.value) return '等待赛事'
   if (snapshot.value.usedLiveSnapshot) return `${snapshot.value.requestedSnapshot} -> 即时`
@@ -317,7 +345,8 @@ const flashAccessBlocksAnalysis = computed(() => {
   return Boolean(status && !status.canAnalyze)
 })
 const canRunAnalysis = computed(() => (
-  matrixReady.value
+  hasValidEventId.value
+  && matrixReady.value
   && selectedFactors.value.length > 0
   && analysisState.value !== 'running'
   && !flashAccessBlocksAnalysis.value
@@ -367,7 +396,8 @@ const factorCardDefinitions: Array<{ id: string, title: string, subtitle: string
   { id: 'goal-volume', title: '进球成交', subtitle: '大 / 小', ids: ['f30', 'f31'] },
   { id: 'goal-ratio', title: '进球占比', subtitle: '大 / 小', ids: ['f32', 'f33'] },
   { id: 'goal-profit', title: '进球盈亏', subtitle: '大 / 小', ids: ['f34', 'f35'] },
-  { id: 'goal-main', title: '进球盘必发', subtitle: '指数 / 成交 / 均衡', ids: ['f36', 'f37', 'f38', 'f39', 'f40'] },
+  { id: 'goal-total', title: '总成交', subtitle: '标准盘 / 进球盘', ids: ['f36', 'f37'] },
+  { id: 'goal-balance', title: '进球均衡', subtitle: '亚盘 / 比分 / 均衡', ids: ['f38', 'f39', 'f40'] },
   { id: 'sfp-io-volume', title: '标准盘成交拆分', subtitle: '主 / 平 / 客', ids: ['f41', 'f42', 'f43'] },
   { id: 'sfp-io-profit', title: '标准盘盈亏拆分', subtitle: '主 / 平 / 客', ids: ['f44', 'f45', 'f46'] },
   { id: 'sfp-io-hot', title: '标准盘冷热拆分', subtitle: '主 / 平 / 客', ids: ['f47', 'f48', 'f49'] },
@@ -455,9 +485,11 @@ const activeFactorRowCount = computed(() => Math.max(0, ...activeFactorCards.val
 
 const factorBoardStyle = computed(() => {
   const columns = Math.max(activeFactorCards.value.length, 1)
+  const labelWidth = activeSection.value?.id === 'goals' ? 48 : 58
+  const columnWidth = activeSection.value?.id === 'goals' ? 124 : 136
   return {
-    gridTemplateColumns: `58px repeat(${columns}, minmax(136px, 1fr))`,
-    minWidth: `${58 + columns * 136}px`,
+    gridTemplateColumns: `${labelWidth}px repeat(${columns}, minmax(${columnWidth}px, 1fr))`,
+    minWidth: `${labelWidth + columns * columnWidth}px`,
   }
 })
 
@@ -899,6 +931,95 @@ const analysisGoalDiffRows = computed(() => {
     { label: '客胜2+', value: report.awayWin2 },
   ]
 })
+
+const reportHitRatio = (count: number) => {
+  const hit = activeAnalysisPeriod.value?.computed.hit ?? 0
+  return hit ? count / hit : 0
+}
+
+const reportDaysShortLabel = computed(() => {
+  const days = activeAnalysisPeriod.value?.days ?? activeReportDays.value
+  return days === 365 ? '1年' : `${days}日`
+})
+
+const classicMarketCharts = computed<ClassicBacktestChart[]>(() => {
+  const report = activeAnalysisPeriod.value?.computed
+  if (!report) return []
+
+  const suffix = `${reportDaysShortLabel.value}回测匹配${numberText(report.hit)}场`
+  return [
+    {
+      id: 'odds',
+      title: `胜负平${suffix}`,
+      bars: [
+        { label: '主胜', count: report.homeOddsCount, percent: report.homeOddsPer, average: report.avrHomeOdds, probability: report.probHomeOdds, yearReturn: report.oddsHomeYearReturn },
+        { label: '平局', count: report.drawOddsCount, percent: report.drawOddsPer, average: report.avrDrawOdds, probability: report.probDrawOdds, yearReturn: report.oddsDrawYearReturn },
+        { label: '客胜', count: report.awayOddsCount, percent: report.awayOddsPer, average: report.avrAwayOdds, probability: report.probAwayOdds, yearReturn: report.oddsAwayYearReturn },
+      ],
+    },
+    {
+      id: 'asian',
+      title: `让球${suffix}`,
+      bars: [
+        { label: '让球主', count: report.homeAsianCount, percent: report.homeAsianPer, average: report.avrAsianOddsHome, probability: report.homeAsianPer, yearReturn: report.asianHomeYearReturn },
+        { label: '走盘', count: report.drawAsianCount, percent: reportHitRatio(report.drawAsianCount) },
+        { label: '让球客', count: report.awayAsianCount, percent: report.awayAsianPer, average: report.avrAsianOddsAway, probability: report.awayAsianPer, yearReturn: report.asianAwayYearReturn },
+      ],
+    },
+    {
+      id: 'goals-market',
+      title: `进球${suffix}`,
+      bars: [
+        { label: '大于2.5球', count: report.over25Count, percent: report.over25Per, average: report.avrOver25, probability: report.probOver25, yearReturn: report.over25YearReturn },
+        { label: '小于2.5球', count: report.under25Count, percent: report.under25Per, average: report.avrUnder25, probability: report.probUnder25, yearReturn: report.under25YearReturn },
+      ],
+    },
+  ]
+})
+
+const classicDistributionCharts = computed<ClassicBacktestChart[]>(() => {
+  const report = activeAnalysisPeriod.value?.computed
+  if (!report) return []
+
+  const suffix = `${reportDaysShortLabel.value}回测匹配${numberText(report.hit)}场`
+  return [
+    {
+      id: 'goal-distribution',
+      title: `命中场次进球分布${suffix}`,
+      wide: true,
+      bars: analysisGoalRows.value.map(row => ({
+        label: row.label,
+        count: row.value,
+        percent: reportHitRatio(row.value),
+      })),
+    },
+    {
+      id: 'goal-diff',
+      title: `净胜球${suffix}`,
+      bars: analysisGoalDiffRows.value.map(row => ({
+        label: row.label,
+        count: row.value,
+        percent: reportHitRatio(row.value),
+      })),
+    },
+  ]
+})
+
+const classicBacktestCharts = computed(() => [
+  ...classicMarketCharts.value,
+  ...classicDistributionCharts.value,
+])
+
+const classicChartColors = ['#83b3e6', '#46464f', '#9fe589', '#efa95f', '#7f7edf', '#dc6081', '#e2d55f', '#5c9ca1']
+
+const classicChartBarColor = (index: number) => classicChartColors[index % classicChartColors.length]
+
+const classicChartBarHeight = (bar: ClassicBacktestBar, chart: ClassicBacktestChart) => {
+  const max = Math.max(...chart.bars.map(item => item.count), 1)
+  if (!bar.count) return '4px'
+  return `${Math.max(22, Math.round((bar.count / max) * 140))}px`
+}
+
 const bestMarket = computed(() => (
   analysisMarketRows.value.length
     ? [...analysisMarketRows.value].sort((left, right) => right.yearReturn - left.yearReturn)[0]
@@ -1117,7 +1238,7 @@ const refreshFlash = async () => {
               </div>
 
               <div class="factor-board-shell">
-                <div class="factor-board" :style="factorBoardStyle">
+                <div :class="['factor-board', activeSection ? `section-${activeSection.id}` : '']" :style="factorBoardStyle">
                   <div class="factor-board-title corner-cell">
                     类型
                   </div>
@@ -1277,68 +1398,62 @@ const refreshFlash = async () => {
               </div>
             </section>
 
-            <div class="report-grid">
-              <section class="report-table">
-                <div class="report-table-title">
-                  <strong>市场分布</strong>
-                  <span>{{ activeReportMode === 'half' ? '半场' : '全场' }}</span>
-                </div>
-                <div class="market-row table-head">
-                  <span>市场</span>
-                  <span>方向</span>
-                  <span>数量</span>
-                  <span>占比</span>
-                  <span>均赔</span>
-                  <span>概率</span>
-                  <span>年化</span>
-                </div>
-                <div
-                  v-for="row in rankedMarketRows"
-                  :key="`${row.market}-${row.selection}`"
-                  :class="['market-row', { leader: row === bestMarket }, returnTone(row.yearReturn)]"
-                >
-                  <span>{{ row.market }}</span>
-                  <strong>{{ row.selection }}</strong>
-                  <span class="num">{{ numberText(row.count) }}</span>
-                  <span class="num">{{ percentText(row.distribution) }}</span>
-                  <span class="num">{{ numberText(row.average) }}</span>
-                  <span class="num">{{ percentText(row.probability) }}</span>
-                  <span class="num">{{ returnText(row.yearReturn) }}</span>
-                </div>
-              </section>
-
-              <section class="goal-board">
-                <div class="report-table-title">
-                  <strong>进球分布</strong>
-                  <span>{{ activeAnalysisPeriod.computed.hit }} 场</span>
-                </div>
-                <div class="goal-bars">
-                  <div v-for="row in analysisGoalRows" :key="row.label" class="goal-bar">
-                    <span>{{ row.label }}</span>
-                    <div>
-                      <i :style="{ width: `${Math.min(100, activeAnalysisPeriod.computed.hit ? row.value / activeAnalysisPeriod.computed.hit * 100 : 0)}%` }" />
+            <section class="classic-backtest-grid">
+              <article
+                v-for="chart in classicBacktestCharts"
+                :key="chart.id"
+                :class="['classic-chart-card', { wide: chart.wide }]"
+              >
+                <h4>{{ chart.title }}</h4>
+                <div :class="['classic-bars', { compact: chart.bars.length <= 3, dense: chart.bars.length >= 5 }]">
+                  <div v-for="(bar, index) in chart.bars" :key="bar.label" class="classic-bar-item">
+                    <div class="classic-bar-value">
+                      <strong>数量 {{ numberText(bar.count) }}</strong>
+                      <span>占比 {{ percentText(bar.percent) }}</span>
                     </div>
-                    <strong class="num">{{ row.value }}</strong>
+                    <i
+                      class="classic-bar-column"
+                      :style="{ height: classicChartBarHeight(bar, chart), backgroundColor: classicChartBarColor(index) }"
+                    />
+                    <div class="classic-bar-foot">
+                      <strong>{{ bar.label }}</strong>
+                      <span v-if="bar.average !== undefined">平均价位:{{ numberText(bar.average) }}</span>
+                      <span v-if="bar.probability !== undefined">平均概率:{{ percentText(bar.probability) }}</span>
+                      <em v-if="bar.yearReturn !== undefined" :class="returnTone(bar.yearReturn)">年化收益: {{ returnText(bar.yearReturn) }}</em>
+                    </div>
                   </div>
                 </div>
-              </section>
+              </article>
+            </section>
 
-              <section class="goal-board">
-                <div class="report-table-title">
-                  <strong>净胜球分布</strong>
-                  <span>{{ activeReportMode === 'half' ? '半场' : '全场' }}</span>
-                </div>
-                <div class="goal-bars">
-                  <div v-for="row in analysisGoalDiffRows" :key="row.label" class="goal-bar">
-                    <span>{{ row.label }}</span>
-                    <div>
-                      <i :style="{ width: `${Math.min(100, activeAnalysisPeriod.computed.hit ? row.value / activeAnalysisPeriod.computed.hit * 100 : 0)}%` }" />
-                    </div>
-                    <strong class="num">{{ row.value }}</strong>
-                  </div>
-                </div>
-              </section>
-            </div>
+            <section class="report-table report-detail-table">
+              <div class="report-table-title">
+                <strong>市场明细</strong>
+                <span>{{ activeReportMode === 'half' ? '半场' : '全场' }}</span>
+              </div>
+              <div class="market-row table-head">
+                <span>市场</span>
+                <span>方向</span>
+                <span>数量</span>
+                <span>占比</span>
+                <span>均赔</span>
+                <span>概率</span>
+                <span>年化</span>
+              </div>
+              <div
+                v-for="row in rankedMarketRows"
+                :key="`${row.market}-${row.selection}`"
+                :class="['market-row', { leader: row === bestMarket }, returnTone(row.yearReturn)]"
+              >
+                <span>{{ row.market }}</span>
+                <strong>{{ row.selection }}</strong>
+                <span class="num">{{ numberText(row.count) }}</span>
+                <span class="num">{{ percentText(row.distribution) }}</span>
+                <span class="num">{{ numberText(row.average) }}</span>
+                <span class="num">{{ percentText(row.probability) }}</span>
+                <span class="num">{{ returnText(row.yearReturn) }}</span>
+              </div>
+            </section>
 
             <section class="match-board">
               <div class="report-table-title">
@@ -1443,7 +1558,7 @@ const refreshFlash = async () => {
       </section>
 
       <aside class="flash-sidebar">
-        <section v-if="!flashEntryBlocked" :class="['side-panel', 'parameter-side-panel', { collapsed: parametersCollapsed && hasAnalysisReport }]">
+        <section v-if="canUseFlashWorkspace" :class="['side-panel', 'parameter-side-panel', { collapsed: parametersCollapsed && hasAnalysisReport }]">
           <div class="panel-title">
             <div>
               <span class="eyebrow">Parameters</span>
@@ -1627,7 +1742,7 @@ const refreshFlash = async () => {
             </div>
           </div>
 
-          <div v-if="!flashEntryBlocked" class="league-tabs">
+          <div v-if="canUseFlashWorkspace" class="league-tabs">
             <button
               v-for="option in leagueOptions"
               :key="option.id"
@@ -1639,12 +1754,12 @@ const refreshFlash = async () => {
             </button>
           </div>
 
-          <button v-if="!flashEntryBlocked" type="button" class="analyze-button focus-ring" :disabled="!canRunAnalysis" @click="runAnalysis">
+          <button v-if="canUseFlashWorkspace" type="button" class="analyze-button focus-ring" :disabled="!canRunAnalysis" @click="runAnalysis">
             <PlayCircle :size="20" />
             <span>{{ analysisState === 'running' ? '分析中' : '分析' }}</span>
           </button>
 
-          <div v-if="!flashEntryBlocked" :class="['analysis-state', { active: analysisState !== 'idle' }]">
+          <div v-if="canUseFlashWorkspace" :class="['analysis-state', { active: analysisState !== 'idle' }]">
             <SlidersHorizontal :size="15" />
             <span>{{ analysisStateLabel }}</span>
           </div>
@@ -1653,7 +1768,7 @@ const refreshFlash = async () => {
       </aside>
     </main>
 
-    <div v-if="!flashEntryBlocked" class="mobile-run-bar">
+    <div v-if="canUseFlashWorkspace" class="mobile-run-bar">
       <div>
         <span>已选 {{ selectedFactors.length }} / {{ selectedLimit }}</span>
         <strong>{{ analysisStateLabel }}</strong>
@@ -2268,6 +2383,24 @@ h1 {
   align-self: center;
 }
 
+.factor-board.section-goals .factor-board-title {
+  min-height: 48px;
+  padding: 7px 8px;
+}
+
+.factor-board.section-goals .factor-row-label,
+.factor-board.section-goals .factor-cell {
+  min-height: 66px;
+}
+
+.factor-board.section-goals .factor-cell {
+  padding: 7px;
+}
+
+.factor-board.section-goals .factor-cell-value {
+  font-size: 0.9rem;
+}
+
 .factor-mobile-groups {
   display: none;
 }
@@ -2691,6 +2824,139 @@ h1 {
   color: var(--rose);
 }
 
+.classic-backtest-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.classic-chart-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 238px;
+  padding: 12px 14px 10px;
+  border: 1px solid #dfe7f0;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.classic-chart-card.wide {
+  grid-column: span 2;
+}
+
+.classic-chart-card h4 {
+  overflow: hidden;
+  margin: 0;
+  color: #2b2f36;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classic-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  gap: 14px;
+  align-items: end;
+  min-height: 194px;
+}
+
+.classic-bars.compact {
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  gap: 12px;
+}
+
+.classic-bars.dense {
+  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+  gap: 8px;
+}
+
+.classic-bar-item {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  min-width: 0;
+  min-height: 194px;
+}
+
+.classic-bar-value {
+  align-self: end;
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 5px;
+  color: #111827;
+  font-size: 0.68rem;
+  font-weight: 860;
+  line-height: 1.18;
+  text-align: left;
+}
+
+.classic-bar-value strong,
+.classic-bar-value span,
+.classic-bar-foot strong,
+.classic-bar-foot span,
+.classic-bar-foot em {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classic-bar-value span {
+  margin-top: 1px;
+}
+
+.classic-bar-column {
+  align-self: end;
+  display: block;
+  width: min(68%, 72px);
+  min-width: 34px;
+}
+
+.classic-bar-foot {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: 100%;
+  min-height: 58px;
+  padding-top: 7px;
+  border-top: 1px solid #cfd9ea;
+  color: #5a6270;
+  font-size: 0.68rem;
+  font-weight: 780;
+  line-height: 1.18;
+  text-align: center;
+}
+
+.classic-bar-foot strong {
+  color: #555b64;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.classic-bar-foot em {
+  color: #ff3b2f;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.classic-bar-foot em.good,
+.classic-bar-foot em.warn {
+  color: #ff3b2f;
+}
+
+.classic-bar-foot em.danger {
+  color: #c94d64;
+}
+
 .report-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2795,6 +3061,10 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.report-detail-table {
+  overflow-x: auto;
 }
 
 .match-board,
@@ -3559,8 +3829,31 @@ h1 {
   .event-strip,
   .matrix-shell,
   .report-overview,
-  .report-grid {
+  .report-grid,
+  .classic-backtest-grid {
     grid-template-columns: 1fr;
+  }
+
+  .classic-chart-card.wide {
+    grid-column: auto;
+  }
+
+  .classic-chart-card h4 {
+    white-space: normal;
+  }
+
+  .classic-bars,
+  .classic-bars.compact {
+    gap: 10px;
+    min-height: 174px;
+  }
+
+  .classic-bar-item {
+    min-height: 174px;
+  }
+
+  .classic-bar-column {
+    min-width: 28px;
   }
 
   .big-trades-grid {

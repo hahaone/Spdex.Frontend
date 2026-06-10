@@ -106,6 +106,13 @@ export interface QuantilearnApiStatisticCoreReport {
   probUnder25: number
   avrAsianOddsHome: number
   avrAsianOddsAway: number
+  oddsHomeYearReturn: number
+  oddsDrawYearReturn: number
+  oddsAwayYearReturn: number
+  asianHomeYearReturn: number
+  asianAwayYearReturn: number
+  over25YearReturn: number
+  under25YearReturn: number
   goal0: number
   goal1: number
   goal2: number
@@ -548,11 +555,6 @@ const factorRole = (factorId: string): FactorDefinition['role'] => {
 
 const formatRange = (min: number, max: number) => `${min} - ${max}`
 
-const returnByDistribution = (distribution: number, average: number) => {
-  if (!distribution || !average) return 0
-  return distribution * average - 1
-}
-
 const formatShortDate = (value?: string) => {
   if (!value) return '-'
   const date = new Date(value)
@@ -633,7 +635,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.homeOddsPer,
       average: report.avrHomeOdds,
       probability: report.probHomeOdds,
-      yearReturn: returnByDistribution(report.homeOddsPer, report.avrHomeOdds),
+      yearReturn: report.oddsHomeYearReturn ?? 0,
     },
     {
       market: '胜平负',
@@ -642,7 +644,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.drawOddsPer,
       average: report.avrDrawOdds,
       probability: report.probDrawOdds,
-      yearReturn: returnByDistribution(report.drawOddsPer, report.avrDrawOdds),
+      yearReturn: report.oddsDrawYearReturn ?? 0,
     },
     {
       market: '胜平负',
@@ -651,7 +653,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.awayOddsPer,
       average: report.avrAwayOdds,
       probability: report.probAwayOdds,
-      yearReturn: returnByDistribution(report.awayOddsPer, report.avrAwayOdds),
+      yearReturn: report.oddsAwayYearReturn ?? 0,
     },
     {
       market: '让球',
@@ -660,7 +662,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.homeAsianPer,
       average: report.avrAsianOddsHome,
       probability: report.homeAsianPer,
-      yearReturn: returnByDistribution(report.homeAsianPer, report.avrAsianOddsHome),
+      yearReturn: report.asianHomeYearReturn ?? 0,
     },
     {
       market: '让球',
@@ -669,7 +671,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.awayAsianPer,
       average: report.avrAsianOddsAway,
       probability: report.awayAsianPer,
-      yearReturn: returnByDistribution(report.awayAsianPer, report.avrAsianOddsAway),
+      yearReturn: report.asianAwayYearReturn ?? 0,
     },
     {
       market: '进球',
@@ -678,7 +680,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.over25Per,
       average: report.avrOver25,
       probability: report.probOver25,
-      yearReturn: returnByDistribution(report.over25Per, report.avrOver25),
+      yearReturn: report.over25YearReturn ?? 0,
     },
     {
       market: '进球',
@@ -687,7 +689,7 @@ export const statisticToMarketRows = (summary?: QuantilearnApiStatisticSummary |
       distribution: report.under25Per,
       average: report.avrUnder25,
       probability: report.probUnder25,
-      yearReturn: returnByDistribution(report.under25Per, report.avrUnder25),
+      yearReturn: report.under25YearReturn ?? 0,
     },
   ]
 }
