@@ -2,12 +2,23 @@
 - name: Verify SPdex Web node
   hosts: web_nodes
   become: false
+  vars:
+    web_expected_node_header: "{{ web_node_id | default(inventory_hostname | regex_replace('^web', '')) }}"
+    web_expected_release_header: "{{ web_release_sha | default(web_image_tag | default('unknown')) }}"
   tasks:
     - name: Check ALB health endpoint
       ansible.builtin.uri:
         url: "http://127.0.0.1{{ web_alb_health_path }}"
         return_content: true
         status_code: 200
+      register: web_health_check
+
+    - name: Check ALB health response headers
+      ansible.builtin.assert:
+        that:
+          - (web_health_check.x_spdex_web_node | default('')) == web_expected_node_header
+          - (web_health_check.x_spdex_web_release | default('')) == web_expected_release_header
+        fail_msg: "Web node response headers do not match expected node/release values."
 
     - name: Check host-routed frontend pages
       ansible.builtin.uri:
@@ -24,9 +35,26 @@
         - { host: "new.spdex.com", path: "/", status_code: [200, 302] }
         - { host: "ql.spdex.com", path: "/", status_code: [200, 302] }
         - { host: "admin2026.spdex.com", path: "/login", status_code: 200 }
+      register: web_page_checks
+
+    - name: Check host-routed response headers
+      ansible.builtin.assert:
+        that:
+          - (item.x_spdex_web_node | default('')) == web_expected_node_header
+          - (item.x_spdex_web_release | default('')) == web_expected_release_header
+        fail_msg: "Host-routed response headers do not match expected node/release values."
+      loop: "{{ web_page_checks.results }}"
 
     - name: Check NewSpdex SSR internal API bridge
       ansible.builtin.uri:
         url: "http://{{ web_internal_api_listen }}/api/newspdex/auth/me"
         status_code: 401
         return_content: true
+      register: web_internal_api_check
+
+    - name: Check internal API bridge response headers
+      ansible.builtin.assert:
+        that:
+          - (web_internal_api_check.x_spdex_web_node | default('')) == web_expected_node_header
+          - (web_internal_api_check.x_spdex_web_release | default('')) == web_expected_release_header
+        fail_msg: "Internal API bridge response headers do not match expected node/release values."

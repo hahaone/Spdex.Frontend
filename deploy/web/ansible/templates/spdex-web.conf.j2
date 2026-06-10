@@ -3,9 +3,15 @@ map $http_x_forwarded_proto $spdex_forwarded_proto {
     ""      $scheme;
 }
 
+{% set spdex_web_node_header = web_node_id | default(inventory_hostname | regex_replace('^web', '')) %}
+{% set spdex_web_release_header = web_release_sha | default(web_image_tag | default('unknown')) %}
+
 server {
     listen {{ web_internal_api_listen }};
     server_name _;
+
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
 
     client_max_body_size 20m;
 
@@ -28,9 +34,12 @@ server {
     listen 80 default_server;
     server_name _;
 
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
+
     location = {{ web_alb_health_path }} {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
@@ -43,11 +52,14 @@ server {
     listen 80;
     server_name fjcx.spdex.com;
 
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
+
     client_max_body_size 20m;
 
     location = {{ web_alb_health_path }} {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
@@ -78,11 +90,14 @@ server {
     listen 80;
     server_name 2026.spdex.com;
 
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
+
     client_max_body_size 20m;
 
     location = {{ web_alb_health_path }} {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
@@ -113,11 +128,14 @@ server {
     listen 80;
     server_name new.spdex.com;
 
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
+
     client_max_body_size 20m;
 
     location = {{ web_alb_health_path }} {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
@@ -148,11 +166,14 @@ server {
     listen 80;
     server_name ql.spdex.com q.spdex.com;
 
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
+
     client_max_body_size 20m;
 
     location = {{ web_alb_health_path }} {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
@@ -183,6 +204,9 @@ server {
     listen 80;
     server_name admin2026.spdex.com;
 
+    add_header X-SPdex-Web-Node "{{ spdex_web_node_header }}" always;
+    add_header X-SPdex-Web-Release "{{ spdex_web_release_header }}" always;
+
     client_max_body_size 10m;
 
     add_header X-Content-Type-Options "nosniff" always;
@@ -193,7 +217,7 @@ server {
 
     location = {{ web_alb_health_path }} {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 

@@ -5,8 +5,11 @@
 # so deployment does not depend on sshd AllowTcpForwarding being enabled.
 
 [web_nodes]
-web1 ansible_host=10.111.0.64 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'
-web2 ansible_host=10.111.1.136 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'
+web1 ansible_host=10.111.0.64 web_node_id=1 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'
+web2 ansible_host=10.111.1.136 web_node_id=2 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'
+# New Web nodes only need the same baseline image/Ansible bootstrap plus one inventory line,
+# for example:
+# web3 ansible_host=10.111.x.x web_node_id=3 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'
 
 [image_source]
 backend1 ansible_host=139.129.208.138 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'

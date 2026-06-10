@@ -367,6 +367,7 @@ jobs:
               "web_acr_username": os.environ.get("ACR_USERNAME", ""),
               "web_acr_password": os.environ.get("ACR_PASSWORD", ""),
               "web_image_tag": os.environ["GITHUB_SHA"],
+              "web_release_sha": os.environ["GITHUB_SHA"],
               "web_image_fjc": os.environ["IMAGE_FJC"],
               "web_image_2026": os.environ["IMAGE_2026"],
               "web_image_newspdex": os.environ["IMAGE_NEWSPDEX"],
