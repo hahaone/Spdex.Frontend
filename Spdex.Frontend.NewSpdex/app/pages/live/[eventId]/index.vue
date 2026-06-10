@@ -90,10 +90,6 @@ const oddsPanel = computed(() => {
 
 // 赛中统计模型（后端自算近似版）
 const model = computed(() => snapshot.value?.model ?? null)
-const leanClass = computed(() => {
-  const l = model.value?.lean
-  return l === '大球价值' ? 'over' : l === '小球价值' ? 'under' : 'neutral'
-})
 const edgeText = computed(() => {
   const e = model.value?.edgePct
   if (e == null) return '-'
@@ -707,7 +703,6 @@ function injStatus(s: string): { text: string, cls: string } {
     <section v-if="model" class="model-card">
       <div class="section-title brand">
         <span>赛中分析</span>
-        <span v-if="model.lean" :class="['lean', leanClass]">{{ model.lean }}</span>
       </div>
       <div class="model-twin">
         <div class="m-pair">
@@ -765,7 +760,7 @@ function injStatus(s: string): { text: string, cls: string } {
             r="2.7"
             class="tg-over-dot"
           >
-            <title>大球价值 {{ marker.minute }}' · {{ marker.text }}</title>
+            <title>{{ marker.minute }}' · {{ marker.text }}</title>
           </circle>
           <g v-for="label in totalGoalsSpark.labels" :key="`${label.x}-${label.text}`" :class="['tg-label-point', label.tone]">
             <circle :cx="label.x" :cy="label.y" r="2.5" class="tg-dot" />

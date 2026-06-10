@@ -40,10 +40,6 @@ const homeCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side =
 const awayCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'away') ?? [])
 
 const model = computed(() => snapshot.value?.model ?? null)
-const leanClass = computed(() => {
-  const l = model.value?.lean ?? ''
-  return l.includes('大') ? 'over' : l.includes('小') ? 'under' : 'neutral'
-})
 
 // 取首个有数据的滚球赔率市场展示
 const oddsMarket = computed(() => snapshot.value?.liveOdds?.markets?.find(m => m.cells.length) ?? null)
@@ -86,9 +82,8 @@ const oddsMarketLine = computed(() => {
 
       <!-- 模型 -->
       <div v-if="model" class="pv-model">
-        <div v-if="model.lean || model.edgePct != null" class="pv-mrow">
-          <span v-if="model.lean" :class="['pv-lean', leanClass]">{{ model.lean }}</span>
-          <span v-if="model.edgePct != null" class="num pv-edge" :class="model.edgePct > 3 ? 'pos' : model.edgePct < -3 ? 'neg' : ''">
+        <div v-if="model.edgePct != null" class="pv-mrow">
+          <span class="num pv-edge" :class="model.edgePct > 3 ? 'pos' : model.edgePct < -3 ? 'neg' : ''">
             Edge {{ model.edgePct > 0 ? '+' : '' }}{{ model.edgePct }}%
           </span>
         </div>

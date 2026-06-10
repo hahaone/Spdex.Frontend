@@ -19,4 +19,6 @@ export const P = {
   planEdit: 'plan.edit',
   signalView: 'signal.view',
   signalConfig: 'signal.config',
+  analyticsView: 'analytics.view',
+  analyticsUserTracking: 'analytics.user.tracking',
 } as const
