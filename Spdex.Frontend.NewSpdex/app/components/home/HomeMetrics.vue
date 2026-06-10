@@ -22,7 +22,7 @@ const visibleMetrics = computed(() => {
     </div>
     <div v-if="prematchSixHourLockApplied" class="lock-banner">
       <Lock :size="13" />
-      <span>免费会员已隐去赛前 6 小时内的未开赛赛事</span>
+      <span>免费会员已隐去赛前 6 小时内及 24 小时以外的未开赛赛事</span>
     </div>
 
     <div class="metric-list">

@@ -63,8 +63,12 @@ export interface LiveListItem {
 
 interface BackendLiveListResult { matches: LiveListItem[], tab: string }
 
-export function useLiveList(tab: MaybeRef<LiveTabKey> = ref('running')) {
+export function useLiveList(
+  tab: MaybeRef<LiveTabKey> = ref('running'),
+  enabled: MaybeRef<boolean> = ref(true),
+) {
   const tabRef = computed(() => unref(tab))
+  const enabledRef = computed(() => unref(enabled))
   const query = computed(() => ({ tab: tabRef.value }))
 
   const result = useApiFetch<ApiResponse<BackendLiveListResult>>(
@@ -73,13 +77,17 @@ export function useLiveList(tab: MaybeRef<LiveTabKey> = ref('running')) {
       key: () => `newspdex-live-${tabRef.value}`,
       server: false,
       lazy: true,
+      immediate: enabledRef.value,
       query,
       watch: [tabRef],
     },
   )
 
-  // 30s 自动刷新（进行中/未开赛需要；其余 tab 也无妨）
-  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
+  // 30s 自动刷新（仅在有访问权限时；免费/游客不轮询，避免反复 403）
+  usePolling(() => {
+    if (enabledRef.value)
+      result.refresh()
+  }, 30_000, { errorRef: result.error })
 
   const matches = computed<LiveListItem[]>(() => result.data.value?.data?.matches ?? [])
   const count = computed(() => matches.value.length)

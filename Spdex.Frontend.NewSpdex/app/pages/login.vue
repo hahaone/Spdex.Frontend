@@ -130,7 +130,7 @@ onMounted(() => {
         <span class="divider">·</span>
         <NuxtLink to="/forgot-password">忘记密码</NuxtLink>
         <span class="divider">·</span>
-        <NuxtLink to="/account">会员权益</NuxtLink>
+        <NuxtLink to="/membership">会员权益</NuxtLink>
       </div>
 
       <NuxtLink class="ai-entry focus-ring" to="/">

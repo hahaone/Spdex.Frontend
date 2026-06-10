@@ -239,14 +239,16 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
   }
 }
 
-export function useLiveSnapshot(eventId: MaybeRef<number>) {
+export function useLiveSnapshot(eventId: MaybeRef<number>, enabled: MaybeRef<boolean> = ref(true)) {
   const idRef = computed(() => unref(eventId))
+  const enabledRef = computed(() => unref(enabled))
 
   const result = useApiFetch<ApiResponse<BackendSnapshot>>(
     () => `/api/newspdex/live/${idRef.value}/snapshot`,
     {
       key: () => `newspdex-live-snapshot-${idRef.value}`,
       server: false,
+      immediate: enabledRef.value,
       watch: [idRef],
     },
   )
@@ -256,8 +258,8 @@ export function useLiveSnapshot(eventId: MaybeRef<number>) {
     return data ? mapSnapshot(data) : null
   })
 
-  // 仅在进行中赛事自动轮询，30s 间隔
-  const isRunning = computed(() => snapshot.value?.status === 'running')
+  // 仅在进行中赛事且有访问权限时自动轮询，30s 间隔（免费/游客不轮询，避免反复 403）
+  const isRunning = computed(() => enabledRef.value && snapshot.value?.status === 'running')
   usePolling(() => result.refresh(), 30_000, { enabled: isRunning, errorRef: result.error })
 
   return {

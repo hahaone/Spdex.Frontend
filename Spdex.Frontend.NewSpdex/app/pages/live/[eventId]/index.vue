@@ -5,8 +5,10 @@ import type { AnalysisReplayPoint } from '~/composables/useLiveSnapshot'
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
+// 实时赛事为付费会员专享：免费版/游客显示升级卡，不发起 snapshot 请求。
+const { canOpenLive, liveLockMessage } = useLiveAccess()
 const { detail, euroOdds } = useMatchDetail(eventId)
-const { snapshot } = useLiveSnapshot(eventId)
+const { snapshot } = useLiveSnapshot(eventId, canOpenLive)
 
 const match = computed(() => detail.value?.match)
 
@@ -665,13 +667,13 @@ function injStatus(s: string): { text: string, cls: string } {
         <ArrowLeft :size="15" />
         <span>返回实时</span>
       </NuxtLink>
-      <div class="league-line">
+      <div v-if="canOpenLive" class="league-line">
         <span v-if="match?.leagueCode" class="code">{{ match.leagueCode }}</span>
         <span>{{ match?.leagueName || snapshot?.leagueName || '—' }}</span>
         <span class="status-pill">{{ statusLabel }}</span>
         <span class="minute num">{{ snapshot?.minute ?? '—' }}</span>
       </div>
-      <div class="score-line" aria-live="polite" aria-atomic="true">
+      <div v-if="canOpenLive" class="score-line" aria-live="polite" aria-atomic="true">
         <span class="team home">{{ match?.homeTeam || snapshot?.homeTeam || '主队' }}</span>
         <b class="score-block">
           <span class="num">{{ snapshot?.score[0] ?? 0 }}</span>
@@ -680,7 +682,7 @@ function injStatus(s: string): { text: string, cls: string } {
         </b>
         <span class="team away">{{ match?.awayTeam || snapshot?.awayTeam || '客队' }}</span>
       </div>
-      <div class="micro-row">
+      <div v-if="canOpenLive" class="micro-row">
         <span class="cluster">
           <span v-for="c in homeCards" :key="`h-${c.color}`" :class="['card-badge', c.color]" role="img" :aria-label="`主队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
           <span class="num">角 {{ snapshot?.corners[0] ?? 0 }}</span>
@@ -693,7 +695,14 @@ function injStatus(s: string): { text: string, cls: string } {
       </div>
     </section>
 
-    <div class="content-grid">
+    <UpgradeUnlockCard
+      v-if="!canOpenLive"
+      variant="hero"
+      headline="实时赛事 · 付费会员专享"
+      :subline="liveLockMessage"
+      :features="['滚球比分赛况', '现场盘口赔率', '赛中价值模型']"
+    />
+    <div v-else class="content-grid">
     <!-- 赛中统计模型（xG 外推 + 大小球 edge） -->
     <section v-if="model" class="model-card">
       <div class="section-title brand">

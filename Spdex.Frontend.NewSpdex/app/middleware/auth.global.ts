@@ -2,7 +2,7 @@
  * 全局路由守卫：未登录跳 /login。
  * 基于后端 HttpOnly session cookie，与后端 /api/newspdex/auth 配合使用。
  */
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password']
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/membership']
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const { user, fetchUser } = useAuth()

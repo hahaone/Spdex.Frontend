@@ -210,7 +210,7 @@ function restore() {
     />
 
     <div v-if="prematchSixHourLockApplied" class="classic-lock">
-      免费会员已隐去赛前 6 小时内未开赛赛事
+      免费会员已隐去赛前 6 小时内及 24 小时以外的未开赛赛事
     </div>
 
     <div v-if="pending && !matches.length" class="classic-skeleton">

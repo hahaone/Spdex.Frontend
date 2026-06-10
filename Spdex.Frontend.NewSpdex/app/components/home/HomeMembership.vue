@@ -74,9 +74,9 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
               <td>FlashQ 10 次</td>
             </tr>
             <tr>
-              <td>红宝石/翡翠</td>
+              <td>翡翠/红宝石</td>
               <td>进球均衡 / 内外盘 / 高级 Q 权限</td>
-              <td>FlashQ 按锦囊</td>
+              <td>FlashQ 免费</td>
             </tr>
             <tr>
               <td>白金版</td>

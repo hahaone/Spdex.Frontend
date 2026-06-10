@@ -12,7 +12,9 @@ const tabOptions = [
   { label: '前日', value: 'before' },
 ]
 
-const { grouped, matches, count, pending, refresh } = useLiveList(tab)
+// 实时赛事为付费会员专享：免费版/游客显示升级卡，并不发起列表请求。
+const { canOpenLive, liveLockMessage } = useLiveAccess()
+const { grouped, matches, count, pending, refresh } = useLiveList(tab, canOpenLive)
 
 function badge(m: LiveListItem, side: 'home' | 'away', color: 'yellow' | 'red'): number {
   return m.cardBadges.find(b => b.side === side && b.color === color)?.count ?? 0
@@ -85,6 +87,14 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
 
 <template>
   <div class="live-page">
+    <UpgradeUnlockCard
+      v-if="!canOpenLive"
+      variant="hero"
+      headline="实时赛事 · 付费会员专享"
+      :subline="liveLockMessage"
+      :features="['滚球比分赛况', '现场盘口赔率', '赛中价值模型']"
+    />
+    <template v-else>
     <section class="live-head">
       <div class="head-top">
         <h2>实时赛事</h2>
@@ -189,6 +199,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
         <div v-else class="pane-empty">选择左侧赛事查看赛况</div>
       </aside>
     </section>
+    </template>
   </div>
 </template>
 
