@@ -3,8 +3,8 @@
   hosts: web_nodes
   become: false
   vars:
-    web_expected_node_header: "{{ web_node_id | default(inventory_hostname | regex_replace('^web', '')) }}"
-    web_expected_release_header: "{{ web_release_sha | default(web_image_tag | default('unknown')) }}"
+    web_expected_node_header: "{{ (web_node_id | default(inventory_hostname | regex_replace('^web', ''))) | string }}"
+    web_expected_release_header: "{{ (web_release_sha | default(web_image_tag | default('unknown'))) | string }}"
   tasks:
     - name: Check ALB health endpoint
       ansible.builtin.uri:
