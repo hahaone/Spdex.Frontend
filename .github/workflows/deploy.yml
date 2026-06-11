@@ -302,7 +302,7 @@ jobs:
             IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
-            ProxyCommand ssh spdex-jump "bash -c 'exec 3<>/dev/tcp/%h/%p; cat <&3 & cat >&3; wait'"
+            ProxyCommand ssh spdex-jump -W %h:%p
           EOF
           chmod 600 "$HOME/.ssh/config"
 

@@ -1,8 +1,8 @@
 # Copy to production.ini and keep the real file out of git.
 #
 # GitHub Actions writes the private key to ~/.ssh/id_rsa and ~/.ssh/config.
-# The SSH config uses a ProxyCommand through the jump host instead of ProxyJump
-# so deployment does not depend on sshd AllowTcpForwarding being enabled.
+# The SSH config uses ProxyCommand with ssh -W through the jump host.
+# The jump host sshd must allow TCP forwarding.
 
 [web_nodes]
 web1 ansible_host=10.111.0.64 web_node_id=1 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-F ~/.ssh/config'
