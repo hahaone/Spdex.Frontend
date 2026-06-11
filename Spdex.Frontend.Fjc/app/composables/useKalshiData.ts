@@ -66,7 +66,7 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
       const [tradesResult, windowStatsResult] = await Promise.all([
         apiFetch<KalshiBswApiResult<KalshiSoccerTradesResponse>>(
           '/api/kalshi/Get/Soccer/Trades',
-          { eventTicker: ticker, limit: 10000, source: 'db' },
+          { eventTicker: ticker, limit: 3000, source: 'db' },
         ),
         apiFetch<KalshiBswApiResult<KalshiTradeWindowStatsResult>>(
           '/api/kalshi/Get/Soccer/TradeWindowStats',
@@ -79,13 +79,13 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
         ? windowStatsResult.data
         : null
 
-      if (!isBswOk(tradesResult)) {
-        error.value = `Kalshi 成交加载失败: ${tradesResult.info || `code=${tradesResult.code}`}`
-      }
+      // trades 上游失败或为空：静默降级为「暂无数据」，不向用户暴露错误。
     }
     catch (e: unknown) {
+      // 上游/网络失败（如代理 502 超时）静默降级：不把原始 fetch 错误（[GET]...: 502）暴露给用户。
       console.error('[useKalshiData] fetch error:', e)
-      error.value = e instanceof Error ? e.message : 'Kalshi 数据加载失败'
+      trades.value = null
+      error.value = null
     }
     finally {
       loading.value = false
@@ -107,8 +107,10 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
       }
     }
     catch (e: unknown) {
+      // 静默降级：不暴露原始 fetch 错误（[GET]...: 502），给一句友好提示即可。
+      console.error('[useKalshiData] orderbook error:', e)
       orderbook.value = null
-      orderbookError.value = e instanceof Error ? e.message : 'Kalshi 盘口加载失败'
+      orderbookError.value = 'Kalshi 盘口暂不可用'
     }
     finally {
       orderbookLoading.value = false
