@@ -76,7 +76,7 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
       const [tradesResult, bookResult, windowStatsResult] = await Promise.all([
         apiFetch<BswApiResult<PolymarketEventTradesAggregate>>(
           `/api/polymarket/Get/Soccer/Trades`,
-          { eventId: polyEventId, limit: 10000, includeFamily: true },
+          { eventId: polyEventId, limit: 3000, includeFamily: true },
         ),
         apiFetch<BswApiResult<PolymarketEventBookAggregate>>(
           `/api/polymarket/Get/Soccer/Book`,
@@ -93,17 +93,15 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
       tradeWindowStats.value = windowStatsResult && isBswOk(windowStatsResult)
         ? windowStatsResult.data : null
 
-      // trades/book 失败时提示（但不阻塞）
-      if (!isBswOk(tradesResult)) {
-        error.value = `Trades 加载失败: ${tradesResult.info || `code=${tradesResult.code}`}`
-      }
-      else if (!isBswOk(bookResult)) {
-        error.value = `Book 加载失败: ${bookResult.info || `code=${bookResult.code}`}`
-      }
+      // trades/book 上游失败或为空：静默降级为「暂无数据」，不向用户暴露错误。
     }
     catch (e: unknown) {
+      // 上游/网络失败（如代理 502 超时）静默降级：不把原始 fetch 错误（[GET]...: 502）暴露给用户，
+      // 页面走「赛事已匹配，但暂无成交和盘口数据」空态。
       console.error('[usePolymarketData] fetch error:', e)
-      error.value = e instanceof Error ? e.message : 'Polymarket 数据加载失败'
+      trades.value = null
+      book.value = null
+      error.value = null
     }
     finally {
       loading.value = false
