@@ -1,5 +1,7 @@
 import type {
   KalshiBswApiResult,
+  KalshiCandlestickResponse,
+  KalshiCandlestickSeries,
   KalshiOrderbook,
   KalshiSoccerMatchLink,
   KalshiSoccerTradesResponse,
@@ -15,6 +17,7 @@ function isBswOk(result: KalshiBswApiResult<unknown>): boolean {
 export function useKalshiData(spdexEventId: Ref<number | null>) {
   const matchLinks = ref<KalshiSoccerMatchLink[]>([])
   const trades = ref<KalshiSoccerTradesResponse | null>(null)
+  const candlesticks = ref<KalshiCandlestickSeries[]>([])
   const tradeWindowStats = ref<KalshiTradeWindowStatsResult | null>(null)
   const orderbook = ref<KalshiOrderbook | null>(null)
   const loading = ref(false)
@@ -43,6 +46,7 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
     error.value = null
     orderbook.value = null
     orderbookError.value = null
+    candlesticks.value = []
 
     try {
       const linkResult = await apiFetch<KalshiBswApiResult<KalshiSoccerMatchLink[]>>(
@@ -79,12 +83,27 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
         ? windowStatsResult.data
         : null
 
+      // 走势图改用 K线（完整赛前历史、统一网格、与 BSW 对齐）：按当前赛事的成交市场拉取。
+      const candleTickers = (trades.value?.trades.markets ?? [])
+        .map(m => m.marketTicker)
+        .filter(t => typeof t === 'string' && t.length > 0)
+      if (candleTickers.length > 0) {
+        const candleResult = await apiFetch<KalshiBswApiResult<KalshiCandlestickResponse>>(
+          '/api/kalshi/Get/Market/Candlesticks',
+          { marketTickers: candleTickers.join(','), hours: 720, periodInterval: 60, source: 'db' },
+        ).catch(() => null)
+        candlesticks.value = candleResult && isBswOk(candleResult)
+          ? (candleResult.data?.series ?? [])
+          : []
+      }
+
       // trades 上游失败或为空：静默降级为「暂无数据」，不向用户暴露错误。
     }
     catch (e: unknown) {
       // 上游/网络失败（如代理 502 超时）静默降级：不把原始 fetch 错误（[GET]...: 502）暴露给用户。
       console.error('[useKalshiData] fetch error:', e)
       trades.value = null
+      candlesticks.value = []
       error.value = null
     }
     finally {
@@ -124,6 +143,7 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
     primaryLink,
     kalshiEventTicker,
     trades,
+    candlesticks,
     tradeWindowStats,
     orderbook,
     loading,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import type { KalshiMarketTradesAggregate, KalshiOutcomeTradeSeries, KalshiTradeDeltaTick } from '~/types/kalshi'
+import type { KalshiCandlestick, KalshiMarketTradesAggregate, KalshiOutcomeTradeSeries } from '~/types/kalshi'
 import { formatCompactCurrency, formatCompactNumber } from '~/composables/usePolymarketMetrics'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 
@@ -16,6 +16,7 @@ const {
   primaryLink,
   kalshiEventTicker,
   trades,
+  candlesticks,
   orderbook,
   loading,
   orderbookLoading,
@@ -45,6 +46,14 @@ const selectedNoSeries = computed(() => findOutcomeSeries(selectedMarket.value?.
 const kickoffUtc = computed(() => {
   const link = primaryLink.value
   return link?.betsapiKickoffUtc ?? link?.kalshiKickoffUtc ?? eventTrades.value?.kickoffUtc ?? null
+})
+
+// 赛前快照截止（毫秒）：走势图只画开赛前的 K线点。
+const preMatchCutoffMs = computed(() => {
+  const iso = kickoffUtc.value
+  if (!iso) return null
+  const ts = new Date(iso).getTime()
+  return Number.isFinite(ts) ? ts : null
 })
 
 const selectedTrades = computed(() => {
@@ -102,13 +111,24 @@ const graphColors = ['#2563eb', '#6b7280', '#dc2626']
 const graphSeries = computed<TrendChartSeries[]>(() => {
   const series: TrendChartSeries[] = []
   const yesSeries = outcomeSeries.value.filter(s => s.outcomeSide.toLowerCase() === 'yes')
+  const candleByTicker = new Map(
+    candlesticks.value.map(c => [c.marketTicker.toLowerCase(), c.candlesticks ?? []]),
+  )
+  const cutoffMs = preMatchCutoffMs.value
   for (let index = 0; index < yesSeries.length; index += 1) {
     const item = yesSeries[index]!
-    const dataPoints = compactTimeSeries(toTrendPoints(item.trades), 180)
+    // 走势用 K线（完整赛前历史、统一小时网格、与 BSW 对齐）；过滤掉开赛后(实时)的点。
+    let dataPoints = compactTimeSeries(
+      toTrendPointsFromCandles(candleByTicker.get(item.marketTicker.toLowerCase()) ?? []),
+      300,
+    )
+    if (cutoffMs != null) {
+      dataPoints = dataPoints.filter(point => point.ts <= cutoffMs)
+    }
     const lastPct = item.lastPrice ?? dataPoints[dataPoints.length - 1]?.price ?? null
     if (dataPoints.length === 0 && lastPct == null) continue
     if (dataPoints.length === 0 && lastPct != null) {
-      dataPoints.push({ ts: Date.now(), price: clampProbability(lastPct) })
+      dataPoints.push({ ts: cutoffMs ?? Date.now(), price: clampProbability(lastPct) })
     }
     series.push({
       key: item.key,
@@ -202,11 +222,24 @@ function findOutcomeSeries(marketTicker: string | undefined, side: 'Yes' | 'No')
   ) ?? null
 }
 
-function toTrendPoints(items: KalshiTradeDeltaTick[]): TrendDataPoint[] {
-  return [...items]
-    .sort((a, b) => new Date(a.createdAtUtc).getTime() - new Date(b.createdAtUtc).getTime())
-    .map(t => ({ ts: new Date(t.createdAtUtc).getTime(), price: clampProbability(t.price) }))
-    .filter(p => Number.isFinite(p.ts))
+function candlePrice(candle: KalshiCandlestick): number | null {
+  const raw = candle.price?.close
+    ?? candle.price?.previous
+    ?? candle.price?.mean
+    ?? candle.yesAsk?.close
+    ?? candle.yesBid?.close
+  return raw == null || !Number.isFinite(raw) ? null : clampProbability(raw)
+}
+
+function toTrendPointsFromCandles(items: KalshiCandlestick[]): TrendDataPoint[] {
+  return items
+    .map((candle) => {
+      const price = candlePrice(candle)
+      const ts = new Date(candle.endPeriodUtc).getTime()
+      return price == null || !Number.isFinite(ts) ? null : { ts, price }
+    })
+    .filter((point): point is TrendDataPoint => point !== null)
+    .sort((a, b) => a.ts - b.ts)
 }
 
 function clampProbability(value: number): number {

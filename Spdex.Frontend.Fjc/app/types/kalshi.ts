@@ -121,6 +121,41 @@ export interface KalshiTradeWindowStats {
   pctChange: number | null
 }
 
+export interface KalshiOhlc {
+  open: number | null
+  low: number | null
+  high: number | null
+  close: number | null
+  mean: number | null
+  previous: number | null
+  min: number | null
+  max: number | null
+}
+
+export interface KalshiCandlestick {
+  endPeriodUtc: string
+  yesBid: KalshiOhlc | null
+  yesAsk: KalshiOhlc | null
+  price: KalshiOhlc | null
+  volume: number | null
+  openInterest: number | null
+}
+
+export interface KalshiCandlestickSeries {
+  marketTicker: string
+  periodIntervalMinutes: number
+  capturedAtUtc: string
+  candlesticks: KalshiCandlestick[]
+}
+
+export interface KalshiCandlestickResponse {
+  fromUtc: string
+  toUtc: string
+  source: string
+  periodIntervalMinutes: number
+  series: KalshiCandlestickSeries[]
+}
+
 export interface KalshiBswApiResult<T> {
   code: string | number
   info: string
