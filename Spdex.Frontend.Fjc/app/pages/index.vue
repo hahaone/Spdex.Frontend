@@ -1046,10 +1046,15 @@ onUnmounted(() => {
 .col-let { width: 4.5%; text-align: center; white-space: nowrap; }
 .col-maxbet { width: 15%; white-space: nowrap; }
 .col-bf-maxbet { width: 17%; white-space: nowrap; }
-.col-score { width: 4.5%; white-space: nowrap; }
+.col-score {
+  width: 6.5%;
+  min-width: 72px;
+  white-space: nowrap;
+  overflow: visible !important;
+}
 .col-bf { width: 6%; text-align: right; white-space: nowrap; }
 .col-asian { width: 6%; text-align: right; white-space: nowrap; }
-.col-detail { width: 15%; white-space: nowrap; }
+.col-detail { width: 13%; white-space: nowrap; }
 
 .league-tag {
   display: inline-block;
@@ -1087,9 +1092,9 @@ onUnmounted(() => {
 }
 
 .half {
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   color: #94a3b8;
-  margin-left: 0.25rem;
+  margin-left: 0.12rem;
 }
 
 .empty {
@@ -1199,7 +1204,7 @@ onUnmounted(() => {
 .detail-links {
   display: flex;
   justify-content: flex-end;
-  gap: 2px;
+  gap: 1px;
   flex-wrap: nowrap;
 }
 
@@ -1209,7 +1214,7 @@ onUnmounted(() => {
   justify-content: center;
   min-width: 20px;
   height: 18px;
-  padding: 0 3px;
+  padding: 0 2px;
   border-radius: 3px;
   color: #fff;
   font-size: 0.68rem;
