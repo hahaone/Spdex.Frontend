@@ -14,10 +14,16 @@ function isBswOk(result: KalshiBswApiResult<unknown>): boolean {
   return String(result.code) === BSW_OK
 }
 
-export function useKalshiData(spdexEventId: Ref<number | null>) {
+export function useKalshiData(
+  spdexEventId: Ref<number | null>,
+  options: { withWindowStats?: boolean, withCandlesticks?: boolean } = {},
+) {
+  // 各页面只拉自己用到的数据：kalshi 详情页不用 windowStats、cs3 不用 candlesticks，避免无谓的重查询。
+  const { withWindowStats = true, withCandlesticks = true } = options
   const matchLinks = ref<KalshiSoccerMatchLink[]>([])
   const trades = ref<KalshiSoccerTradesResponse | null>(null)
   const candlesticks = ref<KalshiCandlestickSeries[]>([])
+  const candlesticksLoading = ref(false)
   const tradeWindowStats = ref<KalshiTradeWindowStatsResult | null>(null)
   const orderbook = ref<KalshiOrderbook | null>(null)
   const loading = ref(false)
@@ -67,15 +73,18 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
       matchLinks.value = linkResult.data
       const ticker = linkResult.data[0]!.kalshiEventTicker
 
+      // Trades 必拉；TradeWindowStats 仅在用到它的页面(如 cs3)才并行拉——kalshi 详情页不用,省一次重查询。
       const [tradesResult, windowStatsResult] = await Promise.all([
         apiFetch<KalshiBswApiResult<KalshiSoccerTradesResponse>>(
           '/api/kalshi/Get/Soccer/Trades',
           { eventTicker: ticker, limit: 3000, source: 'db' },
         ),
-        apiFetch<KalshiBswApiResult<KalshiTradeWindowStatsResult>>(
-          '/api/kalshi/Get/Soccer/TradeWindowStats',
-          { eventTicker: ticker, source: 'db' },
-        ).catch(() => null),
+        withWindowStats
+          ? apiFetch<KalshiBswApiResult<KalshiTradeWindowStatsResult>>(
+              '/api/kalshi/Get/Soccer/TradeWindowStats',
+              { eventTicker: ticker, source: 'db' },
+            ).catch(() => null)
+          : Promise.resolve(null),
       ])
 
       trades.value = isBswOk(tradesResult) ? tradesResult.data : null
@@ -83,18 +92,9 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
         ? windowStatsResult.data
         : null
 
-      // 走势图改用 K线（完整赛前历史、统一网格、与 BSW 对齐）：按当前赛事的成交市场拉取。
-      const candleTickers = (trades.value?.trades.markets ?? [])
-        .map(m => m.marketTicker)
-        .filter(t => typeof t === 'string' && t.length > 0)
-      if (candleTickers.length > 0) {
-        const candleResult = await apiFetch<KalshiBswApiResult<KalshiCandlestickResponse>>(
-          '/api/kalshi/Get/Market/Candlesticks',
-          { marketTickers: candleTickers.join(','), hours: 720, periodInterval: 60, source: 'db' },
-        ).catch(() => null)
-        candlesticks.value = candleResult && isBswOk(candleResult)
-          ? (candleResult.data?.series ?? [])
-          : []
+      // 走势图 K线「后台」加载,不阻塞主内容(概率/成交/Ks指数)的渲染;只有用到走势图的页面才拉。
+      if (withCandlesticks) {
+        void loadCandlesticks()
       }
 
       // trades 上游失败或为空：静默降级为「暂无数据」，不向用户暴露错误。
@@ -108,6 +108,30 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
     }
     finally {
       loading.value = false
+    }
+  }
+
+  // 走势图 K线：单独后台拉取(不在主 loading 里),失败静默降级为空(走势图回退为单点 lastPct)。
+  async function loadCandlesticks() {
+    const candleTickers = (trades.value?.trades.markets ?? [])
+      .map(m => m.marketTicker)
+      .filter(t => typeof t === 'string' && t.length > 0)
+    if (candleTickers.length === 0) {
+      candlesticks.value = []
+      return
+    }
+    candlesticksLoading.value = true
+    try {
+      const candleResult = await apiFetch<KalshiBswApiResult<KalshiCandlestickResponse>>(
+        '/api/kalshi/Get/Market/Candlesticks',
+        { marketTickers: candleTickers.join(','), hours: 720, periodInterval: 60, source: 'db' },
+      ).catch(() => null)
+      candlesticks.value = candleResult && isBswOk(candleResult)
+        ? (candleResult.data?.series ?? [])
+        : []
+    }
+    finally {
+      candlesticksLoading.value = false
     }
   }
 
@@ -144,6 +168,7 @@ export function useKalshiData(spdexEventId: Ref<number | null>) {
     kalshiEventTicker,
     trades,
     candlesticks,
+    candlesticksLoading,
     tradeWindowStats,
     orderbook,
     loading,

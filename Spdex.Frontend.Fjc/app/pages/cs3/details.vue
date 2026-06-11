@@ -26,7 +26,7 @@ const { tradeWindowStats: polyWindowStatsFromApi, loading: polyLoading } = usePo
 // ── Kalshi 数据（延迟加载，点击按钮后才请求） ──
 const kalshiEnabled = ref(false)
 const kalshiEventId = computed(() => kalshiEnabled.value ? eventId.value : null)
-const { primaryLink: kalshiPrimaryLink, trades: kalshiTrades, tradeWindowStats: kalshiWindowStatsFromApi, loading: kalshiLoading } = useKalshiData(kalshiEventId)
+const { primaryLink: kalshiPrimaryLink, trades: kalshiTrades, tradeWindowStats: kalshiWindowStatsFromApi, loading: kalshiLoading } = useKalshiData(kalshiEventId, { withCandlesticks: false })
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)

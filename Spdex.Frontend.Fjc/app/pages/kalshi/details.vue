@@ -17,6 +17,7 @@ const {
   kalshiEventTicker,
   trades,
   candlesticks,
+  candlesticksLoading,
   orderbook,
   loading,
   orderbookLoading,
@@ -24,7 +25,7 @@ const {
   orderbookError,
   refresh,
   fetchOrderbook,
-} = useKalshiData(spdexEventId)
+} = useKalshiData(spdexEventId, { withWindowStats: false })
 
 const cnHome = computed(() => route.query.home ? String(route.query.home) : null)
 const cnAway = computed(() => route.query.away ? String(route.query.away) : null)
@@ -365,7 +366,7 @@ useHead({
 
         <div v-if="graphSeries.length > 0" class="chart-grid">
           <div class="chart-panel">
-            <div class="panel-label">概率及走势</div>
+            <div class="panel-label">概率及走势<span v-if="candlesticksLoading" style="margin-left:6px;font-weight:400;opacity:.55;">· 加载中…</span></div>
             <PolyTrendChart
               :series="graphSeries"
               :time-range="graphTimeline"
