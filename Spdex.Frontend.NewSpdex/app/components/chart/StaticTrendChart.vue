@@ -44,6 +44,8 @@ onMounted(() => {
 const labels = computed<ChartSeriesLabels>(() => props.seriesLabels ?? { home: '主', draw: '平', away: '客' })
 const hasDraw = computed(() => labels.value.draw != null)
 const unit = computed(() => props.unit ?? 'odds')
+// 点数多时隐藏每点圆点(白描边圆点会糊成一团、遮住折线);稀疏时保留便于读数。十字准线 hover 点不受影响。
+const showDots = computed(() => props.points.length <= 60)
 
 type Field = 'home' | 'draw' | 'away'
 const fields = computed<Field[]>(() => hasDraw.value ? ['home', 'draw', 'away'] : ['home', 'away'])
@@ -140,7 +142,7 @@ const pricePath = computed(() => {
   return d.trim()
 })
 const priceDots = computed(() =>
-  props.points.map((point, index) => ({ index, v: priceVal(point) })).filter(d => d.v > 0))
+  showDots.value ? props.points.map((point, index) => ({ index, v: priceVal(point) })).filter(d => d.v > 0) : [])
 function pricePathFor(field: Field): string {
   let d = ''
   let pen = false
@@ -358,7 +360,7 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
         <path v-if="showField('draw')" class="line draw" :d="linePath('draw')" />
         <path v-if="showField('away')" class="line away" :d="linePath('away')" />
 
-        <g>
+        <g v-if="showDots">
           <template v-if="showField('home')">
             <circle v-for="d in visibleDots('home')" :key="`h-${d.index}`" class="dot home" :cx="xAt(d.index)" :cy="yAt(d.value)" r="2.2" />
           </template>

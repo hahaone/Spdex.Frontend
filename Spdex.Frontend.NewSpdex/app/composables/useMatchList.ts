@@ -124,8 +124,18 @@ function formatAmountPair(arr: [number, number]): [string, string] {
   return [fmt(arr[0]), fmt(arr[1])]
 }
 
+/** 标盘三选项真实成交额(各侧)→ 千分位字符串;<=0 显示 '-'。 */
+function formatAmountTriple(arr: [number, number, number]): [string, string, string] {
+  const fmt = (value: number) => value > 0 ? Math.round(value).toLocaleString('en-US') : '-'
+  return [fmt(arr[0]), fmt(arr[1]), fmt(arr[2])]
+}
+
 function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   const bfIndex = toTriple(item.bfIndex)
+  // 各侧成交优先用后端真实金额(BfAmounts);缺省才退回「总额×指数占比」近似——
+  // 否则移动端会按必指分摊,与经典/旧站的真实成交额口径不一致(见反馈:同场两端成交不同)。
+  const bfAmounts = toTriple(item.bfAmounts)
+  const hasBfAmounts = bfAmounts[0] > 0 || bfAmounts[1] > 0 || bfAmounts[2] > 0
   const polyIndex = toTriple(item.polyIndex)
   const bfPrice: [number, number, number] = [item.bfPriceHome ?? 0, item.bfPriceDraw ?? 0, item.bfPriceAway ?? 0]
   const hasBfPrice = bfPrice[0] > 0 || bfPrice[1] > 0 || bfPrice[2] > 0
@@ -159,8 +169,8 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     marketType: item.marketType || '胜负',
     handicap: formatHandicapLine(item.handicap),
     prices: [0, 0, 0],  // 后端 list 不返回 odds，详情页才有
-    turnovers: distributeTurnover(item.bfAmount, bfIndex),
-    bfAmounts: toTriple(item.bfAmounts),
+    turnovers: hasBfAmounts ? formatAmountTriple(bfAmounts) : distributeTurnover(item.bfAmount, bfIndex),
+    bfAmounts,
     bfIndex,
     polyIndex,
     flags: item.flags ?? [],

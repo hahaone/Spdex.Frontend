@@ -31,6 +31,8 @@ function odds(v: number | undefined): string { return v != null && v > 0 ? v.toF
 function num(v: number | undefined): string { return v != null && v !== 0 ? Math.round(v).toLocaleString('en-US') : (v === 0 ? '0' : '') }
 function intList(v: number | undefined): string { return v != null && v > 0 ? Math.round(v).toLocaleString('en-US') : '' }
 function signed(v: number | undefined): string { if (v == null) return ''; const r = Math.round(v); return r > 0 ? `+${r}` : String(r) }
+// 冷热指数:两位小数、不加正号(负号自然保留)。
+function dec2(v: number | undefined): string { return v != null ? v.toFixed(2) : '' }
 // 挂牌指数(可正负,加 %)、亚洲指数(1 位小数 %)、比分指数/进球均衡(2 位)。0 视作无数据→空。
 function pct2(v: number | undefined): string { return v != null && v !== 0 ? `${v.toFixed(2)}%` : '' }
 function pct1(v: number | undefined): string { return v != null && v !== 0 ? `${v.toFixed(1)}%` : '' }
@@ -84,7 +86,7 @@ const footballColumns: Col[] = [
   { key: 'pnl', label: '模拟盈亏', tone: 'deal', get: i => signed(std(i)?.pnl), cls: i => pnlClass(std(i)?.pnl) },
   { key: 'price', label: '价位', tone: 'deal', get: i => std(i)?.price || odds(props.match.bfPrice?.[i]) },
   { key: 'listing1', label: '挂牌指数', tone: 'deal', get: i => pct2(props.match.stockStd?.[i]), cls: i => guaClass(props.match.stockStd?.[i]) },
-  { key: 'heat', label: '冷热指数', tone: 'deal', get: i => signed(std(i)?.heat), cls: i => heatClass(std(i)?.heat) },
+  { key: 'heat', label: '冷热指数', tone: 'deal', get: i => dec2(std(i)?.heat), cls: i => heatClass(std(i)?.heat) },
   { key: 'euroAvg', label: '欧洲平均', tone: 'deal', get: i => odds(std(i)?.euroAvg) || odds(props.match.euro?.[i]) },
   { key: 'kellyVar', label: '凯利方差', tone: 'deal', get: i => num(std(i)?.variance) || intList(props.match.kellyVar?.[i]) },
   // 进球(大小)
