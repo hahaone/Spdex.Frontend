@@ -17,6 +17,13 @@ const props = defineProps<{
   barMode?: boolean
   /** 多价位线：同时画 主/平/客 三条价位线（成交「所有」），而非单条。 */
   multiPrice?: boolean
+  /** 开启框选缩放：横向拖动选时间区间→emit('zoom')；双击→emit('reset')。 */
+  zoomable?: boolean
+}>()
+
+const emit = defineEmits<{
+  zoom: [range: { start: string, end: string }]
+  reset: []
 }>()
 
 // viewBox 宽度 = 容器实测宽度 → 1px viewBox = 1px 屏幕。
@@ -279,19 +286,70 @@ const tooltip = computed(() => {
   }
 })
 
-function updateFromEvent(e: PointerEvent) {
+function vbXOf(e: PointerEvent): number | null {
   const svg = svgRef.value
-  const n = props.points.length
-  if (!svg || n === 0) return
+  if (!svg) return null
   const rect = svg.getBoundingClientRect()
-  if (rect.width === 0) return
-  const vbX = ((e.clientX - rect.left) / rect.width) * width.value
-  const t = (vbX - pad.left) / (chartW.value || 1)
-  hoverIndex.value = Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))))
+  if (rect.width === 0) return null
+  return ((e.clientX - rect.left) / rect.width) * width.value
 }
-function onMove(e: PointerEvent) { updateFromEvent(e) }
-function onLeave() { hoverIndex.value = null }
-function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value = null }
+function indexAtVbX(vbX: number): number {
+  const n = props.points.length
+  if (n === 0) return 0
+  const t = (vbX - pad.left) / (chartW.value || 1)
+  return Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))))
+}
+function updateHover(e: PointerEvent) {
+  const x = vbXOf(e)
+  if (x != null) hoverIndex.value = indexAtVbX(x)
+}
+
+// ── 框选缩放（zoomable）：横向拖动选时间区间，松手 emit('zoom'); 双击 emit('reset')。──
+const dragStartX = ref<number | null>(null)
+const dragCurX = ref<number | null>(null)
+const DRAG_THRESHOLD = 6
+const selRect = computed(() => {
+  if (dragStartX.value == null || dragCurX.value == null) return null
+  const x1 = Math.min(dragStartX.value, dragCurX.value)
+  const x2 = Math.max(dragStartX.value, dragCurX.value)
+  if (x2 - x1 < DRAG_THRESHOLD) return null
+  return { x: x1, w: x2 - x1, y: pad.top, h: chartH.value }
+})
+
+function onDown(e: PointerEvent) {
+  updateHover(e)
+  if (!props.zoomable) return
+  const x = vbXOf(e)
+  if (x != null) { dragStartX.value = x; dragCurX.value = x }
+}
+function onMove(e: PointerEvent) {
+  updateHover(e)
+  if (props.zoomable && dragStartX.value != null) {
+    const x = vbXOf(e)
+    if (x != null) dragCurX.value = x
+  }
+}
+function onUp(e: PointerEvent) {
+  if (props.zoomable && dragStartX.value != null && dragCurX.value != null
+    && Math.abs(dragCurX.value - dragStartX.value) >= DRAG_THRESHOLD) {
+    const lo = indexAtVbX(Math.min(dragStartX.value, dragCurX.value))
+    const hi = indexAtVbX(Math.max(dragStartX.value, dragCurX.value))
+    const sTs = props.points[lo]?.ts
+    const eTs = props.points[hi]?.ts
+    if (sTs && eTs && hi > lo) emit('zoom', { start: sTs, end: eTs })
+  }
+  dragStartX.value = null
+  dragCurX.value = null
+  if (e.pointerType !== 'mouse') hoverIndex.value = null
+}
+function onLeave() {
+  hoverIndex.value = null
+  dragStartX.value = null
+  dragCurX.value = null
+}
+function onDblclick() {
+  if (props.zoomable) emit('reset')
+}
 </script>
 
 <template>
@@ -302,11 +360,12 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
       :style="{ height: `${height}px` }"
       role="img"
       aria-label="走势图"
-      @pointerdown="onMove"
+      @pointerdown="onDown"
       @pointermove="onMove"
       @pointerleave="onLeave"
       @pointerup="onUp"
       @pointercancel="onLeave"
+      @dblclick="onDblclick"
     >
       <g v-for="tick in yTicks" :key="tick.value">
         <line
@@ -376,6 +435,9 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
       <text :x="pad.left" :y="height - 8" class="x-tick">{{ fmtAxisTime(points[0]) }}</text>
       <text :x="(pad.left + width - padRight) / 2" :y="height - 8" class="x-tick" text-anchor="middle">{{ fmtAxisTime(points[Math.floor(points.length / 2)]) }}</text>
       <text :x="width - padRight" :y="height - 8" class="x-tick" text-anchor="end">{{ fmtAxisTime(points[points.length - 1]) }}</text>
+
+      <!-- 框选缩放：拖动时的半透明选区 -->
+      <rect v-if="selRect" class="brush" :x="selRect.x" :y="selRect.y" :width="selRect.w" :height="selRect.h" />
 
       <g v-if="hover" class="cross">
         <line class="crosshair" :x1="hover.x" :x2="hover.x" :y1="pad.top" :y2="height - pad.bottom" />
@@ -450,6 +512,16 @@ svg {
   stroke-width: 1;
   stroke-dasharray: 3 3;
   opacity: 0.7;
+  pointer-events: none;
+}
+
+/* 框选缩放选区 */
+.brush {
+  fill: var(--brand);
+  fill-opacity: 0.12;
+  stroke: var(--brand);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
   pointer-events: none;
 }
 

@@ -102,18 +102,33 @@ function downsamplePoints(src: ChartPoint[], cap: number, zeroMissing: boolean):
   return out
 }
 
+// 框选缩放窗口(优先于时间段下拉);为空时走时间段过滤。
+const zoomWindow = ref<{ start: string, end: string } | null>(null)
+
 const displayPoints = computed(() => {
   const all = points.value
-  const h = RANGE_HOURS[timeRange.value]
-  const lastTs = all.at(-1)?.ts
   let windowed = all
-  if (h && all.length > 0 && lastTs) {
-    const cutoff = new Date(lastTs).getTime() - h * 3600_000
-    const filtered = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
-    windowed = filtered.length >= 2 ? filtered : all
+  if (zoomWindow.value) {
+    const { start, end } = zoomWindow.value
+    const z = all.filter(p => p.ts && p.ts >= start && p.ts <= end)
+    windowed = z.length >= 2 ? z : all
+  }
+  else {
+    const h = RANGE_HOURS[timeRange.value]
+    const lastTs = all.at(-1)?.ts
+    if (h && all.length > 0 && lastTs) {
+      const cutoff = new Date(lastTs).getTime() - h * 3600_000
+      const filtered = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
+      windowed = filtered.length >= 2 ? filtered : all
+    }
   }
   return downsamplePoints(windowed, MAX_CHART_POINTS, unit.value !== 'payout')
 })
+
+function onZoom(range: { start: string, end: string }) { zoomWindow.value = range }
+function resetZoom() { zoomWindow.value = null }
+// 切时间段 / 切指标 → 清缩放(避免 ts 窗口对不上新序列);轮询刷新不清,保持缩放。
+watch([timeRange, chartType], () => { zoomWindow.value = null })
 
 const baseline = computed<number | null>(() => {
   if (metric.value === 'payout') return 60
@@ -304,6 +319,8 @@ const detailButtons = computed<DetailBtn[]>(() => {
           <button type="button" class="cd-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
             <RefreshCw :size="13" :class="{ spinning: pending }" />
           </button>
+          <button v-if="zoomWindow" type="button" class="cd-reset" aria-label="还原缩放" @click="resetZoom">还原</button>
+          <span v-else class="cd-hint">拖动框选可放大</span>
           <span class="chart-title num">{{ chartTitle }}走势图</span>
         </div>
 
@@ -337,6 +354,9 @@ const detailButtons = computed<DetailBtn[]>(() => {
               :bar-mode="barMode"
               :multi-price="multiPrice"
               :height="chartHeight"
+              zoomable
+              @zoom="onZoom"
+              @reset="resetZoom"
             />
           </template>
           <div v-else class="chart-state">暂无走势数据</div>
@@ -501,6 +521,23 @@ const detailButtons = computed<DetailBtn[]>(() => {
   border-radius: 2px;
   background: var(--classic-panel);
   color: var(--classic-text);
+}
+
+.cd-reset {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--classic-green);
+  border-radius: 2px;
+  background: var(--classic-green-soft);
+  color: #2d7e64;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.cd-hint {
+  color: var(--classic-title-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .chart-title {
