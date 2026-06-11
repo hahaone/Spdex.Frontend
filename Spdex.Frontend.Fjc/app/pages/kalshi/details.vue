@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
 import type { KalshiMarketTradesAggregate, KalshiOutcomeTradeSeries, KalshiTradeDeltaTick } from '~/types/kalshi'
-import { formatCompactCurrency } from '~/composables/usePolymarketMetrics'
+import { formatCompactCurrency, formatCompactNumber } from '~/composables/usePolymarketMetrics'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 
 const route = useRoute()
@@ -321,7 +321,7 @@ useHead({
             <div class="team-name">{{ cnHome || primaryLink?.kalshiHomeTeam || 'Home' }}</div>
           </div>
           <div class="event-stat">
-            <div class="event-volume">{{ formatCompactCurrency(eventVolume) }}</div>
+            <div class="event-volume">{{ formatCompactNumber(eventVolume) }}</div>
             <div class="event-label">Ks Vol. · {{ eventTrades?.tradeCount ?? 0 }} 笔</div>
           </div>
           <div class="team-card away">
@@ -357,7 +357,7 @@ useHead({
               </div>
               <div class="bar-value">{{ Math.round(entry.index) }}</div>
               <div class="bar-label" :title="entry.label">{{ entry.label }}</div>
-              <div class="bar-volume">{{ formatCompactCurrency(entry.volume) }}</div>
+              <div class="bar-volume">{{ formatCompactNumber(entry.volume) }}</div>
             </div>
           </div>
         </div>
@@ -368,7 +368,7 @@ useHead({
           <div>
             <div class="market-title">{{ localizeRunner(selectedMarket?.label) }}</div>
             <div class="market-subtitle">
-              {{ formatCompactCurrency(marketVolume(selectedMarket)) }} 交易量 · {{ selectedMarket?.tradeCount ?? 0 }} 笔
+              {{ formatCompactNumber(marketVolume(selectedMarket)) }} 交易量 · {{ selectedMarket?.tradeCount ?? 0 }} 笔
             </div>
           </div>
           <span v-if="orderbookLoading" class="loading-pill">盘口加载中...</span>

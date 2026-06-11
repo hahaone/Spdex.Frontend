@@ -151,6 +151,14 @@ export function formatCompactCurrency(value: number | null | undefined): string 
   return `$${value.toFixed(0)}`
 }
 
+/** 紧凑数字（无 $ 前缀）。用于「张数/成交量(size)」这类非美元计量，避免误标成金额。 */
+export function formatCompactNumber(value: number | null | undefined): string {
+  if (value == null) return '-'
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  return `${value.toFixed(0)}`
+}
+
 export function formatImbalance(value: number | null): string {
   if (value == null) return 'N/A'
   const pct = (value * 100).toFixed(1)
