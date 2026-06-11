@@ -64,6 +64,7 @@ interface MemberItem {
   enabled: boolean
   mobile?: string | null
   lastActivityDate?: string | null
+  registerDate?: string | null
 }
 
 const api = useAdminApi()
@@ -71,11 +72,14 @@ const message = useMessage()
 const dialog = useDialog()
 const { can } = usePermission()
 
-const keyword = ref('')
+// 记住翻页/搜索状态:点「详情」(navigateTo('/users/:id'))再返回('/users')后仍回到原页与搜索词。
+// useState 跨客户端导航存活(Admin 为 SPA,客户端状态不丢)。
+const keyword = useState('admin-users-keyword', () => '')
+const savedPage = useState('admin-users-page', () => 1)
 const rows = ref<MemberItem[]>([])
 const loading = ref(false)
 const saving = ref(false)
-const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0 })
+const pagination = reactive({ page: savedPage.value, pageSize: 20, itemCount: 0 })
 
 const roleOptions = [
   { label: '免费 (2)', value: 2 },
@@ -101,8 +105,8 @@ async function load() {
   else { message.error(res.message) }
 }
 
-function reload() { pagination.page = 1; load() }
-function onPage(p: number) { pagination.page = p; load() }
+function reload() { pagination.page = 1; savedPage.value = 1; load() }
+function onPage(p: number) { pagination.page = p; savedPage.value = p; load() }
 
 const showMembership = ref(false)
 const mForm = reactive<{ userId: number, roleId: number, days: number | null, endDate: number | null }>({
@@ -155,6 +159,7 @@ async function submitPwd() {
 }
 
 function fmtDate(d?: string | null) { return d ? d.substring(0, 10) : '—' }
+function fmtDateTime(d?: string | null) { return d ? d.substring(0, 16).replace('T', ' ') : '—' }
 
 const columns = [
   { title: 'UserId', key: 'userId', width: 90 },
@@ -165,6 +170,7 @@ const columns = [
     render: (r: MemberItem) => h(NTag, { type: 'info', size: 'small' }, { default: () => `${r.tier} (${r.roleId})` }),
   },
   { title: '到期', key: 'endDate', render: (r: MemberItem) => fmtDate(r.endDate) },
+  { title: '注册时间', key: 'registerDate', width: 150, render: (r: MemberItem) => fmtDateTime(r.registerDate) },
   {
     title: '状态',
     key: 'enabled',
