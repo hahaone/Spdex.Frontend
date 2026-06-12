@@ -135,8 +135,8 @@ const baseline = computed<number | null>(() => {
   if (metric.value === 'hotcold') return 0
   return null
 })
-// 成交变化/正确比分价位-成交量用柱状图；后者叠加价位线。
-const barMode = computed(() => metric.value === 'traded' || metric.value === 'pricevolume')
+// 成交变化用柱状图。
+const barMode = computed(() => metric.value === 'traded')
 
 // ── E1 成交明细（原始成交走势）：单独走 tradeflow 通道 ──
 const isTradeFlow = computed(() => metric.value === 'tradeflow')

@@ -49,7 +49,6 @@ const ASIAN_INDEX_METRICS: ChartMetricDef[] = [
 ]
 
 const CORRECT_SCORE_METRICS: ChartMetricDef[] = [
-  { label: '价位-成交量', value: 'pricevolume' },
   { label: '价位', value: 'odds' },
   { label: '成交量', value: 'volume' },
   { label: '成交变化', value: 'traded' },
