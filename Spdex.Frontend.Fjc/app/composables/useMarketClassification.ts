@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 // ─── Types ───
 
 export type MarketCategoryKey = 'match' | 'exact' | 'half' | 'other'
-export type MarketFamilyKey = 'moneyline' | 'spread' | 'totals' | 'btts' | 'exact' | 'half' | 'other'
+export type MarketFamilyKey = 'moneyline' | 'spread' | 'totals' | 'team_totals' | 'btts' | 'exact' | 'half' | 'other'
 
 // ─── Market type normalization ───
 
@@ -28,15 +28,24 @@ export function isExactScoreMarket(type: string, question = ''): boolean {
     || q.includes('correct score')
 }
 
+// 半场/上下半场盘口（半场结果 + 上/下半场总分 + 半场球队总分）——统一归到「半场」分类。
 export function isHalftimeMarket(type: string, question = ''): boolean {
   const t = normalizeMarketType(type)
   const q = normalizeMarketType(question)
   return t === 'soccer_halftime_result'
     || t.includes('halftime')
     || t.includes('half_time')
+    || t.includes('first_half')
+    || t.includes('second_half')
+    || t.includes('1st_half')
+    || t.includes('2nd_half')
     || q.includes('halftime')
     || q.includes('half-time')
     || q.includes('at halftime')
+    || q.includes('1st half')
+    || q.includes('2nd half')
+    || q.includes('first half')
+    || q.includes('second half')
 }
 
 export function isSpreadMarket(type: string, question = ''): boolean {
@@ -48,16 +57,30 @@ export function isSpreadMarket(type: string, question = ''): boolean {
     || q.startsWith('spread:')
 }
 
-export function isTotalsMarket(type: string, question = ''): boolean {
+// 任意「总进球/大小」盘口（全场/球队/半场）——仅用于盘口线解析与 Over/Under 标签，不用于分类。
+export function isAnyTotalsLike(type: string, question = ''): boolean {
   const t = normalizeMarketType(type)
   const q = normalizeMarketType(question)
-  return t === 'totals'
-    || t === 'total'
-    || t === 'total_goals'
-    || t.includes('total')
+  return t.includes('total')
     || q.includes('o/u')
     || q.includes('over ')
     || q.includes('under ')
+}
+
+function isTeamTotalsType(type: string): boolean {
+  return normalizeMarketType(type).includes('team_total')
+}
+
+// 严格「全场总进球」：是 totals-like，但不是球队总分、也不是半场/上下半场。
+export function isTotalsMarket(type: string, question = ''): boolean {
+  return isAnyTotalsLike(type, question)
+    && !isTeamTotalsType(type)
+    && !isHalftimeMarket(type, question)
+}
+
+// 全场「球队总分」：某队的总进球 O/U（soccer_team_totals）。
+export function isTeamTotalsMarket(type: string, question = ''): boolean {
+  return isTeamTotalsType(type) && !isHalftimeMarket(type, question)
 }
 
 export function isBttsMarket(type: string, question = ''): boolean {
@@ -87,7 +110,7 @@ export function isMoneylineMarket(type: string, question = ''): boolean {
  * 其他: 保持 Yes/No
  */
 export function outcomeLabel(outcome: string, sportsMarketType: string, question = ''): string {
-  if (isTotalsMarket(sportsMarketType, question)) {
+  if (isAnyTotalsLike(sportsMarketType, question)) {
     return outcome === 'Yes' ? 'Over' : outcome === 'No' ? 'Under' : outcome
   }
   if (isSpreadMarket(sportsMarketType, question)) {
@@ -105,6 +128,7 @@ export function marketCategory(type: string, question: string): MarketCategoryKe
     isMoneylineMarket(type, question)
     || isSpreadMarket(type, question)
     || isTotalsMarket(type, question)
+    || isTeamTotalsMarket(type, question)
     || isBttsMarket(type, question)
   ) {
     return 'match'
@@ -116,6 +140,7 @@ export function marketFamily(type: string, question: string): MarketFamilyKey {
   if (isExactScoreMarket(type, question)) return 'exact'
   if (isHalftimeMarket(type, question)) return 'half'
   if (isSpreadMarket(type, question)) return 'spread'
+  if (isTeamTotalsMarket(type, question)) return 'team_totals'
   if (isTotalsMarket(type, question)) return 'totals'
   if (isBttsMarket(type, question)) return 'btts'
   if (isMoneylineMarket(type, question)) return 'moneyline'
@@ -145,6 +170,7 @@ export function marketFamilyLabel(key: MarketFamilyKey): string {
     case 'moneyline': return '独赢'
     case 'spread': return '让分'
     case 'totals': return '总分'
+    case 'team_totals': return '球队总分'
     case 'btts': return '双方进球'
     case 'exact': return '准确比分'
     case 'half': return '半场结果'
@@ -157,9 +183,10 @@ export function marketFamilyOrder(key: MarketFamilyKey): number {
     case 'moneyline': return 0
     case 'spread': return 1
     case 'totals': return 2
-    case 'btts': return 3
-    case 'exact': return 4
-    case 'half': return 5
+    case 'team_totals': return 3
+    case 'btts': return 4
+    case 'exact': return 5
+    case 'half': return 6
     default: return 9
   }
 }
@@ -188,7 +215,7 @@ export function parseLineValue(
     return null
   }
 
-  if (isTotalsMarket(type, question)) {
+  if (isAnyTotalsLike(type, question)) {
     for (const src of sources) {
       const ou = src.match(/O\/U\s*([0-9]+(?:\.[0-9]+)?)/i)
       if (ou) {

@@ -90,6 +90,11 @@ function extractExactScoreLabel(question: string): string | null {
   return `${pair[1]}-${pair[2]}`
 }
 
+// 球队总分队名提取："A vs. B: Team O/U 2.5" → "Team"
+function teamTotalsTeam(question: string): string {
+  return (question.match(/:\s*(.+?)\s+o\s*\/\s*u\b/i)?.[1] ?? '').trim()
+}
+
 function marketOptionMeta(
   type: string,
   question: string,
@@ -116,6 +121,12 @@ function marketOptionMeta(
       const handicapValue = handicap ? Number(handicap[1]) : null
       return { label, order: handicapValue == null || Number.isNaN(handicapValue) ? 9 : (handicapValue < 0 ? 0 : 1) }
     }
+  }
+
+  if (family === 'team_totals') {
+    // 球队总分：YES=Over → 「队 大 线」（counter 给「队 小 线」）。队名区分两队，避免再撞一起。
+    const team = teamTotalsTeam(question)
+    return { label: [team, '大', lineText].filter(Boolean).join(' '), order: 0 }
   }
 
   if (family === 'totals') {
@@ -155,7 +166,7 @@ function optionOrderByTeam(teamLabel: string, link: PolymarketSoccerMatchLink | 
 }
 
 function needsDualSides(family: MarketFamilyKey): boolean {
-  return family === 'totals' || family === 'spread' || family === 'btts'
+  return family === 'totals' || family === 'team_totals' || family === 'spread' || family === 'btts'
 }
 
 function resolveKeyAndSide(key: string): { baseKey: string; side: MarketSide } {
@@ -216,6 +227,10 @@ function counterOptionMeta(
   const lineText = lineValue > 0 ? formatLineLabel(lineValue) : ''
 
   if (family === 'totals') return { label: lineText ? `小 ${lineText}` : '小', order: 1 }
+  if (family === 'team_totals') {
+    const team = teamTotalsTeam(question)
+    return { label: [team, '小', lineText].filter(Boolean).join(' '), order: 1 }
+  }
   if (family === 'btts') return { label: '否', order: 1 }
 
   if (family === 'spread') {
