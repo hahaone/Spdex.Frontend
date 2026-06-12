@@ -85,7 +85,7 @@ export function useLiveList(
 
   // 30s 自动刷新（仅在有访问权限时；免费/游客不轮询，避免反复 403）
   usePolling(() => {
-    if (enabledRef.value)
+    if (enabledRef.value && !result.pending.value)
       result.refresh()
   }, 30_000, { errorRef: result.error })
 
