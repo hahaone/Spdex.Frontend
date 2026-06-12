@@ -20,6 +20,8 @@ export interface ChartSeriesLabels {
 
 export interface ChartMetricDef { label: string, value: string }
 export interface ChartMarketDef { label: string, value: string, metrics: ChartMetricDef[] }
+export interface ChartSelectionOption { value: string, label: string, volume: number }
+export interface ChartSelectionGroup { key: string, label: string, options: ChartSelectionOption[] }
 
 /** PriceCalc 系盘口通用指标（含 E1 成交明细原始成交走势）。 */
 const PRICECALC_METRICS: ChartMetricDef[] = [
@@ -46,6 +48,16 @@ const ASIAN_INDEX_METRICS: ChartMetricDef[] = [
   { label: '亚洲指数', value: 'index' },
 ]
 
+const CORRECT_SCORE_METRICS: ChartMetricDef[] = [
+  { label: '价位-成交量', value: 'pricevolume' },
+  { label: '价位', value: 'odds' },
+  { label: '成交量', value: 'volume' },
+  { label: '成交变化', value: 'traded' },
+  { label: '成交比例', value: 'ratio' },
+  { label: '必发指数', value: 'bfindex' },
+  { label: '挂牌倾向', value: 'exchange' },
+]
+
 const CORNER_METRICS: ChartMetricDef[] = [
   { label: '价位', value: 'odds' },
   { label: '必发指数', value: 'bfindex' },
@@ -69,6 +81,7 @@ export const CHART_MARKETS: ChartMarketDef[] = [
     metrics: HANDICAP_METRICS,
   },
   { label: '亚洲指数', value: 'asianindex', metrics: ASIAN_INDEX_METRICS },
+  { label: '正确比分', value: 'correctscore', metrics: CORRECT_SCORE_METRICS },
   { label: '角球', value: 'corner', metrics: CORNER_METRICS },
   { label: '欧赔', value: 'euro', metrics: [{ label: '欧赔', value: 'europe' }, { label: '凯利', value: 'kelly' }] },
 ]
@@ -92,6 +105,9 @@ interface BackendChartResult {
   metricLabel: string
   unit: string
   seriesLabels: ChartSeriesLabels
+  selectionGroups?: ChartSelectionGroup[]
+  activeSelection?: string | null
+  activeSelectionLabel?: string | null
   points: BackendChartPoint[]
   generatedAt: string
   status: ChartStatus
@@ -120,19 +136,30 @@ function mapPoint(p: BackendChartPoint): ChartPoint {
 
 const DEFAULT_LABELS: ChartSeriesLabels = { home: '主', draw: '平', away: '客' }
 
-export function useChartSeries(eventId: MaybeRef<number>, type: MaybeRef<string> = ref('1X2')) {
+export function useChartSeries(
+  eventId: MaybeRef<number>,
+  type: MaybeRef<string> = ref('1X2'),
+  extraQuery: MaybeRef<Record<string, string | number | null | undefined>> = ref({}),
+) {
   const idRef = computed(() => unref(eventId))
   const typeRef = computed(() => unref(type))
+  const extraQueryRef = computed(() => unref(extraQuery))
 
-  const query = computed(() => ({ type: typeRef.value }))
+  const query = computed(() => {
+    const extra = Object.fromEntries(
+      Object.entries(extraQueryRef.value ?? {})
+        .filter(([, value]) => value != null && value !== ''),
+    )
+    return { type: typeRef.value, ...extra }
+  })
 
   const result = useApiFetch<ApiResponse<BackendChartResult>>(
     () => `/api/newspdex/charts/${idRef.value}/timeseries`,
     {
-      key: () => `newspdex-chart-${idRef.value}-${typeRef.value}`,
+      key: () => `newspdex-chart-${idRef.value}-${typeRef.value}-${JSON.stringify(query.value)}`,
       server: false,
       query,
-      watch: [idRef, typeRef],
+      watch: [idRef, typeRef, extraQueryRef],
     },
   )
 
@@ -150,6 +177,9 @@ export function useChartSeries(eventId: MaybeRef<number>, type: MaybeRef<string>
   const metricLabel = computed(() => result.data.value?.data?.metricLabel ?? '')
   const unit = computed(() => result.data.value?.data?.unit ?? 'odds')
   const seriesLabels = computed<ChartSeriesLabels>(() => result.data.value?.data?.seriesLabels ?? DEFAULT_LABELS)
+  const selectionGroups = computed<ChartSelectionGroup[]>(() => result.data.value?.data?.selectionGroups ?? [])
+  const activeSelection = computed(() => result.data.value?.data?.activeSelection ?? null)
+  const activeSelectionLabel = computed(() => result.data.value?.data?.activeSelectionLabel ?? null)
 
   return {
     points,
@@ -158,6 +188,9 @@ export function useChartSeries(eventId: MaybeRef<number>, type: MaybeRef<string>
     metricLabel,
     unit,
     seriesLabels,
+    selectionGroups,
+    activeSelection,
+    activeSelectionLabel,
     pending: result.pending,
     error: result.error,
     refresh: result.refresh,

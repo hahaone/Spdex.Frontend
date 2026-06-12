@@ -13,7 +13,8 @@ function queryString(name: string): string | null {
 
 function initialMarket(): string {
   const q = queryString('market')
-  return q && CHART_MARKETS.some(m => m.value === q) ? q : 'standard'
+  const normalized = q === 'cs' ? 'correctscore' : q
+  return normalized && CHART_MARKETS.some(m => m.value === normalized) ? normalized : 'standard'
 }
 
 function initialRange(): string {
@@ -26,19 +27,51 @@ function initialSeries(): 'home' | 'draw' | 'away' | null {
   return q === 'home' || q === 'draw' || q === 'away' ? q : null
 }
 
+function initialScoreGroup(): string {
+  const q = queryString('scoreGroup')
+  return q && ['hot', 'home', 'draw', 'away'].includes(q) ? q : 'hot'
+}
+
+function defaultMetricForMarket(marketValue: string): string {
+  return CHART_MARKETS.find(m => m.value === marketValue)?.metrics[0]?.value ?? 'odds'
+}
+
 const market = ref(initialMarket())
-const metric = ref(queryString('metric') ?? 'odds')
+const metric = ref(queryString('metric') ?? defaultMetricForMarket(market.value))
 const timeRange = ref(initialRange())
 const seriesOnly = ref<'home' | 'draw' | 'away' | null>(initialSeries())
+const scoreGroup = ref(initialScoreGroup())
+const scoreSelection = ref(queryString('selection'))
 
 const { detail, access } = useMatchDetail(eventId)
 const visibleChartMarkets = computed(() => {
   if (!detail.value) return CHART_MARKETS
-  return CHART_MARKETS.filter(m => m.value !== 'cs' || access.value.cs)
+  return CHART_MARKETS.filter(m => m.value !== 'correctscore' || access.value.cs)
 })
 const currentMarket = computed(() =>
   visibleChartMarkets.value.find(m => m.value === market.value) ?? visibleChartMarkets.value[0] ?? CHART_MARKETS[0]!)
 const metrics = computed(() => currentMarket.value.metrics)
+const isCorrectScore = computed(() => market.value === 'correctscore')
+
+const scoreGroupOptions = [
+  { label: '热门', value: 'hot' },
+  { label: '主胜比分', value: 'home' },
+  { label: '平局比分', value: 'draw' },
+  { label: '客胜比分', value: 'away' },
+]
+
+function selectMarket(next: string) {
+  if (market.value === next) return
+  market.value = next
+  metric.value = defaultMetricForMarket(next)
+  seriesOnly.value = null
+  if (next !== 'correctscore') scoreSelection.value = null
+}
+
+function selectScoreGroup(next: string) {
+  scoreGroup.value = next
+  scoreSelection.value = null
+}
 
 // 切换盘口或 query 深链后，若当前指标不在新盘口的指标集合里，回退到第一个
 watch(visibleChartMarkets, (markets) => {
@@ -53,6 +86,9 @@ watch(metrics, () => {
 
 // 组合成后端的复合 type："standard.bfindex" 等
 const graphType = computed(() => `${market.value}.${metric.value}`)
+const chartExtraQuery = computed(() => isCorrectScore.value
+  ? { scoreGroup: scoreGroup.value, selection: scoreSelection.value }
+  : {})
 
 const timeOptions = [
   { label: '2H', value: '2h' },
@@ -64,7 +100,18 @@ const timeOptions = [
 const match = computed(() => detail.value?.match)
 const matchHandicap = computed(() => formatHandicapLine(match.value?.handicap))
 
-const { points, status, pending, refresh, metricLabel, unit, seriesLabels } = useChartSeries(eventId, graphType)
+const {
+  points,
+  status,
+  pending,
+  refresh,
+  metricLabel,
+  unit,
+  seriesLabels,
+  selectionGroups,
+  activeSelection,
+  activeSelectionLabel,
+} = useChartSeries(eventId, graphType, chartExtraQuery)
 
 // 桌面加高图表画布(移动端保持 220)
 const isDesktop = useIsDesktop()
@@ -88,8 +135,8 @@ const baseline = computed<number | null>(() => {
   if (metric.value === 'hotcold') return 0
   return null
 })
-// 成交变化用柱状图
-const barMode = computed(() => metric.value === 'traded')
+// 成交变化/正确比分价位-成交量用柱状图；后者叠加价位线。
+const barMode = computed(() => metric.value === 'traded' || metric.value === 'pricevolume')
 
 // ── E1 成交明细（原始成交走势）：单独走 tradeflow 通道 ──
 const isTradeFlow = computed(() => metric.value === 'tradeflow')
@@ -122,6 +169,15 @@ const seriesOptions = computed(() => {
   return opts
 })
 const showSeriesOptions = computed(() => isTradeFlow.value || seriesOptions.value.length > 2)
+const scoreOptions = computed(() => {
+  const current = selectionGroups.value.find(g => g.key === scoreGroup.value)
+  return current?.options.length ? current.options : selectionGroups.value.find(g => g.key === 'hot')?.options ?? []
+})
+
+watch(activeSelection, (next) => {
+  if (isCorrectScore.value && next && scoreSelection.value !== next)
+    scoreSelection.value = next
+})
 
 // 盘口切换后若当前筛选项在新盘口不存在，回退到全部
 watch(seriesLabels, (l) => {
@@ -141,7 +197,11 @@ const currentMetricLabel = computed(() => {
     return metrics.value.find(m => m.value === 'tradeflow')?.label || '成交明细'
   return metricLabel.value || metrics.value.find(m => m.value === metric.value)?.label || ''
 })
-const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetricLabel.value}`)
+const chartTitle = computed(() => {
+  if (isCorrectScore.value)
+    return `${currentMarket.value.label} · ${activeSelectionLabel.value ?? '热门'} · ${currentMetricLabel.value}`
+  return `${currentMarket.value.label} · ${currentMetricLabel.value}`
+})
 </script>
 
 <template>
@@ -167,7 +227,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
             :key="m.value"
             type="button"
             :class="['group-btn focus-ring', { active: market === m.value }]"
-            @click="market = m.value"
+            @click="selectMarket(m.value)"
           >
             {{ m.label }}
           </button>
@@ -212,6 +272,32 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
           {{ s.label }}
         </button>
       </div>
+
+      <template v-if="isCorrectScore">
+        <div class="score-filter-row">
+          <button
+            v-for="g in scoreGroupOptions"
+            :key="g.value"
+            type="button"
+            :class="['score-group-btn focus-ring', { active: scoreGroup === g.value }]"
+            @click="selectScoreGroup(g.value)"
+          >
+            {{ g.label }}
+          </button>
+        </div>
+        <div v-if="scoreOptions.length" class="score-chip-row scrollbar-none">
+          <button
+            v-for="s in scoreOptions"
+            :key="s.value"
+            type="button"
+            :class="['score-chip focus-ring', { active: activeSelection === s.value }]"
+            @click="scoreSelection = s.value"
+          >
+            <span>{{ s.label }}</span>
+            <b class="num">{{ Math.round(s.volume).toLocaleString('zh-CN') }}</b>
+          </button>
+        </div>
+      </template>
     </section>
 
     <section class="chart-band">
@@ -416,6 +502,64 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
 .series-btn.active {
   border-color: var(--brand);
   background: var(--brand-tint);
+  color: var(--brand-deep);
+}
+
+.score-filter-row,
+.score-chip-row {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.score-group-btn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.score-group-btn.active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.score-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 29px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.score-chip b {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 760;
+}
+
+.score-chip.active {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand-deep);
+}
+
+.score-chip.active b {
   color: var(--brand-deep);
 }
 
