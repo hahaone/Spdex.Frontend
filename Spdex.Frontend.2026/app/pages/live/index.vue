@@ -217,7 +217,7 @@ function tgSpark(eventId: number) {
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
   const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
   if (nums.length < 2) return null
-  const W = 320, H = 64, pad = 8
+  const W = 960, H = 104, pad = 12
   const min = Math.min(...nums)
   const max = Math.max(...nums)
   const span = max - min || 1
@@ -297,8 +297,6 @@ const refreshCountdownSeconds = computed(() =>
 )
 
 const expandedEventIds = ref<Set<number>>(new Set())
-const flashEventIds = ref<Set<number>>(new Set())
-const previousSignatures = ref<Map<number, string>>(new Map())
 let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let liveTradeRefreshTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -309,24 +307,6 @@ type RefreshOptions = { silent?: boolean } | PointerEvent
 function normalizeRefreshOptions(options?: RefreshOptions): { silent?: boolean } {
   return options && 'silent' in options ? options : {}
 }
-
-watch(
-  () => liveTrades.data.value?.timestamp,
-  () => {
-    const next = new Map(previousSignatures.value)
-    for (const item of liveTrades.data.value?.items ?? []) {
-      const eventId = Number(item.eventId)
-      if (!Number.isFinite(eventId) || !item.topSignature) continue
-
-      const previous = next.get(eventId)
-      if (previous && previous !== item.topSignature) {
-        flashExpandButton(eventId)
-      }
-      next.set(eventId, item.topSignature)
-    }
-    previousSignatures.value = next
-  },
-)
 
 watch(liveMarkets, () => {
   void liveTrades.refresh({ silent: liveTrades.data.value != null })
@@ -411,15 +391,6 @@ function scheduleNextMatchRefresh() {
   }, MATCH_REFRESH_INTERVAL_MS)
 }
 
-function flashExpandButton(eventId: number) {
-  flashEventIds.value = new Set([...flashEventIds.value, eventId])
-  setTimeout(() => {
-    const next = new Set(flashEventIds.value)
-    next.delete(eventId)
-    flashEventIds.value = next
-  }, 1000)
-}
-
 function setDay(day: 'today' | 'yesterday') {
   selectedDay.value = day
   selectedLeague.value = ''
@@ -447,10 +418,6 @@ function toggleExpanded(eventId: number) {
 
 function isExpanded(eventId: number): boolean {
   return expandedEventIds.value.has(eventId)
-}
-
-function shouldFlash(eventId: number): boolean {
-  return flashEventIds.value.has(eventId)
 }
 
 function getLiveItem(item: MatchListItem): LiveMatchOddsEventItem | undefined {
@@ -749,7 +716,6 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <th class="col-live">现场最大单</th>
             <th class="col-xg">xG</th>
             <th class="col-tg">预期总进球</th>
-            <th class="col-action" />
           </tr>
         </thead>
         <tbody>
@@ -805,17 +771,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                   <i class="tg-arrow">{{ isXgExpanded(item.match.eventId) ? '⌃' : '⌄' }}</i>
                 </button>
               </td>
-              <td class="action-cell">
-                <button
-                  :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
-                  @click.stop="toggleExpanded(item.match.eventId)"
-                >
-                  {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
-                </button>
-              </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
-              <td colspan="14">
+              <td colspan="13">
                 <table class="top-table">
                   <thead>
                     <tr>
@@ -854,7 +812,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
             </tr>
             <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
-              <td colspan="14">
+              <td colspan="13">
                 <template v-for="(spark, sparkIdx) in [tgSpark(item.match.eventId)]" :key="sparkIdx">
                   <div class="tg-chart">
                     <div class="tg-chart-head">
@@ -1052,7 +1010,7 @@ select {
 }
 
 .live-table {
-  min-width: 1380px;
+  min-width: 1330px;
 }
 
 th {
@@ -1143,18 +1101,19 @@ th.col-tg {
 /* xG 预期总进球走势图（独立展开行） */
 .xg-detail-row td {
   background: #f4fbf6;
-  padding: 12px 16px;
+  padding: 14px 18px 16px;
 }
 
 .tg-chart {
-  max-width: 420px;
+  width: 100%;
+  max-width: none;
 }
 
 .tg-chart-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .tg-title {
@@ -1176,7 +1135,7 @@ th.col-tg {
 
 .tg-svg {
   width: 100%;
-  height: 64px;
+  height: 112px;
   color: #2e9c5f;
 }
 
@@ -1271,10 +1230,6 @@ th.col-tg {
   width: 112px;
 }
 
-.col-action {
-  width: 50px;
-}
-
 .pin-btn {
   border: 0;
   background: transparent;
@@ -1331,29 +1286,6 @@ th.col-tg {
 .match-row:nth-child(4n + 1) td.live-cell.live-trade-alert-strong {
   color: #d62929;
   font-weight: 800;
-}
-
-.action-cell {
-  text-align: right;
-}
-
-.expand-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #cfd6e2;
-  border-radius: 6px;
-  background: #fff;
-  color: #40506a;
-  cursor: pointer;
-}
-
-.expand-btn.open {
-  background: #eef3ff;
-  color: #2f56c5;
-}
-
-.expand-btn.flash {
-  animation: flash 1s ease-out;
 }
 
 .detail-row > td {
@@ -1420,17 +1352,6 @@ th.col-tg {
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes flash {
-  0% {
-    background: #ffe08a;
-    border-color: #f0b429;
-  }
-  100% {
-    background: #fff;
-    border-color: #cfd6e2;
   }
 }
 

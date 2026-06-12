@@ -24,10 +24,22 @@ function loadScript(region: string, prefix: string): Promise<void> {
   window.AliyunCaptchaConfig = { region, prefix }
   scriptPromise = new Promise<void>((resolve, reject) => {
     const s = document.createElement('script')
+    const timer = window.setTimeout(() => {
+      scriptPromise = null
+      s.remove()
+      reject(new Error('AliyunCaptcha.js 加载超时'))
+    }, 8000)
     s.src = SCRIPT_URL
     s.async = true
-    s.onload = () => resolve()
-    s.onerror = () => { scriptPromise = null; reject(new Error('AliyunCaptcha.js 加载失败')) }
+    s.onload = () => {
+      window.clearTimeout(timer)
+      resolve()
+    }
+    s.onerror = () => {
+      window.clearTimeout(timer)
+      scriptPromise = null
+      reject(new Error('AliyunCaptcha.js 加载失败'))
+    }
     document.head.appendChild(s)
   })
   return scriptPromise

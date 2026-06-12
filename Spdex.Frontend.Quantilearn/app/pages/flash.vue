@@ -289,7 +289,7 @@ const snapshotSourceLabel = computed(() => {
   if (snapshot.value.usedLiveSnapshot) return `${snapshot.value.requestedSnapshot} -> 即时`
   return snapshot.value.snapshot === 'current' ? '即时快照' : `${snapshot.value.snapshot}h 快照`
 })
-const bestDefaultFactor = computed(() => factorsById.value.get('f36'))
+const totalAmountFactor = computed(() => factorsById.value.get('f36'))
 const goalBalanceFactor = computed(() => factorsById.value.get('f40'))
 const validValueCount = computed(() => (snapshot.value?.factors ?? []).filter(factor => factor.hasValue).length)
 const flashAccessLabel = computed(() => {
@@ -679,13 +679,7 @@ const resetDefaultSelection = () => {
     return
   }
 
-  const defaultIds = current.defaultSelectedFactorIds?.length ? current.defaultSelectedFactorIds : ['f36']
-  const defaults = defaultIds
-    .map(id => current.factors.find(factor => factor.factorId === id))
-    .filter((factor): factor is QuantilearnApiFlashFactorCell => Boolean(factor && isFactorAllowed(factor.factorId)))
-
-  const fallback = current.factors.find(factor => factor.hasValue && isFactorAllowed(factor.factorId)) ?? current.factors[0]!
-  selectedFactors.value = (defaults.length ? defaults : [fallback]).slice(0, selectedLimit.value).map(createSelectedFactor)
+  selectedFactors.value = []
 }
 
 watch(snapshot, () => {
@@ -1152,7 +1146,7 @@ const refreshFlash = async () => {
             </div>
             <div>
               <span>总成交</span>
-              <strong class="num">{{ bestDefaultFactor?.displayValue || '-' }}</strong>
+              <strong class="num">{{ totalAmountFactor?.displayValue || '-' }}</strong>
             </div>
             <div>
               <span>进球均衡</span>

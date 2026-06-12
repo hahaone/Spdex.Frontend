@@ -13,6 +13,9 @@ const form = reactive({
 })
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
+const captchaReady = ref(false)
+const captchaSetupDone = ref(false)
+let cleanupCaptcha: (() => void) | null = null
 const registerTarget = computed(() => ({
   path: '/register',
   query: typeof route.query.redirect === 'string' ? { redirect: route.query.redirect } : {},
@@ -56,7 +59,9 @@ async function submitDirect() {
   const r = await login(form.userName.trim(), form.password)
   loading.value = false
   if (r.ok) { await navigateTo(postAuthTarget(), { external: true }); return }
-  errorMessage.value = r.error
+  errorMessage.value = captchaEnabled.value && !captchaReady.value && r.captchaFailed
+    ? '验证码加载失败，请刷新页面或换个浏览器后重试'
+    : r.error
 }
 
 // 验证码开启：滑块通过后由 SDK 回调此函数发登录请求
@@ -76,19 +81,40 @@ function onBizResult(bizResult: boolean) {
 
 // 验证码开启时由 SDK 接管 #login-submit 的点击（弹滑块）；关闭时直接提交
 function onSubmit() {
-  if (captchaEnabled.value) return
-  submitDirect()
+  if (loading.value) return
+  if (captchaEnabled.value && captchaReady.value) return
+  if (captchaEnabled.value && !captchaSetupDone.value) {
+    if (validate()) errorMessage.value = '验证码加载中，请稍后再试'
+    return
+  }
+  void submitDirect()
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (captchaEnabled.value) {
-    setupCaptcha({
-      buttonId: 'login-submit',
-      elementId: 'login-captcha-element',
-      verify: captchaVerify,
-      onBizResult,
-    })
+    try {
+      cleanupCaptcha = await setupCaptcha({
+        buttonId: 'login-submit',
+        elementId: 'login-captcha-element',
+        verify: captchaVerify,
+        onBizResult,
+      })
+    }
+    catch (error) {
+      console.error('[captcha] 初始化失败', error)
+    }
+    finally {
+      captchaReady.value = Boolean(cleanupCaptcha)
+      captchaSetupDone.value = true
+    }
   }
+  else {
+    captchaSetupDone.value = true
+  }
+})
+
+onBeforeUnmount(() => {
+  cleanupCaptcha?.()
 })
 </script>
 
