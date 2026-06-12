@@ -17,7 +17,7 @@ async function fetchHolders() {
   if (!props.conditionId) return
   loading.value = true
   try {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { 'X-Spdex-Frontend': 'fjcx' }
     if (token.value) headers.Authorization = `Bearer ${token.value}`
 
     const [holdersRes, snapshotsRes] = await Promise.all([

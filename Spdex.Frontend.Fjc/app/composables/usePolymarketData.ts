@@ -34,7 +34,7 @@ export function usePolymarketData(spdexEventId: Ref<number | null>) {
 
   /** 带 auth header 的 $fetch（走 Nuxt proxy，避免 CORS） */
   function apiFetch<T>(path: string, params: Record<string, unknown> = {}) {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { 'X-Spdex-Frontend': 'fjcx' }
     if (token.value) {
       headers.Authorization = `Bearer ${token.value}`
     }

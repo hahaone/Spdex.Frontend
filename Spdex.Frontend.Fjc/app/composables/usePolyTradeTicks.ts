@@ -32,7 +32,7 @@ export function usePolyTradeTicks(
   const token = useCookie('spdex_token')
 
   function apiFetch<T>(path: string, params: Record<string, unknown> = {}) {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { 'X-Spdex-Frontend': 'fjcx' }
     if (token.value) headers.Authorization = `Bearer ${token.value}`
     return $fetch<T>(path, { params, headers })
   }

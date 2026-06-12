@@ -37,7 +37,7 @@ export function useKalshiData(
   const kalshiEventTicker = computed(() => primaryLink.value?.kalshiEventTicker ?? null)
 
   function apiFetch<T>(path: string, params: Record<string, unknown> = {}) {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { 'X-Spdex-Frontend': 'fjcx' }
     if (token.value) {
       headers.Authorization = `Bearer ${token.value}`
     }

@@ -126,8 +126,8 @@ const liveByEventId = computed(() => liveTrades.byEventId.value)
 const xgToken = useCookie('spdex_token')
 const xgRefs = computed<LiveXgRef[]>(() => matchCandidates.value.map(item => ({
   eventId: item.match.eventId,
-  homeTeamName: item.match.homeTeamName,
-  guestTeamName: item.match.guestTeamName,
+  homeTeamName: item.match.homeTeamName || item.match.homeTeam,
+  guestTeamName: item.match.guestTeamName || item.match.guestTeam,
 })))
 const liveXg = useLiveXg(xgRefs)
 function getXg(item: MatchListItem): LiveXgItem | null {
@@ -156,7 +156,7 @@ async function loadXgReplay(eventId: number) {
   refreshing.add(eventId)
   xgReplayRefreshingEventIds.value = refreshing
   try {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { 'X-Spdex-Frontend': '2026' }
     if (xgToken.value) headers.Authorization = `Bearer ${xgToken.value}`
     const res = await $fetch<ApiResponse<LiveXgReplay>>(`/api/live/xg/${eventId}/replay`, {
       headers,

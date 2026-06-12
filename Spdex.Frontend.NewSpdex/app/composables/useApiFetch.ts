@@ -15,7 +15,7 @@ export function useApiFetch<T>(
   const sessionHint = useNewSpdexSessionHintCookie()
   const authVersion = useState<number>('newspdex_auth_version', () => 0)
   const fetchOpts = withAuthVersionWatch(opts, authVersion)
-  const headers = withServerCookieHeader(fetchOpts.headers)
+  const headers = withFrontendSourceHeader(withServerCookieHeader(fetchOpts.headers))
 
   return useFetch<T>(path as never, {
     ...fetchOpts,
@@ -49,6 +49,12 @@ function withServerCookieHeader(existing: unknown): HeadersInit | undefined {
   return headers
 }
 
+function withFrontendSourceHeader(existing: unknown): HeadersInit {
+  const headers = new Headers(existing as HeadersInit | undefined)
+  headers.set('X-Spdex-Frontend', 'newspdex')
+  return headers
+}
+
 function withAuthVersionWatch(opts: Record<string, unknown>, authVersion: Ref<number>) {
   const merged = { ...opts }
   const existingWatch = merged.watch
@@ -69,7 +75,7 @@ export function $apiFetch<T>(path: string, opts: Record<string, unknown> = {}): 
   const config = useRuntimeConfig()
   const token = useNewSpdexTokenCookie()
   const sessionHint = useNewSpdexSessionHintCookie()
-  const headers = withServerCookieHeader(opts.headers)
+  const headers = withFrontendSourceHeader(withServerCookieHeader(opts.headers))
 
   return $fetch<T>(path, {
     ...opts,
