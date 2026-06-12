@@ -159,7 +159,7 @@ const seriesOptions = computed(() => {
     { label: `只看${l.home}`, value: 'home' },
   ]
   if (l.draw) opts.push({ label: `只看${l.draw}`, value: 'draw' })
-  opts.push({ label: `只看${l.away}`, value: 'away' })
+  if (l.away) opts.push({ label: `只看${l.away}`, value: 'away' })
   return opts
 })
 
@@ -203,9 +203,8 @@ const allMetricButtons: MetricBtn[] = [
   { label: '让分挂牌', market: 'handicap', metric: 'exchange' },
   { label: '进球均衡', market: 'goals', metric: 'balance' },
   { label: '亚洲指数', market: 'asianindex', metric: 'index' },
-  { label: '比分指数', market: 'cs', metric: 'bfindex' },
 ]
-// 篮球走势矩阵对齐旧站:去掉 凯利/欧洲平均(euro,无博彩数据)、比分指数(cs)、冷热、进球均衡(balance)、
+// 篮球走势矩阵对齐旧站:去掉 凯利/欧洲平均(euro,无博彩数据)、冷热、进球均衡(balance)、
 // 亚洲指数(足球专属,源 Win007 亚盘+欧赔;篮球用亚盘让球/总分)。保留 标盘/进球/让分 各指标。
 const metricButtons = computed<MetricBtn[]>(() => {
   let buttons = allMetricButtons

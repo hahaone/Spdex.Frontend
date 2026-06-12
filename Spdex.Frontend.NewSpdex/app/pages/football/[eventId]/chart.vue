@@ -118,13 +118,15 @@ const seriesOptions = computed(() => {
     ? [{ label: `只看${l.home}`, value: 'home' }]
     : [{ label: '全部', value: null }, { label: `只看${l.home}`, value: 'home' }]
   if (l.draw) opts.push({ label: `只看${l.draw}`, value: 'draw' })
-  opts.push({ label: `只看${l.away}`, value: 'away' })
+  if (l.away) opts.push({ label: `只看${l.away}`, value: 'away' })
   return opts
 })
+const showSeriesOptions = computed(() => isTradeFlow.value || seriesOptions.value.length > 2)
 
-// 盘口切换后若当前"只看平"但新盘口无平局，回退到全部
+// 盘口切换后若当前筛选项在新盘口不存在，回退到全部
 watch(seriesLabels, (l) => {
   if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = null
+  if (seriesOnly.value === 'away' && !l.away) seriesOnly.value = null
 })
 
 const statusLabel = computed(() => {
@@ -199,7 +201,7 @@ const chartTitle = computed(() => `${currentMarket.value.label} · ${currentMetr
         </button>
       </div>
 
-      <div class="series-row scrollbar-none">
+      <div v-if="showSeriesOptions" class="series-row scrollbar-none">
         <button
           v-for="s in seriesOptions"
           :key="String(s.value)"

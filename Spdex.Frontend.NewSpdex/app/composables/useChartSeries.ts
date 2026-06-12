@@ -15,7 +15,7 @@ export type ChartStatus = 'ok' | 'pending' | 'no-access'
 export interface ChartSeriesLabels {
   home: string
   draw: string | null
-  away: string
+  away: string | null
 }
 
 export interface ChartMetricDef { label: string, value: string }
@@ -34,7 +34,7 @@ const PRICECALC_METRICS: ChartMetricDef[] = [
 
 const HANDICAP_METRICS: ChartMetricDef[] = [
   { label: '价位', value: 'odds' },
-  { label: '亚洲指数', value: 'bfindex' },
+  { label: '让分指数', value: 'bfindex' },
   { label: '成交变化', value: 'traded' },
   { label: '成交量', value: 'volume' },
   { label: '成交比例', value: 'ratio' },
@@ -42,8 +42,13 @@ const HANDICAP_METRICS: ChartMetricDef[] = [
   { label: '冷热', value: 'hotcold' },
 ]
 
-const CORRECT_SCORE_METRICS: ChartMetricDef[] = [
-  { label: '比分指数', value: 'bfindex' },
+const ASIAN_INDEX_METRICS: ChartMetricDef[] = [
+  { label: '亚洲指数', value: 'index' },
+]
+
+const CORNER_METRICS: ChartMetricDef[] = [
+  { label: '价位', value: 'odds' },
+  { label: '必发指数', value: 'bfindex' },
   { label: '成交变化', value: 'traded' },
   { label: '成交量', value: 'volume' },
   { label: '成交比例', value: 'ratio' },
@@ -63,8 +68,8 @@ export const CHART_MARKETS: ChartMarketDef[] = [
     value: 'handicap',
     metrics: HANDICAP_METRICS,
   },
-  { label: '比分', value: 'cs', metrics: CORRECT_SCORE_METRICS },
-  { label: '角球', value: 'corner', metrics: [...PRICECALC_METRICS] },
+  { label: '亚洲指数', value: 'asianindex', metrics: ASIAN_INDEX_METRICS },
+  { label: '角球', value: 'corner', metrics: CORNER_METRICS },
   { label: '欧赔', value: 'euro', metrics: [{ label: '欧赔', value: 'europe' }, { label: '凯利', value: 'kelly' }] },
 ]
 

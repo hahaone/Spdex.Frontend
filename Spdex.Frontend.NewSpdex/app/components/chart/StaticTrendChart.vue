@@ -5,7 +5,7 @@ import type { ChartSeriesLabels } from '~/composables/useChartSeries'
 const props = defineProps<{
   points: ChartPoint[]
   height?: number
-  /** 三序列标签；draw 为 null 时只画两条线（如大小盘）。默认 主/平/客。 */
+  /** 序列标签；draw/away 为空时不画对应序列（如大小盘/亚洲指数单线）。默认 主/平/客。 */
   seriesLabels?: ChartSeriesLabels
   /** 数值单位：odds/index/amount/percent/payout。决定 Y 轴与图例数值格式。默认 odds。 */
   unit?: string
@@ -50,12 +50,18 @@ onMounted(() => {
 
 const labels = computed<ChartSeriesLabels>(() => props.seriesLabels ?? { home: '主', draw: '平', away: '客' })
 const hasDraw = computed(() => labels.value.draw != null)
+const hasAway = computed(() => !!labels.value.away)
 const unit = computed(() => props.unit ?? 'odds')
 // 点数多时隐藏每点圆点(白描边圆点会糊成一团、遮住折线);稀疏时保留便于读数。十字准线 hover 点不受影响。
 const showDots = computed(() => props.points.length <= 60)
 
 type Field = 'home' | 'draw' | 'away'
-const fields = computed<Field[]>(() => hasDraw.value ? ['home', 'draw', 'away'] : ['home', 'away'])
+const fields = computed<Field[]>(() => {
+  const out: Field[] = ['home']
+  if (hasDraw.value) out.push('draw')
+  if (hasAway.value) out.push('away')
+  return out
+})
 
 /** 只看某序列时只渲染它；否则全部。 */
 const activeFields = computed<Field[]>(() => {
@@ -64,6 +70,7 @@ const activeFields = computed<Field[]>(() => {
 })
 function showField(f: Field): boolean {
   if (f === 'draw' && !hasDraw.value) return false
+  if (f === 'away' && !hasAway.value) return false
   return !props.only || props.only === f
 }
 
@@ -477,12 +484,12 @@ function onDblclick() {
     <div class="legend">
       <span><i class="home" />{{ labels.home }}</span>
       <span v-if="hasDraw"><i class="draw" />{{ labels.draw }}</span>
-      <span><i class="away" />{{ labels.away }}</span>
+      <span v-if="hasAway"><i class="away" />{{ labels.away }}</span>
       <template v-if="showPrice">
         <template v-if="multiPrice">
           <span><i class="price home" />{{ labels.home }}价位</span>
           <span v-if="hasDraw"><i class="price draw" />{{ labels.draw }}价位</span>
-          <span><i class="price away" />{{ labels.away }}价位</span>
+          <span v-if="hasAway"><i class="price away" />{{ labels.away }}价位</span>
         </template>
         <span v-else><i class="price" />{{ labels[priceField] }}价位</span>
       </template>
