@@ -166,29 +166,45 @@ export function marketFamilyOrder(key: MarketFamilyKey): number {
 
 // ─── Line parsing ───
 
-export function parseLineValue(type: string, question: string): number | null {
+export function parseLineValue(
+  type: string,
+  question: string,
+  groupItemTitle: string | null | undefined = null,
+): number | null {
+  // 线值优先从 groupItemTitle（如 "Over 3.5" / "Spread: TeamA (-1.5)"）解析：分组市场的真实线在此，
+  // question 往往是事件级共享文本、会把不同线折叠成同一条；question 仅作兜底。
+  const sources = [groupItemTitle, question].filter(
+    (s): s is string => typeof s === 'string' && s.trim().length > 0,
+  )
+
   if (isSpreadMarket(type, question)) {
-    const match = question.match(/([+-]?\d+(?:\.\d+)?)(?!.*[+-]?\d)/)
-    if (!match) return null
-    const value = Number(match[1])
-    return Number.isFinite(value) ? Math.abs(value) : null
+    for (const src of sources) {
+      const match = src.match(/([+-]?\d+(?:\.\d+)?)(?!.*[+-]?\d)/)
+      if (match) {
+        const value = Number(match[1])
+        if (Number.isFinite(value)) return Math.abs(value)
+      }
+    }
+    return null
   }
 
   if (isTotalsMarket(type, question)) {
-    const ou = question.match(/O\/U\s*([0-9]+(?:\.[0-9]+)?)/i)
-    if (ou) {
-      const value = Number(ou[1])
-      return Number.isFinite(value) ? value : null
-    }
-    const overUnder = question.match(/(?:over|under)\s*([0-9]+(?:\.[0-9]+)?)/i)
-    if (overUnder) {
-      const value = Number(overUnder[1])
-      return Number.isFinite(value) ? value : null
-    }
-    const trailing = question.match(/([0-9]+(?:\.[0-9]+)?)(?!.*[0-9])/)
-    if (trailing) {
-      const value = Number(trailing[1])
-      return Number.isFinite(value) ? value : null
+    for (const src of sources) {
+      const ou = src.match(/O\/U\s*([0-9]+(?:\.[0-9]+)?)/i)
+      if (ou) {
+        const value = Number(ou[1])
+        if (Number.isFinite(value)) return value
+      }
+      const overUnder = src.match(/(?:over|under)\s*([0-9]+(?:\.[0-9]+)?)/i)
+      if (overUnder) {
+        const value = Number(overUnder[1])
+        if (Number.isFinite(value)) return value
+      }
+      const trailing = src.match(/([0-9]+(?:\.[0-9]+)?)(?!.*[0-9])/)
+      if (trailing) {
+        const value = Number(trailing[1])
+        if (Number.isFinite(value)) return value
+      }
     }
   }
 

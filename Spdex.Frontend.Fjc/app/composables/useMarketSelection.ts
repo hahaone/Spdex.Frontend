@@ -93,11 +93,12 @@ function extractExactScoreLabel(question: string): string | null {
 function marketOptionMeta(
   type: string,
   question: string,
+  groupItemTitle: string | null | undefined,
   primaryLink: PolymarketSoccerMatchLink | null,
 ): { label: string; order: number } {
   const cleaned = normalizedQuestion(question)
   const family = marketFamily(type, question)
-  const lineValue = parseLineValue(type, question)
+  const lineValue = parseLineValue(type, question, groupItemTitle)
   const lineText = lineValue === null ? '' : formatLineLabel(lineValue)
 
   if (family === 'moneyline' || family === 'half') {
@@ -118,10 +119,12 @@ function marketOptionMeta(
   }
 
   if (family === 'totals') {
-    if (/\bover\b/i.test(cleaned) || /^\s*o\s*[\d.]+/i.test(cleaned)) {
+    // 大/小 方向也优先看 groupItemTitle（如 "Over 3.5"），question 兜底。
+    const sideText = `${groupItemTitle ?? ''} ${cleaned}`
+    if (/\bover\b/i.test(sideText) || /^\s*o\s*[\d.]+/i.test(cleaned)) {
       return { label: lineText ? `大 ${lineText}` : '大', order: 0 }
     }
-    if (/\bunder\b/i.test(cleaned) || /^\s*u\s*[\d.]+/i.test(cleaned)) {
+    if (/\bunder\b/i.test(sideText) || /^\s*u\s*[\d.]+/i.test(cleaned)) {
       return { label: lineText ? `小 ${lineText}` : '小', order: 1 }
     }
     return { label: lineText ? `大小 ${lineText}` : '大小', order: 0 }
@@ -164,13 +167,14 @@ function buildMarketEntry(
   key: string,
   sportsType: string,
   question: string,
+  groupItemTitle: string | null | undefined,
   primaryLink: PolymarketSoccerMatchLink | null,
 ): MarketEntry {
   const categoryKey = marketCategory(sportsType, question)
   const familyKey = marketFamily(sportsType, question)
-  const lineValue = parseLineValue(sportsType, question)
+  const lineValue = parseLineValue(sportsType, question, groupItemTitle)
   const lineLabel = lineValue === null ? 'default' : formatLineLabel(lineValue)
-  const option = marketOptionMeta(sportsType, question, primaryLink)
+  const option = marketOptionMeta(sportsType, question, groupItemTitle, primaryLink)
 
   let optionLabel = option.label || key
   let optionOrder = option.order
@@ -279,7 +283,7 @@ export function useMarketSelection(
       if (seenKeys.has(key)) return
       seenKeys.add(key)
       questionByKey.set(key, market.question)
-      entries.push(buildMarketEntry(key, market.sportsMarketType, market.question, link))
+      entries.push(buildMarketEntry(key, market.sportsMarketType, market.question, market.groupItemTitle, link))
     })
 
     ;(book.value?.markets ?? []).forEach((market, index) => {
@@ -287,7 +291,8 @@ export function useMarketSelection(
       if (seenKeys.has(key)) return
       seenKeys.add(key)
       questionByKey.set(key, market.question)
-      entries.push(buildMarketEntry(key, market.sportsMarketType, market.question, link))
+      // 盘口聚合不带 groupItemTitle，传 null（仅无成交的市场走此路；有成交的以 trades 项为准）。
+      entries.push(buildMarketEntry(key, market.sportsMarketType, market.question, null, link))
     })
 
     const counterEntries: MarketEntry[] = []
