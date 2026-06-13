@@ -152,6 +152,43 @@ const graphSeries = computed<TrendChartSeries[]>(() => {
 const topSeries = computed(() => [...graphSeries.value].sort((a, b) => (b.lastPct ?? -1) - (a.lastPct ?? -1)))
 const isExactScoreFamily = computed(() => activeFamilyKey.value === 'exact')
 const maxVisibleSeriesCount = computed(() => isExactScoreFamily.value ? 8 : 12)
+
+/**
+ * 准确比分 Top3 成交量的 runner -> 排名(1/2/3)。
+ * 成交量口径与"成交量"卡片一致：marketVolume ?? totalSize。
+ */
+const topVolumeRankByKey = computed<Map<string, 1 | 2 | 3>>(() => {
+  const rank = new Map<string, 1 | 2 | 3>()
+  if (!isExactScoreFamily.value) return rank
+  const ranked = lineScopedMarkets.value
+    .map((entry) => {
+      const market = findTradeMarketByKey(entry.key)
+      const volume = market?.marketVolume ?? market?.totalSize ?? 0
+      return { key: entry.key, volume }
+    })
+    .filter(item => item.volume > 0)
+    .sort((a, b) => b.volume - a.volume)
+  ranked.slice(0, 3).forEach((item, index) => rank.set(item.key, (index + 1) as 1 | 2 | 3))
+  return rank
+})
+
+const TOP_VOLUME_RANK_CLASS: Record<1 | 2 | 3, string> = {
+  1: 'bg-gradient-to-br from-red-700 to-red-900 text-white border-red-900 shadow-sm',
+  2: 'bg-gradient-to-br from-red-400 to-red-600 text-white border-red-600 shadow-sm',
+  3: 'bg-gradient-to-br from-pink-400 to-pink-600 text-white border-pink-600 shadow-sm',
+}
+
+function scoreChipClass(key: string): string {
+  const isActive = activeMarketKey.value === key
+  const rank = topVolumeRankByKey.value.get(key)
+  if (rank) {
+    return `${TOP_VOLUME_RANK_CLASS[rank]}${isActive ? ' ring-2 ring-blue-500 ring-offset-1 ring-offset-white' : ''}`
+  }
+  return isActive
+    ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+    : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100'
+}
+
 const visibleSeries = computed(() => topSeries.value.slice(0, maxVisibleSeriesCount.value))
 const hiddenSeriesCount = computed(() => Math.max(0, topSeries.value.length - visibleSeries.value.length))
 
@@ -385,7 +422,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
           <button
             v-for="market in lineScopedMarkets" :key="market.key"
             class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-150 border"
-            :class="activeMarketKey === market.key ? 'bg-blue-500 text-white border-blue-500 shadow-sm' : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100'"
+            :class="scoreChipClass(market.key)"
             @click="activeMarketKey = market.key"
           >
             <span>{{ localizeName(market.optionLabel) }}</span>
