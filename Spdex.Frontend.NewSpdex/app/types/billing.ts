@@ -35,11 +35,6 @@ export interface AlipayOrderResult {
   expireAt: string | null
 }
 
-export interface WxCodeOrderResult {
-  orderId: string | null
-  qrImageBase64: string
-}
-
 export interface SilkOrderResult {
   success: boolean
   orderId: string | null
@@ -78,7 +73,7 @@ export interface SilkRechargeOrderResult {
 
 export interface OrderRecord {
   orderId: string
-  channel: string         // wxcode / alipay / silk / wechat
+  channel: string         // alipay / yft / silk / historical wxcode/wechat
   roleId: number
   roleName: string | null
   dueMonths: number
@@ -124,5 +119,5 @@ export interface CreateOrderRequest {
   stageId: number
 }
 
-export type PaymentChannel = 'alipay' | 'yft' | 'silk' | 'wxcode'
-export type SilkRechargeChannel = 'alipay' | 'wxcode'
+export type PaymentChannel = 'alipay' | 'yft' | 'silk'
+export type SilkRechargeChannel = 'alipay'

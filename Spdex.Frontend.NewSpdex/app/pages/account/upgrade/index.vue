@@ -240,9 +240,8 @@ function stageAriaLabel(plan: PaymentPlan, stage: PriceStage): string {
         <h2>支持的支付方式</h2>
         <div class="pay-methods">
           <span class="pay-item"><CreditCard :size="13" /> 支付宝</span>
-          <span class="pay-item"><QrCode :size="13" /> 扫码支付（微信/支付宝）</span>
+          <span class="pay-item"><QrCode :size="13" /> 扫码支付（聚合通道）</span>
           <span class="pay-item"><Coins :size="13" /> 锦囊扣点</span>
-          <span class="pay-item muted"><QrCode :size="13" /> 微信扫码（限额）</span>
         </div>
         <p class="pay-hint">
           <CheckCircle :size="12" />

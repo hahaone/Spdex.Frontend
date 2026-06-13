@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, QrCode, RefreshCw } from '@lucide/vue'
+import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, RefreshCw } from '@lucide/vue'
 import type { SilkBalance, SilkProduct, SilkRechargeChannel, SilkRechargeOrderResult } from '~/types/billing'
 
 const route = useRoute()
@@ -24,11 +24,6 @@ const number = ref(Math.max(1, Math.ceil(required.value > 0 ? Math.max(required.
 
 const currentBalance = computed(() => balance.value?.total ?? initialBalance.value)
 const estimatedTotal = computed(() => (product.value?.unitPrice ?? 0) * number.value)
-const qrSrc = computed(() => {
-  const raw = order.value?.qrImageBase64
-  if (!raw) return ''
-  return raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`
-})
 
 onMounted(async () => {
   try {
@@ -143,10 +138,6 @@ async function refreshAndReturn() {
           <CreditCard :size="17" />
           <span>支付宝</span>
         </button>
-        <button class="channel-btn focus-ring" type="button" :disabled="phase === 'paying'" @click="startRecharge('wxcode')">
-          <QrCode :size="17" />
-          <span>微信扫码</span>
-        </button>
       </div>
     </section>
 
@@ -167,7 +158,6 @@ async function refreshAndReturn() {
       </div>
       <p v-if="order.orderId" class="hint num">订单号：{{ order.orderId }}</p>
       <div id="silk-alipay-form" />
-      <img v-if="qrSrc" class="qr-img" :src="qrSrc" alt="微信支付二维码">
       <p class="hint">支付成功后约 30 秒内到账。</p>
       <div class="order-actions">
         <button class="ghost-btn focus-ring" type="button" @click="refreshBalance">
@@ -305,7 +295,6 @@ async function refreshAndReturn() {
 
 .channel-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -352,16 +341,6 @@ async function refreshAndReturn() {
   justify-content: flex-start;
   color: var(--brand);
   font-weight: 850;
-}
-
-.qr-img {
-  width: min(220px, 100%);
-  aspect-ratio: 1;
-  justify-self: center;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  padding: 8px;
 }
 
 .spinning {

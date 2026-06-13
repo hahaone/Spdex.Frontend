@@ -1,7 +1,6 @@
 /**
  * 下单 composable：会员支付通道。
  *   - YFT 扫码支付：返回 base64 二维码或支付链接
- *   - 微信扫码：返回 base64 二维码
  *   - 支付宝：返回 formHtml（前端自动 submit）
  *   - 锦囊扣点：即时生效，返回扣点结果
  */
@@ -18,7 +17,6 @@ import type {
   SilkProduct,
   SilkRechargeChannel,
   SilkRechargeOrderResult,
-  WxCodeOrderResult,
   YftOrderResult,
 } from '~/types/billing'
 
@@ -43,20 +41,6 @@ export function useCreateOrder() {
     }
     catch (err: unknown) {
       yftOrderError.value = apiErrorMessage(err, '扫码支付下单失败')
-      return null
-    }
-  }
-
-  async function createWxCodeOrder(roleId: number, stageId: number): Promise<WxCodeOrderResult | null> {
-    const body: CreateOrderRequest = { roleId, stageId }
-    try {
-      const res = await $apiFetch<ApiResponse<WxCodeOrderResult>>('/api/newspdex/billing/order/wxcode', {
-        method: 'POST',
-        body,
-      })
-      return res.code === 0 ? (res.data ?? null) : null
-    }
-    catch {
       return null
     }
   }
@@ -161,7 +145,6 @@ export function useCreateOrder() {
   return {
     yftOrderError,
     createYftOrder,
-    createWxCodeOrder,
     createAlipayOrder,
     syncAlipayOrder,
     createSilkOrder,
