@@ -34,7 +34,7 @@ export function useSignals(limit: MaybeRef<number> = 50) {
     },
   )
 
-  usePolling(() => result.refresh(), 60_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
 
   const signals = computed<SignalSummary[]>(() => result.data.value?.data?.signals ?? [])
 

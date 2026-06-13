@@ -55,7 +55,7 @@ export function useDashboardMetrics() {
   })
 
   // 60s 自动刷新（与后端 cache TTL 一致）
-  usePolling(() => result.refresh(), 60_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
 
   /** 按行顺序输出 5 个 metric，方便 v-for 渲染 */
   const metrics = computed<DashboardMetric[]>(() => {

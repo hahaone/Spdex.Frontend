@@ -94,7 +94,7 @@ export function useMatchLadder(eventId: MaybeRef<number>) {
   }
 
   // 30s 轮询（盘口实时变化）
-  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
   return {
     data,

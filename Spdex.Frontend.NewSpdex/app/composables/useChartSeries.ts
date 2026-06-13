@@ -163,7 +163,7 @@ export function useChartSeries(
   )
 
   // 60s 自动刷新（走势变化频率较低）
-  usePolling(() => result.refresh(), 60_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
 
   const points = computed<ChartPoint[]>(() => {
     const list = result.data.value?.data?.points ?? []

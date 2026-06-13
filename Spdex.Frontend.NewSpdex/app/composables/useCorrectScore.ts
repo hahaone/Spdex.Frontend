@@ -55,7 +55,7 @@ export function useCorrectScore(eventId: MaybeRef<number>, reviewMin: MaybeRef<n
   )
 
   // 30s 轮询（赛前比分盘持续变化）
-  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
   const data = computed<CorrectScoreData | null>(() => result.data.value?.data ?? null)
 

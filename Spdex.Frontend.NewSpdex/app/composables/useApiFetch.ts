@@ -18,6 +18,9 @@ export function useApiFetch<T>(
   const headers = withFrontendSourceHeader(withServerCookieHeader(fetchOpts.headers))
 
   return useFetch<T>(path as never, {
+    // 默认 20s 客户端超时：挂死的请求快速失败（而非干等到 nginx 90s），让轮询尽快重试。
+    // 调用方可在 opts 里覆盖（如重查询接口）。
+    timeout: 20_000,
     ...fetchOpts,
     baseURL: config.public.apiBase as string,
     credentials: 'include',

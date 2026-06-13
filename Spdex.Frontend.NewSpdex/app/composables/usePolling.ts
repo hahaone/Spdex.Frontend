@@ -27,6 +27,12 @@ export interface PollingOptions {
    * 不提供则永不退避（行为同原版）。
    */
   errorRef?: Ref<unknown>
+  /**
+   * 上次请求的 pending ref（如 useApiFetch().pending）。提供后：请求仍在飞行（含首屏加载）时
+   * 跳过本 tick，避免 useFetch 默认 dedupe:'cancel' 把未完成的慢请求 abort 掉。
+   * 否则慢网/慢后端下每 N ms abort+重发，请求永远完不成 → 列表永久骨架屏、加载不出数据。
+   */
+  pending?: Ref<boolean> | ComputedRef<boolean>
 }
 
 export function usePolling(
@@ -39,8 +45,10 @@ export function usePolling(
   const enabled = options.enabled ?? ref(true)
   const refreshOnVisible = options.refreshOnVisible ?? true
   const errorRef = options.errorRef
+  const pending = options.pending
   let failCount = 0   // 连续失败数（弱网退避）
   let skipTicks = 0   // 退避中待跳过的 tick 数
+  let inFlight = false // 本 helper 发起的 refresh 是否仍未结算（无 pending ref 时的兜底）
 
   function start() {
     if (import.meta.server) return
@@ -50,15 +58,19 @@ export function usePolling(
     handle.value = setInterval(() => {
       if (document.visibilityState !== 'visible') return
       if (skipTicks > 0) { skipTicks--; return }   // 弱网退避中：跳过本 tick
+      // 上一次请求（含首屏加载 / 上一轮 refresh）仍在飞行 → 跳过本 tick。
+      // 否则会触发 useFetch dedupe:'cancel'，把未完成的慢请求 abort 掉重发；
+      // 慢网/慢后端下请求永远完不成 → 永久骨架屏、列表加载不出数据（尤其 Firefox 对 abort 后连接复用更差）。
+      if (pending?.value || inFlight) return
 
-      const r = refresh()
-      if (errorRef) {
-        // refresh 完成后据 error 计连错：连错 → 跳过 1/3/7 个 tick（有效间隔 2×/4×/8× 封顶）
-        Promise.resolve(r).then(() => {
+      inFlight = true
+      // refresh 完成后据 error 计连错：连错 → 跳过 1/3/7 个 tick（有效间隔 2×/4×/8× 封顶）
+      Promise.resolve(refresh()).then(() => {
+        if (errorRef) {
           if (errorRef.value) { failCount = Math.min(failCount + 1, 3); skipTicks = (1 << failCount) - 1 }
           else { failCount = 0 }
-        }).catch(() => {})
-      }
+        }
+      }).catch(() => {}).finally(() => { inFlight = false })
     }, intervalMs)
   }
 
@@ -77,7 +89,8 @@ export function usePolling(
       if (document.visibilityState !== 'visible') return
       if (!enabled.value) return
       failCount = 0; skipTicks = 0   // 回前台清退避，立即恢复正常节奏
-      if (refreshOnVisible) refresh()
+      // 已有请求在飞行就不强制刷新（避免 abort 掉正在加载的请求）
+      if (refreshOnVisible && !pending?.value && !inFlight) refresh()
     }
     document.addEventListener('visibilitychange', visibilityHandler.value)
   }

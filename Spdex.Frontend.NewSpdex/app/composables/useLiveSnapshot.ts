@@ -260,7 +260,7 @@ export function useLiveSnapshot(eventId: MaybeRef<number>, enabled: MaybeRef<boo
 
   // 仅在进行中赛事且有访问权限时自动轮询，30s 间隔（免费/游客不轮询，避免反复 403）
   const isRunning = computed(() => enabledRef.value && snapshot.value?.status === 'running')
-  usePolling(() => result.refresh(), 30_000, { enabled: isRunning, errorRef: result.error })
+  usePolling(() => result.refresh(), 30_000, { enabled: isRunning, pending: result.pending, errorRef: result.error })
 
   return {
     snapshot,

@@ -58,7 +58,7 @@ export function useBigTrades(eventId: MaybeRef<number>, perGroup = 10) {
   }
 
   // 60s 轮询（成交持续变化）
-  usePolling(() => result.refresh(), 60_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
 
   return {
     data,

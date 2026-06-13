@@ -72,7 +72,7 @@ export function useEuroOdds(eventId: MaybeRef<number>) {
   )
 
   // 30s 轮询（赛前欧赔持续变化）
-  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
   const data = computed<EuroOddsData | null>(() => result.data.value?.data ?? null)
 

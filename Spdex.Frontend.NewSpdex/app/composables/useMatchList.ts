@@ -240,7 +240,7 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   })
 
   // 30s 自动刷新（赛事开赛/比分变化时反映）
-  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
   const items = computed<MatchSummary[]>(() => {
     const list = result.data.value?.data?.items ?? []

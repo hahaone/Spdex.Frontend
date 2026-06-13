@@ -72,7 +72,7 @@ export function useOrderDetail(
   )
 
   // 30s 轮询（赛前盘口持续变化）
-  usePolling(() => result.refresh(), 30_000, { errorRef: result.error })
+  usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
   const data = computed<OrderDetailData | null>(() => result.data.value?.data ?? null)
 
