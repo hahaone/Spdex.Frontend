@@ -9,6 +9,15 @@
           - web_image_refs is defined
           - web_image_refs | length > 0
 
+    # 用 raw（直接 SSH 执行，不在远端写临时模块）清盘，磁盘 100% 满时也能跑。
+    # 清掉无容器引用的旧镜像 + 历史归档 tar，避免 docker pull/save 撑爆盘。
+    - name: Free disk on image source before pull/save
+      ansible.builtin.raw: |
+        rm -f /tmp/spdex-web-images-*.tar.gz 2>/dev/null || true
+        docker image prune -af 2>/dev/null || true
+        docker builder prune -af 2>/dev/null || true
+      changed_when: false
+
     - name: Login to ACR on image source host
       ansible.builtin.shell: |
         set -euo pipefail
@@ -42,6 +51,16 @@
   hosts: web_nodes
   become: true
   tasks:
+    # 拷贝镜像 tar 前先清盘（raw 直跑，磁盘满时也能执行）。旧版镜像由仍在运行的容器引用、
+    # 不会被 prune；只清掉「上上次部署」的孤儿镜像与历史 tar，腾出空间给本次 copy+load。
+    # 修复 2026-06-13 因 web1/web2 磁盘满导致 "No space left on device" 部署失败。
+    - name: Free disk on Web node before copy
+      ansible.builtin.raw: |
+        rm -f /tmp/spdex-web-images-*.tar.gz 2>/dev/null || true
+        docker image prune -af 2>/dev/null || true
+        docker builder prune -af 2>/dev/null || true
+      changed_when: false
+
     - name: Copy image archive to Web node
       ansible.builtin.copy:
         src: "{{ web_image_archive_local }}"
