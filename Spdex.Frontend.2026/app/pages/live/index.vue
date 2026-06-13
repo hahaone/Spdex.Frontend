@@ -205,7 +205,7 @@ async function toggleXgExpand(eventId: number) {
   await loadXgReplay(eventId)
 }
 
-const TG_SPARK_MARK_DIFF_THRESHOLD = 0.9
+const TG_SPARK_MARK_DIFF_THRESHOLD = 1.09
 
 function formatTgSparkValue(value: number): string {
   return value.toFixed(2)

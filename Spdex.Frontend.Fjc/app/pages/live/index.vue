@@ -213,7 +213,7 @@ async function toggleXgExpand(eventId: number) {
   await loadXgReplay(eventId)
 }
 
-const TG_SPARK_MARK_DIFF_THRESHOLD = 0.9
+const TG_SPARK_MARK_DIFF_THRESHOLD = 1.09
 
 function formatTgSparkValue(value: number): string {
   return value.toFixed(2)
@@ -246,7 +246,7 @@ function tgSpark(eventId: number) {
     pen = true
     lastX = x
     lastY = y
-    // 与上一个有效节点差异 >0.90 → 两个节点都标记并显示数值。
+    // 与上一个有效节点差异 >1.09 → 两个节点都标记并显示数值。
     const prev = previousValidIndex == null ? null : vals[previousValidIndex]
     if (previousValidIndex != null && prev != null && Math.abs(v - prev) > TG_SPARK_MARK_DIFF_THRESHOLD) {
       marked.add(previousValidIndex)

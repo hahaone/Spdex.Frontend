@@ -415,6 +415,8 @@ const overProbSpark = computed(() => {
   }
 })
 
+const TG_SPARK_MARK_DIFF_THRESHOLD = 1.09
+
 const totalGoalsSpark = computed(() => {
   const series = replaySeries.value
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
@@ -447,7 +449,7 @@ const totalGoalsSpark = computed(() => {
     path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${yOf(v).toFixed(1)} `
     pen = true
     const prev = vals[i - 1]
-    if (prev != null && Math.abs(v - prev) > 0.9) {
+    if (prev != null && Math.abs(v - prev) > TG_SPARK_MARK_DIFF_THRESHOLD) {
       addCandidate(i - 1, 120, 'jump', true)
       addCandidate(i, 121, 'jump', true)
     }
