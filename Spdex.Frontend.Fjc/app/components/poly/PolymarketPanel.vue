@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, provide } from 'vue'
+import { ref, computed, provide, watch } from 'vue'
 import type {
   PolymarketSoccerMatchLink,
   PolymarketEventTradesAggregate,
@@ -227,10 +227,16 @@ function scoreChipClass(key: string): string {
 
 const visibleSeries = computed(() => topSeries.value.slice(0, maxVisibleSeriesCount.value))
 const hiddenSeriesCount = computed(() => Math.max(0, topSeries.value.length - visibleSeries.value.length))
+const isSeriesExpanded = ref(false)
+const displayedSeries = computed(() => (isSeriesExpanded.value ? topSeries.value : visibleSeries.value))
+
+watch([activeCategoryKey, activeFamilyKey, activeLineKey], () => {
+  isSeriesExpanded.value = false
+})
 
 const chartScale = computed(() => {
   const values: number[] = []
-  for (const s of visibleSeries.value) {
+  for (const s of displayedSeries.value) {
     for (const dp of s.dataPoints) values.push(dp.price)
     if (s.lastPct != null) values.push(s.lastPct)
   }
@@ -376,11 +382,11 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
 
       <div class="text-sm font-semibold text-gray-400 tabular-nums">{{ formatCompactCurrency(activeMarketNotional) }} Vol.</div>
 
-      <div v-if="visibleSeries.length > 0" class="grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-3">
+      <div v-if="displayedSeries.length > 0" class="grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-3">
         <div class="rounded-xl border border-gray-200 bg-gray-50/40 p-3">
           <div class="text-xs font-semibold text-gray-400 mb-1">概率及走势</div>
           <PolyTrendChart
-            :series="visibleSeries"
+            :series="displayedSeries"
             :volume-buckets="volumeBuckets"
             :volume-max="volumeMaxNotional"
             :time-range="graphTimeline"
@@ -391,7 +397,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
           />
         </div>
         <div class="rounded-xl border border-gray-200 bg-gray-50/35 p-3 flex flex-col gap-2">
-          <div v-for="s in visibleSeries" :key="`top-side-${s.key}`" class="rounded-lg bg-white px-3 py-2">
+          <div v-for="s in displayedSeries" :key="`top-side-${s.key}`" class="rounded-lg bg-white px-3 py-2">
             <div class="text-xs font-semibold" :style="{ color: s.color }">{{ s.label }}</div>
             <div class="flex items-baseline gap-1.5">
               <span class="text-3xl leading-tight font-bold tabular-nums text-gray-900">{{ formatPercent(s.lastPct) }}</span>
@@ -402,9 +408,15 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
               >{{ formatPercentDelta(seriesPriceDelta(s)) }}</span>
             </div>
           </div>
-          <div v-if="hiddenSeriesCount > 0" class="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-400">
-            其余 {{ hiddenSeriesCount }} 个选项已折叠
-          </div>
+          <button
+            v-if="hiddenSeriesCount > 0"
+            type="button"
+            class="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-400 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-500"
+            :aria-expanded="isSeriesExpanded"
+            @click="isSeriesExpanded = !isSeriesExpanded"
+          >
+            {{ isSeriesExpanded ? `已展开全部 ${topSeries.length} 个选项，点击收起` : `其余 ${hiddenSeriesCount} 个选项已折叠，点击展开` }}
+          </button>
         </div>
       </div>
 
@@ -425,7 +437,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
         <div class="text-[9px] text-gray-400">当前值使用市场聚合成交量</div>
       </div>
 
-      <div v-if="!visibleSeries.length" class="text-sm text-gray-400 text-center py-4 border border-gray-200 rounded-xl bg-gray-50/30">
+      <div v-if="!displayedSeries.length" class="text-sm text-gray-400 text-center py-4 border border-gray-200 rounded-xl bg-gray-50/30">
         当前市场暂无可展示的趋势数据
       </div>
     </div>
@@ -519,18 +531,31 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
           </template>
 
           <template v-else-if="activeViewTab === 'graph'">
-            <div v-if="visibleSeries.length > 0" class="space-y-3">
+            <div v-if="displayedSeries.length > 0" class="space-y-3">
               <div class="flex items-center gap-4 flex-wrap">
-                <div v-for="s in visibleSeries" :key="s.key" class="inline-flex items-center gap-1.5 text-sm text-gray-500">
+                <div v-for="s in displayedSeries" :key="s.key" class="inline-flex items-center gap-1.5 text-sm text-gray-500">
                   <span class="w-2.5 h-2.5 rounded-full" :style="{ backgroundColor: s.color }" />
                   <span>{{ s.label }}</span>
                   <span class="font-semibold tabular-nums text-gray-900">{{ formatPercent(s.lastPct) }}</span>
+                  <span
+                    v-if="isExactScoreFamily && seriesPriceDelta(s) !== null"
+                    class="text-xs font-bold tabular-nums"
+                    :class="percentDeltaClass(seriesPriceDelta(s))"
+                  >{{ formatPercentDelta(seriesPriceDelta(s)) }}</span>
                 </div>
               </div>
               <div class="rounded-xl border border-gray-200 bg-gray-50/40 p-3">
-                <PolyTrendChart :series="visibleSeries" :volume-buckets="volumeBuckets" :volume-max="volumeMaxNotional" :time-range="graphTimeline" :chart-scale="chartScale" :height="180" />
+                <PolyTrendChart :series="displayedSeries" :volume-buckets="volumeBuckets" :volume-max="volumeMaxNotional" :time-range="graphTimeline" :chart-scale="chartScale" :height="180" />
               </div>
-              <div v-if="hiddenSeriesCount > 0" class="text-[11px] text-gray-400">已显示前 {{ visibleSeries.length }} 个选项，其余 {{ hiddenSeriesCount }} 个已折叠。</div>
+              <button
+                v-if="hiddenSeriesCount > 0"
+                type="button"
+                class="text-left text-[11px] font-semibold text-gray-400 transition-colors hover:text-blue-500"
+                :aria-expanded="isSeriesExpanded"
+                @click="isSeriesExpanded = !isSeriesExpanded"
+              >
+                {{ isSeriesExpanded ? `已展开全部 ${topSeries.length} 个选项，点击收起。` : `已显示前 ${visibleSeries.length} 个选项，其余 ${hiddenSeriesCount} 个已折叠，点击展开。` }}
+              </button>
             </div>
             <div v-else class="text-sm text-gray-400 text-center py-4">当前市场暂无可绘制的价格曲线</div>
           </template>
