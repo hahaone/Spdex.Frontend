@@ -149,6 +149,12 @@ const listReturnQuery = computed(() => {
   return query
 })
 
+// 筛选条件持久化:任一筛选变化即写回 URL(replace 不进历史),刷新后由顶部 route.query 初始化恢复。
+// 只盯筛选 ref(navigateTo 不改这些 ref → 无回环);回调写 listReturnQuery 以一并保留 metric/events 下钻态。
+watch([day, status, lottery, league, customDate], () => {
+  navigateTo({ query: listReturnQuery.value }, { replace: true })
+})
+
 function detailRoute(eventId: number) {
   return { path: `/football/${eventId}`, query: listReturnQuery.value }
 }

@@ -239,8 +239,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     watch: [query],
   })
 
-  // 30s 自动刷新（赛事开赛/比分变化时反映）
-  usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
+  // 20s 自动刷新（赛事开赛/比分/赔率成交变化时反映；后端会动数据缓存 30s，前端略快于它以尽快反映）
+  usePolling(() => result.refresh(), 20_000, { pending: result.pending, errorRef: result.error })
 
   const items = computed<MatchSummary[]>(() => {
     const list = result.data.value?.data?.items ?? []
