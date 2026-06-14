@@ -16,10 +16,10 @@ const isSelectableArchiveDate = (value: unknown): value is string => (
   && value >= archiveMinDate
 )
 const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
-// 回查(自选过去日期)默认「全部赛事」:过去日期无「未开」,默认停在未开会空;显式带 ?status 时仍尊重。
+// 默认「全部赛事」(含未开/已开/完场);显式带 ?status 时仍尊重。回查过去日期同样默认全部。
 const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status))
   ? String(route.query.status) as 'upcoming' | 'started' | 'all'
-  : (routeCustomDate ? 'all' : 'upcoming')
+  : 'all'
 
 const day = ref(routeDay)
 // 状态筛选与「竞彩/足彩」拆成两组独立控件（G2/G3）
@@ -36,9 +36,9 @@ const dayOptions = [
 ]
 
 const statusOptions = [
+  { label: '全部', value: 'all' },
   { label: '未开', value: 'upcoming' },
   { label: '已开', value: 'started' },
-  { label: '全部', value: 'all' },
 ]
 
 const lotteryOptions = [
@@ -140,7 +140,7 @@ const listReturnQuery = computed(() => {
   const query: Record<string, string> = {}
   if (!backcheckLocked.value && customDate.value) query.date = customDate.value
   else if (!backcheckLocked.value && day.value !== 'today') query.day = day.value
-  if (status.value !== 'upcoming') query.status = status.value
+  if (status.value !== 'all') query.status = status.value
   if (lottery.value !== 'all') query.lottery = lottery.value
   if (league.value !== 'all') query.league = league.value
   if (metricKey.value) {
