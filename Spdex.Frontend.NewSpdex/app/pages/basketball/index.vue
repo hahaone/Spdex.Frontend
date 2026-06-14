@@ -6,7 +6,8 @@ import { isFreeMembership } from '~/utils/membership'
 const route = useRoute()
 const { user } = useAuth()
 const routeDay = route.query.day === 'tomorrow' ? 'tomorrow' : route.query.day === 'yesterday' ? 'yesterday' : 'today'
-const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'started' | 'all' : 'upcoming'
+// 默认「全部赛事」;仅保留 全部/未开 两个筛选(已移除「已开」)。?status=started 回落全部。
+const routeStatus = ['upcoming', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'all' : 'all'
 const archiveMinDate = '2012-08-01'
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const toLocalYmd = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
@@ -31,9 +32,8 @@ const dayOptions = [
 ]
 
 const statusOptions = [
-  { label: '未开', value: 'upcoming' },
-  { label: '已开', value: 'started' },
   { label: '全部', value: 'all' },
+  { label: '未开', value: 'upcoming' },
 ]
 const lotteryOptions = [{ label: '不限', value: 'all' }]
 
@@ -132,7 +132,7 @@ const listReturnQuery = computed(() => {
   const query: Record<string, string> = {}
   if (!backcheckLocked.value && customDate.value) query.date = customDate.value
   else if (!backcheckLocked.value && day.value !== 'today') query.day = day.value
-  if (status.value !== 'upcoming') query.status = status.value
+  if (status.value !== 'all') query.status = status.value
   if (league.value !== 'all') query.league = league.value
   return query
 })
