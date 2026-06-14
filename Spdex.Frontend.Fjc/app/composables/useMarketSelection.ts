@@ -5,6 +5,7 @@ import type {
   PolymarketEventBookAggregate,
   PolymarketMarketTradesAggregate,
   PolymarketMarketBookAggregate,
+  PolymarketTradeTick,
 } from '~/types/polymarket'
 import { formatPolyOdds, type OddsFormat } from '~/composables/usePolymarketMetrics'
 import {
@@ -530,8 +531,10 @@ export function useMarketSelection(
         ? (tokenBook.bestBid + tokenBook.bestAsk) / 2
         : (tokenBook?.bestBid ?? tokenBook?.bestAsk ?? null))
 
-    const tradePrice = tradeMarket?.lastPrice ?? null
-    const rawPrice = side === 'yes' ? tradePrice : (tradePrice != null ? 1 - tradePrice : null)
+    // 成交回退价：用 runner 的"最新 Yes 价"（按成交所属 Yes/No 侧归一），
+    // 避免直接用 side-agnostic 的 lastPrice 把 No 侧成交价当成 Yes 概率展示。
+    const lastYes = lastYesTradePrice(tradeMarket)
+    const rawPrice = lastYes == null ? null : (side === 'yes' ? lastYes : 1 - lastYes)
     const finalPrice = bookPrice ?? rawPrice
     if (finalPrice == null) return null
     return clampPrice(finalPrice)
@@ -561,4 +564,43 @@ export function clampPrice(raw: number): number {
   if (raw < 0) return 0
   if (raw > 1) return 1
   return raw
+}
+
+/**
+ * 判断成交属于二元市场的 Yes 侧。
+ * 与后端 PolymarketTradeSideClassifier 对齐：以 outcomeIndex（0=Yes, 1=No）为主判据，
+ * 回退到 outcome 字符串别名（Yes/Over）。
+ */
+export function isYesSideTick(tick: PolymarketTradeTick): boolean {
+  if (tick.outcomeIndex === 0) return true
+  if (tick.outcomeIndex === 1) return false
+  const outcome = tick.outcome?.trim().toLowerCase()
+  return outcome === 'yes' || outcome === 'over'
+}
+
+/** 把任一侧成交价归一到 Yes 概率：Yes 侧取原价，No 侧取 1 - price。 */
+export function yesPriceOfTick(tick: PolymarketTradeTick): number {
+  return clampPrice(isYesSideTick(tick) ? tick.price : 1 - tick.price)
+}
+
+/**
+ * Runner 的"最新 Yes 价"：取时间最新的一笔成交并归一到 Yes 侧。
+ * 替代 side-agnostic 的 lastPrice，保证图表 Yes 线与盘口标价口径一致。
+ */
+export function lastYesTradePrice(
+  market: PolymarketMarketTradesAggregate | null | undefined,
+): number | null {
+  const trades = market?.recentTrades
+  if (!trades || trades.length === 0) return null
+  let newest = trades[0]!
+  let newestTs = new Date(newest.timestampUtc).getTime()
+  for (let i = 1; i < trades.length; i += 1) {
+    const tick = trades[i]!
+    const ts = new Date(tick.timestampUtc).getTime()
+    if (ts > newestTs) {
+      newest = tick
+      newestTs = ts
+    }
+  }
+  return yesPriceOfTick(newest)
 }

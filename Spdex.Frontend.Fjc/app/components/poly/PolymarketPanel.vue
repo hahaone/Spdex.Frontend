@@ -7,7 +7,7 @@ import type {
   PolymarketMarketTradesAggregate,
 } from '~/types/polymarket'
 import { ODDS_FORMATS, ODDS_FORMAT_KEY, formatCompactCurrency, type OddsFormat } from '~/composables/usePolymarketMetrics'
-import { useMarketSelection, clampPrice } from '~/composables/useMarketSelection'
+import { useMarketSelection, clampPrice, yesPriceOfTick } from '~/composables/useMarketSelection'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 import dayjs from 'dayjs'
 
@@ -127,19 +127,12 @@ function teamShortCode(name: string | null | undefined): string {
   return raw.slice(0, 3).toUpperCase()
 }
 
-function isYesOutcome(outcome: string): boolean {
-  return outcome.trim().toLowerCase() === 'yes'
-}
-
 function yesOutcomeTimeSeries(market: PolymarketMarketTradesAggregate): TrendDataPoint[] {
-  const yesTrades = (market.recentTrades ?? [])
-    .filter(tick => isYesOutcome(tick.outcome))
-    .sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
-    .map(tick => ({ ts: new Date(tick.timestampUtc).getTime(), price: clampPrice(tick.price) }))
-  if (yesTrades.length > 0) return yesTrades
+  // 把每一笔成交（含 No 侧）都归一到 Yes 概率，构成该 runner 的 Yes 价时间序列。
+  // 不再只筛 outcome==='yes' 后回退到原始价，那会把 No 侧成交价当成 Yes 价混入。
   return [...(market.recentTrades ?? [])]
     .sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
-    .map(tick => ({ ts: new Date(tick.timestampUtc).getTime(), price: clampPrice(tick.price) }))
+    .map(tick => ({ ts: new Date(tick.timestampUtc).getTime(), price: yesPriceOfTick(tick) }))
 }
 
 // 主队蓝 / 平局灰 / 客队红（与双红列表一致）
@@ -168,7 +161,13 @@ const graphSeries = computed<TrendChartSeries[]>(() => {
     const entry = lineScopedMarkets.value[index]!
     const market = findTradeMarketByKey(entry.key)
     if (!market) continue
-    const dataPoints = compactTimeSeries(yesOutcomeTimeSeries(market), 60)
+    const rawPoints = yesOutcomeTimeSeries(market)
+    const dataPoints = compactTimeSeries(
+      entry.side === 'no'
+        ? rawPoints.map(p => ({ ts: p.ts, price: 1 - p.price }))
+        : rawPoints,
+      60,
+    )
     const displayPrice = resolveDisplayProbability(entry.key, market)
     if (dataPoints.length === 0 && displayPrice != null) {
       dataPoints.push({ ts: minTs || Date.now(), price: displayPrice })
@@ -507,7 +506,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
 
         <div class="py-4 space-y-4">
           <template v-if="activeViewTab === 'orderbook'">
-            <PolymarketMarketSummary :trades="trades" :market="activeTradeMarket" />
+            <PolymarketMarketSummary :trades="trades" :market="activeTradeMarket" :side="activeMarketSide" />
             <div v-if="activeBookMarket" class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div>
                 <div class="text-[11px] text-gray-400 mb-1">{{ activeMarketSide === 'yes' ? 'Yes' : 'No' }}</div>

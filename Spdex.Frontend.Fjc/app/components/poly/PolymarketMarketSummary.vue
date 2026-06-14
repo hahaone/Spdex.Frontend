@@ -2,12 +2,14 @@
 import { computed, inject, ref } from 'vue'
 import type { PolymarketEventTradesAggregate, PolymarketMarketTradesAggregate } from '~/types/polymarket'
 import { formatPolyOdds, formatCompactCurrency, ODDS_FORMAT_KEY, type OddsFormat } from '~/composables/usePolymarketMetrics'
+import { lastYesTradePrice, type MarketSide } from '~/composables/useMarketSelection'
 import { outcomeLabel } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
 const props = defineProps<{
   trades: PolymarketEventTradesAggregate | null
   market: PolymarketMarketTradesAggregate | null
+  side?: MarketSide
 }>()
 
 const oddsFormat = inject(ODDS_FORMAT_KEY, ref<OddsFormat>('decimal'))
@@ -15,7 +17,11 @@ const market = computed(() => props.market)
 const selectedTradeCount = computed(() => market.value?.tradeCount ?? props.trades?.tradeCount ?? 0)
 const selectedVolume = computed(() => market.value?.marketVolume ?? market.value?.totalSize ?? props.trades?.marketVolume ?? props.trades?.totalSize ?? 0)
 const selectedLastTradeAt = computed(() => market.value?.lastTradeAtUtc ?? props.trades?.lastTradeAtUtc ?? null)
-const selectedLastPrice = computed(() => market.value?.lastPrice ?? null)
+const selectedLastPrice = computed(() => {
+  const yes = lastYesTradePrice(market.value)
+  if (yes == null) return null
+  return props.side === 'no' ? 1 - yes : yes
+})
 
 function fmt(price: number | null | undefined): string {
   return formatPolyOdds(price, oddsFormat.value)
