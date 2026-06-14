@@ -179,6 +179,7 @@ onMounted(() => {
     const s = JSON.parse(raw) as Record<string, unknown>
     const toIdSet = (v: unknown) =>
       new Set((Array.isArray(v) ? v : []).filter((x): x is number => typeof x === 'number'))
+    selectedIds.value = toIdSet(s.selected)
     retainedIds.value = toIdSet(s.retained)
     deletedIds.value = toIdSet(s.deleted)
     pinnedIds.value = toIdSet(s.pinned)
@@ -189,10 +190,11 @@ onMounted(() => {
   } catch { /* 损坏的存储忽略 */ }
 })
 
-watch([retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLeagues, sortMode], () => {
+watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLeagues, sortMode], () => {
   if (!import.meta.client) return
   try {
     localStorage.setItem(workbenchStorageKey, JSON.stringify({
+      selected: [...selectedIds.value],
       retained: [...retainedIds.value],
       deleted: [...deletedIds.value],
       pinned: [...pinnedIds.value],
