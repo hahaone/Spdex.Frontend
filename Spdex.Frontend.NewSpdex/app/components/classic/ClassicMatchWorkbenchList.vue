@@ -168,6 +168,18 @@ function restore() {
   retainedIds.value = new Set()
 }
 
+// 清除筛选/重置列表:清空工作台选择(勾选/保留/删除/置前/收起)+ 赛事选择联赛 + 排序回默认,
+// 并把顶部状态/赛事下拉回默认;保留当前日期/回查。localStorage(下方 watch)与 URL(父页 watch)随之清空。
+function resetFilters() {
+  restore()
+  selectedLeagues.value = []
+  sortMode.value = 'time'
+  page.value = 1
+  emit('update:status', 'all')
+  emit('update:lottery', 'all')
+  emit('update:league', 'all')
+}
+
 // 经典工作台编辑状态持久化:保留/删除/置前/收起/排序/联赛多选 → localStorage(按运动分键),刷新后恢复。
 // 只存 eventId/联赛码;换日期或隔天的陈旧 ID 由上方 watch(activeIds)/watch(leagueChips) 自动剔除,无需在此判活。
 const workbenchStorageKey = `spdex:classic-wb:${props.sport ?? 'football'}`
@@ -244,6 +256,7 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
       @retain-selected="retainSelected"
       @delete-selected="deleteSelected"
       @restore="restore"
+      @reset-filters="resetFilters"
     />
 
     <div v-if="prematchSixHourLockApplied" class="classic-lock">

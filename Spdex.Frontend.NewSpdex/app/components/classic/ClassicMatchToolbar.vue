@@ -57,6 +57,7 @@ const emit = defineEmits<{
   retainSelected: []
   deleteSelected: []
   restore: []
+  resetFilters: []
 }>()
 
 const hasSelection = computed(() => props.selectedCount > 0)
@@ -186,6 +187,7 @@ onBeforeUnmount(() => {
         <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('retainSelected')">保留</button>
         <button type="button" class="classic-btn" :disabled="!hasSelection" @click="emit('deleteSelected')">删除</button>
         <button type="button" class="classic-btn" @click="emit('restore')">还原</button>
+        <button type="button" class="classic-btn ghost" @click="emit('resetFilters')">清除筛选</button>
 
         <label class="classic-field sort">
           <span>排序</span>
@@ -561,6 +563,17 @@ onBeforeUnmount(() => {
 .classic-btn:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+/* 「清除筛选」用中性描边样式,区别于绿色操作按钮(保留/删除等) */
+.classic-btn.ghost {
+  background: var(--classic-panel);
+  color: var(--classic-text);
+}
+
+.classic-btn.ghost:hover:not(:disabled) {
+  background: var(--classic-row-hover);
+  filter: none;
 }
 
 .selected-count {
