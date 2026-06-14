@@ -16,9 +16,9 @@ const isSelectableArchiveDate = (value: unknown): value is string => (
   && value >= archiveMinDate
 )
 const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
-// 默认「全部赛事」(含未开/已开/完场);显式带 ?status 时仍尊重。回查过去日期同样默认全部。
-const routeStatus = ['upcoming', 'started', 'all'].includes(String(route.query.status))
-  ? String(route.query.status) as 'upcoming' | 'started' | 'all'
+// 默认「全部赛事」(含未开/已开/完场);仅保留 全部/未开 两个筛选(已移除「已开」)。?status=started 回落全部。
+const routeStatus = ['upcoming', 'all'].includes(String(route.query.status))
+  ? String(route.query.status) as 'upcoming' | 'all'
   : 'all'
 
 const day = ref(routeDay)
@@ -38,7 +38,6 @@ const dayOptions = [
 const statusOptions = [
   { label: '全部', value: 'all' },
   { label: '未开', value: 'upcoming' },
-  { label: '已开', value: 'started' },
 ]
 
 const lotteryOptions = [
