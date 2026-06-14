@@ -7,7 +7,7 @@ const props = defineProps<{
   height?: number
   /** 序列标签；draw/away 为空时不画对应序列（如大小盘/亚洲指数单线）。默认 主/平/客。 */
   seriesLabels?: ChartSeriesLabels
-  /** 数值单位：odds/index/amount/percent/payout。决定 Y 轴与图例数值格式。默认 odds。 */
+  /** 数值单位：odds/index/amount/percent/stock/payout。决定 Y 轴与图例数值格式。默认 odds。 */
   unit?: string
   /** 只看某序列（主/平/客）：null=全部。 */
   only?: 'home' | 'draw' | 'away' | null
@@ -233,6 +233,7 @@ function fmtValue(v: number): string {
   switch (unit.value) {
     case 'index': return v.toFixed(0)
     case 'percent': return `${v.toFixed(0)}%`
+    case 'stock': return `${v.toFixed(2)}%`
     case 'amount': return fmtAmount(v)
     case 'payout': return `${v > 0 ? '+' : ''}${fmtAmount(v)}`
     default: return v.toFixed(2) // odds
