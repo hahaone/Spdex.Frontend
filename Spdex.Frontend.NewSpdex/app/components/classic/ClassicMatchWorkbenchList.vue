@@ -167,6 +167,41 @@ function restore() {
   deletedIds.value = new Set()
   retainedIds.value = new Set()
 }
+
+// 经典工作台编辑状态持久化:保留/删除/置前/收起/排序/联赛多选 → localStorage(按运动分键),刷新后恢复。
+// 只存 eventId/联赛码;换日期或隔天的陈旧 ID 由上方 watch(activeIds)/watch(leagueChips) 自动剔除,无需在此判活。
+const workbenchStorageKey = `spdex:classic-wb:${props.sport ?? 'football'}`
+
+onMounted(() => {
+  try {
+    const raw = localStorage.getItem(workbenchStorageKey)
+    if (!raw) return
+    const s = JSON.parse(raw) as Record<string, unknown>
+    const toIdSet = (v: unknown) =>
+      new Set((Array.isArray(v) ? v : []).filter((x): x is number => typeof x === 'number'))
+    retainedIds.value = toIdSet(s.retained)
+    deletedIds.value = toIdSet(s.deleted)
+    pinnedIds.value = toIdSet(s.pinned)
+    collapsedIds.value = toIdSet(s.collapsed)
+    if (Array.isArray(s.leagues))
+      selectedLeagues.value = s.leagues.filter((x): x is string => typeof x === 'string')
+    if (typeof s.sort === 'string') sortMode.value = s.sort
+  } catch { /* 损坏的存储忽略 */ }
+})
+
+watch([retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLeagues, sortMode], () => {
+  if (!import.meta.client) return
+  try {
+    localStorage.setItem(workbenchStorageKey, JSON.stringify({
+      retained: [...retainedIds.value],
+      deleted: [...deletedIds.value],
+      pinned: [...pinnedIds.value],
+      collapsed: [...collapsedIds.value],
+      leagues: selectedLeagues.value,
+      sort: sortMode.value,
+    }))
+  } catch { /* 配额/隐私模式忽略 */ }
+})
 </script>
 
 <template>
