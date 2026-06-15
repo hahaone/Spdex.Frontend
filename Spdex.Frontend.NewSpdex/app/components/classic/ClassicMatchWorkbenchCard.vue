@@ -22,6 +22,8 @@ const emit = defineEmits<{
   toggleCollapsed: [eventId: number]
 }>()
 
+type TradeDirection = 'home' | 'draw' | 'away'
+
 const { buildFlashQLink } = useFlashQLink()
 const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 
@@ -68,6 +70,25 @@ const goalsTotal = computed(() => {
 const handicapTotal = computed(() => {
   const t = enrich.value?.handicapTotal ?? 0
   return t > 0 ? Math.round(t).toLocaleString('en-US') : '-'
+})
+function parseAmountText(value: string | undefined): number {
+  if (!value) return 0
+  const parsed = Number(value.replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+function standardTradeAmount(index: number): number {
+  const raw = props.match.bfAmounts?.[index]
+  if (raw != null && Number.isFinite(raw) && raw > 0) return raw
+  return parseAmountText(props.match.turnovers[index])
+}
+const defaultTradeSelection = computed<TradeDirection>(() => {
+  const keys: readonly TradeDirection[] = ['home', 'draw', 'away']
+  const indexes = props.twoWay ? [0, 2] : [0, 1, 2]
+  let best = indexes[0]!
+  for (const i of indexes.slice(1)) {
+    if (standardTradeAmount(i) > standardTradeAmount(best)) best = i
+  }
+  return keys[best] ?? 'home'
 })
 const flashQUrl = computed(() => buildFlashQLink(props.match.eventId))
 const bigBetText = computed(() => {
@@ -129,6 +150,7 @@ const bigBetText = computed(() => {
         :away-team="match.awayTeam"
         :detail-to="detailTo"
         :sport="sport"
+        :default-trade-selection="defaultTradeSelection"
       />
     </template>
   </article>

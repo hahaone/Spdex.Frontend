@@ -12,16 +12,20 @@ const props = withDefaults(defineProps<{
   selection: string
   timeRange?: string
   height?: number
+  refreshKey?: number
 }>(), {
   timeRange: '6h',
   height: 240,
+  refreshKey: 0,
 })
 
-const { data, status, pending } = useTradeFlow(
+const { data, status, pending, refresh } = useTradeFlow(
   computed(() => props.eventId),
   computed(() => props.market),
   computed(() => props.selection),
 )
+
+watch(() => props.refreshKey, () => { refresh() })
 
 const RANGE_HOURS: Record<string, number> = { '3h': 3, '6h': 6, '12h': 12, '24h': 24 }
 

@@ -3,6 +3,9 @@ import { RefreshCw } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { ChartPoint } from '~/types/market'
 
+type TradeDirection = 'home' | 'draw' | 'away'
+type SeriesSelection = TradeDirection | 'all' | null
+
 /**
  * 经典工作台内嵌走势区(还原旧站 dcon):
  * - 默认「重大成交提示」(标准盘 + 大小球大单列表,来自 useBigTrades);
@@ -16,8 +19,10 @@ const props = withDefaults(defineProps<{
   awayTeam: string
   detailTo: RouteLocationRaw
   sport?: 'football' | 'basketball'
+  defaultTradeSelection?: TradeDirection
 }>(), {
   sport: 'football',
+  defaultTradeSelection: 'home',
 })
 
 const eventIdRef = computed(() => props.eventId)
@@ -35,7 +40,9 @@ const view = ref<'tips' | 'chart'>('chart')
 const market = ref('standard')
 const metric = ref('tradeflow')
 const timeRange = ref('6h')
-const seriesOnly = ref<'home' | 'draw' | 'away' | 'all' | null>('all')
+const seriesOnly = ref<SeriesSelection>(props.defaultTradeSelection)
+const lastTradeSeries = ref<Exclude<SeriesSelection, null>>(props.defaultTradeSelection)
+const userPickedSeries = ref(false)
 
 // 渲染类别:traded(成交系=成交柱 + 价位线全高叠加) / ratio(比例=百分比堆叠面积) / line(其余=纯折线)
 const chartKind = computed<'traded' | 'ratio' | 'line'>(() =>
@@ -43,9 +50,6 @@ const chartKind = computed<'traded' | 'ratio' | 'line'>(() =>
 const graphType = computed(() => `${market.value}.${metric.value}`)
 // 成交系(成交/进球成交/让分成交)统一走后端 .traded(全方向成交柱 + 主/平/客价位),柱线在同区双轴全高叠加。
 const chartType = computed(() => (chartKind.value === 'traded' ? `${market.value}.traded` : graphType.value))
-const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType } = useChartSeries(eventIdRef, chartType)
-// 已加载数据是否对应当前请求类型;切指标时旧数据 type 不匹配 → 先显「加载中」,不渲染陈旧序列。
-const chartReady = computed(() => loadedType.value === chartType.value)
 
 const RANGE_HOURS: Record<string, number> = { '3h': 3, '6h': 6, '12h': 12, '24h': 24 }
 const timeOptions = [
@@ -105,6 +109,33 @@ function downsamplePoints(src: ChartPoint[], cap: number, zeroMissing: boolean):
 // 框选缩放窗口(优先于时间段下拉);为空时走时间段过滤。
 const zoomWindow = ref<{ start: string, end: string } | null>(null)
 
+const baseline = computed<number | null>(() => {
+  if (metric.value === 'payout') return 60
+  if (metric.value === 'hotcold') return 0
+  return null
+})
+// 成交系=成交柱(全方向);比例=堆叠面积、其余=折线,均无柱。
+const barMode = computed(() => chartKind.value === 'traded')
+// 成交系选「所有」→ 主/平/客三条价位线;单方向→单条价位线。
+const multiPrice = computed(() => chartKind.value === 'traded' && seriesOnly.value === 'all')
+// 仅成交系有方向下拉(所有/主/平/客);比例与折线默认全部方向同呈现。
+const hasDirection = computed(() => chartKind.value === 'traded')
+// StaticTrendChart 的 only:成交系单方向取该方向,「所有」=null(全方向柱+多价位);非成交系恒 null(全部序列)。
+const trendOnly = computed<TradeDirection | null>(() =>
+  (chartKind.value === 'traded' && seriesOnly.value && seriesOnly.value !== 'all') ? seriesOnly.value : null)
+
+// 成交系 + 只看单方向(主/客/平)→ 切「成交明细」(买/卖/买+/卖+/冲/换 attr 拆分,复刻旧站单株走势图);「所有」保持方向图。
+const isTradeFlowDetail = computed(() => trendOnly.value !== null)
+const needsSeriesChart = computed(() => !isTradeFlowDetail.value)
+const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType } = useChartSeries(
+  eventIdRef,
+  chartType,
+  ref({}),
+  needsSeriesChart,
+)
+// 已加载数据是否对应当前请求类型;切指标时旧数据 type 不匹配 → 先显「加载中」,不渲染陈旧序列。
+const chartReady = computed(() => loadedType.value === chartType.value)
+
 const displayPoints = computed(() => {
   const all = points.value
   let windowed = all
@@ -130,30 +161,38 @@ function resetZoom() { zoomWindow.value = null }
 // 切时间段 / 切指标 → 清缩放(避免 ts 窗口对不上新序列);轮询刷新不清,保持缩放。
 watch([timeRange, chartType], () => { zoomWindow.value = null })
 
-const baseline = computed<number | null>(() => {
-  if (metric.value === 'payout') return 60
-  if (metric.value === 'hotcold') return 0
-  return null
+const directionLabels = computed(() => {
+  if (market.value === 'goals') return { home: '大', draw: null, away: '小' }
+  if (isBasket.value) return { home: '主', draw: null, away: '客' }
+  return { home: '主', draw: '平', away: '客' }
 })
-// 成交系=成交柱(全方向);比例=堆叠面积、其余=折线,均无柱。
-const barMode = computed(() => chartKind.value === 'traded')
-// 成交系选「所有」→ 主/平/客三条价位线;单方向→单条价位线。
-const multiPrice = computed(() => chartKind.value === 'traded' && seriesOnly.value === 'all')
-// 仅成交系有方向下拉(所有/主/平/客);比例与折线默认全部方向同呈现。
-const hasDirection = computed(() => chartKind.value === 'traded')
-// StaticTrendChart 的 only:成交系单方向取该方向,「所有」=null(全方向柱+多价位);非成交系恒 null(全部序列)。
-const trendOnly = computed<'home' | 'draw' | 'away' | null>(() =>
-  (chartKind.value === 'traded' && seriesOnly.value && seriesOnly.value !== 'all') ? seriesOnly.value : null)
+const normalizedDefaultTradeSelection = computed<TradeDirection>(() =>
+  props.defaultTradeSelection === 'draw' && !directionLabels.value.draw ? 'home' : props.defaultTradeSelection)
 
-// 成交系 + 只看单方向(主/客/平)→ 切「成交明细」(买/卖/买+/卖+/冲/换 attr 拆分,复刻旧站单株走势图);「所有」保持方向图。
-const isTradeFlowDetail = computed(() => trendOnly.value !== null)
-
-// 仅成交系保留方向(默认「所有」=柱线全高叠加);其余指标 seriesOnly 置 null。
-watch(hasDirection, (on) => { seriesOnly.value = on ? (seriesOnly.value ?? 'all') : null }, { immediate: true })
-watch(seriesLabels, (l) => { if (seriesOnly.value === 'draw' && !l.draw) seriesOnly.value = 'home' })
+// 仅成交系保留方向；默认按该场标准盘成交额最大单项，用户手动改过后保留用户选择。
+watch(hasDirection, (on) => {
+  seriesOnly.value = on
+    ? (userPickedSeries.value ? lastTradeSeries.value : normalizedDefaultTradeSelection.value)
+    : null
+}, { immediate: true })
+watch(normalizedDefaultTradeSelection, (next) => {
+  if (userPickedSeries.value || !hasDirection.value) return
+  lastTradeSeries.value = next
+  seriesOnly.value = next
+})
+watch(directionLabels, (l) => {
+  if (seriesOnly.value === 'draw' && !l.draw) {
+    seriesOnly.value = 'home'
+    if (lastTradeSeries.value === 'draw') lastTradeSeries.value = 'home'
+  }
+})
+function onSeriesOnlyChange() {
+  userPickedSeries.value = true
+  if (seriesOnly.value) lastTradeSeries.value = seriesOnly.value
+}
 
 const seriesOptions = computed(() => {
-  const l = seriesLabels.value
+  const l = directionLabels.value
   const opts: { label: string, value: 'home' | 'draw' | 'away' | 'all' }[] = [
     { label: '所有', value: 'all' },
     { label: `只看${l.home}`, value: 'home' },
@@ -240,6 +279,12 @@ function isActive(b: MetricBtn) {
 function showTips() { view.value = 'tips' }
 defineExpose({ showTips })
 
+const tradeFlowRefreshKey = ref(0)
+function refreshChart() {
+  if (isTradeFlowDetail.value) tradeFlowRefreshKey.value++
+  else refresh()
+}
+
 // 经典版「明细图表」入口(还原旧站),按运动分流:
 // 足球:明细 / 进球明细 / 比分明细 / 欧洲指数 / 标盘 / 进球 / 正确比分;
 // 篮球:明细 / 大球明细 / 小球明细 / 标盘 / 进球(2-way、总分大小;无欧赔/比分/正确比分)。
@@ -313,11 +358,11 @@ const detailButtons = computed<DetailBtn[]>(() => {
           <select v-model="timeRange" class="cd-select" aria-label="时间段">
             <option v-for="o in timeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
-          <select v-if="hasDirection" v-model="seriesOnly" class="cd-select" aria-label="方向筛选">
+          <select v-if="hasDirection" v-model="seriesOnly" class="cd-select" aria-label="方向筛选" @change="onSeriesOnlyChange">
             <option v-for="o in seriesOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
-          <button type="button" class="cd-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
-            <RefreshCw :size="13" :class="{ spinning: pending }" />
+          <button type="button" class="cd-refresh" :disabled="!isTradeFlowDetail && pending" aria-label="刷新" @click="refreshChart">
+            <RefreshCw :size="13" :class="{ spinning: !isTradeFlowDetail && pending }" />
           </button>
           <button v-if="zoomWindow" type="button" class="cd-reset" aria-label="还原缩放" @click="resetZoom">还原</button>
           <span v-else class="cd-hint">拖动框选可放大</span>
@@ -333,6 +378,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
             :selection="seriesOnly || 'home'"
             :time-range="timeRange"
             :height="chartHeight"
+            :refresh-key="tradeFlowRefreshKey"
           />
           <div v-else-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
           <div v-else-if="!chartReady" class="chart-state">加载中…</div>

@@ -139,10 +139,13 @@ export function useChartSeries(
   eventId: MaybeRef<number>,
   type: MaybeRef<string> = ref('1X2'),
   extraQuery: MaybeRef<Record<string, string | number | null | undefined>> = ref({}),
+  enabled?: MaybeRef<boolean>,
 ) {
   const idRef = computed(() => unref(eventId))
   const typeRef = computed(() => unref(type))
   const extraQueryRef = computed(() => unref(extraQuery))
+  const enabledRef = computed(() => enabled == null ? true : unref(enabled))
+  const manualRefresh = enabled != null
 
   const query = computed(() => {
     const extra = Object.fromEntries(
@@ -158,12 +161,20 @@ export function useChartSeries(
       key: () => `newspdex-chart-${idRef.value}-${typeRef.value}-${JSON.stringify(query.value)}`,
       server: false,
       query,
-      watch: [idRef, typeRef, extraQueryRef],
+      ...(manualRefresh
+        ? { immediate: false, watch: false }
+        : { watch: [idRef, typeRef, extraQueryRef] }),
     },
   )
 
+  if (manualRefresh) {
+    watch([idRef, typeRef, extraQueryRef, enabledRef], () => {
+      if (enabledRef.value && idRef.value > 0 && typeRef.value) result.refresh()
+    }, { immediate: true })
+  }
+
   // 60s 自动刷新（走势变化频率较低）
-  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
+  usePolling(() => { if (enabledRef.value) result.refresh() }, 60_000, { pending: result.pending, errorRef: result.error })
 
   const points = computed<ChartPoint[]>(() => {
     const list = result.data.value?.data?.points ?? []
