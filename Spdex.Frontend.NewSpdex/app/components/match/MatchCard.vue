@@ -56,7 +56,16 @@ function fmtAmount(n: number): string {
   return Math.round(n).toLocaleString('en-US')
 }
 
-const kickOff = computed(() => props.match.matchTime.slice(11, 16))
+const kickOff = computed(() => {
+  const t = props.match.matchTime
+  if (!t || t.length < 16) return ''
+  const hm = t.slice(11, 16)
+  // 比赛日(GMT+8 口径)非「今日」时,在时间前补 MM-DD:回查/昨日列表显示日期、避免歧义;今日保持简洁。
+  const g8 = new Date(Date.now() + 8 * 3600 * 1000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const todayG8 = `${g8.getUTCFullYear()}-${p(g8.getUTCMonth() + 1)}-${p(g8.getUTCDate())}`
+  return t.slice(0, 10) === todayG8 ? hm : `${t.slice(5, 10)} ${hm}`
+})
 const handicapLabel = computed(() => formatHandicapLine(props.match.handicap))
 const statusLabel = computed(() => {
   if (props.match.status === 'finished') return '完场'
