@@ -33,9 +33,8 @@ function intList(v: number | undefined): string { return v != null && v > 0 ? Ma
 function signed(v: number | undefined): string { if (v == null) return ''; const r = Math.round(v); return r > 0 ? `+${r}` : String(r) }
 // 冷热指数:两位小数、不加正号(负号自然保留)。
 function dec2(v: number | undefined): string { return v != null ? v.toFixed(2) : '' }
-// 挂牌指数(可正负,加 %)、亚洲指数(1 位小数 %)、比分指数/进球均衡(2 位)。0 视作无数据→空。
+// 挂牌指数/亚洲指数(可正负,两位小数 %)、比分指数/进球均衡(2 位)。0 视作无数据→空。
 function pct2(v: number | undefined): string { return v != null && v !== 0 ? `${v.toFixed(2)}%` : '' }
-function pct1(v: number | undefined): string { return v != null && v !== 0 ? `${v.toFixed(1)}%` : '' }
 function ratio2(v: number | undefined): string { return v != null && v > 0 ? v.toFixed(2) : '' }
 // 旧站着色:挂牌指数 正蓝/负绿;亚洲指数 正红/负紫。
 function guaClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-blue' : 'c-green') }
@@ -102,7 +101,7 @@ const footballColumns: Col[] = [
   { key: 'hcpPrice', label: '让分价位', tone: 'handicap', get: i => odds(props.match.handicapOdds?.[i]) },
   { key: 'listing3', label: '挂牌指数', tone: 'handicap', get: i => pct2(props.match.stockHandicap?.[i]), cls: i => guaClass(props.match.stockHandicap?.[i]) },
   // 其他(VendorBase 同源)
-  { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct1(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : '') },
+  { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct2(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : '') },
   { key: 'csIndex', label: '比分指数', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.csIndex) : '') },
   { key: 'goalBalance', label: '进球均衡', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.goalBalance) : '') },
 ]
