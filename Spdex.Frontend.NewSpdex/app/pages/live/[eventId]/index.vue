@@ -275,7 +275,7 @@ const replayPoint = computed(() => replaySeries.value[replayIndex.value] ?? null
 function edgeToneOf(e: number): string { return e > 3 ? 'pos' : e < -3 ? 'neg' : '' }
 function pctSigned(e: number): string { return `${e > 0 ? '+' : ''}${e}%` }
 function replayMaxMinute(series: AnalysisReplayPoint[]): number {
-  return Math.max(45, ...series.map(p => Number.isFinite(p.minute) ? p.minute : 0))
+  return Math.max(90, ...series.map(p => Number.isFinite(p.minute) ? p.minute : 0))
 }
 function replayMinute(point: AnalysisReplayPoint | undefined, index: number): number {
   const minute = point?.minute
@@ -290,6 +290,7 @@ function buildTimeGuides(series: AnalysisReplayPoint[], w: number, h: number, pa
   return [
     { minute: 20, label: "20'", dashed: true },
     { minute: 45, label: '中场', dashed: false },
+    { minute: 75, label: "75'", dashed: true },
   ]
     .filter(g => maxMinute >= g.minute)
     .map(g => {

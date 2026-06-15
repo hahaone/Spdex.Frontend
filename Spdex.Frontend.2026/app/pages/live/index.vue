@@ -259,7 +259,7 @@ function tgSpark(eventId: number) {
       anchor: nearRight ? 'end' : 'start',
     }
   })
-  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }]
+  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }, { minute: 75, label: '75\'' }]
     .filter(g => maxMinute >= g.minute)
     .map((g) => {
       const x = xOf(g.minute)

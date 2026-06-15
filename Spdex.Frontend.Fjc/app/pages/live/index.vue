@@ -268,8 +268,8 @@ function tgSpark(eventId: number) {
       anchor: nearRight ? 'end' : 'start',
     }
   })
-  // 20 分钟虚线竖线 + 中场竖线（带标签）
-  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }]
+  // 20 分钟、中场、75 分钟时间轴竖线（带标签）
+  const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }, { minute: 75, label: '75\'' }]
     .filter(g => maxMinute >= g.minute)
     .map((g) => {
       const x = xOf(g.minute)

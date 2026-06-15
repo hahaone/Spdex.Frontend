@@ -541,9 +541,9 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
             </span>
             <span class="info-chip">
               冷热
-              <b :class="{ 'text-neg': activeWindow.odds.homeHotTrend < 0 }">{{ activeWindow.odds.homeHotTrend.toFixed(2) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.drawHotTrend < 0 }">{{ activeWindow.odds.drawHotTrend.toFixed(2) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.awayHotTrend < 0 }">{{ activeWindow.odds.awayHotTrend.toFixed(2) }}</b>
+              <b :class="['hot-trend-value', { 'text-neg': activeWindow.odds.homeHotTrend < 0 }]">{{ activeWindow.odds.homeHotTrend.toFixed(2) }}</b>-<b
+                :class="['hot-trend-value', { 'text-neg': activeWindow.odds.drawHotTrend < 0 }]">{{ activeWindow.odds.drawHotTrend.toFixed(2) }}</b>-<b
+                :class="['hot-trend-value', { 'text-neg': activeWindow.odds.awayHotTrend < 0 }]">{{ activeWindow.odds.awayHotTrend.toFixed(2) }}</b>
             </span>
             <span class="info-chip">
               分项 <b>主 {{ formatMoney(activeWindow.odds.homeAmount) }}-平{{ formatMoney(activeWindow.odds.drawAmount) }}-客{{ formatMoney(activeWindow.odds.awayAmount) }}</b>
@@ -602,7 +602,7 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                   <td>{{ item.per.toFixed(1) }}%</td>
                   <td>{{ (item.perTotal * 100).toFixed(0) }}%</td>
                   <td>{{ item.weight.toFixed(0) }}</td>
-                  <td :class="{ 'text-neg': item.hotTrend < 0 }">{{ item.hotTrend.toFixed(2) }}</td>
+                  <td :class="['hot-trend-value', { 'text-neg': item.hotTrend < 0 }]">{{ item.hotTrend.toFixed(2) }}</td>
                   <td><span :class="['pmark-badge', pmarkClass(item.pMark)]">{{ item.pMark }}</span></td>
                   <td class="col-time-val" :style="bigTimeColorStyle(item.colorGroup)">{{ formatDateTime(item.refreshTime) }}</td>
                 </tr>
@@ -1067,6 +1067,10 @@ td.st-bk-ratio {
 .filter-link-1 { color: #b22222; }
 .filter-link-2 { color: #2563eb; }
 .filter-link-3 { color: #059669; }
+
+.hot-trend-value.text-neg {
+  color: #c00;
+}
 
 /* ── 跨表共振高亮（标盘与亚盘同一时间均有大注时整行突出显示） ── */
 .row-resonant {
