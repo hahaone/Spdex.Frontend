@@ -29,6 +29,19 @@ const BUCKET_W_MIN = 22
 const buckets = computed(() => props.result?.buckets ?? [])
 const attrs = computed(() => props.result?.attrs ?? [])
 
+// 图例点击切换:隐藏的成交方向(买/卖/冲/买+/卖+/换)与价位线。切换选项(主/客/平)时自动清空。
+const hiddenAttrs = ref<Set<string>>(new Set())
+const priceHidden = ref(false)
+const visibleAttrs = computed(() => attrs.value.filter(a => !hiddenAttrs.value.has(a)))
+function isAttrHidden(a: string): boolean { return hiddenAttrs.value.has(a) }
+function toggleAttr(a: string) {
+  const next = new Set(hiddenAttrs.value)
+  if (next.has(a)) next.delete(a)
+  else next.add(a)
+  hiddenAttrs.value = next
+}
+watch(() => props.result?.selectionLabel, () => { hiddenAttrs.value = new Set(); priceHidden.value = false })
+
 // 测量中部可视宽度：桶少时把桶宽撑开填满容器（消除右侧空白），桶多时回落到最小桶宽并横向滚动。
 const scrollRef = ref<HTMLElement | null>(null)
 const measuredWidth = ref(320)
@@ -52,7 +65,7 @@ const svgW = computed(() => Math.max(buckets.value.length * bucketW.value, measu
 const maxVol = computed(() => {
   let m = 0
   for (const b of buckets.value) {
-    for (const a of attrs.value) {
+    for (const a of visibleAttrs.value) {
       const v = b.items[a] ?? 0
       if (v > m) m = v
     }
@@ -74,6 +87,7 @@ const priceMin = computed(() => priceBounds.value.min)
 const priceMax = computed(() => priceBounds.value.max)
 const priceRange = computed(() => priceMax.value - priceMin.value || 1)
 const hasPrice = computed(() => prices.value.length > 0)
+const showPrice = computed(() => hasPrice.value && !priceHidden.value)
 
 /**
  * 价位 + 成交「全高叠加」(双轴,与经典 StaticTrendChart 统一):成交柱与价位线同占整图高、上下叠加;
@@ -95,13 +109,14 @@ function priceY(p: number): number {
 interface Bar { x: number, y: number, w: number, h: number, color: string }
 const bars = computed<Bar[]>(() => {
   const out: Bar[] = []
-  const aN = Math.max(attrs.value.length, 1)
+  const vis = visibleAttrs.value
+  const aN = Math.max(vis.length, 1)
   const bw = bucketW.value
   const groupW = bw - 5
   const barW = groupW / aN
   buckets.value.forEach((b, i) => {
     const x0 = i * bw + 2.5
-    attrs.value.forEach((a, j) => {
+    vis.forEach((a, j) => {
       const v = b.items[a] ?? 0
       if (v <= 0) return
       const h = volH(v)
@@ -142,7 +157,7 @@ function fmtVol(v: number): string {
 
 /** 价位（右轴，上方带）刻度：max / mid / min。 */
 const priceTicks = computed(() => {
-  if (!hasPrice.value) return []
+  if (!showPrice.value) return []
   return [0, 0.5, 1].map(f => ({
     y: PAD_TOP + chartH.value * f,
     label: (priceMax.value - priceRange.value * f).toFixed(2),
@@ -189,8 +204,8 @@ const tip = computed(() => {
   const chartW = chartRef.value?.clientWidth ?? 320
   return {
     time: hm(b.time),
-    rows: attrs.value.map(a => ({ label: a, value: b.items[a] ?? 0, color: attrColor(a) })).filter(r => r.value > 0),
-    price: b.price,
+    rows: visibleAttrs.value.map(a => ({ label: a, value: b.items[a] ?? 0, color: attrColor(a) })).filter(r => r.value > 0),
+    price: showPrice.value ? b.price : null,
     rightSide: tipLeft.value > chartW * 0.58,
   }
 })
@@ -243,16 +258,18 @@ const tip = computed(() => {
             :height="b.h"
             :fill="b.color"
           />
-          <!-- 价位线 -->
-          <polyline v-if="priceLine" :points="priceLine" class="tf-price-line" :stroke="PRICE_COLOR" />
-          <circle
-            v-for="(p, i) in pricePts"
-            :key="`p${i}`"
-            :cx="p.x"
-            :cy="p.y"
-            r="1.6"
-            :fill="PRICE_COLOR"
-          />
+          <!-- 价位线（图例可隐藏） -->
+          <template v-if="showPrice">
+            <polyline v-if="priceLine" :points="priceLine" class="tf-price-line" :stroke="PRICE_COLOR" />
+            <circle
+              v-for="(p, i) in pricePts"
+              :key="`p${i}`"
+              :cx="p.x"
+              :cy="p.y"
+              r="1.6"
+              :fill="PRICE_COLOR"
+            />
+          </template>
           <!-- x 轴时间 -->
           <text
             v-for="(t, i) in timeLabels"
@@ -297,12 +314,12 @@ const tip = computed(() => {
 
     <!-- 图例 -->
     <div class="tf-legend scrollbar-none">
-      <span v-for="a in attrs" :key="a" class="tf-lg">
+      <button v-for="a in attrs" :key="a" type="button" class="tf-lg" :class="{ off: isAttrHidden(a) }" @click="toggleAttr(a)">
         <i class="sw" :style="{ background: attrColor(a) }" />{{ result?.selectionLabel }}-{{ a }}
-      </span>
-      <span v-if="hasPrice" class="tf-lg">
+      </button>
+      <button v-if="hasPrice" type="button" class="tf-lg" :class="{ off: priceHidden }" @click="priceHidden = !priceHidden">
         <i class="sw line" :style="{ background: PRICE_COLOR }" />{{ result?.selectionLabel }}价位
-      </span>
+      </button>
     </div>
   </div>
 </template>
@@ -433,10 +450,25 @@ const tip = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
   font-size: 0.68rem;
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tf-lg:hover {
+  background: var(--surface);
+}
+
+.tf-lg.off {
+  opacity: 0.36;
 }
 
 .tf-lg .sw {
