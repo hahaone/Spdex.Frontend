@@ -63,14 +63,26 @@ const fields = computed<Field[]>(() => {
   return out
 })
 
-/** 只看某序列时只渲染它；否则全部。 */
+// 图例点击切换:被隐藏的序列(主/平/客)。切换指标/方向(unit/only/barMode 变化)时自动清空,避免跨指标残留。
+const hiddenFields = ref<Set<Field>>(new Set())
+function isHidden(f: Field): boolean { return hiddenFields.value.has(f) }
+function toggleField(f: Field) {
+  const next = new Set(hiddenFields.value)
+  if (next.has(f)) next.delete(f)
+  else next.add(f)
+  hiddenFields.value = next
+}
+watch([unit, () => props.only, () => props.barMode], () => { hiddenFields.value = new Set() })
+
+/** 只看某序列时只渲染它；否则全部。再排除图例点击隐藏的序列。 */
 const activeFields = computed<Field[]>(() => {
-  if (props.only && fields.value.includes(props.only)) return [props.only]
-  return fields.value
+  const base = (props.only && fields.value.includes(props.only)) ? [props.only] : fields.value
+  return base.filter(f => !hiddenFields.value.has(f))
 })
 function showField(f: Field): boolean {
   if (f === 'draw' && !hasDraw.value) return false
   if (f === 'away' && !hasAway.value) return false
+  if (hiddenFields.value.has(f)) return false
   return !props.only || props.only === f
 }
 
@@ -483,9 +495,9 @@ function onDblclick() {
       </template>
     </div>
     <div class="legend">
-      <span><i class="home" />{{ labels.home }}</span>
-      <span v-if="hasDraw"><i class="draw" />{{ labels.draw }}</span>
-      <span v-if="hasAway"><i class="away" />{{ labels.away }}</span>
+      <button type="button" class="lg-item" :class="{ off: isHidden('home') }" @click="toggleField('home')"><i class="home" />{{ labels.home }}</button>
+      <button v-if="hasDraw" type="button" class="lg-item" :class="{ off: isHidden('draw') }" @click="toggleField('draw')"><i class="draw" />{{ labels.draw }}</button>
+      <button v-if="hasAway" type="button" class="lg-item" :class="{ off: isHidden('away') }" @click="toggleField('away')"><i class="away" />{{ labels.away }}</button>
       <template v-if="showPrice">
         <template v-if="multiPrice">
           <span><i class="price home" />{{ labels.home }}价位</span>
@@ -751,6 +763,30 @@ svg {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* 图例可点击切换显示/隐藏对应序列;关闭态变暗。 */
+.legend .lg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.legend .lg-item:hover {
+  background: var(--surface);
+}
+
+.legend .lg-item.off {
+  opacity: 0.36;
 }
 
 .legend i {
