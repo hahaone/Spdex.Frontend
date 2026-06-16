@@ -150,7 +150,7 @@ const graphSeries = computed<TrendChartSeries[]>(() => {
     const slot = runnerSlot(item.runner) ?? slotOrder[index]
     series.push({
       key: item.key,
-      label: localizeRunner(item.runner),
+      label: localizeRunner(item.runner, slot),
       color: slot ? slotColors[slot] : graphColors[index % graphColors.length]!,
       dataPoints,
       lastPct: lastPct == null ? null : clampProbability(lastPct),
@@ -221,7 +221,7 @@ const displayRunners = computed<RunnerDisplay[]>(() => {
       key: market.marketTicker,
       slot,
       market,
-      label: localizeRunner(market.label) || fallbackRunnerLabel(slot),
+      label: localizeRunner(market.label, slot) || fallbackRunnerLabel(slot),
       color: slotColors[slot],
       lastPct: lastPct == null ? null : clampProbability(lastPct),
       volume,
@@ -246,6 +246,13 @@ const ksIndex = computed(() => {
     ...row,
     index: total > 0 ? row.volume / total * 100 : 0,
   }))
+})
+
+const selectedMarketDisplay = computed(() => {
+  const ticker = selectedMarket.value?.marketTicker
+  return ticker
+    ? displayRunners.value.find(row => row.market?.marketTicker === ticker) ?? null
+    : null
 })
 
 function marketVolume(market: KalshiMarketTradesAggregate | null | undefined): number {
@@ -316,9 +323,10 @@ function fallbackRunnerLabel(slot: RunnerSlot): string {
   return '平局'
 }
 
-function localizeRunner(name: string | null | undefined): string {
+function localizeRunner(name: string | null | undefined, slot: RunnerSlot | null = null): string {
   const raw = (name ?? '').trim()
   if (!raw) return raw
+  if (slot) return fallbackRunnerLabel(slot)
   const link = primaryLink.value
   if (!link) return raw
   if (cnHome.value && link.kalshiHomeTeam && raw.toLowerCase() === link.kalshiHomeTeam.toLowerCase()) return cnHome.value
@@ -468,7 +476,7 @@ useHead({
       <div v-if="markets.length > 0" class="market-card">
         <div class="market-head">
           <div>
-            <div class="market-title">{{ localizeRunner(selectedMarket?.label) }}</div>
+            <div class="market-title">{{ selectedMarketDisplay?.label ?? localizeRunner(selectedMarket?.label) }}</div>
             <div class="market-subtitle">
               {{ formatCompactNumber(marketVolume(selectedMarket)) }} 交易量 · {{ selectedMarket?.tradeCount ?? 0 }} 笔
             </div>
