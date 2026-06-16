@@ -108,6 +108,22 @@ const kalshiUrl = computed(() => {
 })
 
 const graphColors = ['#2563eb', '#6b7280', '#dc2626']
+type RunnerSlot = 'home' | 'draw' | 'away'
+type RunnerDisplay = {
+  key: string
+  slot: RunnerSlot
+  label: string
+  color: string
+  market: KalshiMarketTradesAggregate | null
+  lastPct: number | null
+  volume: number
+}
+const slotOrder: RunnerSlot[] = ['home', 'draw', 'away']
+const slotColors: Record<RunnerSlot, string> = {
+  home: '#2563eb',
+  draw: '#6b7280',
+  away: '#dc2626',
+}
 
 const graphSeries = computed<TrendChartSeries[]>(() => {
   const series: TrendChartSeries[] = []
@@ -131,10 +147,11 @@ const graphSeries = computed<TrendChartSeries[]>(() => {
     if (dataPoints.length === 0 && lastPct != null) {
       dataPoints.push({ ts: cutoffMs ?? Date.now(), price: clampProbability(lastPct) })
     }
+    const slot = runnerSlot(item.runner) ?? slotOrder[index]
     series.push({
       key: item.key,
       label: localizeRunner(item.runner),
-      color: graphColors[index % graphColors.length]!,
+      color: slot ? slotColors[slot] : graphColors[index % graphColors.length]!,
       dataPoints,
       lastPct: lastPct == null ? null : clampProbability(lastPct),
     })
@@ -192,17 +209,38 @@ const eventVolume = computed(() => {
   return marketTotal > 0 ? marketTotal : (eventTrades.value?.totalNotional ?? 0)
 })
 
-const ksIndex = computed(() => {
-  const rows = markets.value.map((market, index) => {
+const displayRunners = computed<RunnerDisplay[]>(() => {
+  const rowsBySlot = new Map<RunnerSlot, RunnerDisplay>()
+  markets.value.forEach((market, index) => {
+    const slot = runnerSlot(market.label) ?? slotOrder[index]
+    if (!slot || rowsBySlot.has(slot)) return
+    const yesSeries = findOutcomeSeries(market.marketTicker, 'Yes')
     const volume = marketVolume(market)
-    return {
+    const lastPct = market.lastYesPrice ?? yesSeries?.lastPrice ?? null
+    rowsBySlot.set(slot, {
+      key: market.marketTicker,
+      slot,
       market,
-      label: localizeRunner(market.label),
-      color: graphColors[index % graphColors.length]!,
+      label: localizeRunner(market.label) || fallbackRunnerLabel(slot),
+      color: slotColors[slot],
+      lastPct: lastPct == null ? null : clampProbability(lastPct),
       volume,
-      index: 0,
-    }
+    })
   })
+
+  return slotOrder.map(slot => rowsBySlot.get(slot) ?? {
+    key: `missing-${slot}`,
+    slot,
+    market: null,
+    label: fallbackRunnerLabel(slot),
+    color: slotColors[slot],
+    lastPct: null,
+    volume: 0,
+  })
+})
+
+const ksIndex = computed(() => {
+  const rows = displayRunners.value
   const total = rows.reduce((sum, row) => sum + row.volume, 0)
   return rows.map(row => ({
     ...row,
@@ -246,6 +284,36 @@ function toTrendPointsFromCandles(items: KalshiCandlestick[]): TrendDataPoint[] 
 function clampProbability(value: number): number {
   if (!Number.isFinite(value)) return 0
   return Math.min(1, Math.max(0, value))
+}
+
+function normalizeRunnerName(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+function runnerSlot(name: string | null | undefined): RunnerSlot | null {
+  const raw = normalizeRunnerName(name)
+  if (!raw) return null
+  if (raw === 'draw' || raw === 'tie' || raw === '平局') return 'draw'
+  const link = primaryLink.value
+  const homeNames = [
+    cnHome.value,
+    link?.betsapiHomeTeam,
+    link?.kalshiHomeTeam,
+  ].map(normalizeRunnerName).filter(Boolean)
+  const awayNames = [
+    cnAway.value,
+    link?.betsapiAwayTeam,
+    link?.kalshiAwayTeam,
+  ].map(normalizeRunnerName).filter(Boolean)
+  if (homeNames.includes(raw)) return 'home'
+  if (awayNames.includes(raw)) return 'away'
+  return null
+}
+
+function fallbackRunnerLabel(slot: RunnerSlot): string {
+  if (slot === 'home') return cnHome.value ?? primaryLink.value?.kalshiHomeTeam ?? '主队'
+  if (slot === 'away') return cnAway.value ?? primaryLink.value?.kalshiAwayTeam ?? '客队'
+  return '平局'
 }
 
 function localizeRunner(name: string | null | undefined): string {
@@ -375,7 +443,7 @@ useHead({
             />
           </div>
           <div class="side-stack">
-            <div v-for="s in graphSeries" :key="s.key" class="side-card">
+            <div v-for="s in displayRunners" :key="s.key" class="side-card">
               <div class="side-label" :style="{ color: s.color }">{{ s.label }}</div>
               <div class="side-price">{{ formatSideProbability(s.lastPct) }}</div>
             </div>
@@ -385,9 +453,9 @@ useHead({
         <div v-if="ksIndex.length > 0" class="index-panel">
           <div class="panel-label dark">Ks 指数</div>
           <div class="index-bars">
-            <div v-for="entry in ksIndex" :key="entry.market.marketTicker" class="index-item">
+            <div v-for="entry in ksIndex" :key="entry.key" class="index-item">
               <div class="bar-shell">
-                <div class="bar-fill" :style="{ height: `${Math.max(entry.index, 2)}%`, backgroundColor: entry.color }" />
+                <div class="bar-fill" :style="{ height: `${entry.volume > 0 ? Math.max(entry.index, 2) : 0}%`, backgroundColor: entry.color }" />
               </div>
               <div class="bar-value">{{ Math.round(entry.index) }}</div>
               <div class="bar-label" :title="entry.label">{{ entry.label }}</div>
@@ -411,15 +479,16 @@ useHead({
 
         <div class="market-tabs">
           <button
-            v-for="(market, index) in markets"
-            :key="market.marketTicker"
+            v-for="entry in displayRunners"
+            :key="entry.key"
             class="market-tab"
-            :class="{ active: selectedMarketTicker === market.marketTicker }"
-            :style="selectedMarketTicker === market.marketTicker ? { backgroundColor: graphColors[index % graphColors.length] } : undefined"
-            @click="selectedMarketTicker = market.marketTicker"
+            :class="{ active: entry.market && selectedMarketTicker === entry.market.marketTicker, disabled: !entry.market }"
+            :style="entry.market && selectedMarketTicker === entry.market.marketTicker ? { backgroundColor: entry.color } : undefined"
+            :disabled="!entry.market"
+            @click="entry.market && (selectedMarketTicker = entry.market.marketTicker)"
           >
-            <span>{{ localizeRunner(market.label) }}</span>
-            <span>{{ formatDecimalOdds(market.lastYesPrice) }}</span>
+            <span>{{ entry.label }}</span>
+            <span>{{ formatDecimalOdds(entry.lastPct) }}</span>
           </button>
         </div>
 
@@ -741,6 +810,11 @@ useHead({
 .market-tab.active {
   color: #fff;
   border-color: transparent;
+}
+.market-tab.disabled,
+.market-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 .market-body {
   display: grid;
