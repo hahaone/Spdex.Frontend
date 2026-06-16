@@ -212,6 +212,8 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
 }
 
 .membership-table-wrap {
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
 }
 

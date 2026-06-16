@@ -57,9 +57,14 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
 <style scoped>
 .home-page {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .hero {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 10px 12px;
   background: linear-gradient(120deg, var(--brand) 0%, var(--brand-deep) 60%, var(--accent-deep) 100%);
   color: #fff;
@@ -69,17 +74,23 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  min-width: 0;
   gap: 6px;
 }
 
 .hero-title {
+  min-width: 0;
+  overflow: hidden;
   font-size: 0.92rem;
   font-weight: 820;
   letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hero-right {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
 }
@@ -120,7 +131,14 @@ const MODULE_COMPONENT: Record<HomeSectionId, Component> = {
 .module-stack {
   display: grid;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px 16px;
+}
+
+.module-item {
+  min-width: 0;
+  max-width: 100%;
 }
 
 @media (min-width: 1024px) {

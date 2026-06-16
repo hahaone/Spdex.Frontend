@@ -42,6 +42,9 @@ function tickerSideClass(selection: string): string {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 7px 10px;
   background: var(--away-bg);
   border: 1px solid var(--away-strong);
@@ -60,6 +63,8 @@ function tickerSideClass(selection: string): string {
 
 .ticker-scroll {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   gap: 6px;
 }

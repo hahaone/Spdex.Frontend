@@ -28,21 +28,33 @@ onMounted(() => {
 
 <style scoped>
 .viewport-shell {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .app-frame {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 100vh;
   margin: 0 auto;
   background: var(--surface);
 }
 
 .app-content {
+  min-width: 0;
+  max-width: 100%;
   min-height: calc(100vh - 44px);
   padding-bottom: calc(60px + env(safe-area-inset-bottom));
 }
 
 .content-inner {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0 auto;
 }
 
