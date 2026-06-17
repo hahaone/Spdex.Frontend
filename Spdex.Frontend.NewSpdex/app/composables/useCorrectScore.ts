@@ -57,6 +57,11 @@ export function useCorrectScore(eventId: MaybeRef<number>, reviewMin: MaybeRef<n
   // 30s 轮询（赛前比分盘持续变化）
   usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
+  // 硬刷新兜底:server:false + 函数式 URL 水合时偶发不触发首次客户端取数 → 空白（见 useEuroOdds）。
+  onMounted(() => {
+    if (!result.data.value && !result.pending.value) result.refresh()
+  })
+
   const data = computed<CorrectScoreData | null>(() => result.data.value?.data ?? null)
 
   return {

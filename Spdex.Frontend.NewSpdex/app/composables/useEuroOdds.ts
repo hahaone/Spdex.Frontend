@@ -74,6 +74,12 @@ export function useEuroOdds(eventId: MaybeRef<number>) {
   // 30s 轮询（赛前欧赔持续变化）
   usePolling(() => result.refresh(), 30_000, { pending: result.pending, errorRef: result.error })
 
+  // 硬刷新（直接进入本页）兜底:server:false + 函数式 URL 在水合时偶发不触发首次客户端取数 → 页面空白。
+  // 挂载后若仍无数据且非加载中,主动拉一次,确保刷新也能出数据（与列表页同样可靠）。
+  onMounted(() => {
+    if (!result.data.value && !result.pending.value) result.refresh()
+  })
+
   const data = computed<EuroOddsData | null>(() => result.data.value?.data ?? null)
 
   return {

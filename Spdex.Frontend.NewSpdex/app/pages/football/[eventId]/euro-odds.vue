@@ -19,6 +19,8 @@ function od(n: number): string { return n > 0 ? n.toFixed(2) : '-' }
 function kv(n: number): string { return n > 0 ? n.toFixed(2) : '-' }
 function vint(n: number | undefined): string { return n != null ? Math.round(n).toString() : '-' }
 function avg2(n: number | undefined): string { return n != null && n > 0 ? n.toFixed(2) : '-' }
+// 公司名里的 "Bet" 脱敏成 "B*t"（合规，与移动端 EuroOddsTable.maskName 同口径）。保留大小写:Bet→B*t / bet→b*t。
+function maskCo(name: string): string { return (name || '').replace(/bet/gi, m => (m[0] === 'B' ? 'B*t' : 'b*t')) }
 </script>
 
 <template>
@@ -65,7 +67,7 @@ function avg2(n: number | undefined): string { return n != null && n > 0 ? n.toF
             </thead>
             <tbody>
               <tr v-for="r in rows" :key="r.company">
-                <td class="c-co">{{ r.company }}</td>
+                <td class="c-co">{{ maskCo(r.company) }}</td>
                 <td class="c-odds o-home num">{{ od(r.home) }}</td>
                 <td class="c-odds o-draw num">{{ od(r.draw) }}</td>
                 <td class="c-odds o-away num">{{ od(r.away) }}</td>
@@ -182,18 +184,28 @@ function avg2(n: number | undefined): string { return n != null && n > 0 ? n.toF
 .eo-table td.c-ret { font-weight: 820; color: var(--classic-title); }
 .eo-table .r-ext td { background: var(--classic-blue-soft); font-weight: 800; color: var(--classic-title); }
 
+/* 均值/方差汇总:6 列网格(即时一行、初盘一行),整齐不再 ragged 折行;窄屏降到 3 列。
+   gap:1px + 容器底色 = 网格线，免去逐格 border 的 nth-child 维护。 */
 .eo-foot {
-  display: flex; flex-wrap: wrap; gap: 0;
-  margin: 10px 14px 14px; border: 1px solid var(--classic-border); border-radius: 3px; overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  margin: 10px 14px 14px;
+  background: var(--classic-border);
+  border: 1px solid var(--classic-border); border-radius: 3px; overflow: hidden;
 }
 .f-cell {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; border-right: 1px solid var(--classic-border);
-  font-size: 0.76rem; font-weight: 740; color: var(--classic-text);
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 7px 12px;
+  background: var(--classic-panel);
+  font-size: 0.74rem; font-weight: 740; color: var(--classic-text); min-width: 0;
 }
-.f-cell span { color: var(--classic-title-muted); }
-.f-cell b { color: var(--classic-title); font-weight: 840; }
+.f-cell span { color: var(--classic-title-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-cell b { color: var(--classic-title); font-weight: 840; flex: 0 0 auto; }
 .f-cell.warn { background: #fdeede; }
+@media (max-width: 920px) {
+  .eo-foot { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 .dark .eo-table .c-odds { background: rgba(255, 233, 138, 0.08); }
 .dark .eo-table .c-kelly { background: rgba(214, 43, 43, 0.1); }
