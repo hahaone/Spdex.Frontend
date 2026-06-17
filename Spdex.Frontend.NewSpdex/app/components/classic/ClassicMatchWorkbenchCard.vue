@@ -152,6 +152,9 @@ const bigBetText = computed(() => {
         :sport="sport"
         :default-trade-selection="defaultTradeSelection"
       />
+
+      <!-- 内盘/外盘资金细分(足球 1X2);懒挂载,与图表同 visible 门控 -->
+      <InnerOuterPanel v-if="visible && sport !== 'basketball'" class="classic-inner-outer" :event-id="match.eventId" />
     </template>
   </article>
 </template>

@@ -432,6 +432,8 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
           <LadderPanel :event-id="match.eventId" :initial-market="ladderMarket" />
         </div>
 
+        <InnerOuterPanel v-if="access.tradeDetails" class="panel-inner-outer" :event-id="match.eventId" />
+
         <UpgradeUnlockCard
           v-if="tab === 'all' && lockedFeatures.length"
           class="span-all"
