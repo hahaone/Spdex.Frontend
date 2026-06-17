@@ -66,6 +66,7 @@ interface BackendMatchSummary {
   handicapIndex?: number[]
   handicapOdds?: number[]
   asianIndex?: number
+  asianIndexTo?: string
   csIndex?: number
   goalBalance?: number
   mediaIndex?: number[]
@@ -205,6 +206,7 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
     handicapIndex: toTriple(item.handicapIndex),
     handicapOdds: toTriple(item.handicapOdds),
     asianIndex: item.asianIndex ?? 0,
+    asianIndexTo: item.asianIndexTo ?? '',
     csIndex: item.csIndex ?? 0,
     goalBalance: item.goalBalance ?? 0,
     mediaIndex: toPair(item.mediaIndex),
