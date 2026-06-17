@@ -4,7 +4,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
-import type { MarketMetricRow } from '~/types/market'
+import type { MarketMetricRow, MarketRowExtreme } from '~/types/market'
 import type { MatchStatus, MatchSummary } from '~/types/match'
 
 interface BackendMarketRow {
@@ -22,6 +22,8 @@ interface BackendMarketRow {
   variance?: number
   asian?: string
   balance?: string
+  high?: MarketRowExtreme | null
+  low?: MarketRowExtreme | null
 }
 
 interface BackendMarketSection {
@@ -126,6 +128,8 @@ function mapRow(row: BackendMarketRow): MarketMetricRow {
     variance: row.variance,
     asian: row.asian,
     balance: row.balance,
+    high: row.high,
+    low: row.low,
   }
 }
 

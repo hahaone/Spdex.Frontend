@@ -2,6 +2,19 @@ import type { MatchSummary } from './match'
 
 export type MarketTab = 'all' | 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
 
+/** 单行某指标的「高/低」预格式化值（后端已按各指标显示口径格式化为字符串；无源为缺省/null）。 */
+export interface MarketRowExtreme {
+  price?: string
+  turnover?: string
+  bfIndex?: string
+  ratio?: string
+  pnl?: string
+  listing?: string
+  heat?: string
+  euroAvg?: string
+  variance?: string
+}
+
 export interface MarketMetricRow {
   key: string
   selection: string
@@ -17,6 +30,10 @@ export interface MarketMetricRow {
   variance?: number
   asian?: string
   balance?: string
+  /** 赛前高值（标盘/进球段，移动端详情展示；无源为 null）。 */
+  high?: MarketRowExtreme | null
+  /** 赛前低值。 */
+  low?: MarketRowExtreme | null
 }
 
 export interface MarketDetail {

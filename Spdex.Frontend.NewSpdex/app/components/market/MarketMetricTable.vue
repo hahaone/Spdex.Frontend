@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MarketMetricRow } from '~/types/market'
+import type { MarketMetricRow, MarketRowExtreme } from '~/types/market'
 
 const props = defineProps<{
   title: string
@@ -59,6 +59,45 @@ function isNegative(value: unknown): boolean {
 function isPnlHot(value: unknown): boolean {
   return typeof value === 'number' && value >= 60
 }
+
+// ── 高/低值（赛前区间，后端已按显示口径预格式化为字符串；仅标盘/进球段有源）──
+type Hl = { hi: string, lo: string } | null
+function buildHl(row: MarketMetricRow, key: keyof MarketRowExtreme): Hl {
+  const hi = row.high?.[key]
+  const lo = row.low?.[key]
+  if (!hi && !lo) return null
+  return { hi: hi || '-', lo: lo || '-' }
+}
+/** 按 row.key 预算各指标高/低，避免模板里反复计算。 */
+const hlByRow = computed(() => {
+  const out: Record<string, Record<string, Hl>> = {}
+  for (const r of props.rows) {
+    out[r.key] = {
+      price: buildHl(r, 'price'),
+      turnover: buildHl(r, 'turnover'),
+      bfIndex: buildHl(r, 'bfIndex'),
+      ratio: buildHl(r, 'ratio'),
+      pnl: buildHl(r, 'pnl'),
+      listing: buildHl(r, 'listing'),
+      heat: buildHl(r, 'heat'),
+      euroAvg: buildHl(r, 'euroAvg'),
+      variance: buildHl(r, 'variance'),
+    }
+  }
+  return out
+})
+/** 主表某列(对齐 primaryColumns 顺序)对应的高/低；首列(选项)及无源列为 null。 */
+function cellHl(row: MarketMetricRow, index: number): Hl {
+  const m = hlByRow.value[row.key]
+  if (!m) return null
+  if (props.mode === 'standard') return [null, m.price, m.turnover, m.bfIndex, m.ratio][index] ?? null
+  // 进球：价位/成交/指数/比例有源；挂牌(当前值缺)/均衡 不显高低
+  if (props.mode === 'goals') return [null, m.price, m.turnover, m.bfIndex, m.ratio, null, null][index] ?? null
+  return null
+}
+function extHl(row: MarketMetricRow, key: string): Hl {
+  return hlByRow.value[row.key]?.[key] ?? null
+}
 </script>
 
 <template>
@@ -80,7 +119,11 @@ function isPnlHot(value: unknown): boolean {
         <tbody>
           <tr v-for="row in rows" :key="row.key" :class="rowClass(row)">
             <td v-for="(value, index) in rowPrimary(row)" :key="`${row.key}-${index}`" :class="['num', { 'first-col': index === 0 }]">
-              {{ value }}
+              <span class="cell-val">{{ value }}</span>
+              <small v-if="cellHl(row, index)" class="hl">
+                <span class="hi">高{{ cellHl(row, index)?.hi }}</span>
+                <span class="lo">低{{ cellHl(row, index)?.lo }}</span>
+              </small>
             </td>
           </tr>
         </tbody>
@@ -92,11 +135,21 @@ function isPnlHot(value: unknown): boolean {
       <div class="extension-grid">
         <div v-for="row in rows" :key="`${row.key}-ext`" :class="['extension-row', rowClass(row)]">
           <b class="ext-key">{{ row.selection }}</b>
-          <span :class="{ hot: isPnlHot(row.pnl) }">盈亏 <b class="num">{{ fmtInt(row.pnl) }}</b></span>
-          <span>挂牌 <b class="num">{{ row.listing ?? '-' }}</b></span>
-          <span :class="{ negative: isNegative(row.heat) }">冷热 <b class="num">{{ fmt2(row.heat) }}</b></span>
-          <span>欧均 <b class="num">{{ fmt2(row.euroAvg) }}</b></span>
-          <span>方差 <b class="num">{{ fmtVar(row.variance) }}</b></span>
+          <span :class="{ hot: isPnlHot(row.pnl) }">盈亏 <b class="num">{{ fmtInt(row.pnl) }}</b>
+            <em v-if="extHl(row, 'pnl')" class="hl-ext">高{{ extHl(row, 'pnl')?.hi }} 低{{ extHl(row, 'pnl')?.lo }}</em>
+          </span>
+          <span>挂牌 <b class="num">{{ row.listing ?? '-' }}</b>
+            <em v-if="extHl(row, 'listing')" class="hl-ext">高{{ extHl(row, 'listing')?.hi }} 低{{ extHl(row, 'listing')?.lo }}</em>
+          </span>
+          <span :class="{ negative: isNegative(row.heat) }">冷热 <b class="num">{{ fmt2(row.heat) }}</b>
+            <em v-if="extHl(row, 'heat')" class="hl-ext">高{{ extHl(row, 'heat')?.hi }} 低{{ extHl(row, 'heat')?.lo }}</em>
+          </span>
+          <span>欧均 <b class="num">{{ fmt2(row.euroAvg) }}</b>
+            <em v-if="extHl(row, 'euroAvg')" class="hl-ext">高{{ extHl(row, 'euroAvg')?.hi }} 低{{ extHl(row, 'euroAvg')?.lo }}</em>
+          </span>
+          <span>方差 <b class="num">{{ fmtVar(row.variance) }}</b>
+            <em v-if="extHl(row, 'variance')" class="hl-ext">高{{ extHl(row, 'variance')?.hi }} 低{{ extHl(row, 'variance')?.lo }}</em>
+          </span>
         </div>
       </div>
     </div>
@@ -253,5 +306,38 @@ function isPnlHot(value: unknown): boolean {
 /* 盈亏 ≥60 强烈盈利才标红 */
 .extension-row span.hot b {
   color: var(--buy);
+}
+
+/* ── 高/低值（赛前区间）── */
+.metric-table td .cell-val {
+  display: block;
+}
+
+.metric-table td .hl {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-table td .hl .hi,
+.metric-table td .hl .lo {
+  display: block;
+  white-space: nowrap;
+}
+
+.extension-row .hl-ext {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 </style>
