@@ -74,7 +74,7 @@ function lineStr(v: number | undefined): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(1)
 }
 
-interface Col { key: string, label: string, tone: Tone, get: (i: number) => string, strong?: (i: number) => boolean, cls?: (i: number) => string }
+interface Col { key: string, label: string, tone: Tone, get: (i: number) => string, strong?: (i: number) => boolean, cls?: (i: number) => string, sub?: (i: number) => string }
 
 const footballColumns: Col[] = [
   { key: 'team', label: '队名', tone: 'team', get: optionLabel, strong: () => true },
@@ -101,8 +101,7 @@ const footballColumns: Col[] = [
   { key: 'hcpPrice', label: '让分价位', tone: 'handicap', get: i => odds(props.match.handicapOdds?.[i]) },
   { key: 'listing3', label: '挂牌指数', tone: 'handicap', get: i => pct2(props.match.stockHandicap?.[i]), cls: i => guaClass(props.match.stockHandicap?.[i]) },
   // 其他(VendorBase 同源)
-  { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct2(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : '') },
-  { key: 'asianTo', label: '亚指倾向', tone: 'extra', get: i => (i === 1 ? (props.match.asianIndexTo ?? '') : '') },
+  { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct2(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : ''), sub: i => (i === 1 ? (props.match.asianIndexTo ?? '') : '') },
   { key: 'csIndex', label: '比分指数', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.csIndex) : '') },
   { key: 'goalBalance', label: '进球均衡', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.goalBalance) : '') },
 ]
@@ -131,7 +130,7 @@ const basketballColumns: Col[] = [
   { key: 'asianTotal', label: '亚盘总进球', tone: 'extra', get: i => i === 1 ? lineStr(props.match.asianTotalLine) : odds(props.match.asianTotal?.[i === 0 ? 0 : 1]) },
 ]
 
-interface Cell { key: string, tone: Tone, value: string, strong: boolean, cls: string }
+interface Cell { key: string, tone: Tone, value: string, strong: boolean, cls: string, sub: string }
 // 足球用宽表;篮球用旧 NBAToday 列集(twoWay 即篮球)。
 const columns = computed<Col[]>(() => props.twoWay ? basketballColumns : footballColumns)
 // 均 3 行;篮球中间行只承载 进球分界(线)/VS,标盘列留空(2-way 无平)。
@@ -142,6 +141,7 @@ const rows = computed<Cell[][]>(() => rowIndexes.map(i => columns.value.map(c =>
   value: c.get(i),
   strong: c.strong?.(i) ?? false,
   cls: c.cls?.(i) ?? '',
+  sub: c.sub?.(i) ?? '',
 }))))
 </script>
 
@@ -161,6 +161,7 @@ const rows = computed<Cell[][]>(() => rowIndexes.map(i => columns.value.map(c =>
             :class="[`tone-${cell.tone}`, `col-${cell.key}`, cell.cls, { strong: cell.strong, blank: !cell.value }]"
           >
             <span class="num">{{ cell.value || '-' }}</span>
+            <small v-if="cell.sub" class="cell-sub">{{ cell.sub }}</small>
           </td>
         </tr>
       </tbody>
@@ -196,6 +197,16 @@ td {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 亚洲指数值下方的实时倾向小字(让分主/让分客) */
+.cell-sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.6rem;
+  font-weight: 740;
+  line-height: 1.15;
+  color: var(--classic-link, #5a3fd6);
 }
 
 thead th {

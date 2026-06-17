@@ -422,6 +422,10 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
             <span>进球均衡</span>
             <b>{{ goalsBalance }}</b>
           </div>
+          <div v-if="match.asianIndex" class="stat-row">
+            <span>亚洲指数</span>
+            <b>{{ match.asianIndex?.toFixed(2) }}%<i v-if="match.asianIndexTo" class="stat-sub">{{ match.asianIndexTo }}</i></b>
+          </div>
         </section>
 
         <BigTradesSummary v-if="access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
@@ -432,7 +436,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
           <LadderPanel :event-id="match.eventId" :initial-market="ladderMarket" />
         </div>
 
-        <InnerOuterPanel v-if="access.tradeDetails" class="panel-inner-outer" :event-id="match.eventId" />
+        <InnerOuterPanel v-if="access.tradeDetails" class="panel-inner-outer" :event-id="match.eventId" :collapsible="false" />
 
         <UpgradeUnlockCard
           v-if="tab === 'all' && lockedFeatures.length"
@@ -755,6 +759,14 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
 .stat-row b {
   color: var(--ink);
   font-weight: 780;
+}
+
+.stat-sub {
+  margin-left: 6px;
+  font-style: normal;
+  font-size: 0.74rem;
+  font-weight: 760;
+  color: var(--brand-deep);
 }
 
 .shortcut-grid {

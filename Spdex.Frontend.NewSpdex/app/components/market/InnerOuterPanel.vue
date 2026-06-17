@@ -2,10 +2,13 @@
 import { ChevronDown, Lock } from '@lucide/vue'
 import { useInnerOuter } from '~/composables/useInnerOuter'
 
-const props = defineProps<{ eventId: number }>()
+const props = withDefaults(defineProps<{ eventId: number, collapsible?: boolean }>(), {
+  collapsible: true,
+})
 
-// 默认收起;收起时不请求(懒加载),展开后才拉 + 轮询。
-const collapsed = ref(true)
+// collapsible=true(经典):默认收起、收起不请求(懒加载),展开才拉+轮询。
+// collapsible=false(移动端):始终展开、无折叠头,直接呈现。
+const collapsed = ref(props.collapsible)
 const { data, pending } = useInnerOuter(
   computed(() => props.eventId),
   computed(() => !collapsed.value),
@@ -85,12 +88,15 @@ function plCls(v: number): string {
 
 <template>
   <div class="io-panel">
-    <!-- 主折叠头(始终可见,点击展开/收起;默认收起) -->
-    <button type="button" class="io-master" :class="{ open: !collapsed }" @click="collapsed = !collapsed">
+    <!-- 头:collapsible 时可点击折叠(默认收起);否则静态标题、内容直接呈现 -->
+    <button v-if="collapsible" type="button" class="io-master" :class="{ open: !collapsed }" @click="collapsed = !collapsed">
       <span class="io-master-t">内盘/外盘</span>
       <span class="io-master-hint">{{ collapsed ? '展开' : '收起' }}</span>
       <ChevronDown class="io-caret" :size="15" />
     </button>
+    <div v-else class="io-master io-master-static">
+      <span class="io-master-t">内盘/外盘</span>
+    </div>
 
     <div v-if="!collapsed" class="io-content">
       <div v-if="locked" class="io-msg">
@@ -213,6 +219,8 @@ function plCls(v: number): string {
 }
 
 .io-master.open .io-caret { transform: rotate(180deg); }
+
+.io-master-static { cursor: default; }
 
 .io-content { border-top: 1px solid var(--divider, #eef1f6); }
 

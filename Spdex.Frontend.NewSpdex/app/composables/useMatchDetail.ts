@@ -92,6 +92,8 @@ interface BackendMatchDetail {
     polyAmount: number
     flags: string[]
     pMark: string | null
+    asianIndex?: number
+    asianIndexTo?: string
   }
   standard: BackendMarketSection | null
   poly: BackendMarketSection | null
@@ -149,6 +151,8 @@ function mapMatch(m: BackendMatchDetail['match']): MatchSummary {
     bfIndex: toTriple(m.bfIndex),
     polyIndex: toTriple(m.polyIndex),
     flags: m.flags ?? [],
+    asianIndex: m.asianIndex ?? 0,
+    asianIndexTo: m.asianIndexTo ?? '',
   }
 }
 
