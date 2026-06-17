@@ -317,9 +317,10 @@ function extHl(row: MarketMetricRow, key: string): Hl {
   display: block;
   margin-top: 1px;
   color: var(--muted);
-  font-size: 0.56rem;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: 0.5rem;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.78;
   font-variant-numeric: tabular-nums;
 }
 
@@ -331,12 +332,13 @@ function extHl(row: MarketMetricRow, key: string): Hl {
 
 .extension-row .hl-ext {
   display: block;
-  margin-top: 1px;
+  margin-top: 0;
   color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: 700;
+  font-size: 0.5rem;
+  font-weight: 500;
   font-style: normal;
-  line-height: 1.2;
+  line-height: 1.25;
+  opacity: 0.78;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
