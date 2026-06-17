@@ -52,7 +52,11 @@ onMounted(() => {
   sync()
   const ro = new ResizeObserver(sync)
   ro.observe(el)
-  onScopeDispose(() => ro.disconnect())
+  document.addEventListener('pointerdown', onDocPointerDown, true)
+  onScopeDispose(() => {
+    ro.disconnect()
+    document.removeEventListener('pointerdown', onDocPointerDown, true)
+  })
 })
 const bucketW = computed(() => {
   const n = buckets.value.length
@@ -183,7 +187,9 @@ const totalH = computed(() => props.height)
 const chartRef = ref<HTMLElement | null>(null)
 const hoverIndex = ref<number | null>(null)
 const tipLeft = ref(0)
-function onMove(e: PointerEvent) {
+// 触屏「钉住」:点一下后 tooltip 常显(手指离开不消失),点图表外才取消;鼠标不钉(沿用 hover / leave)。
+const pinned = ref(false)
+function setHoverAt(e: PointerEvent) {
   const el = scrollRef.value
   const n = buckets.value.length
   if (!el || n === 0) return
@@ -194,7 +200,23 @@ function onMove(e: PointerEvent) {
   const chartRect = chartRef.value?.getBoundingClientRect()
   tipLeft.value = chartRect ? e.clientX - chartRect.left : 0
 }
-function onLeave() { hoverIndex.value = null }
+function onDown(e: PointerEvent) {
+  setHoverAt(e)
+  if (e.pointerType === 'mouse') pinned.value = false
+}
+function onMove(e: PointerEvent) { setHoverAt(e) }
+function onUp(e: PointerEvent) {
+  if (e.pointerType !== 'mouse') pinned.value = hoverIndex.value != null
+}
+function onLeave() { if (!pinned.value) hoverIndex.value = null }
+// 触屏钉住后:点击图表外任意处取消 tooltip(点图表内则保留/移动)。
+function onDocPointerDown(e: PointerEvent) {
+  if (!pinned.value) return
+  const el = chartRef.value
+  if (el && e.target instanceof Node && el.contains(e.target)) return
+  pinned.value = false
+  hoverIndex.value = null
+}
 const crosshairX = computed(() => (hoverIndex.value == null ? 0 : hoverIndex.value * bucketW.value + bucketW.value / 2))
 const tip = computed(() => {
   const i = hoverIndex.value
@@ -228,7 +250,7 @@ const tip = computed(() => {
 
       <!-- 中部：可横向滚动的柱状 + 价位线 -->
       <div ref="scrollRef" class="tf-scroll scrollbar-thin">
-        <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none" @pointermove="onMove" @pointerleave="onLeave">
+        <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onLeave" @pointercancel="onLeave">
           <!-- 网格线：成交带 + 价位带 -->
           <line
             v-for="(t, i) in volTicks"

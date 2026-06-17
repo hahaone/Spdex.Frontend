@@ -45,7 +45,11 @@ onMounted(() => {
   sync()
   const ro = new ResizeObserver(sync)
   ro.observe(el)
-  onScopeDispose(() => ro.disconnect())
+  document.addEventListener('pointerdown', onDocPointerDown, true)
+  onScopeDispose(() => {
+    ro.disconnect()
+    document.removeEventListener('pointerdown', onDocPointerDown, true)
+  })
 })
 
 const labels = computed<ChartSeriesLabels>(() => props.seriesLabels ?? { home: '主', draw: '平', away: '客' })
@@ -219,6 +223,11 @@ function visibleDots(field: Field) {
 
 const baselineY = computed(() => typeof props.baseline === 'number' ? yAt(props.baseline) : null)
 
+// 0 值水平线:可正负的指标(挂牌/模拟盈亏/冷热…)且 0 落在 Y 轴量程内时画一条,便于判断是否小于 0。
+// 基线本身就是 0(冷热)时不重复画。
+const zeroLineY = computed(() =>
+  (minValue.value < 0 && maxValue.value > 0 && props.baseline !== 0) ? yAt(0) : null)
+
 /** 柱状模式：每个可见点一根柱（从轴底到值），多序列横向错开。 */
 function barsFor(field: Field) {
   const baseY = pad.top + chartH.value
@@ -278,8 +287,10 @@ const yTicks = computed(() => {
   })
 })
 
-// ── 交互：十字准线 + 悬浮提示（鼠标 hover / 触屏拖动 scrub）──
+// ── 交互：十字准线 + 悬浮提示（鼠标 hover / 触屏点一下钉住）──
 const hoverIndex = ref<number | null>(null)
+// 触屏「钉住」:点一下后 tooltip 常显(手指离开不消失),点图表外才取消;鼠标不钉(沿用 hover / leave)。
+const pinned = ref(false)
 
 const hover = computed(() => {
   const i = hoverIndex.value
@@ -338,6 +349,7 @@ const selRect = computed(() => {
 
 function onDown(e: PointerEvent) {
   updateHover(e)
+  if (e.pointerType === 'mouse') pinned.value = false // 鼠标不钉,沿用 hover / leave
   if (!props.zoomable) return
   const x = vbXOf(e)
   if (x != null) { dragStartX.value = x; dragCurX.value = x }
@@ -350,8 +362,10 @@ function onMove(e: PointerEvent) {
   }
 }
 function onUp(e: PointerEvent) {
+  let wasDrag = false
   if (props.zoomable && dragStartX.value != null && dragCurX.value != null
     && Math.abs(dragCurX.value - dragStartX.value) >= DRAG_THRESHOLD) {
+    wasDrag = true
     const lo = indexAtVbX(Math.min(dragStartX.value, dragCurX.value))
     const hi = indexAtVbX(Math.max(dragStartX.value, dragCurX.value))
     const sTs = props.points[lo]?.ts
@@ -360,15 +374,27 @@ function onUp(e: PointerEvent) {
   }
   dragStartX.value = null
   dragCurX.value = null
-  if (e.pointerType !== 'mouse') hoverIndex.value = null
+  // 触屏:点一下后钉住 tooltip(手指离开不消失,点图表外才取消);拖动缩放则不钉。
+  if (e.pointerType !== 'mouse') {
+    if (wasDrag) { hoverIndex.value = null; pinned.value = false }
+    else pinned.value = hoverIndex.value != null
+  }
 }
 function onLeave() {
-  hoverIndex.value = null
   dragStartX.value = null
   dragCurX.value = null
+  if (!pinned.value) hoverIndex.value = null // 钉住时(触屏)手指离开仍保留 tooltip
 }
 function onDblclick() {
   if (props.zoomable) emit('reset')
+}
+// 触屏钉住后:点击图表外任意处取消 tooltip(捕获阶段,点图表内则交给图表自身处理)。
+function onDocPointerDown(e: PointerEvent) {
+  if (!pinned.value) return
+  const svg = svgRef.value
+  if (svg && e.target instanceof Node && svg.contains(e.target)) return
+  pinned.value = false
+  hoverIndex.value = null
 }
 </script>
 
@@ -399,6 +425,12 @@ function onDblclick() {
       </g>
 
       <line :x1="pad.left" :x2="width - padRight" :y1="height - pad.bottom" :y2="height - pad.bottom" class="axis" />
+
+      <!-- 0 值水平线（可正负指标：判断是否 < 0） -->
+      <g v-if="zeroLineY != null">
+        <line class="zero-line" :x1="pad.left" :x2="width - padRight" :y1="zeroLineY" :y2="zeroLineY" />
+        <text class="zero-text" :x="pad.left - 4" :y="zeroLineY + 3" text-anchor="end">0</text>
+      </g>
 
       <!-- 基线（模拟盈亏=60 / 冷热=0）+ 数值标记 -->
       <g v-if="baselineY != null">
@@ -653,6 +685,23 @@ svg {
   font-size: 9px;
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
   letter-spacing: 0;
+}
+
+/* 0 值水平线（可正负指标参考线，比网格更明显，比基线更克制） */
+.zero-line {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.zero-text {
+  fill: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  pointer-events: none;
 }
 
 .baseline {
