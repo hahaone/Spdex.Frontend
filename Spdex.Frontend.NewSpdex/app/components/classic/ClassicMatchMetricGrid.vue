@@ -102,6 +102,7 @@ const footballColumns: Col[] = [
   { key: 'listing3', label: '挂牌指数', tone: 'handicap', get: i => pct2(props.match.stockHandicap?.[i]), cls: i => guaClass(props.match.stockHandicap?.[i]) },
   // 其他(VendorBase 同源)
   { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct2(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : '') },
+  { key: 'asianTo', label: '亚指倾向', tone: 'extra', get: i => (i === 1 ? (props.match.asianIndexTo ?? '') : '') },
   { key: 'csIndex', label: '比分指数', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.csIndex) : '') },
   { key: 'goalBalance', label: '进球均衡', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.goalBalance) : '') },
 ]

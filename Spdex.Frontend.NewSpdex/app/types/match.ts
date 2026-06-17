@@ -82,6 +82,8 @@ export interface MatchSummary {
   handicapOdds?: [number, number, number]
   /** 亚洲指数（VendorBase.AsianIndex）。 */
   asianIndex?: number
+  /** 亚洲指数实时倾向："让分主" / "让分客" / ""。 */
+  asianIndexTo?: string
   /** 比分指数（VendorBase.CsIndex）。 */
   csIndex?: number
   /** 进球均衡 = 大小成交/标盘成交×10。 */
