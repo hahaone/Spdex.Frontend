@@ -539,7 +539,7 @@ function formatHkdCompact(amount: number | null | undefined): string {
 }
 
 function tradeTotalDelta(trade: LiveMatchOddsTopTradeSummary): number {
-  return trade.snapshotTotalMatchedDelta || trade.amount
+  return trade.tradedSizeDelta || trade.runnerMatchedDelta || trade.amount || trade.snapshotTotalMatchedDelta
 }
 
 function tradeTotalDeltaHkd(trade: LiveMatchOddsTopTradeSummary): number {

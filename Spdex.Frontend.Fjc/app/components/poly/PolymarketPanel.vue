@@ -5,6 +5,7 @@ import type {
   PolymarketEventTradesAggregate,
   PolymarketEventBookAggregate,
   PolymarketMarketTradesAggregate,
+  PolymarketTradeTick,
 } from '~/types/polymarket'
 import { ODDS_FORMATS, ODDS_FORMAT_KEY, formatCompactCurrency, type OddsFormat } from '~/composables/usePolymarketMetrics'
 import { useMarketSelection, clampPrice, yesPriceOfTick } from '~/composables/useMarketSelection'
@@ -222,6 +223,173 @@ function scoreChipClass(key: string): string {
   return isActive
     ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
     : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100'
+}
+
+interface ExactScoreTopTradeRow {
+  key: string
+  score: string
+  trade: PolymarketTradeTick
+  delta: number | null
+}
+
+const exactScoreTradeSource = computed(() => {
+  if (!isExactScoreFamily.value) return []
+  const source: Array<{ score: string; trade: PolymarketTradeTick }> = []
+  for (const entry of lineScopedMarkets.value) {
+    const market = findTradeMarketByKey(entry.key)
+    if (!market) continue
+    const score = localizeName(entry.optionLabel)
+    const trades = [
+      ...(market.topTrades ?? []),
+      ...(market.recentTrades ?? []),
+    ]
+    for (const trade of trades) source.push({ score, trade })
+  }
+  return source
+})
+
+const exactScoreDeltaSourceTrades = computed(() => {
+  const list: PolymarketTradeTick[] = []
+  if (!isExactScoreFamily.value) return list
+  for (const entry of lineScopedMarkets.value) {
+    const market = findTradeMarketByKey(entry.key)
+    if (!market) continue
+    if (market.recentTrades?.length) list.push(...market.recentTrades)
+    if (market.topTrades?.length) list.push(...market.topTrades)
+  }
+  return list
+})
+
+const exactScoreDeltaMap = computed(() => {
+  const map = new Map<string, number | null>()
+  const grouped = new Map<string, PolymarketTradeTick[]>()
+  for (const trade of exactScoreDeltaSourceTrades.value) {
+    const key = `${trade.conditionId}_${trade.outcome}`
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key)!.push(trade)
+  }
+  for (const [, trades] of grouped) {
+    const sorted = [...trades].sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
+    for (let i = 0; i < sorted.length; i += 1) {
+      const trade = sorted[i]!
+      const key = exactScoreTradeKey(trade)
+      if (trade.previousPrice != null) {
+        map.set(key, Math.round((trade.price - trade.previousPrice) * 10000) / 10000)
+      } else if (i > 0) {
+        map.set(key, Math.round((trade.price - sorted[i - 1]!.price) * 10000) / 10000)
+      } else {
+        map.set(key, null)
+      }
+    }
+  }
+  return map
+})
+
+const exactScoreTopTrades = computed<ExactScoreTopTradeRow[]>(() => {
+  if (!isExactScoreFamily.value) return []
+  const seen = new Set<string>()
+  const rows: ExactScoreTopTradeRow[] = []
+  for (const item of exactScoreTradeSource.value) {
+    const key = exactScoreTradeKey(item.trade)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rows.push({
+      key,
+      score: item.score,
+      trade: item.trade,
+      delta: exactScoreTradeDelta(item.trade),
+    })
+  }
+  return rows
+    .sort((a, b) => b.trade.size - a.trade.size)
+    .slice(0, 10)
+})
+
+function exactScoreTradeKey(trade: PolymarketTradeTick): string {
+  return [
+    trade.conditionId,
+    trade.outcome,
+    trade.timestampUtc,
+    trade.price,
+    trade.size,
+    trade.transactionHash ?? '',
+    trade.proxyWallet ?? '',
+  ].join('|')
+}
+
+function exactScoreTradeDelta(trade: PolymarketTradeTick): number | null {
+  if (trade.previousPrice != null) {
+    return Math.round((trade.price - trade.previousPrice) * 10000) / 10000
+  }
+  return exactScoreDeltaMap.value.get(exactScoreTradeKey(trade)) ?? null
+}
+
+function exactScoreTraderDisplay(trade: PolymarketTradeTick): string {
+  if (trade.traderName) return trade.traderName
+  if (trade.traderPseudonym) return trade.traderPseudonym
+  if (trade.proxyWallet) return `${trade.proxyWallet.slice(0, 6)}…${trade.proxyWallet.slice(-4)}`
+  return '-'
+}
+
+function exactScoreTraderUrl(trade: PolymarketTradeTick): string | null {
+  return trade.proxyWallet ? `https://polymarket.com/profile/${trade.proxyWallet}` : null
+}
+
+function exactScoreTradeOutcome(trade: PolymarketTradeTick): string {
+  if (trade.outcomeIndex === 0) return 'Yes'
+  if (trade.outcomeIndex === 1) return 'No'
+  const raw = trade.outcome?.trim()
+  return raw || '-'
+}
+
+function exactScoreTradeSide(trade: PolymarketTradeTick): string {
+  return trade.side?.toUpperCase() || '-'
+}
+
+function exactScoreSideClass(trade: PolymarketTradeTick): string {
+  return exactScoreTradeSide(trade) === 'BUY'
+    ? 'bg-green-100 text-green-700'
+    : 'bg-red-100 text-red-700'
+}
+
+function getTimeMark(tradeUtc: string): string {
+  if (!kickoffUtc.value) return ''
+  const tradeMs = new Date(tradeUtc).getTime()
+  const kickoffMs = new Date(kickoffUtc.value).getTime()
+  const diffMin = (kickoffMs - tradeMs) / 60000
+  if (diffMin < 0) return 'LIVE'
+  if (diffMin <= 2) return 'PP'
+  if (diffMin < 30) return 'P'
+  if (diffMin >= 50 && diffMin <= 65) return 'PS'
+  if (diffMin < 60) return 'P0'
+  if (diffMin < 120) return 'P1'
+  if (diffMin < 180) return 'P2'
+  if (diffMin < 360) return 'P3'
+  if (diffMin < 720) return 'P6'
+  if (diffMin < 1440) return 'P12'
+  if (diffMin < 2880) return 'P24'
+  return 'P48'
+}
+
+function formatExactScorePrice(price: number): string {
+  return `${(price * 100).toFixed(1)}%`
+}
+
+function formatExactScoreDelta(delta: number | null): string {
+  if (delta == null) return ''
+  if (delta === 0) return '0.00'
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`
+}
+
+function exactScoreDeltaClass(delta: number | null): string {
+  if (delta == null || delta === 0) return 'text-gray-400'
+  return delta > 0 ? 'text-green-600' : 'text-red-500'
+}
+
+function formatExactScoreSize(size: number): string {
+  if (size >= 1_000_000) return `${(size / 1_000_000).toFixed(1)}M`
+  if (size >= 1000) return `${(size / 1000).toFixed(1)}K`
+  return size.toFixed(1)
 }
 
 const visibleSeries = computed(() => topSeries.value.slice(0, maxVisibleSeriesCount.value))
@@ -613,6 +781,63 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             </div>
           </template>
         </div>
+      </div>
+    </div>
+
+    <div v-if="isExactScoreFamily && exactScoreTopTrades.length > 0" class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-gray-900">综合TOP10</div>
+          <div class="text-xs text-gray-400 mt-0.5">准确比分所有比分项大注排序</div>
+        </div>
+        <span class="text-xs text-gray-400 tabular-nums">{{ exactScoreTopTrades.length }} 笔</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+          <thead class="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400">
+            <tr>
+              <th class="px-3 py-2 text-left">比分项</th>
+              <th class="px-3 py-2 text-left">P标记</th>
+              <th class="px-3 py-2 text-left">Buy/Sell</th>
+              <th class="px-3 py-2 text-left">Yes/No</th>
+              <th class="px-3 py-2 text-left">交易者</th>
+              <th class="px-3 py-2 text-right">价格</th>
+              <th class="px-3 py-2 text-right">价差</th>
+              <th class="px-3 py-2 text-right">成交量</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in exactScoreTopTrades" :key="row.key" class="border-t border-gray-100 hover:bg-gray-50">
+              <td class="px-3 py-2 font-semibold text-gray-900 tabular-nums">{{ row.score }}</td>
+              <td class="px-3 py-2">
+                <span v-if="kickoffUtc" class="inline-flex min-w-6 justify-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">
+                  {{ getTimeMark(row.trade.timestampUtc) }}
+                </span>
+                <span v-else class="text-gray-300">-</span>
+              </td>
+              <td class="px-3 py-2">
+                <span class="inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold" :class="exactScoreSideClass(row.trade)">
+                  {{ exactScoreTradeSide(row.trade) }}
+                </span>
+              </td>
+              <td class="px-3 py-2 text-gray-500">{{ exactScoreTradeOutcome(row.trade) }}</td>
+              <td class="px-3 py-2 max-w-[160px] truncate">
+                <a
+                  v-if="exactScoreTraderUrl(row.trade)"
+                  :href="exactScoreTraderUrl(row.trade) ?? undefined"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-blue-500 hover:underline"
+                  @click.stop
+                >{{ exactScoreTraderDisplay(row.trade) }}</a>
+                <span v-else class="text-gray-400">{{ exactScoreTraderDisplay(row.trade) }}</span>
+              </td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-900 tabular-nums">{{ formatExactScorePrice(row.trade.price) }}</td>
+              <td class="px-3 py-2 text-right font-semibold tabular-nums" :class="exactScoreDeltaClass(row.delta)">{{ formatExactScoreDelta(row.delta) }}</td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-700 tabular-nums">{{ formatExactScoreSize(row.trade.size) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
