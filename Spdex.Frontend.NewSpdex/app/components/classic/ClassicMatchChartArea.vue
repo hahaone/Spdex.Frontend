@@ -209,6 +209,13 @@ const statusLabel = computed(() => {
 })
 const chartTitle = computed(() => {
   if (chartKind.value === 'traded') return market.value === 'handicap' ? '让分成交' : market.value === 'goals' ? '进球成交' : '成交'
+  const active = metricButtons.value.find(b => b.market === market.value && b.metric === metric.value)
+  if (active) {
+    // 标盘「指数」沿用后端更完整的「必发指数」标题；其它跨盘口复用指标必须显示按钮文案，
+    // 例如「进球指数 / 让分指数 / 欧洲平均」，避免图表已切换但标题仍是通用 metricLabel。
+    if (active.market === 'standard' && active.metric === 'bfindex') return metricLabel.value || '必发指数'
+    return active.label
+  }
   return metricLabel.value || '走势'
 })
 
