@@ -130,9 +130,11 @@ const expandedSelectedFactorId = ref<string | null>(null)
 const reportPanel = ref<HTMLElement | null>(null)
 const analysisState = ref<'idle' | 'running' | 'done'>('idle')
 const analysisResult = ref<QuantilearnApiFlashAnalysisResult | null>(null)
+const analysisResultsByLeagueType = ref<Record<number, QuantilearnApiFlashAnalysisResult>>({})
 const analysisError = ref('')
 const matchesState = ref<'idle' | 'running' | 'done'>('idle')
 const matchesResult = ref<QuantilearnApiFlashMatchesResult | null>(null)
+const matchesResultsByKey = ref<Record<string, QuantilearnApiFlashMatchesResult>>({})
 const matchesError = ref('')
 const purchaseState = ref<'idle' | 'running' | 'done'>('idle')
 const purchaseError = ref('')
@@ -649,9 +651,11 @@ const activeLeagueLabel = computed(() => (
 const resetAnalysis = () => {
   analysisState.value = 'idle'
   analysisResult.value = null
+  analysisResultsByLeagueType.value = {}
   analysisError.value = ''
   matchesState.value = 'idle'
   matchesResult.value = null
+  matchesResultsByKey.value = {}
   matchesError.value = ''
   bigTradesState.value = 'idle'
   bigTradesResult.value = null
@@ -672,18 +676,40 @@ const createSelectedFactor = (factor: QuantilearnApiFlashFactorCell): SelectedFl
   rangeStrategy: factor.rangeStrategy,
 })
 
-const resetDefaultSelection = () => {
+const syncSelectedFactorsWithSnapshot = () => {
   const current = snapshot.value
   if (!current?.factors.length) {
     selectedFactors.value = []
     return
   }
 
-  selectedFactors.value = []
+  const currentFactors = new Map(current.factors.map(factor => [factor.factorId, factor]))
+  const nextFactors: SelectedFlashFactor[] = []
+  selectedFactors.value.forEach((selected) => {
+    const factor = currentFactors.get(selected.factorId)
+    if (!factor?.hasValue || !isFactorAllowed(factor.factorId)) return
+
+    const min = Math.max(factor.minLimit, Math.min(selected.min, factor.maxLimit))
+    const max = Math.max(factor.minLimit, Math.min(selected.max, factor.maxLimit))
+    const allowedValues = new Set(logicOptionsForFactor(factor.factorId).map(option => option.id))
+    nextFactors.push({
+      ...selected,
+      name: factorName(factor),
+      min: Math.min(min, max),
+      max: Math.max(min, max),
+      minLimit: factor.minLimit,
+      maxLimit: factor.maxLimit,
+      value: factor.value,
+      displayValue: factor.displayValue || numberText(factor.value),
+      logic: allowedValues.has(selected.logic) ? selected.logic : 'none',
+      rangeStrategy: factor.rangeStrategy,
+    })
+  })
+  selectedFactors.value = nextFactors
 }
 
 watch(snapshot, () => {
-  resetDefaultSelection()
+  syncSelectedFactorsWithSnapshot()
   resetAnalysis()
   if (!factorSections.value.some(section => section.id === activeSectionId.value)) {
     activeSectionId.value = factorSections.value[0]?.id ?? 'bf-core'
@@ -739,11 +765,6 @@ const updateLogic = (factorId: string, event: Event) => {
   resetAnalysis()
 }
 
-const updateLeagueType = (leagueType: number) => {
-  activeLeagueType.value = leagueType
-  resetAnalysis()
-}
-
 const peersForFactor = (factorId: string) => {
   const group = factorPeerGroups.find(ids => ids.includes(factorId))
   return group?.filter(id => id !== factorId) ?? []
@@ -795,28 +816,88 @@ const buildFlashRequestFactors = () => selectedFactors.value.map(factor => ({
   max: factor.max,
 }))
 
-const loadMatches = async () => {
-  if (!analysisResult.value || !eventId.value || !selectedFactors.value.length) return
+const createMatchesKey = (
+  leagueType = activeLeagueType.value,
+  days = activeReportDays.value,
+  mode: FlashReportMode = activeReportMode.value,
+) => `${leagueType}:${days}:${mode}`
 
-  matchesState.value = 'running'
+const syncActiveMatchesFromCache = () => {
+  const cached = matchesResultsByKey.value[createMatchesKey()]
+  matchesResult.value = cached ?? null
+  matchesState.value = cached ? 'done' : 'idle'
   matchesError.value = ''
+}
+
+const setActiveAnalysisResult = () => {
+  analysisResult.value = analysisResultsByLeagueType.value[activeLeagueType.value] ?? null
+  syncActiveMatchesFromCache()
+}
+
+const isActiveMatchesKey = (leagueType: number, key: string) => (
+  leagueType === activeLeagueType.value && key === createMatchesKey()
+)
+
+const loadMatches = async (leagueType = activeLeagueType.value) => {
+  const leagueAnalysis = analysisResultsByLeagueType.value[leagueType]
+    ?? (analysisResult.value?.leagueType === leagueType ? analysisResult.value : null)
+  if (!leagueAnalysis || !eventId.value || !selectedFactors.value.length) return
+
+  const key = createMatchesKey(leagueType)
+  const cached = matchesResultsByKey.value[key]
+  if (cached) {
+    if (isActiveMatchesKey(leagueType, key)) {
+      matchesResult.value = cached
+      matchesState.value = 'done'
+      matchesError.value = ''
+    }
+    return
+  }
+
+  if (leagueType === activeLeagueType.value) {
+    matchesState.value = 'running'
+    matchesError.value = ''
+  }
 
   try {
-    matchesResult.value = await quantilearnApi.getFlashEventMatches(eventId.value, {
+    const result = await quantilearnApi.getFlashEventMatches(eventId.value, {
       factorSetName: 'spdex_v1',
       snapshot: activeSnapshot.value,
-      leagueType: activeLeagueType.value,
+      leagueType,
       days: activeReportDays.value,
       half: activeReportMode.value === 'half',
       limit: 24,
       factors: buildFlashRequestFactors(),
       logics: buildAnalysisLogics(),
     })
-    matchesState.value = 'done'
+    matchesResultsByKey.value = {
+      ...matchesResultsByKey.value,
+      [key]: result,
+    }
+    if (isActiveMatchesKey(leagueType, key)) {
+      matchesResult.value = result
+      matchesState.value = 'done'
+    }
   }
   catch (error) {
-    matchesError.value = errorMessage(error)
-    matchesState.value = 'idle'
+    if (isActiveMatchesKey(leagueType, key)) {
+      matchesError.value = errorMessage(error)
+      matchesState.value = 'idle'
+    }
+  }
+}
+
+const loadMatchesForAllLeagueTypes = async () => {
+  await Promise.all(leagueOptions.map(option => loadMatches(option.id)))
+}
+
+const updateLeagueType = (leagueType: number) => {
+  if (activeLeagueType.value === leagueType) return
+
+  activeLeagueType.value = leagueType
+  if (analysisState.value === 'done') {
+    setActiveAnalysisResult()
+    void loadMatches(leagueType)
   }
 }
 
@@ -844,25 +925,34 @@ const runAnalysis = async () => {
 
   analysisState.value = 'running'
   analysisError.value = ''
+  analysisResultsByLeagueType.value = {}
   matchesState.value = 'idle'
   matchesResult.value = null
+  matchesResultsByKey.value = {}
   matchesError.value = ''
 
   try {
-    analysisResult.value = await quantilearnApi.analyzeFlashEvent(eventId.value, {
+    const scopeResult = await quantilearnApi.analyzeFlashEventScopes(eventId.value, {
       factorSetName: 'spdex_v1',
       snapshot: activeSnapshot.value,
-      leagueType: activeLeagueType.value,
+      leagueType: 0,
       days: [7, 30, 365],
       includeHalf: true,
       factors: buildFlashRequestFactors(),
       logics: buildAnalysisLogics(),
     })
+    analysisResultsByLeagueType.value = scopeResult.results.reduce<Record<number, QuantilearnApiFlashAnalysisResult>>((result, item) => {
+      result[item.leagueType] = item
+      return result
+    }, {})
+    setActiveAnalysisResult()
     analysisState.value = 'done'
     parametersCollapsed.value = true
     await refreshAccess()
-    await loadMatches()
-    await loadBigTrades()
+    await Promise.all([
+      loadMatchesForAllLeagueTypes(),
+      loadBigTrades(),
+    ])
     await nextTick()
     reportPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }

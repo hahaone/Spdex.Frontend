@@ -363,6 +363,10 @@ export interface QuantilearnApiFlashAnalysisResult {
   periods: QuantilearnApiFlashAnalysisPeriod[]
 }
 
+export interface QuantilearnApiFlashAnalysisScopeResult {
+  results: QuantilearnApiFlashAnalysisResult[]
+}
+
 export interface QuantilearnFlashMatchesRequest {
   factorSetName?: string
   snapshot?: 'current' | '1' | '2' | '3' | '6' | string
@@ -914,6 +918,10 @@ export const useQuantilearnApi = () => {
       factorSet: query.factorSet ?? 'spdex_v1',
     }),
     analyzeFlashEvent: (eventId: string, body: QuantilearnFlashAnalysisRequest) => request<QuantilearnApiFlashAnalysisResult>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}/analysis`, undefined, {
+      method: 'POST',
+      body,
+    }),
+    analyzeFlashEventScopes: (eventId: string, body: QuantilearnFlashAnalysisRequest) => request<QuantilearnApiFlashAnalysisScopeResult>(`/api/quantilearn/flash/events/${encodeURIComponent(eventId)}/analysis/scopes`, undefined, {
       method: 'POST',
       body,
     }),
