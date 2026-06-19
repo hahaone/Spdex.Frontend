@@ -39,7 +39,7 @@ function dayMs(offsetDays: number): number {
   d.setDate(d.getDate() + offsetDays)
   return d.getTime()
 }
-const range = ref<[number, number]>([dayMs(-6), dayMs(0)])
+const range = ref<[number, number]>([dayMs(0), dayMs(0)])   // 默认今日
 function toYmd(ms: number): string {
   const d = new Date(ms)
   const p = (n: number) => String(n).padStart(2, '0')
@@ -47,6 +47,10 @@ function toYmd(ms: number): string {
 }
 function quickRange(days: number) {
   range.value = [dayMs(-(days - 1)), dayMs(0)]
+  loadOverview()
+}
+function quickDay(offset: number) {
+  range.value = [dayMs(offset), dayMs(offset)]
   loadOverview()
 }
 
@@ -63,16 +67,23 @@ async function loadOverview() {
   overview.value = res.code === 0 ? res.data : null
 }
 
-// ── SVG 迷你趋势图（PV / UV 两条线，无图表库依赖）──
+// ── SVG 迷你趋势图（PV / UV 两条线 + hover tooltip，无图表库依赖）──
+const hoverIdx = ref<number | null>(null)
 const chart = computed(() => {
   const pts = overview.value?.trend ?? []
-  if (pts.length < 2) return null
+  if (pts.length < 1) return null
   const W = 760, H = 150, pad = 6
   const max = Math.max(1, ...pts.map(p => Math.max(p.pv, p.uv)))
-  const x = (i: number) => pad + (W - pad * 2) * (i / (pts.length - 1))
+  const x = (i: number) => (pts.length === 1 ? W / 2 : pad + (W - pad * 2) * (i / (pts.length - 1)))
   const y = (v: number) => pad + (H - pad * 2) * (1 - v / max)
-  const line = (key: 'pv' | 'uv') => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ')
-  return { W, H, max, pv: line('pv'), uv: line('uv'), first: pts[0]!.date, last: pts[pts.length - 1]!.date }
+  const line = (key: 'pv' | 'uv') => (pts.length < 2 ? '' : pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' '))
+  const points = pts.map((p, i) => ({
+    xPct: +(x(i) / W * 100).toFixed(2),
+    pvTop: +(y(p.pv) / H * 100).toFixed(2),
+    uvTop: +(y(p.uv) / H * 100).toFixed(2),
+    date: p.date, pv: p.pv, uv: p.uv, anonPv: p.anonPv,
+  }))
+  return { W, H, max, pv: line('pv'), uv: line('uv'), points, first: pts[0]!.date, last: pts[pts.length - 1]!.date }
 })
 
 const tierMax = computed(() => Math.max(1, ...(overview.value?.byTier ?? []).map(t => t.count)))
@@ -155,6 +166,9 @@ onMounted(loadOverview)
     <div class="mb-4 flex items-center justify-between">
       <h2 class="text-xl font-semibold">用户访问统计</h2>
       <NSpace align="center">
+        <NButton size="small" @click="quickDay(0)">今日</NButton>
+        <NButton size="small" @click="quickDay(-1)">昨日</NButton>
+        <NButton size="small" @click="quickDay(-2)">前日</NButton>
         <NButton size="small" @click="quickRange(7)">近 7 天</NButton>
         <NButton size="small" @click="quickRange(30)">近 30 天</NButton>
         <NDatePicker v-model:value="range" type="daterange" :is-date-disabled="(ts: number) => ts > Date.now()" />
