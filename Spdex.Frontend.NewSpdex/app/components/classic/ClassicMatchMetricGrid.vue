@@ -192,7 +192,7 @@ td {
   height: 28px;
   padding: 0 5px;
   border-right: 1px solid var(--classic-grid);
-  border-bottom: 1px solid var(--classic-grid);
+  border-bottom: 0;
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
@@ -239,10 +239,12 @@ th.col-goalTurnover,
 th.col-hcpTurnover,
 th.col-asian,
 th.col-csIndex { background: var(--classic-head); }
-/* 数据区一律白底(成交列仅以粗体强调,不再上色) */
+/* 紫表头列(成交×3 + 亚洲 + 比分)的数据格用浅紫底;成交列另加粗体强调,亚洲/比分保留各自字色 */
 td.col-turnover,
 td.col-goalTurnover,
-td.col-hcpTurnover { background: var(--classic-panel); color: var(--classic-text); font-weight: 800; }
+td.col-hcpTurnover { background: var(--classic-purple-soft); color: var(--classic-text); font-weight: 800; }
+td.col-asian,
+td.col-csIndex { background: var(--classic-purple-soft); }
 
 /* 整行悬停：半透明蓝色叠层，保留分区底色又给出扫读焦点 */
 tbody tr:hover td {
