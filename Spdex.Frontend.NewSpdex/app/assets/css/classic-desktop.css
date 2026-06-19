@@ -12,8 +12,8 @@
   --classic-purple: #7d7aee;
   --classic-purple-soft: #efedfd;
   --classic-blue-soft: #e6f1fa;
-  /* 复刻旧站:表头淡紫(旧站 #e1d9ec)+ 每场标题栏绿(旧站 #34bb9d),取代原深藏青表头/标题(队名不再「黑掉」) */
-  --classic-head: #e1d9ec;
+  /* 复刻旧站:表头中紫(旧站 #9999FF,白字)+ 每场标题栏绿(旧站 #34bb9d),取代原深藏青表头/标题(队名不再「黑掉」) */
+  --classic-head: #9999ff;
   --classic-cardhead: #34bb9d;
   --classic-yellow: #ffe98a;
   /* 线条/网格（更淡，留出呼吸感） */
@@ -40,7 +40,7 @@
   --classic-purple: #6a66dd;
   --classic-purple-soft: #24233c;
   --classic-blue-soft: #16314a;
-  --classic-head: #2a3142;
+  --classic-head: #4a4d86;
   --classic-cardhead: #2c7d68;
   --classic-yellow: #5a4d18;
   --classic-border: #2d3543;

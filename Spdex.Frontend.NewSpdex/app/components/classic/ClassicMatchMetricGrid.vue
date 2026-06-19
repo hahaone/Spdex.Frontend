@@ -211,13 +211,13 @@ td {
 
 thead th {
   height: 30px;
-  color: var(--classic-text);
+  color: #fff;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   text-align: center;
-  border-right-color: var(--classic-border);
-  border-bottom: 1px solid var(--classic-border);
+  border-right-color: rgba(255, 255, 255, 0.16);
+  border-bottom: 0;
 }
 
 /* 复刻旧站:表头统一淡紫深字(原饱和绿/紫/深藏青 + 白字过深),分区色保留在数据格 */
@@ -227,10 +227,11 @@ th.tone-handicap,
 th.tone-extra,
 th.tone-team { background: var(--classic-head); }
 
-td.tone-deal { background: var(--classic-green-soft); }
+/* 旧站数据区基本白底:标盘/亚指等不上色带;仅进球/让分组 + 成交列淡紫(见下 col-turnover) */
+td.tone-deal { background: var(--classic-panel); }
 td.tone-goal,
 td.tone-handicap { background: var(--classic-purple-soft); }
-td.tone-extra { background: var(--classic-blue-soft); }
+td.tone-extra { background: var(--classic-panel); }
 
 /* #3 成交列(标盘/进球/让分成交)淡紫底深字,复刻旧站对「成交」列的突出(旧站 td #f0e9ff)。放在 tone-* 之后以同特异性覆盖。 */
 th.col-turnover,
