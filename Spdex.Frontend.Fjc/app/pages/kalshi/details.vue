@@ -142,7 +142,11 @@ const graphSeries = computed<TrendChartSeries[]>(() => {
     if (cutoffMs != null) {
       dataPoints = dataPoints.filter(point => point.ts <= cutoffMs)
     }
-    const lastPct = item.lastPrice ?? dataPoints[dataPoints.length - 1]?.price ?? null
+    const noSeries = findOutcomeSeries(item.marketTicker, 'No')
+    const lastPct = item.lastPrice
+      ?? yesPriceFromNoPrice(noSeries?.lastPrice)
+      ?? dataPoints[dataPoints.length - 1]?.price
+      ?? null
     if (dataPoints.length === 0 && lastPct == null) continue
     if (dataPoints.length === 0 && lastPct != null) {
       dataPoints.push({ ts: cutoffMs ?? Date.now(), price: clampProbability(lastPct) })
@@ -214,9 +218,8 @@ const displayRunners = computed<RunnerDisplay[]>(() => {
   markets.value.forEach((market, index) => {
     const slot = runnerSlot(market.label) ?? slotOrder[index]
     if (!slot || rowsBySlot.has(slot)) return
-    const yesSeries = findOutcomeSeries(market.marketTicker, 'Yes')
     const volume = marketVolume(market)
-    const lastPct = market.lastYesPrice ?? yesSeries?.lastPrice ?? null
+    const lastPct = marketYesProbability(market)
     rowsBySlot.set(slot, {
       key: market.marketTicker,
       slot,
@@ -266,6 +269,20 @@ function findOutcomeSeries(marketTicker: string | undefined, side: 'Yes' | 'No')
   return outcomeSeries.value.find(s =>
     s.marketTicker === marketTicker && s.outcomeSide.toLowerCase() === side.toLowerCase(),
   ) ?? null
+}
+
+function yesPriceFromNoPrice(value: number | null | undefined): number | null {
+  if (value == null) return null
+  return clampProbability(1 - value)
+}
+
+function marketYesProbability(market: KalshiMarketTradesAggregate): number | null {
+  const yesSeries = findOutcomeSeries(market.marketTicker, 'Yes')
+  const noSeries = findOutcomeSeries(market.marketTicker, 'No')
+  return market.lastYesPrice
+    ?? yesSeries?.lastPrice
+    ?? yesPriceFromNoPrice(market.lastNoPrice)
+    ?? yesPriceFromNoPrice(noSeries?.lastPrice)
 }
 
 function candlePrice(candle: KalshiCandlestick): number | null {

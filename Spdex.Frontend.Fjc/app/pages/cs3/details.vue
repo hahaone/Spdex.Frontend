@@ -94,6 +94,13 @@ function setOrder(newOrder: number) {
   resetAll()
 }
 
+function payoutClass(value: number): Record<string, boolean> {
+  return {
+    'text-neg': value < 0,
+    'text-payout-high': value > 60,
+  }
+}
+
 /** 获取匹配 selectionId 的 LastPrice 数据 */
 function getLastPriceRows(selectionId: number): PriceSizeRow[] {
   if (!activeWindow.value?.lastPrices) return []
@@ -447,7 +454,13 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
               </td>
               <td class="st-pct-detail">{{ windowRatioDisplay(w) }}</td>
               <td class="st-payout">
-                <template v-if="w.odds">{{ w.odds.homePayout.toFixed(0) }} | {{ w.odds.drawPayout.toFixed(0) }} | {{ w.odds.awayPayout.toFixed(0) }}</template>
+                <template v-if="w.odds">
+                  <span :class="payoutClass(w.odds.homePayout)">{{ w.odds.homePayout.toFixed(0) }}</span>
+                  <span class="ratio-sep">|</span>
+                  <span :class="payoutClass(w.odds.drawPayout)">{{ w.odds.drawPayout.toFixed(0) }}</span>
+                  <span class="ratio-sep">|</span>
+                  <span :class="payoutClass(w.odds.awayPayout)">{{ w.odds.awayPayout.toFixed(0) }}</span>
+                </template>
                 <template v-else>-</template>
               </td>
               <td class="st-pct" :style="pctColorStyle(w.amountPercent, w.odds?.totalAmount)">
@@ -535,9 +548,9 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
             </span>
             <span class="info-chip">
               盈亏
-              <b :class="{ 'text-neg': activeWindow.odds.homePayout < 0 }">{{ activeWindow.odds.homePayout.toFixed(0) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.drawPayout < 0 }">{{ activeWindow.odds.drawPayout.toFixed(0) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.awayPayout < 0 }">{{ activeWindow.odds.awayPayout.toFixed(0) }}</b>
+              <b :class="payoutClass(activeWindow.odds.homePayout)">{{ activeWindow.odds.homePayout.toFixed(0) }}</b>-<b
+                :class="payoutClass(activeWindow.odds.drawPayout)">{{ activeWindow.odds.drawPayout.toFixed(0) }}</b>-<b
+                :class="payoutClass(activeWindow.odds.awayPayout)">{{ activeWindow.odds.awayPayout.toFixed(0) }}</b>
             </span>
             <span class="info-chip">
               冷热
@@ -598,7 +611,7 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                   <td :class="amountClass(item)">{{ formatMoney(item.tradedChange) }}</td>
                   <td class="col-attr-val">{{ item.tradedAttr }}</td>
                   <td :class="holdClass(item)">{{ formatMoney(item.hold) }}</td>
-                  <td>{{ item.payout.toFixed(0) }}</td>
+                  <td :class="payoutClass(item.payout)">{{ item.payout.toFixed(0) }}</td>
                   <td>{{ item.per.toFixed(1) }}%</td>
                   <td>{{ (item.perTotal * 100).toFixed(0) }}%</td>
                   <td>{{ item.weight.toFixed(0) }}</td>
@@ -1070,6 +1083,11 @@ td.st-bk-ratio {
 
 .hot-trend-value.text-neg {
   color: #c00;
+}
+
+.text-payout-high {
+  color: #c00;
+  font-weight: 700;
 }
 
 /* ── 跨表共振高亮（标盘与亚盘同一时间均有大注时整行突出显示） ── */
