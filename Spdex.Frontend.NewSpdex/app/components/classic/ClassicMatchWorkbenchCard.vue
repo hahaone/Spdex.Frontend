@@ -175,7 +175,7 @@ const bigBetText = computed(() => {
   gap: 8px;
   min-height: 32px;
   padding: 0 8px;
-  background: var(--classic-title);
+  background: var(--classic-cardhead);
   color: #fff;
   font-size: 0.78rem;
   font-weight: 800;

@@ -211,33 +211,34 @@ td {
 
 thead th {
   height: 30px;
-  color: #fff;
+  color: var(--classic-text);
   font-size: 0.7rem;
-  font-weight: 760;
+  font-weight: 800;
   letter-spacing: 0.02em;
   text-align: center;
-  border-right-color: rgba(255, 255, 255, 0.14);
-  border-bottom: 0;
+  border-right-color: var(--classic-border);
+  border-bottom: 1px solid var(--classic-border);
 }
 
-th.tone-deal { background: var(--classic-green); }
+/* 复刻旧站:表头统一淡紫深字(原饱和绿/紫/深藏青 + 白字过深),分区色保留在数据格 */
+th.tone-deal,
 th.tone-goal,
 th.tone-handicap,
-th.tone-extra { background: var(--classic-purple); }
-th.tone-team { background: var(--classic-title); }
+th.tone-extra,
+th.tone-team { background: var(--classic-head); }
 
 td.tone-deal { background: var(--classic-green-soft); }
 td.tone-goal,
 td.tone-handicap { background: var(--classic-purple-soft); }
 td.tone-extra { background: var(--classic-blue-soft); }
 
-/* #3 成交列(标盘/进球/让分成交)整列紫底白字,复刻旧站对「成交」列的突出(旧站 spec 列 th #9999FF / td #f0e9ff,此处按新主题紫 + 白字更醒目)。放在 tone-* 之后以同特异性覆盖。 */
+/* #3 成交列(标盘/进球/让分成交)淡紫底深字,复刻旧站对「成交」列的突出(旧站 td #f0e9ff)。放在 tone-* 之后以同特异性覆盖。 */
 th.col-turnover,
 th.col-goalTurnover,
-th.col-hcpTurnover { background: var(--classic-purple); }
+th.col-hcpTurnover { background: var(--classic-head); }
 td.col-turnover,
 td.col-goalTurnover,
-td.col-hcpTurnover { background: var(--classic-purple); color: #fff; font-weight: 760; }
+td.col-hcpTurnover { background: var(--classic-purple-soft); color: var(--classic-text); font-weight: 800; }
 
 /* 整行悬停：半透明蓝色叠层，保留分区底色又给出扫读焦点 */
 tbody tr:hover td {

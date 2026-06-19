@@ -72,6 +72,7 @@ function updateDay(value: string) {
 // 用 Teleport 挂到 body,绕开 .classic-toolbar 的 overflow:hidden 裁剪;固定定位锚定按钮下方。
 const menuOpen = ref(false)
 const menuBtn = ref<HTMLElement | null>(null)
+const menuEl = ref<HTMLElement | null>(null)
 const menuPos = ref({ top: 0, left: 0 })
 const draft = ref<Set<string>>(new Set())
 
@@ -100,7 +101,13 @@ function applyLeagues() {
   closeMenu()
 }
 
-function onMenuScroll() { closeMenu() }
+function onMenuScroll(e: Event) {
+  // 仅「页面」滚动才关闭弹层;菜单内部(联赛列表 overflow 滚动)不关闭——
+  // 否则赛事多到列表需要滚动时,一滚就触发 capture 阶段 scroll 把弹层关掉、无法继续下拉。
+  const t = e.target as Node | null
+  if (t && menuEl.value?.contains(t)) return
+  closeMenu()
+}
 function onMenuKey(e: KeyboardEvent) { if (e.key === 'Escape') closeMenu() }
 watch(menuOpen, (open) => {
   if (!import.meta.client) return
@@ -205,7 +212,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <template v-if="menuOpen">
         <div class="league-menu-backdrop" @click="closeMenu" />
-        <div class="league-menu classic-desktop" :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }">
+        <div ref="menuEl" class="league-menu classic-desktop" :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }">
           <div class="league-menu-head">
             <span>赛事选择 · 联赛</span>
             <div class="lm-quick">
