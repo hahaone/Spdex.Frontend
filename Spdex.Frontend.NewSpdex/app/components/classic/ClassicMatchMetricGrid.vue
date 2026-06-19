@@ -220,26 +220,29 @@ thead th {
   border-bottom: 0;
 }
 
-/* 复刻旧站:表头统一淡紫深字(原饱和绿/紫/深藏青 + 白字过深),分区色保留在数据格 */
+/* 表头:多数列绿(--classic-headgreen)+ 白字;成交/亚洲/比分列紫(见下 col-* 覆盖) */
 th.tone-deal,
 th.tone-goal,
 th.tone-handicap,
 th.tone-extra,
-th.tone-team { background: var(--classic-head); }
+th.tone-team { background: var(--classic-headgreen); }
 
-/* 旧站数据区基本白底:标盘/亚指等不上色带;仅进球/让分组 + 成交列淡紫(见下 col-turnover) */
-td.tone-deal { background: var(--classic-panel); }
+/* 数据区一律白底(标盘/进球/让分/亚指均不上色带) */
+td.tone-deal,
 td.tone-goal,
-td.tone-handicap { background: var(--classic-purple-soft); }
+td.tone-handicap,
 td.tone-extra { background: var(--classic-panel); }
 
-/* #3 成交列(标盘/进球/让分成交)淡紫底深字,复刻旧站对「成交」列的突出(旧站 td #f0e9ff)。放在 tone-* 之后以同特异性覆盖。 */
+/* 紫色表头列:成交(标盘/进球/让分)+ 亚洲指数 + 比分指数;其余表头绿。放在 tone-* 之后以同特异性覆盖。 */
 th.col-turnover,
 th.col-goalTurnover,
-th.col-hcpTurnover { background: var(--classic-head); }
+th.col-hcpTurnover,
+th.col-asian,
+th.col-csIndex { background: var(--classic-head); }
+/* 数据区一律白底(成交列仅以粗体强调,不再上色) */
 td.col-turnover,
 td.col-goalTurnover,
-td.col-hcpTurnover { background: var(--classic-purple-soft); color: var(--classic-text); font-weight: 800; }
+td.col-hcpTurnover { background: var(--classic-panel); color: var(--classic-text); font-weight: 800; }
 
 /* 整行悬停：半透明蓝色叠层，保留分区底色又给出扫读焦点 */
 tbody tr:hover td {

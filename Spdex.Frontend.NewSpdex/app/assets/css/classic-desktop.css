@@ -12,9 +12,10 @@
   --classic-purple: #7d7aee;
   --classic-purple-soft: #efedfd;
   --classic-blue-soft: #e6f1fa;
-  /* 复刻旧站:表头中紫(旧站 #9999FF,白字)+ 每场标题栏绿(旧站 #34bb9d),取代原深藏青表头/标题(队名不再「黑掉」) */
+  /* 经典表头:多数列绿(--classic-headgreen);成交/亚洲/比分列紫(--classic-head)。每场标题栏黑底(--classic-cardhead)。 */
   --classic-head: #9999ff;
-  --classic-cardhead: #34bb9d;
+  --classic-headgreen: #34bb9d;
+  --classic-cardhead: #1a1d23;
   --classic-yellow: #ffe98a;
   /* 线条/网格（更淡，留出呼吸感） */
   --classic-border: #dce1e8;
@@ -41,7 +42,8 @@
   --classic-purple-soft: #24233c;
   --classic-blue-soft: #16314a;
   --classic-head: #4a4d86;
-  --classic-cardhead: #2c7d68;
+  --classic-headgreen: #2c7d68;
+  --classic-cardhead: #0e1116;
   --classic-yellow: #5a4d18;
   --classic-border: #2d3543;
   --classic-grid: #262e3b;
