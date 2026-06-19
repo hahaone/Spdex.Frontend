@@ -156,17 +156,17 @@ function approve(r: any, ok: boolean) {
 
 // 执行退款：支付宝自动调 API；微信/YFT 确认人工已退
 function execute(r: any) {
-  const isAlipay = (r.channel || '').toLowerCase() === 'alipay'
+  const auto = !!r.canAutoRefund
   dialog.warning({
-    title: isAlipay ? '自动退款' : '确认已退款',
-    content: isAlipay
-      ? `将调用支付宝退款 ¥${r.amount} 到原支付方式，这是真实退款操作，确认执行？`
+    title: auto ? '自动退款' : '确认已退款',
+    content: auto
+      ? `将调用${channelText(r.channel)}接口自动退款 ¥${r.amount} 到原支付方式，这是真实退款操作，确认执行？`
       : `确认工单 #${r.id}（¥${r.amount}）已在${channelText(r.channel)}商户后台完成退款？`,
-    positiveText: isAlipay ? '执行退款' : '确认已退',
+    positiveText: auto ? '执行退款' : '确认已退',
     negativeText: '取消',
     onPositiveClick: async () => {
       const res = await api.post(`refunds/${r.id}/execute`)
-      if (res.code === 0) { message.success(isAlipay ? '退款成功' : '已标记已退款'); load() }
+      if (res.code === 0) { message.success(auto ? '退款已执行' : '已标记已退款'); load() }
       else message.error(res.message)
     },
   })
@@ -195,8 +195,7 @@ const columns = [
           btns.push(h(NButton, { size: 'tiny', type: 'error', onClick: () => approve(r, false) }, { default: () => '驳回' }))
         }
         else if (r.status === 1) {
-          const isAlipay = (r.channel || '').toLowerCase() === 'alipay'
-          btns.push(h(NButton, { size: 'tiny', type: 'success', onClick: () => execute(r) }, { default: () => (isAlipay ? '自动退款' : '确认已退款') }))
+          btns.push(h(NButton, { size: 'tiny', type: 'success', onClick: () => execute(r) }, { default: () => (r.canAutoRefund ? '自动退款' : '确认已退款') }))
         }
         else if (r.status === 4) {
           btns.push(h(NButton, { size: 'tiny', type: 'warning', onClick: () => execute(r) }, { default: () => '重试退款' }))
