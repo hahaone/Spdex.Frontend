@@ -31,12 +31,31 @@
         </NDescriptionsItem>
       </NDescriptions>
     </NModal>
+
+    <NModal v-model:show="showRefund" preset="card" title="发起退款" style="width:460px">
+      <NForm label-placement="left" label-width="84">
+        <NFormItem label="订单号"><NInput :value="refundForm.orderId" disabled /></NFormItem>
+        <NFormItem label="渠道">
+          <span>{{ refundChannelText }}</span>
+          <NTag v-if="refundable?.canAutoRefund" size="small" type="success" :bordered="false" class="ml-2">支付宝·审批后可自动退款</NTag>
+          <NTag v-else-if="refundable" size="small" :bordered="false" class="ml-2">需人工后台退款</NTag>
+        </NFormItem>
+        <NFormItem label="可退余额">
+          <b>¥{{ refundable?.refundable ?? '—' }}</b>
+          <span class="ml-2 text-xs text-gray-400">订单 ¥{{ refundable?.orderTotalFee ?? '—' }}，已退 ¥{{ refundable?.alreadyRefunded ?? 0 }}</span>
+        </NFormItem>
+        <NFormItem label="退款金额"><NInputNumber v-model:value="refundForm.amount" :min="0.01" :max="refundable?.refundable" :precision="2" style="width:100%" /></NFormItem>
+        <NFormItem label="退款原因"><NInput v-model:value="refundForm.reason" type="textarea" :rows="2" placeholder="必填" /></NFormItem>
+      </NForm>
+      <template #footer><NButton type="primary" :loading="refundSaving" @click="submitRefund">提交退款工单</NButton></template>
+    </NModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { h } from 'vue'
-import { NButton } from 'naive-ui'
+import { NButton, NSpace, useMessage } from 'naive-ui'
+import { P } from '~/utils/permissions'
 
 interface OrderItem {
   orderId: string
@@ -63,6 +82,8 @@ interface OrderDetailT extends OrderItem {
 }
 
 const api = useAdminApi()
+const message = useMessage()
+const { can } = usePermission()
 const rows = ref<OrderItem[]>([])
 const loading = ref(false)
 const pagination = reactive({ page: 1, pageSize: 30, itemCount: 0 })
@@ -116,6 +137,33 @@ async function openDetail(orderId: string) {
   if (res.code === 0) { detail.value = res.data; showDetail.value = true }
 }
 
+const showRefund = ref(false)
+const refundSaving = ref(false)
+const refundable = ref<any>(null)
+const refundForm = reactive<{ orderId: string, amount: number | null, reason: string }>({ orderId: '', amount: null, reason: '' })
+const refundChannelText = computed(() => {
+  const c = refundable.value?.channel
+  return c === 'alipay' ? '支付宝' : c === 'wxcode' ? '微信' : c === 'yft' ? '易付通' : (c || '—')
+})
+async function openRefund(r: OrderItem) {
+  refundForm.orderId = r.orderId
+  refundForm.reason = ''
+  refundForm.amount = null
+  refundable.value = null
+  showRefund.value = true
+  const res = await api.get<any>(`refunds/refundable/${r.orderId}`)
+  if (res.code === 0 && res.data) { refundable.value = res.data; refundForm.amount = res.data.refundable }
+}
+async function submitRefund() {
+  if (!refundForm.reason.trim()) { message.warning('请填写退款原因'); return }
+  if (!refundForm.amount || refundForm.amount <= 0) { message.warning('退款金额无效'); return }
+  refundSaving.value = true
+  const res = await api.post('refunds', { orderId: refundForm.orderId, reason: refundForm.reason.trim(), amount: refundForm.amount })
+  refundSaving.value = false
+  if (res.code === 0) { message.success('已发起退款工单'); showRefund.value = false }
+  else message.error(res.message)
+}
+
 const columns = [
   { title: '订单号', key: 'orderId', width: 180, ellipsis: { tooltip: true } },
   { title: 'UserId', key: 'userId', width: 90 },
@@ -124,7 +172,17 @@ const columns = [
   { title: '金额', key: 'totalFee', width: 90, render: (r: OrderItem) => `¥${r.totalFee}` },
   { title: '状态', key: 'statusText', width: 100 },
   { title: '创建', key: 'createTime', width: 160, render: (r: OrderItem) => fmt(r.createTime) },
-  { title: '操作', key: 'a', width: 80, render: (r: OrderItem) => h(NButton, { size: 'small', onClick: () => openDetail(r.orderId) }, { default: () => '详情' }) },
+  {
+    title: '操作', key: 'a', width: 140,
+    render: (r: OrderItem) => h(NSpace, { size: 'small' }, {
+      default: () => {
+        const btns = [h(NButton, { size: 'small', onClick: () => openDetail(r.orderId) }, { default: () => '详情' })]
+        if (r.status === 1 && can(P.orderRefundRequest))
+          btns.push(h(NButton, { size: 'small', type: 'warning', onClick: () => openRefund(r) }, { default: () => '退款' }))
+        return btns
+      },
+    }),
+  },
 ]
 
 onMounted(load)
