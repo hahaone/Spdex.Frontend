@@ -66,8 +66,11 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in rows" :key="r.company">
-                <td class="c-co">{{ maskCo(r.company) }}</td>
+              <tr v-for="r in rows" :key="r.company" :class="{ 'r-outlier': r.isOutlier }" :title="r.outlierReason || undefined">
+                <td class="c-co">
+                  <span class="co-name">{{ maskCo(r.company) }}</span>
+                  <span v-if="r.isOutlier" class="outlier-badge">异常</span>
+                </td>
                 <td class="c-odds o-home num">{{ od(r.home) }}</td>
                 <td class="c-odds o-draw num">{{ od(r.draw) }}</td>
                 <td class="c-odds o-away num">{{ od(r.away) }}</td>
@@ -183,6 +186,23 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
 .eo-table td.o-away { color: #2456a6; font-weight: 720; }
 .eo-table td.c-ret { font-weight: 820; color: var(--classic-title); }
 .eo-table .r-ext td { background: var(--classic-blue-soft); font-weight: 800; color: var(--classic-title); }
+.eo-table .r-outlier td { opacity: 0.62; }
+.eo-table .r-outlier .co-name {
+  color: #9a6a14;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.outlier-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: #ffe1b5;
+  color: #9a4b08;
+  font-size: 0.62rem;
+  font-weight: 760;
+  text-decoration: none;
+}
 
 /* 均值/方差汇总:6 列网格(即时一行、初盘一行),整齐不再 ragged 折行;窄屏降到 3 列。
    gap:1px + 容器底色 = 网格线，免去逐格 border 的 nth-child 维护。 */

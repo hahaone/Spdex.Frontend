@@ -26,6 +26,8 @@ export interface EuroBookRow {
   ikDraw: number
   ikAway: number
   iRet: number
+  isOutlier: boolean
+  outlierReason: string | null
 }
 
 export interface EuroExtremes {
