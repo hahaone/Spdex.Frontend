@@ -436,27 +436,36 @@ function isLatestTopTrade(
   return !!live?.latestTopTradeKey && trade.key === live.latestTopTradeKey
 }
 
-const NEAR_TRADE_WINDOW_MS = 3_000
+const NEAR_TRADE_WINDOW_MS = 5_000
 
 /**
- * 新进入 TOP10 的成交单（latestTopTradeKey 对应行），
- * 如果与其他 TOP10 大单成交时间差 < 3 秒，则返回 true，
- * 用于把时间单元格高亮为粗体红字（识别簇拥成交）。
+ * 新进入 TOP10 的成交单与其他 TOP10 大单成交时间差 < 5 秒时，
+ * 最新单时间粗体红字，联动单时间红字。
  */
-function isNewTradeNearOthers(
+function topTradeTimeClass(
   trade: LiveMatchOddsTopTradeSummary,
   live: LiveMatchOddsEventItem | undefined,
-): boolean {
-  if (!live?.latestTopTradeKey || trade.key !== live.latestTopTradeKey) return false
-  const t = Date.parse(trade.timestamp)
-  if (Number.isNaN(t)) return false
+): string {
+  if (!live?.latestTopTradeKey) return ''
+  const latest = live.topTrades.find(item => item.key === live.latestTopTradeKey)
+  if (!latest) return ''
+  const latestTime = Date.parse(latest.timestamp)
+  const tradeTime = Date.parse(trade.timestamp)
+  if (Number.isNaN(latestTime) || Number.isNaN(tradeTime)) return ''
+
+  const isLatest = trade.key === live.latestTopTradeKey
+  const isNearLatest = Math.abs(tradeTime - latestTime) < NEAR_TRADE_WINDOW_MS
+  if (!isLatest) return isNearLatest ? 'time-near-collision-linked' : ''
+
   for (const other of live.topTrades) {
     if (other.key === trade.key) continue
-    const ot = Date.parse(other.timestamp)
-    if (Number.isNaN(ot)) continue
-    if (Math.abs(t - ot) < NEAR_TRADE_WINDOW_MS) return true
+    const otherTime = Date.parse(other.timestamp)
+    if (Number.isNaN(otherTime)) continue
+    if (Math.abs(latestTime - otherTime) < NEAR_TRADE_WINDOW_MS) {
+      return 'time-near-collision-latest'
+    }
   }
-  return false
+  return ''
 }
 
 function liveEmptyText(item: MatchListItem): string {
@@ -794,7 +803,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       :class="{ latest: isLatestTopTrade(trade, getLiveItem(item)) }"
                     >
                       <td>{{ trade.rank }}</td>
-                      <td :class="{ 'time-near-collision': isNewTradeNearOthers(trade, getLiveItem(item)) }">{{ formatTradeTime(trade.timestamp) }}</td>
+                      <td :class="topTradeTimeClass(trade, getLiveItem(item))">{{ formatTradeTime(trade.timestamp) }}</td>
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
@@ -1337,11 +1346,16 @@ th.col-tg {
   font-weight: 800;
 }
 
-/* 新进入 TOP10 大单成交时间，与其他 TOP10 成交时间差 < 3s 时高亮（簇拥成交识别） */
-.top-table td.time-near-collision,
-.top-table tr.latest td.time-near-collision {
+/* 新进入 TOP10 大单成交时间，与其他 TOP10 成交时间差 < 5s 时高亮（簇拥成交识别） */
+.top-table td.time-near-collision-latest,
+.top-table tr.latest td.time-near-collision-latest {
   color: #d62929;
   font-weight: 800;
+}
+
+.top-table td.time-near-collision-linked {
+  color: #d62929;
+  font-weight: 400;
 }
 
 .empty-cell {
