@@ -4,9 +4,15 @@ import type { TradeFlowResult } from '~/composables/useTradeFlow'
 const props = withDefaults(defineProps<{
   result: TradeFlowResult | null
   height?: number
+  zoomable?: boolean
 }>(), {
   height: 230,
+  zoomable: false,
 })
+const emit = defineEmits<{
+  zoom: [range: { start: string, end: string }]
+  reset: []
+}>()
 
 /** D3/A7 配色（对照旧站 成交走势图）：买=红 卖=绿 冲=teal 买+=粉 卖+=蓝 换=黑，价位=浅蓝。 */
 const ATTR_COLORS: Record<string, string> = {
@@ -186,32 +192,80 @@ function hm(iso: string): string {
 
 const totalH = computed(() => props.height)
 
-// ── 交互:十字准线 + 悬浮提示(对齐旧站成交走势图) ──
+// ── 交互:十字准线 + 悬浮提示 + 框选缩放(对齐旧站成交走势图) ──
 const chartRef = ref<HTMLElement | null>(null)
 const hoverIndex = ref<number | null>(null)
 const tipLeft = ref(0)
+const dragStartX = ref<number | null>(null)
+const dragCurX = ref<number | null>(null)
+const DRAG_THRESHOLD = 6
+const selRect = computed(() => {
+  if (dragStartX.value == null || dragCurX.value == null) return null
+  const x1 = Math.min(dragStartX.value, dragCurX.value)
+  const x2 = Math.max(dragStartX.value, dragCurX.value)
+  if (x2 - x1 < DRAG_THRESHOLD) return null
+  return { x: x1, y: PAD_TOP, w: x2 - x1, h: chartH.value }
+})
 // 触屏「钉住」:点一下后 tooltip 常显(手指离开不消失),点图表外才取消;鼠标不钉(沿用 hover / leave)。
 const pinned = ref(false)
-function setHoverAt(e: PointerEvent) {
+function svgXOf(e: PointerEvent): number | null {
   const el = scrollRef.value
-  const n = buckets.value.length
-  if (!el || n === 0) return
+  if (!el) return null
   const rect = el.getBoundingClientRect()
-  if (rect.width === 0) return
-  const svgX = (e.clientX - rect.left) + el.scrollLeft
-  hoverIndex.value = Math.max(0, Math.min(n - 1, Math.floor(svgX / bucketW.value)))
+  if (rect.width === 0) return null
+  return Math.max(0, Math.min(svgW.value, (e.clientX - rect.left) + el.scrollLeft))
+}
+function indexAtSvgX(x: number): number {
+  const n = buckets.value.length
+  if (n === 0) return 0
+  return Math.max(0, Math.min(n - 1, Math.floor(x / bucketW.value)))
+}
+function setHoverAt(e: PointerEvent) {
+  const n = buckets.value.length
+  const x = svgXOf(e)
+  if (x == null || n === 0) return
+  hoverIndex.value = indexAtSvgX(x)
   const chartRect = chartRef.value?.getBoundingClientRect()
   tipLeft.value = chartRect ? e.clientX - chartRect.left : 0
 }
 function onDown(e: PointerEvent) {
   setHoverAt(e)
   if (e.pointerType === 'mouse') pinned.value = false
+  if (!props.zoomable) return
+  const x = svgXOf(e)
+  if (x != null) { dragStartX.value = x; dragCurX.value = x }
 }
-function onMove(e: PointerEvent) { setHoverAt(e) }
+function onMove(e: PointerEvent) {
+  setHoverAt(e)
+  if (props.zoomable && dragStartX.value != null) {
+    const x = svgXOf(e)
+    if (x != null) dragCurX.value = x
+  }
+}
 function onUp(e: PointerEvent) {
-  if (e.pointerType !== 'mouse') pinned.value = hoverIndex.value != null
+  let wasDrag = false
+  if (props.zoomable && dragStartX.value != null && dragCurX.value != null
+    && Math.abs(dragCurX.value - dragStartX.value) >= DRAG_THRESHOLD) {
+    wasDrag = true
+    const lo = indexAtSvgX(Math.min(dragStartX.value, dragCurX.value))
+    const hi = indexAtSvgX(Math.max(dragStartX.value, dragCurX.value))
+    const sTs = buckets.value[lo]?.time
+    const eTs = buckets.value[hi]?.time
+    if (sTs && eTs && hi > lo) emit('zoom', { start: sTs, end: eTs })
+  }
+  dragStartX.value = null
+  dragCurX.value = null
+  if (e.pointerType !== 'mouse') {
+    if (wasDrag) { hoverIndex.value = null; pinned.value = false }
+    else pinned.value = hoverIndex.value != null
+  }
 }
-function onLeave() { if (!pinned.value) hoverIndex.value = null }
+function onLeave() {
+  dragStartX.value = null
+  dragCurX.value = null
+  if (!pinned.value) hoverIndex.value = null
+}
+function onDblclick() { if (props.zoomable) emit('reset') }
 // 触屏钉住后:点击图表外任意处取消 tooltip(点图表内则保留/移动)。
 function onDocPointerDown(e: PointerEvent) {
   if (!pinned.value) return
@@ -253,7 +307,7 @@ const tip = computed(() => {
 
       <!-- 中部：可横向滚动的柱状 + 价位线 -->
       <div ref="scrollRef" class="tf-scroll scrollbar-thin">
-        <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onLeave" @pointercancel="onLeave">
+        <svg :width="svgW" :height="totalH" :viewBox="`0 0 ${svgW} ${totalH}`" preserveAspectRatio="none" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onLeave" @pointercancel="onLeave" @dblclick="onDblclick">
           <!-- 网格线：成交带 + 价位带 -->
           <line
             v-for="(t, i) in volTicks"
@@ -306,6 +360,8 @@ const tip = computed(() => {
           >{{ t.label }}</text>
           <!-- 十字准线 -->
           <line v-if="hoverIndex != null" :x1="crosshairX" :x2="crosshairX" :y1="PAD_TOP" :y2="volBase" class="tf-crosshair" />
+          <!-- 框选缩放 -->
+          <rect v-if="selRect" class="tf-brush" :x="selRect.x" :y="selRect.y" :width="selRect.w" :height="selRect.h" />
         </svg>
       </div>
 
@@ -360,6 +416,15 @@ const tip = computed(() => {
   stroke: #9aa3af;
   stroke-width: 1;
   stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.tf-brush {
+  fill: var(--brand);
+  fill-opacity: 0.12;
+  stroke: var(--brand);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
   pointer-events: none;
 }
 

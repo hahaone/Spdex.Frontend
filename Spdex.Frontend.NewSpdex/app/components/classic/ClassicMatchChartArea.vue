@@ -159,8 +159,8 @@ const displayPoints = computed(() => {
 
 function onZoom(range: { start: string, end: string }) { zoomWindow.value = range }
 function resetZoom() { zoomWindow.value = null }
-// 切时间段 / 切指标 → 清缩放(避免 ts 窗口对不上新序列);轮询刷新不清,保持缩放。
-watch([timeRange, chartType], () => { zoomWindow.value = null })
+// 切时间段 / 切指标 / 切方向 → 清缩放(避免 ts 窗口对不上新序列);轮询刷新不清,保持缩放。
+watch([timeRange, chartType, seriesOnly], () => { zoomWindow.value = null })
 
 const directionLabels = computed(() => {
   if (market.value === 'goals') return { home: '大', draw: null, away: '小' }
@@ -387,6 +387,9 @@ const detailButtons = computed<DetailBtn[]>(() => {
             :time-range="timeRange"
             :height="chartHeight"
             :refresh-key="tradeFlowRefreshKey"
+            :zoom-window="zoomWindow"
+            @zoom="onZoom"
+            @reset="resetZoom"
           />
           <div v-else-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
           <div v-else-if="!chartReady" class="chart-state">加载中…</div>
