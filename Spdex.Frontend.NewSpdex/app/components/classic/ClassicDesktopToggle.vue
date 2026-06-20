@@ -55,10 +55,4 @@ const { desktopViewMode, isDesktopModeAvailable, setDesktopViewMode } = useDeskt
   color: var(--brand-deep);
   background: var(--brand-tint);
 }
-
-@media (max-width: 1199px) {
-  .classic-toggle {
-    display: none;
-  }
-}
 </style>

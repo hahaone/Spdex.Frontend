@@ -4,6 +4,10 @@ import { Bell, Moon, Search, Sun } from '@lucide/vue'
 const route = useRoute()
 const { isDark, toggle } = useTheme()
 const { show: showCommand } = useCommandPalette()
+const { isClassicDesktop, setDesktopViewMode } = useDesktopViewMode()
+function toggleViewMode() {
+  setDesktopViewMode(isClassicDesktop.value ? 'modern' : 'classic')
+}
 
 const title = computed(() => {
   if (route.path.startsWith('/football')) return '今日足球'
@@ -27,6 +31,13 @@ const title = computed(() => {
     </div>
 
     <div class="top-actions" aria-label="页面工具">
+      <button
+        class="mode-pill focus-ring"
+        :aria-label="isClassicDesktop ? '切换到新版' : '切换到经典版（宽屏布局，可横屏或双指缩放）'"
+        @click="toggleViewMode"
+      >
+        {{ isClassicDesktop ? '新版' : '经典' }}
+      </button>
       <button class="icon-btn focus-ring" aria-label="搜索" @click="showCommand()">
         <Search :size="17" />
       </button>
@@ -103,6 +114,23 @@ const title = computed(() => {
 .icon-btn:active {
   background: var(--brand-tint);
   color: var(--brand-deep);
+}
+
+.mode-pill {
+  margin-right: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--brand);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--brand);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mode-pill:active {
+  background: var(--brand-tint);
 }
 
 @media (max-width: 370px) {
