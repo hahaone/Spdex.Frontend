@@ -5,7 +5,7 @@
  *  - 导航/其它同源 GET：network-first，离线时回退缓存（降级）
  * 升级缓存版本只需改 CACHE 名。
  */
-const CACHE = 'newspdex-shell-v4'
+const CACHE = 'newspdex-shell-v5'
 const PRECACHE = [
   '/favicon.ico',
   '/manifest.webmanifest',

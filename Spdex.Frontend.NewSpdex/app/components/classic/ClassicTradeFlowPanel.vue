@@ -25,6 +25,7 @@ const { data, status, pending, refresh } = useTradeFlow(
   computed(() => props.eventId),
   computed(() => props.market),
   computed(() => props.selection),
+  computed(() => 'raw'),
 )
 const { points: timelinePoints } = useChartSeries(
   computed(() => props.eventId),
@@ -103,16 +104,16 @@ const denseTimeline = computed(() => {
   return filtered.length >= 2 ? filtered : all
 })
 
-// 按密集 .traded 时间轴补齐 tradeflow 空桶：成交属性来自 tradeflow，价位/时间网格来自 timeseries。
-// 这样既保留旧站买/卖/冲/买+/卖+/换，又不会因为目标方向无成交而让价位线节点变稀疏。
+// 单方向优先使用 tradeflow raw 原始点；只有后端还未返回 raw 密度时，才用 .traded 时间轴兜底补齐。
 const filtered = computed<TradeFlowResult | null>(() => {
   const d = data.value
   if (!d) return null
+  const base = fallbackFiltered(d)
   const timeline = denseTimeline.value
-  if (timeline.length < 2) return fallbackFiltered(d)
+  if (timeline.length < 2 || base.buckets.length >= timeline.length) return base
 
   const itemMap = new Map<number, Record<string, number>>()
-  for (const b of d.buckets) {
+  for (const b of base.buckets) {
     const key = bucketKey(b.time)
     if (key == null) continue
     const normalized = normalizeItems(b.items ?? {})
@@ -134,7 +135,7 @@ const filtered = computed<TradeFlowResult | null>(() => {
     }
   })
 
-  return { ...d, attrs: fixedAttrs(d), buckets }
+  return { ...base, attrs: fixedAttrs(base), buckets }
 })
 </script>
 
