@@ -24,20 +24,31 @@ const reviewOptions = [
   { label: '12小时前', value: 720 },
 ]
 
-// 每块的指标极值(行内热力归一化)
-interface BlockView extends CsBlock { maxTraded: number, maxLocked: number, maxPayoutAbs: number }
+// 每行按「列间排名」着色（还原旧站 CorrectSocreHandler：成交/锁定取前 4 名红；盈亏/指数前 4 名红 + 后 4 名绿，其余无背景）
+interface BlockView extends CsBlock {
+  tradedRank: Record<string, number>
+  lockedRank: Record<string, number>
+  payoutRank: Record<string, number>
+  indexRank: Record<string, number>
+  rankCount: number
+}
+function rankMap(keys: string[], cells: Record<string, CsCell>, getVal: (c: CsCell) => number): Record<string, number> {
+  const valid = keys.filter(k => cells[k]).map(k => ({ k, v: getVal(cells[k]!) }))
+  valid.sort((a, b) => b.v - a.v)   // 数值降序
+  const r: Record<string, number> = {}
+  valid.forEach((it, i) => { r[it.k] = i + 1 })
+  return r
+}
 const viewBlocks = computed<BlockView[]>(() => blocks.value.map((b) => {
-  let mt = 0
-  let ml = 0
-  let mp = 0
-  for (const s of scores.value) {
-    const c = b.cells[s.key]
-    if (!c) continue
-    mt = Math.max(mt, c.traded)
-    ml = Math.max(ml, c.locked)
-    mp = Math.max(mp, Math.abs(c.payout))
+  const keys = scores.value.map(s => s.key)
+  return {
+    ...b,
+    tradedRank: rankMap(keys, b.cells, c => c.traded),
+    lockedRank: rankMap(keys, b.cells, c => c.locked),
+    payoutRank: rankMap(keys, b.cells, c => c.payout),
+    indexRank: rankMap(keys, b.cells, c => c.index),
+    rankCount: keys.filter(k => b.cells[k]).length,
   }
-  return { ...b, maxTraded: mt, maxLocked: ml, maxPayoutAbs: mp }
 }))
 
 function cell(b: CsBlock, s: CsScore): CsCell | undefined { return b.cells[s.key] }
@@ -48,37 +59,25 @@ function fPct(n: number): string { return n !== 0 ? `${n.toFixed(2)}%` : '' }
 function fPnl(n: number): string { return n !== 0 ? n.toFixed(2) : '' }
 function fIdx(n: number): string { return n !== 0 ? Math.round(n).toString() : '' }
 
-function heatStep(r: number): number {
-  if (r >= 0.92) return 5
-  if (r >= 0.76) return 4
-  if (r >= 0.6) return 3
-  if (r >= 0.45) return 2
-  if (r >= 0.28) return 1
-  return 0
+// 旧站排名色：红=前 4 名(高值) #990000→#FFBFBF；绿=后 4 名(低值) #5ADD57(浅)→#193314(深)
+const rankReds = ['#990000', '#cc0000', '#ff3300', '#ffbfbf']
+const rankGreens = ['#5add57', '#008c23', '#166314', '#193314']
+function rankStyle(color: string): Record<string, string> {
+  return { background: color, color: '#fff', fontWeight: '700' }
 }
-
-const redScale = ['', '#f9bbbb', '#ff3211', '#e50000', '#b90000', '#940000']
-const greenScale = ['', '#50dc50', '#00921c', '#006d16', '#17401c', '#102c13']
-
-function heatStyle(color: string, strong: boolean): Record<string, string> {
-  if (!color) return {}
-  return {
-    background: color,
-    color: strong ? '#fff' : '#1f2b3a',
-    fontWeight: strong ? '780' : '650',
+// 成交/锁定：仅前 4 名红
+function rankRed(rank: number | undefined): Record<string, string> {
+  return rank && rank >= 1 && rank <= 4 ? rankStyle(rankReds[rank - 1]!) : {}
+}
+// 盈亏/指数：前 4 名红 + 后 4 名绿（总数 > 8 才双向，避免少数据时红绿重叠）
+function rankRedGreen(rank: number | undefined, count: number): Record<string, string> {
+  if (!rank) return {}
+  if (rank <= 4) return rankStyle(rankReds[rank - 1]!)
+  if (count > 8) {
+    const fromEnd = count - rank   // 0 = 最后一名
+    if (fromEnd >= 0 && fromEnd <= 3) return rankStyle(rankGreens[3 - fromEnd]!)
   }
-}
-
-function redHeat(v: number, max: number): Record<string, string> {
-  if (!(v > 0) || max <= 0) return {}
-  const step = heatStep(Math.min(1, v / max))
-  return heatStyle(redScale[step] ?? '', step >= 2)
-}
-function pnlHeat(v: number, maxAbs: number): Record<string, string> {
-  if (!v || maxAbs <= 0) return {}
-  const step = heatStep(Math.min(1, Math.abs(v) / maxAbs))
-  const scale = v > 0 ? redScale : greenScale
-  return heatStyle(scale[step] ?? '', step >= 2)
+  return {}
 }
 function dirArrow(d: number): string { return d > 0 ? '▲' : d < 0 ? '▼' : '' }
 function dirCls(d: number): string { return d > 0 ? 'up' : d < 0 ? 'down' : '' }
@@ -130,30 +129,30 @@ function money(n: number): string { return Math.round(n).toLocaleString('en-US')
                 <tr>
                   <th class="m-col">赔率</th>
                   <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]">
-                    <template v-if="cell(b, s)"><i :class="['ar', dirCls(cell(b, s)!.oddsDir)]">{{ dirArrow(cell(b, s)!.oddsDir) }}</i>{{ fOdds(cell(b, s)!.odds) }}</template>
+                    <template v-if="cell(b, s)"><i v-if="bi === 0" :class="['ar', dirCls(cell(b, s)!.oddsDir)]">{{ dirArrow(cell(b, s)!.oddsDir) }}</i>{{ fOdds(cell(b, s)!.odds) }}</template>
                   </td>
                 </tr>
                 <tr>
                   <th class="m-col">成交</th>
-                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? redHeat(cell(b, s)!.traded, b.maxTraded) : {}">{{ cell(b, s) ? fAmt(cell(b, s)!.traded) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="rankRed(b.tradedRank[s.key])">{{ cell(b, s) ? fAmt(cell(b, s)!.traded) : '' }}</td>
                 </tr>
                 <tr>
                   <th class="m-col">锁定</th>
-                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? redHeat(cell(b, s)!.locked, b.maxLocked) : {}">{{ cell(b, s) ? fAmt(cell(b, s)!.locked) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="rankRed(b.lockedRank[s.key])">{{ cell(b, s) ? fAmt(cell(b, s)!.locked) : '' }}</td>
                 </tr>
                 <tr>
                   <th class="m-col">比例</th>
                   <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]">
-                    <template v-if="cell(b, s)"><i :class="['ar', dirCls(cell(b, s)!.ratioDir)]">{{ dirArrow(cell(b, s)!.ratioDir) }}</i>{{ fPct(cell(b, s)!.ratio) }}</template>
+                    <template v-if="cell(b, s)"><i v-if="bi === 0" :class="['ar', dirCls(cell(b, s)!.ratioDir)]">{{ dirArrow(cell(b, s)!.ratioDir) }}</i>{{ fPct(cell(b, s)!.ratio) }}</template>
                   </td>
                 </tr>
                 <tr>
                   <th class="m-col">盈亏</th>
-                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? pnlHeat(cell(b, s)!.payout, b.maxPayoutAbs) : {}">{{ cell(b, s) ? fPnl(cell(b, s)!.payout) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="rankRedGreen(b.payoutRank[s.key], b.rankCount)">{{ cell(b, s) ? fPnl(cell(b, s)!.payout) : '' }}</td>
                 </tr>
                 <tr>
                   <th class="m-col">指数</th>
-                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? pnlHeat(cell(b, s)!.payout, b.maxPayoutAbs) : {}">{{ cell(b, s) ? fIdx(cell(b, s)!.index) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="rankRedGreen(b.indexRank[s.key], b.rankCount)">{{ cell(b, s) ? fIdx(cell(b, s)!.index) : '' }}</td>
                 </tr>
               </tbody>
             </table>
