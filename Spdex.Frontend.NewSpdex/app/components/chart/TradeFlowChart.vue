@@ -24,7 +24,7 @@ function attrColor(a: string): string {
 
 const PAD_TOP = 8
 const PAD_BOTTOM = 24 // 底部留白:x 轴时间标签落在 0 线下方,不与柱/0 线重叠(对齐 StaticTrendChart)
-const BUCKET_W_MIN = 12
+const BUCKET_W_FLOOR = 1.2
 
 const buckets = computed(() => props.result?.buckets ?? [])
 const attrs = computed(() => props.result?.attrs ?? [])
@@ -42,7 +42,8 @@ function toggleAttr(a: string) {
 }
 watch(() => props.result?.selectionLabel, () => { hiddenAttrs.value = new Set(); priceHidden.value = false })
 
-// 测量中部可视宽度：桶少时把桶宽撑开填满容器（消除右侧空白），桶多时回落到最小桶宽并横向滚动。
+// 测量中部可视宽度：旧站成交图会把原始点压进当前图宽，不能按固定最小桶宽横向滚动，
+// 否则 raw 明细点虽然返回了，当前视口里仍只看到稀疏的一小段。
 const scrollRef = ref<HTMLElement | null>(null)
 const measuredWidth = ref(320)
 onMounted(() => {
@@ -60,7 +61,7 @@ onMounted(() => {
 })
 const bucketW = computed(() => {
   const n = buckets.value.length
-  return n > 0 ? Math.max(BUCKET_W_MIN, measuredWidth.value / n) : BUCKET_W_MIN
+  return n > 0 ? Math.max(BUCKET_W_FLOOR, measuredWidth.value / n) : 8
 })
 
 const chartH = computed(() => Math.max(props.height - PAD_TOP - PAD_BOTTOM, 40))
@@ -116,10 +117,11 @@ const bars = computed<Bar[]>(() => {
   const vis = visibleAttrs.value
   const aN = Math.max(vis.length, 1)
   const bw = bucketW.value
-  const groupW = bw - 5
+  const gap = bw >= 6 ? 5 : Math.max(0.2, bw * 0.18)
+  const groupW = Math.max(bw - gap, 0.8)
   const barW = groupW / aN
   buckets.value.forEach((b, i) => {
-    const x0 = i * bw + 2.5
+    const x0 = i * bw + gap / 2
     vis.forEach((a, j) => {
       const v = b.items[a] ?? 0
       if (v <= 0) return
@@ -127,7 +129,7 @@ const bars = computed<Bar[]>(() => {
       out.push({
         x: x0 + j * barW,
         y: volBase.value - h,
-        w: Math.max(barW - 0.6, 1),
+        w: Math.max(barW - 0.15, 0.45),
         h,
         color: attrColor(a),
       })
@@ -146,6 +148,7 @@ const pricePts = computed(() => {
   return pts
 })
 const priceLine = computed(() => pricePts.value.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '))
+const pointRadius = computed(() => bucketW.value < 4 ? 0.8 : 1.6)
 
 /** 成交（左轴，下方带）刻度：等视觉高度处的真实成交量（sqrt 标度 → 量值非线性，向下收窄）。 */
 const volTicks = computed(() =>
@@ -288,7 +291,7 @@ const tip = computed(() => {
               :key="`p${i}`"
               :cx="p.x"
               :cy="p.y"
-              r="1.6"
+              :r="pointRadius"
               :fill="PRICE_COLOR"
             />
           </template>
