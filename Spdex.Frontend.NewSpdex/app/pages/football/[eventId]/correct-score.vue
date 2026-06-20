@@ -48,16 +48,37 @@ function fPct(n: number): string { return n !== 0 ? `${n.toFixed(2)}%` : '' }
 function fPnl(n: number): string { return n !== 0 ? n.toFixed(2) : '' }
 function fIdx(n: number): string { return n !== 0 ? Math.round(n).toString() : '' }
 
+function heatStep(r: number): number {
+  if (r >= 0.92) return 5
+  if (r >= 0.76) return 4
+  if (r >= 0.6) return 3
+  if (r >= 0.45) return 2
+  if (r >= 0.28) return 1
+  return 0
+}
+
+const redScale = ['', '#f9bbbb', '#ff3211', '#e50000', '#b90000', '#940000']
+const greenScale = ['', '#50dc50', '#00921c', '#006d16', '#17401c', '#102c13']
+
+function heatStyle(color: string, strong: boolean): Record<string, string> {
+  if (!color) return {}
+  return {
+    background: color,
+    color: strong ? '#fff' : '#1f2b3a',
+    fontWeight: strong ? '780' : '650',
+  }
+}
+
 function redHeat(v: number, max: number): Record<string, string> {
   if (!(v > 0) || max <= 0) return {}
-  const r = Math.min(1, v / max)
-  return { background: `rgba(214, 48, 43, ${(0.1 + 0.78 * r).toFixed(3)})`, color: r > 0.42 ? '#fff' : 'inherit' }
+  const step = heatStep(Math.min(1, v / max))
+  return heatStyle(redScale[step] ?? '', step >= 2)
 }
 function pnlHeat(v: number, maxAbs: number): Record<string, string> {
   if (!v || maxAbs <= 0) return {}
-  const r = Math.min(1, Math.abs(v) / maxAbs)
-  const rgb = v > 0 ? '214, 48, 43' : '38, 132, 86'
-  return { background: `rgba(${rgb}, ${(0.1 + 0.78 * r).toFixed(3)})`, color: r > 0.5 ? '#fff' : 'inherit' }
+  const step = heatStep(Math.min(1, Math.abs(v) / maxAbs))
+  const scale = v > 0 ? redScale : greenScale
+  return heatStyle(scale[step] ?? '', step >= 2)
 }
 function dirArrow(d: number): string { return d > 0 ? '▲' : d < 0 ? '▼' : '' }
 function dirCls(d: number): string { return d > 0 ? 'up' : d < 0 ? 'down' : '' }
@@ -114,11 +135,11 @@ function money(n: number): string { return Math.round(n).toLocaleString('en-US')
                 </tr>
                 <tr>
                   <th class="m-col">成交</th>
-                  <td v-for="s in scores" :key="s.key" class="v num" :style="cell(b, s) ? redHeat(cell(b, s)!.traded, b.maxTraded) : {}">{{ cell(b, s) ? fAmt(cell(b, s)!.traded) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? redHeat(cell(b, s)!.traded, b.maxTraded) : {}">{{ cell(b, s) ? fAmt(cell(b, s)!.traded) : '' }}</td>
                 </tr>
                 <tr>
                   <th class="m-col">锁定</th>
-                  <td v-for="s in scores" :key="s.key" class="v num" :style="cell(b, s) ? redHeat(cell(b, s)!.locked, b.maxLocked) : {}">{{ cell(b, s) ? fAmt(cell(b, s)!.locked) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? redHeat(cell(b, s)!.locked, b.maxLocked) : {}">{{ cell(b, s) ? fAmt(cell(b, s)!.locked) : '' }}</td>
                 </tr>
                 <tr>
                   <th class="m-col">比例</th>
@@ -128,11 +149,11 @@ function money(n: number): string { return Math.round(n).toLocaleString('en-US')
                 </tr>
                 <tr>
                   <th class="m-col">盈亏</th>
-                  <td v-for="s in scores" :key="s.key" class="v num" :style="cell(b, s) ? pnlHeat(cell(b, s)!.payout, b.maxPayoutAbs) : {}">{{ cell(b, s) ? fPnl(cell(b, s)!.payout) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? pnlHeat(cell(b, s)!.payout, b.maxPayoutAbs) : {}">{{ cell(b, s) ? fPnl(cell(b, s)!.payout) : '' }}</td>
                 </tr>
                 <tr>
                   <th class="m-col">指数</th>
-                  <td v-for="s in scores" :key="s.key" class="v num" :style="cell(b, s) ? pnlHeat(cell(b, s)!.payout, b.maxPayoutAbs) : {}">{{ cell(b, s) ? fIdx(cell(b, s)!.index) : '' }}</td>
+                  <td v-for="s in scores" :key="s.key" :class="['v', 'num', { tint: tint(s) }]" :style="cell(b, s) ? pnlHeat(cell(b, s)!.payout, b.maxPayoutAbs) : {}">{{ cell(b, s) ? fIdx(cell(b, s)!.index) : '' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -199,66 +220,88 @@ function money(n: number): string { return Math.round(n).toLocaleString('en-US')
   border-radius: 6px; background: var(--classic-blue-soft); color: #8a6212;
 }
 
-.cs-block { padding: 12px 14px 4px; }
-.cs-block-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
-.cs-block-head h3 { margin: 0; font-size: 1rem; font-weight: 840; color: var(--classic-title); }
+.cs-block { padding: 14px 14px 8px; }
+.cs-block + .cs-block { padding-top: 18px; }
+.cs-block-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px 12px;
+  background: #fff;
+  border: 1px solid #e1e1e1;
+}
+.cs-block-head h3 { margin: 0; font-size: 1.14rem; font-weight: 840; color: #2f3946; }
 .cs-review {
   height: 26px; padding: 0 6px; border: 1px solid var(--classic-border); border-radius: 2px;
   background: var(--classic-panel); color: var(--classic-text); font-size: 0.78rem; font-weight: 720;
 }
 
-.cs-table-wrap { overflow-x: auto; }
+.cs-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+}
 .cs-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 1220px;
   border-collapse: collapse;
-  font-size: 0.72rem;
+  font-family: Arial, 'Helvetica Neue', sans-serif;
+  font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   table-layout: fixed;
+  color: #1f2b3a;
 }
 .cs-table th,
 .cs-table td {
-  border: 1px solid var(--classic-grid);
-  padding: 4px 4px;
+  height: 34px;
+  border: 1px solid #d9dfe7;
+  padding: 5px 6px;
   text-align: center;
   white-space: nowrap;
 }
 .cs-table .m-col {
-  width: 46px;
-  background: var(--classic-blue-soft);
-  color: var(--classic-title);
-  font-weight: 820;
+  width: 54px;
+  background: #a9d0fb;
+  color: #1f2b3a;
+  font-weight: 760;
   position: sticky;
   left: 0;
   z-index: 1;
 }
 .cs-table thead .s-h {
-  font-weight: 820;
-  color: var(--classic-title);
-  background: var(--classic-panel);
+  height: 42px;
+  font-weight: 760;
+  color: #101820;
+  background: #fff;
 }
-.cs-table thead .s-h.tint { background: var(--classic-blue-soft); }
-.cs-table td.v { font-family: 'JetBrains Mono', 'SF Mono', monospace; color: var(--classic-text); }
-.cs-table td.v.tint { background: var(--classic-blue-soft); }
+.cs-table thead .s-h.tint { background: #a9d0fb; }
+.cs-table td.v {
+  font-family: Arial, 'Helvetica Neue', sans-serif;
+  color: #1f2b3a;
+  font-weight: 500;
+}
+.cs-table td.v.tint { background: #a9d0fb; }
 
-.ar { font-style: normal; font-size: 0.6rem; margin-right: 1px; }
-.ar.up { color: #2f9e63; }
-.ar.down { color: #d62b2b; }
+.ar { font-style: normal; font-size: 0.7rem; margin-right: 2px; font-weight: 900; }
+.ar.up { color: #25932c; }
+.ar.down { color: #ee302b; }
 
 .cs-foot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
-  margin-top: 6px;
-  padding: 8px 4px 4px;
-  border-top: 1px solid var(--classic-border);
-  font-size: 0.78rem;
-  font-weight: 740;
-  color: var(--classic-text);
+  gap: 8px 48px;
+  margin-top: 0;
+  padding: 10px 64px;
+  border: 1px solid #d9dfe7;
+  border-top: 0;
+  background: #dceafb;
+  font-size: 0.82rem;
+  font-weight: 760;
+  color: #1f2b3a;
 }
-.cs-foot b { color: var(--classic-title); font-weight: 840; }
-.f-big { color: var(--classic-title-muted); font-weight: 720; }
+.cs-foot b { color: #101820; font-weight: 840; }
+.f-big { color: #1f2b3a; font-weight: 500; }
 
 .dark .cs-table thead .s-h.tint,
 .dark .cs-table td.v.tint,
