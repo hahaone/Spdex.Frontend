@@ -24,7 +24,7 @@ function attrColor(a: string): string {
 
 const PAD_TOP = 8
 const PAD_BOTTOM = 24 // 底部留白:x 轴时间标签落在 0 线下方,不与柱/0 线重叠(对齐 StaticTrendChart)
-const BUCKET_W_MIN = 22
+const BUCKET_W_MIN = 12
 
 const buckets = computed(() => props.result?.buckets ?? [])
 const attrs = computed(() => props.result?.attrs ?? [])

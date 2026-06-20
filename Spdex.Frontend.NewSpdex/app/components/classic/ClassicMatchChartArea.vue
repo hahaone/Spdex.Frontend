@@ -124,9 +124,10 @@ const hasDirection = computed(() => chartKind.value === 'traded')
 const trendOnly = computed<TradeDirection | null>(() =>
   (chartKind.value === 'traded' && seriesOnly.value && seriesOnly.value !== 'all') ? seriesOnly.value : null)
 
-// 经典内嵌成交走势图始终使用 .traded 密集时间序列；只看主/平/客仅在图表层过滤方向，
-// 避免切到成交明细 tradeflow 聚合后只在该方向有成交的时间桶出点，导致节点变稀疏。
-const needsSeriesChart = computed(() => view.value === 'chart')
+// 成交系 + 只看单方向(主/客/平)→ 切「成交明细」:买/卖/买+/卖+/冲/换 attr 拆分 + 单价位线。
+// 后端 tradeflow 已用整盘口记录补完整时间网格，单方向不会再因为只看目标 selection 而稀疏。
+const isTradeFlowDetail = computed(() => trendOnly.value !== null)
+const needsSeriesChart = computed(() => view.value === 'chart' && !isTradeFlowDetail.value)
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType } = useChartSeries(
   eventIdRef,
   chartType,
@@ -286,8 +287,10 @@ function isActive(b: MetricBtn) {
 function showTips() { view.value = 'tips' }
 defineExpose({ showTips })
 
+const tradeFlowRefreshKey = ref(0)
 function refreshChart() {
-  refresh()
+  if (isTradeFlowDetail.value) tradeFlowRefreshKey.value++
+  else refresh()
 }
 
 // 经典版「明细图表」入口(还原旧站),按运动分流:
@@ -366,8 +369,8 @@ const detailButtons = computed<DetailBtn[]>(() => {
           <select v-if="hasDirection" v-model="seriesOnly" class="cd-select" aria-label="方向筛选" @change="onSeriesOnlyChange">
             <option v-for="o in seriesOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
-          <button type="button" class="cd-refresh" :disabled="pending" aria-label="刷新" @click="refreshChart">
-            <RefreshCw :size="13" :class="{ spinning: pending }" />
+          <button type="button" class="cd-refresh" :disabled="!isTradeFlowDetail && pending" aria-label="刷新" @click="refreshChart">
+            <RefreshCw :size="13" :class="{ spinning: !isTradeFlowDetail && pending }" />
           </button>
           <button v-if="zoomWindow" type="button" class="cd-reset" aria-label="还原缩放" @click="resetZoom">还原</button>
           <span v-else class="cd-hint">拖动框选可放大</span>
@@ -375,7 +378,17 @@ const detailButtons = computed<DetailBtn[]>(() => {
         </div>
 
         <div class="chart-canvas" :style="{ '--cc-h': `${chartHeight}px` }">
-          <div v-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
+          <!-- 单方向成交图保留旧站成交属性柱：买/卖/冲/买+/卖+/换 + 单价位线。 -->
+          <ClassicTradeFlowPanel
+            v-if="isTradeFlowDetail"
+            :event-id="eventId"
+            :market="market"
+            :selection="seriesOnly || 'home'"
+            :time-range="timeRange"
+            :height="chartHeight"
+            :refresh-key="tradeFlowRefreshKey"
+          />
+          <div v-else-if="statusLabel" class="chart-state">{{ statusLabel }}</div>
           <div v-else-if="!chartReady" class="chart-state">加载中…</div>
           <template v-else-if="displayPoints.length">
             <!-- 比例 → 百分比堆叠面积图;成交系/折线 → StaticTrendChart(成交=柱+价位线全高叠加,其余=纯折线) -->
