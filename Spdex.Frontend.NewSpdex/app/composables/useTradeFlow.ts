@@ -26,7 +26,7 @@ export function useTradeFlow(
   eventId: MaybeRef<number>,
   market: MaybeRef<string>,
   selection: MaybeRef<string>,
-  granularity: MaybeRef<string> = ref('15m'),
+  granularity: MaybeRef<string> = ref('5m'),
 ) {
   const idRef = computed(() => unref(eventId))
   const marketRef = computed(() => unref(market))
