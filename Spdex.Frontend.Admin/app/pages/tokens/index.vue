@@ -295,6 +295,23 @@ function revokeBinding(row: BindingRow) {
   })
 }
 
+// ── 撤销绑定并删除令牌（彻底作废）──
+function confirmForceRemove(code: string, boundUser?: { userName: string, userId: number } | null) {
+  dialog.warning({
+    title: '撤销绑定并删除令牌',
+    content: boundUser
+      ? `令牌 ${code} 已绑定用户 ${boundUser.userName}（UserId ${boundUser.userId}）。确认撤销其绑定并彻底删除该令牌？该用户会话将立即失效，令牌不可恢复。`
+      : `确认彻底删除令牌 ${code}？不可恢复。`,
+    positiveText: '撤销并删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const res = await api.del(`license-tokens/${encodeURIComponent(code)}/force`)
+      if (res.code === 0) { message.success(res.message || '已撤销并删除'); load() }
+      else message.error(res.message)
+    },
+  })
+}
+
 const tokenColumns = [
   { title: '令牌码', key: 'code', width: 160 },
   { title: '类型', key: 'type', width: 120, render: (r: TokenRow) => typeTag(r.type) },
@@ -309,17 +326,14 @@ const tokenColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 180,
+    width: 200,
     render: (r: TokenRow) => h(NSpace, { size: 'small' }, {
       default: () => [
         can(P.tokenManage) ? h(NButton, { size: 'small', onClick: () => openType(r) }, { default: () => '改类型' }) : null,
         can(P.tokenManage)
-          ? h(NButton, {
-              size: 'small',
-              type: 'error',
-              disabled: !!r.boundTo,
-              onClick: () => removeToken(r),
-            }, { default: () => '删除' })
+          ? (r.boundTo
+              ? h(NButton, { size: 'small', type: 'error', onClick: () => confirmForceRemove(r.code, r.boundTo) }, { default: () => '撤销并删除' })
+              : h(NButton, { size: 'small', type: 'error', onClick: () => removeToken(r) }, { default: () => '删除' }))
           : null,
       ].filter(Boolean),
     }),
@@ -335,9 +349,14 @@ const bindingColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 120,
+    width: 220,
     render: (r: BindingRow) => can(P.tokenManage)
-      ? h(NButton, { size: 'small', type: 'error', onClick: () => revokeBinding(r) }, { default: () => '撤销绑定' })
+      ? h(NSpace, { size: 'small' }, {
+          default: () => [
+            h(NButton, { size: 'small', onClick: () => revokeBinding(r) }, { default: () => '撤销绑定' }),
+            h(NButton, { size: 'small', type: 'error', onClick: () => confirmForceRemove(r.code, { userName: r.userName, userId: r.userId }) }, { default: () => '撤销并删除' }),
+          ],
+        })
       : null,
   },
 ]
