@@ -21,4 +21,6 @@ export const P = {
   signalConfig: 'signal.config',
   analyticsView: 'analytics.view',
   analyticsUserTracking: 'analytics.user.tracking',
+  tokenView: 'token.view',
+  tokenManage: 'token.manage',
 } as const
