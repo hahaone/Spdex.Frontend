@@ -14,6 +14,24 @@ function isBswOk(result: KalshiBswApiResult<unknown>): boolean {
   return String(result.code) === BSW_OK
 }
 
+function linkPriority(link: KalshiSoccerMatchLink): number {
+  const series = link.seriesTicker?.trim().toUpperCase() ?? ''
+  const ticker = link.kalshiEventTicker?.trim().toUpperCase() ?? ''
+  const title = link.kalshiTitle?.trim().toLowerCase() ?? ''
+
+  if (series === 'KXWCGAME' || ticker.startsWith('KXWCGAME-')) return 0
+  if (series === 'KXWC1H' || ticker.startsWith('KXWC1H-') || title.includes('first half')) return 2
+  return 1
+}
+
+function selectPrimaryLink(links: KalshiSoccerMatchLink[]): KalshiSoccerMatchLink | null {
+  return [...links].sort((a, b) => {
+    const priority = linkPriority(a) - linkPriority(b)
+    if (priority !== 0) return priority
+    return (b.matchConfidence ?? 0) - (a.matchConfidence ?? 0)
+  })[0] ?? null
+}
+
 export function useKalshiData(
   spdexEventId: Ref<number | null>,
   options: { withWindowStats?: boolean, withCandlesticks?: boolean } = {},
@@ -33,7 +51,7 @@ export function useKalshiData(
 
   const token = useCookie('spdex_token')
 
-  const primaryLink = computed(() => matchLinks.value[0] ?? null)
+  const primaryLink = computed(() => selectPrimaryLink(matchLinks.value))
   const kalshiEventTicker = computed(() => primaryLink.value?.kalshiEventTicker ?? null)
 
   function apiFetch<T>(path: string, params: Record<string, unknown> = {}) {
@@ -71,7 +89,7 @@ export function useKalshiData(
       }
 
       matchLinks.value = linkResult.data
-      const ticker = linkResult.data[0]!.kalshiEventTicker
+      const ticker = selectPrimaryLink(linkResult.data)?.kalshiEventTicker ?? linkResult.data[0]!.kalshiEventTicker
 
       // Trades 必拉；TradeWindowStats 仅在用到它的页面(如 cs3)才并行拉——kalshi 详情页不用,省一次重查询。
       const [tradesResult, windowStatsResult] = await Promise.all([
