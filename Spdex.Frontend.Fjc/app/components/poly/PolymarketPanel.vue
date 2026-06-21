@@ -9,7 +9,6 @@ import type {
 } from '~/types/polymarket'
 import { ODDS_FORMATS, ODDS_FORMAT_KEY, formatCompactCurrency, type OddsFormat } from '~/composables/usePolymarketMetrics'
 import { useMarketSelection, clampPrice, yesPriceOfTick, type MarketEntry } from '~/composables/useMarketSelection'
-import { outcomeLabel } from '~/composables/useMarketClassification'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 import dayjs from 'dayjs'
 
@@ -396,6 +395,7 @@ function formatExactScoreSize(size: number): string {
 interface LineTopTradeRow {
   key: string
   line: string
+  direction: string
   trade: PolymarketTradeTick
   delta: number | null
 }
@@ -447,6 +447,14 @@ function lineTopTradeMarketLine(entry: MarketEntry): string {
     return localizeName(entry.optionLabel)
   }
   return entry.lineLabel === '默认' ? localizeName(entry.optionLabel) : entry.lineLabel
+}
+
+function lineTopTradeDirection(entry: MarketEntry): string {
+  const label = localizeName(entry.optionLabel).trim()
+  if (!label) return '-'
+  if (entry.familyKey === 'spread') return label.replace(/\s*\([+-]?\d+(?:\.\d+)?\)\s*$/, '').trim() || label
+  if (entry.familyKey === 'totals') return label.replace(/\s+\d+(?:\.\d+)?\s*$/, '').trim() || label
+  return label
 }
 
 function lineTopTradeDelta(trade: PolymarketTradeTick): number | null {
@@ -507,6 +515,7 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
       rows.push({
         key: tradeKey,
         line: lineTopTradeMarketLine(sideEntry),
+        direction: lineTopTradeDirection(sideEntry),
         trade,
         delta: lineTopTradeDelta(trade),
       })
@@ -520,10 +529,6 @@ const lineTopTradeSubtitle = computed(() => (
     ? '让分所有盘口大注排序'
     : '总分所有盘口大注排序'
 ))
-
-function lineTopTradeOutcome(trade: PolymarketTradeTick): string {
-  return outcomeLabel(exactScoreTradeOutcome(trade), activeTradeMarket.value?.sportsMarketType ?? '', activeTradeMarket.value?.question ?? '')
-}
 
 const visibleSeries = computed(() => topSeries.value.slice(0, maxVisibleSeriesCount.value))
 const hiddenSeriesCount = computed(() => Math.max(0, topSeries.value.length - visibleSeries.value.length))
@@ -953,7 +958,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
                   {{ exactScoreTradeSide(row.trade) }}
                 </span>
               </td>
-              <td class="px-3 py-2 text-gray-500">{{ lineTopTradeOutcome(row.trade) }}</td>
+              <td class="px-3 py-2 text-gray-500">{{ row.direction }}</td>
               <td class="px-3 py-2 max-w-[160px] truncate">
                 <a
                   v-if="exactScoreTraderUrl(row.trade)"

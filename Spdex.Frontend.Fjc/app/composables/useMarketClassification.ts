@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 
 // ─── Types ───
 
-export type MarketCategoryKey = 'match' | 'exact' | 'half' | 'other'
+export type MarketCategoryKey = 'match' | 'exact' | 'half' | 'corners' | 'player_props' | 'other'
 export type MarketFamilyKey = 'moneyline' | 'spread' | 'totals' | 'team_totals' | 'btts' | 'exact' | 'half' | 'other'
 
 // ─── Market type normalization ───
@@ -26,6 +26,23 @@ export function isExactScoreMarket(type: string, question = ''): boolean {
     || q.startsWith('correct score:')
     || q.includes('exact score')
     || q.includes('correct score')
+}
+
+export function isCornerMarket(type: string, question = ''): boolean {
+  const t = normalizeMarketType(type)
+  const q = normalizeMarketType(question)
+  return t.includes('corner') || q.includes('corner')
+}
+
+export function isPlayerPropMarket(type: string, question = ''): boolean {
+  const t = normalizeMarketType(type)
+  const q = normalizeMarketType(question)
+  const text = `${t} ${q}`
+  return text.includes('player_prop')
+    || text.includes('player-prop')
+    || text.includes('player prop')
+    || text.includes('player pro')
+    || (text.includes('player') && text.includes('prop'))
 }
 
 // 半场/上下半场盘口（半场结果 + 上/下半场总分 + 半场球队总分）——统一归到「半场」分类。
@@ -122,6 +139,8 @@ export function outcomeLabel(outcome: string, sportsMarketType: string, question
 // ─── Market classification ───
 
 export function marketCategory(type: string, question: string): MarketCategoryKey {
+  if (isCornerMarket(type, question)) return 'corners'
+  if (isPlayerPropMarket(type, question)) return 'player_props'
   if (isExactScoreMarket(type, question)) return 'exact'
   if (isHalftimeMarket(type, question)) return 'half'
   if (
@@ -152,6 +171,8 @@ export function categoryOrder(key: MarketCategoryKey): number {
     case 'match': return 0
     case 'exact': return 1
     case 'half': return 2
+    case 'corners': return 3
+    case 'player_props': return 4
     default: return 9
   }
 }
@@ -161,6 +182,8 @@ export function marketCategoryLabel(key: MarketCategoryKey): string {
     case 'match': return '比赛盘口'
     case 'exact': return '准确比分'
     case 'half': return '半场结果'
+    case 'corners': return '角球'
+    case 'player_props': return '球员'
     default: return '其他'
   }
 }

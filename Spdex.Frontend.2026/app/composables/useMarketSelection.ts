@@ -315,7 +315,7 @@ export function useMarketSelection(
   const categoryTabs = computed(() => {
     const counts = new Map<MarketCategoryKey, number>()
     for (const market of allMarketEntries.value) counts.set(market.categoryKey, (counts.get(market.categoryKey) ?? 0) + 1)
-    const orderedKeys: MarketCategoryKey[] = ['match', 'exact', 'half', 'other']
+    const orderedKeys: MarketCategoryKey[] = ['match', 'exact', 'half', 'corners', 'player_props', 'other']
     return orderedKeys.filter(key => (counts.get(key) ?? 0) > 0).map(key => ({ key, label: marketCategoryLabel(key), count: counts.get(key) ?? 0 }))
   })
 

@@ -9,7 +9,6 @@ import type {
 } from '~/types/polymarket'
 import { ODDS_FORMATS, ODDS_FORMAT_KEY, formatCompactCurrency, type OddsFormat } from '~/composables/usePolymarketMetrics'
 import { useMarketSelection, clampPrice, type MarketEntry } from '~/composables/useMarketSelection'
-import { outcomeLabel } from '~/composables/useMarketClassification'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 import dayjs from 'dayjs'
 
@@ -194,6 +193,7 @@ function scoreChipClass(key: string): string {
 interface LineTopTradeRow {
   key: string
   line: string
+  direction: string
   trade: PolymarketTradeTick
   delta: number | null
 }
@@ -245,6 +245,14 @@ function lineTopTradeMarketLine(entry: MarketEntry): string {
     return localizeName(entry.optionLabel)
   }
   return entry.lineLabel === '默认' ? localizeName(entry.optionLabel) : entry.lineLabel
+}
+
+function lineTopTradeDirection(entry: MarketEntry): string {
+  const label = localizeName(entry.optionLabel).trim()
+  if (!label) return '-'
+  if (entry.familyKey === 'spread') return label.replace(/\s*\([+-]?\d+(?:\.\d+)?\)\s*$/, '').trim() || label
+  if (entry.familyKey === 'totals') return label.replace(/\s+\d+(?:\.\d+)?\s*$/, '').trim() || label
+  return label
 }
 
 function lineTopTradeDelta(trade: PolymarketTradeTick): number | null {
@@ -305,6 +313,7 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
       rows.push({
         key: tradeKey,
         line: lineTopTradeMarketLine(sideEntry),
+        direction: lineTopTradeDirection(sideEntry),
         trade,
         delta: lineTopTradeDelta(trade),
       })
@@ -336,17 +345,6 @@ function getTimeMark(tradeUtc: string): string {
   if (diffMin < 1440) return 'P12'
   if (diffMin < 2880) return 'P24'
   return 'P48'
-}
-
-function lineTopTradeRawOutcome(trade: PolymarketTradeTick): string {
-  if (trade.outcomeIndex === 0) return 'Yes'
-  if (trade.outcomeIndex === 1) return 'No'
-  const raw = trade.outcome?.trim()
-  return raw || '-'
-}
-
-function lineTopTradeOutcome(trade: PolymarketTradeTick): string {
-  return outcomeLabel(lineTopTradeRawOutcome(trade), activeTradeMarket.value?.sportsMarketType ?? '', activeTradeMarket.value?.question ?? '')
 }
 
 function lineTopTradeSide(trade: PolymarketTradeTick): string {
@@ -783,7 +781,7 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
                   {{ lineTopTradeSide(row.trade) }}
                 </span>
               </td>
-              <td class="px-3 py-2 text-gray-500">{{ lineTopTradeOutcome(row.trade) }}</td>
+              <td class="px-3 py-2 text-gray-500">{{ row.direction }}</td>
               <td class="px-3 py-2 max-w-[160px] truncate">
                 <a
                   v-if="lineTopTraderUrl(row.trade)"
