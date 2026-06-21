@@ -468,6 +468,24 @@ function topTradeTimeClass(
   return ''
 }
 
+function topTradeCollisionGroupSize(live: LiveMatchOddsEventItem | undefined): number {
+  if (!live?.latestTopTradeKey) return 0
+  const latest = live.topTrades.find(item => item.key === live.latestTopTradeKey)
+  if (!latest) return 0
+  const latestTime = Date.parse(latest.timestamp)
+  if (Number.isNaN(latestTime)) return 0
+
+  let linkedCount = 0
+  for (const other of live.topTrades) {
+    if (other.key === latest.key) continue
+    const otherTime = Date.parse(other.timestamp)
+    if (Number.isNaN(otherTime)) continue
+    if (Math.abs(latestTime - otherTime) < NEAR_TRADE_WINDOW_MS) linkedCount += 1
+  }
+
+  return linkedCount > 0 ? linkedCount + 1 : 0
+}
+
 function liveEmptyText(item: MatchListItem): string {
   if (liveTrades.error.value) return '现场成交加载失败，等待下次自动刷新'
   if (liveTrades.loading.value) return '现场成交加载中...'
@@ -745,6 +763,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                   <span>现场价位 {{ formatLiveLtp(getLiveItem(item), item) }}</span>
                   <span :class="['mobile-live-max', liveMaxPromptClass(getLiveItem(item), item)]">
                     现场最大单 {{ formatLiveSummary(getLiveItem(item), item) }}
+                    <span v-if="topTradeCollisionGroupSize(getLiveItem(item)) > 0" class="live-collision-count">
+                      [{{ topTradeCollisionGroupSize(getLiveItem(item)) }}]
+                    </span>
                   </span>
                 </div>
               </td>
@@ -768,6 +789,9 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                 ]"
               >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
+                <span v-if="topTradeCollisionGroupSize(getLiveItem(item)) > 0" class="live-collision-count">
+                  [{{ topTradeCollisionGroupSize(getLiveItem(item)) }}]
+                </span>
               </td>
               <td class="xg-cell">{{ formatXg(item) }}</td>
               <td class="tg-cell">
@@ -1295,6 +1319,13 @@ th.col-tg {
 .match-row:nth-child(4n + 1) td.live-cell.live-trade-alert-strong {
   color: #d62929;
   font-weight: 800;
+}
+
+.live-collision-count {
+  margin-left: 4px;
+  color: #ff2d3f;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-row > td {
