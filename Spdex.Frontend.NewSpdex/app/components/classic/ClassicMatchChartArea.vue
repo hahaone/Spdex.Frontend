@@ -150,8 +150,7 @@ const displayPoints = computed(() => {
     const lastTs = all.at(-1)?.ts
     if (h && all.length > 0 && lastTs) {
       const cutoff = new Date(lastTs).getTime() - h * 3600_000
-      const filtered = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
-      windowed = filtered.length >= 2 ? filtered : all
+      windowed = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
     }
   }
   return downsamplePoints(windowed, MAX_CHART_POINTS, unit.value !== 'payout')

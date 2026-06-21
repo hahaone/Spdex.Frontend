@@ -117,7 +117,7 @@ const {
 const isDesktop = useIsDesktop()
 const chartHeight = computed(() => (isDesktop.value ? 360 : 220))
 
-// 时间范围过滤（按最后一个点往前推 N 小时；不足 2 点退回全部）
+// 时间范围过滤（按最后一个点往前推 N 小时；不再退回全部，避免范围标签与横轴不一致）
 const RANGE_HOURS: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24 }
 const displayPoints = computed(() => {
   const all = points.value
@@ -125,8 +125,7 @@ const displayPoints = computed(() => {
   const lastTs = all.at(-1)?.ts
   if (!h || all.length === 0 || !lastTs) return all
   const cutoff = new Date(lastTs).getTime() - h * 3600_000
-  const filtered = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
-  return filtered.length >= 2 ? filtered : all
+  return all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
 })
 
 // 模拟盈亏固定 60 基线、冷热固定 0 基线
