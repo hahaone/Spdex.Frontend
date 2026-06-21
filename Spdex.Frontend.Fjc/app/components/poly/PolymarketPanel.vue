@@ -8,7 +8,8 @@ import type {
   PolymarketTradeTick,
 } from '~/types/polymarket'
 import { ODDS_FORMATS, ODDS_FORMAT_KEY, formatCompactCurrency, type OddsFormat } from '~/composables/usePolymarketMetrics'
-import { useMarketSelection, clampPrice, yesPriceOfTick } from '~/composables/useMarketSelection'
+import { useMarketSelection, clampPrice, yesPriceOfTick, type MarketEntry } from '~/composables/useMarketSelection'
+import { outcomeLabel } from '~/composables/useMarketClassification'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 import dayjs from 'dayjs'
 
@@ -63,9 +64,9 @@ const polymarketUrl = computed(() => {
 const {
   activeMarketKey, activeCategoryKey, activeFamilyKey, activeLineKey, activeViewTab,
   primaryLink, kickoffUtc, kickoffTimeLabel, kickoffDateLabel,
-  categoryTabs, familyTabs, lineTabs, lineScopedMarkets,
+  categoryTabs, familyTabs, lineTabs, familyMarkets, lineScopedMarkets,
   activeMarketSide, activeTradeMarket, activeBookMarket, recentTrades, deltaSourceTrades,
-  activeMarketLabel, activeOptionLabel, activeMarketNotional, activeMarketTradeCount,
+  activeMarketLabel, activeMarketNotional, activeMarketTradeCount,
   activeMarketQuestion, activeMarketId, activeConditionId,
   marketViewTabs, findTradeMarketByKey, resolveDisplayProbability, optionOddsLabel,
 } = useMarketSelection(
@@ -392,6 +393,138 @@ function formatExactScoreSize(size: number): string {
   return size.toFixed(1)
 }
 
+interface LineTopTradeRow {
+  key: string
+  line: string
+  trade: PolymarketTradeTick
+  delta: number | null
+}
+
+function entryBaseKey(entry: MarketEntry): string {
+  return entry.key.endsWith('::no') ? entry.key.slice(0, -4) : entry.key
+}
+
+function tradeSideForLine(trade: PolymarketTradeTick): 'yes' | 'no' {
+  if (trade.outcomeIndex === 0) return 'yes'
+  if (trade.outcomeIndex === 1) return 'no'
+  const outcome = trade.outcome?.trim().toLowerCase()
+  if (outcome === 'no' || outcome === 'under') return 'no'
+  return 'yes'
+}
+
+function lineTopTradeKey(trade: PolymarketTradeTick): string {
+  return [
+    trade.conditionId,
+    trade.outcome,
+    trade.timestampUtc,
+    trade.price,
+    trade.size,
+    trade.transactionHash ?? '',
+    trade.proxyWallet ?? '',
+  ].join('|')
+}
+
+function signedLineValue(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}`
+}
+
+function teamSideLabel(team: string): string {
+  const localized = localizeName(team).trim()
+  const home = localizeName(primaryLink.value?.polymarketHomeTeam ?? '').trim()
+  const away = localizeName(primaryLink.value?.polymarketAwayTeam ?? '').trim()
+  if (localized && home && localized.toLowerCase() === home.toLowerCase()) return '主'
+  if (localized && away && localized.toLowerCase() === away.toLowerCase()) return '客'
+  if (localized && props.cnHome && localized === props.cnHome) return '主'
+  if (localized && props.cnAway && localized === props.cnAway) return '客'
+  return localized || team
+}
+
+function lineTopTradeMarketLine(entry: MarketEntry): string {
+  if (entry.familyKey === 'totals') return entry.lineLabel === '默认' ? 'OU' : `OU${entry.lineLabel}`
+  if (entry.familyKey === 'spread') {
+    const match = entry.optionLabel.match(/(.+?)\s*\(([+-]?\d+(?:\.\d+)?)\)/)
+    if (match) return `${teamSideLabel(match[1]!.trim())}${signedLineValue(Number(match[2]))}`
+    return localizeName(entry.optionLabel)
+  }
+  return entry.lineLabel === '默认' ? localizeName(entry.optionLabel) : entry.lineLabel
+}
+
+function lineTopTradeDelta(trade: PolymarketTradeTick): number | null {
+  if (trade.previousPrice != null) {
+    return Math.round((trade.price - trade.previousPrice) * 10000) / 10000
+  }
+  return lineTopTradeDeltaMap.value.get(lineTopTradeKey(trade)) ?? null
+}
+
+const isLineTopFamily = computed(() => activeFamilyKey.value === 'spread' || activeFamilyKey.value === 'totals')
+
+const lineTopTradeDeltaMap = computed(() => {
+  const map = new Map<string, number | null>()
+  const grouped = new Map<string, PolymarketTradeTick[]>()
+  for (const entry of familyMarkets.value) {
+    if (entry.familyKey !== activeFamilyKey.value) continue
+    const market = findTradeMarketByKey(entry.key)
+    if (!market) continue
+    for (const trade of [...(market.recentTrades ?? []), ...(market.topTrades ?? [])]) {
+      const key = `${trade.conditionId}_${trade.outcome}`
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key)!.push(trade)
+    }
+  }
+  for (const [, trades] of grouped) {
+    const sorted = [...trades].sort((a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime())
+    for (let i = 0; i < sorted.length; i += 1) {
+      const trade = sorted[i]!
+      const key = lineTopTradeKey(trade)
+      if (trade.previousPrice != null) map.set(key, Math.round((trade.price - trade.previousPrice) * 10000) / 10000)
+      else if (i > 0) map.set(key, Math.round((trade.price - sorted[i - 1]!.price) * 10000) / 10000)
+      else map.set(key, null)
+    }
+  }
+  return map
+})
+
+const lineTopTrades = computed<LineTopTradeRow[]>(() => {
+  if (!isLineTopFamily.value) return []
+  const seenMarkets = new Set<string>()
+  const seenTrades = new Set<string>()
+  const rows: LineTopTradeRow[] = []
+  for (const entry of familyMarkets.value) {
+    if (entry.familyKey !== activeFamilyKey.value) continue
+    const baseKey = entryBaseKey(entry)
+    if (seenMarkets.has(baseKey)) continue
+    seenMarkets.add(baseKey)
+    const market = findTradeMarketByKey(entry.key)
+    if (!market) continue
+    const familyEntries = familyMarkets.value.filter(item => entryBaseKey(item) === baseKey)
+    const sourceTrades = [...(market.topTrades ?? []), ...(market.recentTrades ?? [])]
+    for (const trade of sourceTrades) {
+      const tradeKey = lineTopTradeKey(trade)
+      if (seenTrades.has(tradeKey)) continue
+      seenTrades.add(tradeKey)
+      const side = tradeSideForLine(trade)
+      const sideEntry = familyEntries.find(item => item.side === side) ?? entry
+      rows.push({
+        key: tradeKey,
+        line: lineTopTradeMarketLine(sideEntry),
+        trade,
+        delta: lineTopTradeDelta(trade),
+      })
+    }
+  }
+  return rows.sort((a, b) => b.trade.size - a.trade.size).slice(0, 10)
+})
+
+const lineTopTradeSubtitle = computed(() => (
+  activeFamilyKey.value === 'spread'
+    ? '让分所有盘口大注排序'
+    : '总分所有盘口大注排序'
+))
+
+function lineTopTradeOutcome(trade: PolymarketTradeTick): string {
+  return outcomeLabel(exactScoreTradeOutcome(trade), activeTradeMarket.value?.sportsMarketType ?? '', activeTradeMarket.value?.question ?? '')
+}
+
 const visibleSeries = computed(() => topSeries.value.slice(0, maxVisibleSeriesCount.value))
 const hiddenSeriesCount = computed(() => Math.max(0, topSeries.value.length - visibleSeries.value.length))
 const isSeriesExpanded = ref(false)
@@ -444,7 +577,7 @@ const volumeBuckets = computed<VolumeBucket[]>(() => {
     for (const t of market.recentTrades ?? []) {
       const ts = new Date(t.timestampUtc).getTime()
       if (!Number.isFinite(ts)) continue
-      allTrades.push({ ts, notional: t.price * t.size, isBuy: t.side.toUpperCase() === 'BUY' })
+      allTrades.push({ ts, notional: tradeNotional(t.price, t.size), isBuy: t.side.toUpperCase() === 'BUY' })
     }
   }
   if (allTrades.length === 0) return []
@@ -781,6 +914,63 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
             </div>
           </template>
         </div>
+      </div>
+    </div>
+
+    <div v-if="lineTopTrades.length > 0" class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-gray-900">综合TOP10</div>
+          <div class="text-xs text-gray-400 mt-0.5">{{ lineTopTradeSubtitle }}</div>
+        </div>
+        <span class="text-xs text-gray-400 tabular-nums">{{ lineTopTrades.length }} 笔</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+          <thead class="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400">
+            <tr>
+              <th class="px-3 py-2 text-left">盘口</th>
+              <th class="px-3 py-2 text-left">P标记</th>
+              <th class="px-3 py-2 text-left">Buy/Sell</th>
+              <th class="px-3 py-2 text-left">方向</th>
+              <th class="px-3 py-2 text-left">交易者</th>
+              <th class="px-3 py-2 text-right">价格</th>
+              <th class="px-3 py-2 text-right">价差</th>
+              <th class="px-3 py-2 text-right">成交量</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in lineTopTrades" :key="row.key" class="border-t border-gray-100 hover:bg-gray-50">
+              <td class="px-3 py-2 font-semibold text-gray-900 tabular-nums">{{ row.line }}</td>
+              <td class="px-3 py-2">
+                <span v-if="kickoffUtc" class="inline-flex min-w-6 justify-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">
+                  {{ getTimeMark(row.trade.timestampUtc) }}
+                </span>
+                <span v-else class="text-gray-300">-</span>
+              </td>
+              <td class="px-3 py-2">
+                <span class="inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold" :class="exactScoreSideClass(row.trade)">
+                  {{ exactScoreTradeSide(row.trade) }}
+                </span>
+              </td>
+              <td class="px-3 py-2 text-gray-500">{{ lineTopTradeOutcome(row.trade) }}</td>
+              <td class="px-3 py-2 max-w-[160px] truncate">
+                <a
+                  v-if="exactScoreTraderUrl(row.trade)"
+                  :href="exactScoreTraderUrl(row.trade) ?? undefined"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-blue-500 hover:underline"
+                  @click.stop
+                >{{ exactScoreTraderDisplay(row.trade) }}</a>
+                <span v-else class="text-gray-400">{{ exactScoreTraderDisplay(row.trade) }}</span>
+              </td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-900 tabular-nums">{{ formatExactScorePrice(row.trade.price) }}</td>
+              <td class="px-3 py-2 text-right font-semibold tabular-nums" :class="exactScoreDeltaClass(row.delta)">{{ formatExactScoreDelta(row.delta) }}</td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-700 tabular-nums">{{ formatExactScoreSize(row.trade.size) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 

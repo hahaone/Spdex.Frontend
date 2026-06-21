@@ -96,7 +96,7 @@ function setOrder(newOrder: number) {
 
 function payoutClass(value: number): Record<string, boolean> {
   return {
-    'text-neg': value < 0,
+    'text-payout-negative': value < 0,
     'text-payout-high': value > 60,
   }
 }
@@ -654,7 +654,7 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                           <div class="panel-title">前一条记录</div>
                           <!-- 加载中 -->
                           <div v-if="loadingPcId === item.pcId" class="panel-loading">
-                            <span class="spinner"></span> 加载中...
+                            <span class="spinner" /> 加载中...
                           </div>
                           <!-- 加载失败 -->
                           <div v-else-if="failedPcIds.has(item.pcId)" class="panel-error">
@@ -755,30 +755,30 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
               <tr class="stat-row">
                 <td colspan="3" class="stat-label">&sigma; (标准差)</td>
                 <td>{{ formatMoney(activeWindow.stdDevAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.stdDevHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
               <tr class="stat-row">
                 <td colspan="3" class="stat-label">&mu; (平均)</td>
                 <td>{{ formatMoney(activeWindow.avgAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.avgHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
               <tr class="stat-row stat-highlight">
                 <td colspan="3" class="stat-label">&mu; + 2&sigma;</td>
                 <td>{{ formatMoney(activeWindow.threshold2SigmaAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.threshold2SigmaHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
               <tr class="stat-row stat-highlight">
                 <td colspan="3" class="stat-label">&mu; + 3&sigma;</td>
                 <td>{{ formatMoney(activeWindow.threshold3SigmaAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.threshold3SigmaHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
             </tfoot>
           </table>
@@ -1088,6 +1088,10 @@ td.st-bk-ratio {
 .text-payout-high {
   color: #c00;
   font-weight: 700;
+}
+
+.text-payout-negative {
+  color: #059669;
 }
 
 /* ── 跨表共振高亮（标盘与亚盘同一时间均有大注时整行突出显示） ── */

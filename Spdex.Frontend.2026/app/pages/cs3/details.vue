@@ -80,19 +80,19 @@ function setOrder(newOrder: number) {
   resetAll()
 }
 
+function payoutClass(value: number): Record<string, boolean> {
+  return {
+    'text-payout-negative': value < 0,
+    'text-payout-high': value > 60,
+  }
+}
+
 /** 获取匹配 selectionId 的 LastPrice 数据 */
 function getLastPriceRows(selectionId: number): PriceSizeRow[] {
   if (!activeWindow.value?.lastPrices) return []
   const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
   if (!lp?.rawData) return []
   return parseRawData(lp.rawData)
-}
-
-/** 检查 LastPrice 是否有大额挂单（500/1000 价位 ≥ 200） */
-function hasLargeOrder(selectionId: number): boolean {
-  if (!activeWindow.value?.lastPrices) return false
-  const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
-  return lp?.hasLargeOrderAt500Or1000 ?? false
 }
 
 // ── Poly 分时统计（后端预计算） ──
@@ -262,7 +262,13 @@ function windowRatioDisplay(w: TimeWindowData): string {
               </td>
               <td class="st-pct-detail">{{ windowRatioDisplay(w) }}</td>
               <td class="st-payout">
-                <template v-if="w.odds">{{ w.odds.homePayout.toFixed(0) }} | {{ w.odds.drawPayout.toFixed(0) }} | {{ w.odds.awayPayout.toFixed(0) }}</template>
+                <template v-if="w.odds">
+                  <span :class="payoutClass(w.odds.homePayout)">{{ w.odds.homePayout.toFixed(0) }}</span>
+                  <span class="ratio-sep">|</span>
+                  <span :class="payoutClass(w.odds.drawPayout)">{{ w.odds.drawPayout.toFixed(0) }}</span>
+                  <span class="ratio-sep">|</span>
+                  <span :class="payoutClass(w.odds.awayPayout)">{{ w.odds.awayPayout.toFixed(0) }}</span>
+                </template>
                 <template v-else>-</template>
               </td>
               <td class="st-pct" :style="pctColorStyle(w.amountPercent, w.odds?.totalAmount)">
@@ -338,9 +344,9 @@ function windowRatioDisplay(w: TimeWindowData): string {
             </span>
             <span class="info-chip">
               盈亏
-              <b :class="{ 'text-neg': activeWindow.odds.homePayout < 0 }">{{ activeWindow.odds.homePayout.toFixed(0) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.drawPayout < 0 }">{{ activeWindow.odds.drawPayout.toFixed(0) }}</b>-<b
-                :class="{ 'text-neg': activeWindow.odds.awayPayout < 0 }">{{ activeWindow.odds.awayPayout.toFixed(0) }}</b>
+              <b :class="payoutClass(activeWindow.odds.homePayout)">{{ activeWindow.odds.homePayout.toFixed(0) }}</b>-<b
+                :class="payoutClass(activeWindow.odds.drawPayout)">{{ activeWindow.odds.drawPayout.toFixed(0) }}</b>-<b
+                :class="payoutClass(activeWindow.odds.awayPayout)">{{ activeWindow.odds.awayPayout.toFixed(0) }}</b>
             </span>
             <span class="info-chip">
               冷热
@@ -401,7 +407,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
                   <td :class="amountClass(item)">{{ formatMoney(item.tradedChange) }}</td>
                   <td class="col-attr-val">{{ item.tradedAttr }}</td>
                   <td :class="holdClass(item)">{{ formatMoney(item.hold) }}</td>
-                  <td>{{ item.payout.toFixed(0) }}</td>
+                  <td :class="payoutClass(item.payout)">{{ item.payout.toFixed(0) }}</td>
                   <td>{{ item.per.toFixed(1) }}%</td>
                   <td>{{ (item.perTotal * 100).toFixed(0) }}%</td>
                   <td>{{ item.weight.toFixed(0) }}</td>
@@ -444,7 +450,7 @@ function windowRatioDisplay(w: TimeWindowData): string {
                           <div class="panel-title">前一条记录</div>
                           <!-- 加载中 -->
                           <div v-if="loadingPcId === item.pcId" class="panel-loading">
-                            <span class="spinner"></span> 加载中...
+                            <span class="spinner" /> 加载中...
                           </div>
                           <!-- 加载失败 -->
                           <div v-else-if="failedPcIds.has(item.pcId)" class="panel-error">
@@ -545,30 +551,30 @@ function windowRatioDisplay(w: TimeWindowData): string {
               <tr class="stat-row">
                 <td colspan="3" class="stat-label">&sigma; (标准差)</td>
                 <td>{{ formatMoney(activeWindow.stdDevAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.stdDevHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
               <tr class="stat-row">
                 <td colspan="3" class="stat-label">&mu; (平均)</td>
                 <td>{{ formatMoney(activeWindow.avgAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.avgHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
               <tr class="stat-row stat-highlight">
                 <td colspan="3" class="stat-label">&mu; + 2&sigma;</td>
                 <td>{{ formatMoney(activeWindow.threshold2SigmaAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.threshold2SigmaHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
               <tr class="stat-row stat-highlight">
                 <td colspan="3" class="stat-label">&mu; + 3&sigma;</td>
                 <td>{{ formatMoney(activeWindow.threshold3SigmaAmount) }}</td>
-                <td></td>
+                <td />
                 <td>{{ formatMoney(activeWindow.threshold3SigmaHold) }}</td>
-                <td colspan="7"></td>
+                <td colspan="7" />
               </tr>
             </tfoot>
           </table>
@@ -744,6 +750,15 @@ td.st-bp-ratio {
 .filter-link-1 { color: #b22222; }
 .filter-link-2 { color: #2563eb; }
 .filter-link-3 { color: #059669; }
+
+.text-payout-high {
+  color: #c00;
+  font-weight: 700;
+}
+
+.text-payout-negative {
+  color: #059669;
+}
 
 /* ── 跨表共振高亮（标盘与亚盘同一时间均有大注时整行突出显示） ── */
 .row-resonant {
