@@ -58,14 +58,6 @@ function cardMarkers(side: 'home' | 'away'): CardMarker[] {
 const homeCards = computed(() => cardMarkers('home'))
 const awayCards = computed(() => cardMarkers('away'))
 
-const homeGoalEvents = computed(() => goalEvents('home'))
-const awayGoalEvents = computed(() => goalEvents('away'))
-const hasGoalEvents = computed(() => homeGoalEvents.value.length > 0 || awayGoalEvents.value.length > 0)
-
-function goalEvents(side: 'home' | 'away'): LiveEvent[] {
-  return snapshot.value?.events.filter(e => e.side === side && (e.type === 'goal' || e.type === 'penalty')) ?? []
-}
-
 function goalActor(event: LiveEvent): string {
   if (event.player) return event.player
   if (event.type === 'penalty') return '点球'
@@ -76,6 +68,74 @@ function goalTitle(event: LiveEvent): string {
   const parts = [event.minute, event.text || goalActor(event), event.rawText].filter(Boolean)
   return parts.join(' · ')
 }
+
+type EventProgressKind = 'goal' | 'yellow' | 'red'
+type EventProgressHalf = 'first' | 'second'
+type EventProgressMarker = {
+  id: string
+  side: 'home' | 'away'
+  half: EventProgressHalf
+  kind: EventProgressKind
+  left: number
+  minute: string
+  title: string
+}
+
+function progressKind(type: string): EventProgressKind | null {
+  if (type === 'goal' || type === 'penalty') return 'goal'
+  if (type === 'yellow') return 'yellow'
+  if (type === 'red') return 'red'
+  return null
+}
+
+function parseEventMinute(value?: string): { base: number, total: number } | null {
+  const match = `${value || ''}`.match(/(\d+)(?:\s*\+\s*(\d+))?/)
+  if (!match) return null
+  const base = Number(match[1])
+  const extra = Number(match[2] || 0)
+  if (!Number.isFinite(base)) return null
+  return { base, total: base + (Number.isFinite(extra) ? extra : 0) }
+}
+
+function eventProgressTitle(event: LiveEvent, kind: EventProgressKind): string {
+  if (kind === 'goal') return goalTitle(event)
+  const sideName = event.side === 'home'
+    ? (match.value?.homeTeam || snapshot.value?.homeTeam || '主队')
+    : (match.value?.awayTeam || snapshot.value?.awayTeam || '客队')
+  const label = kind === 'red' ? '红牌' : '黄牌'
+  return [sideName, event.minute, label, event.player || event.text || event.rawText].filter(Boolean).join(' · ')
+}
+
+const eventProgressMarkers = computed<EventProgressMarker[]>(() => {
+  const events = snapshot.value?.events ?? []
+  return events.reduce<EventProgressMarker[]>((markers, event, index) => {
+    if (event.side !== 'home' && event.side !== 'away') return markers
+    const kind = progressKind(event.type)
+    const parsed = parseEventMinute(event.minute)
+    if (!kind || !parsed) return markers
+
+    const half: EventProgressHalf = parsed.base <= 45 ? 'first' : 'second'
+    const halfMinute = half === 'first'
+      ? Math.min(parsed.total, 45)
+      : Math.max(45, Math.min(parsed.total, 90)) - 45
+
+    markers.push({
+      id: `${index}-${event.minute}-${event.type}-${event.text}`,
+      side: event.side,
+      half,
+      kind,
+      left: Math.max(0, Math.min(100, (halfMinute / 45) * 100)),
+      minute: event.minute,
+      title: eventProgressTitle(event, kind),
+    })
+    return markers
+  }, [])
+})
+const firstHalfProgressMarkers = computed(() => eventProgressMarkers.value.filter(marker => marker.half === 'first'))
+const secondHalfProgressMarkers = computed(() => eventProgressMarkers.value.filter(marker => marker.half === 'second'))
+const hasEventProgress = computed(() => eventProgressMarkers.value.length > 0)
+const hasHomeCardProgress = computed(() => eventProgressMarkers.value.some(marker => marker.side === 'home' && (marker.kind === 'yellow' || marker.kind === 'red')))
+const hasAwayCardProgress = computed(() => eventProgressMarkers.value.some(marker => marker.side === 'away' && (marker.kind === 'yellow' || marker.kind === 'red')))
 
 const statusLabel = computed(() => {
   const s = snapshot.value?.status
@@ -727,45 +787,56 @@ function injStatus(s: string): { text: string, cls: string } {
         </b>
         <span class="team away">{{ match?.awayTeam || snapshot?.awayTeam || '客队' }}</span>
       </div>
-      <div v-if="canOpenLive && hasGoalEvents" class="goal-row" aria-label="进球明细">
-        <span class="goal-list home">
+      <div v-if="canOpenLive && hasEventProgress" class="event-progress" aria-label="进球和红黄牌进度">
+        <div class="ep-half" aria-label="上半场事件">
+          <span class="ep-track" aria-hidden="true" />
+          <span class="ep-label num">45'</span>
           <span
-            v-for="goal in homeGoalEvents"
-            :key="`hg-${goal.minute}-${goal.text}`"
-            class="goal-pill"
-            :title="goalTitle(goal)"
+            v-for="marker in firstHalfProgressMarkers"
+            :key="`fh-${marker.id}`"
+            :class="['ep-marker', marker.kind, marker.side]"
+            :style="{ left: `${marker.left}%` }"
+            :title="marker.title"
+            :aria-label="marker.title"
+            role="img"
           >
-            <span class="goal-minute num">{{ goal.minute }}</span>
-            <span class="goal-player">{{ goalActor(goal) }}</span>
+            <CircleDot v-if="marker.kind === 'goal'" :size="13" stroke-width="2.6" aria-hidden="true" />
+            <span v-else class="ep-card" aria-hidden="true" />
           </span>
-        </span>
-        <span class="goal-gap" aria-hidden="true" />
-        <span class="goal-list away">
+        </div>
+        <div class="ep-half" aria-label="下半场事件">
+          <span class="ep-track" aria-hidden="true" />
+          <span class="ep-label num">90'</span>
           <span
-            v-for="goal in awayGoalEvents"
-            :key="`ag-${goal.minute}-${goal.text}`"
-            class="goal-pill"
-            :title="goalTitle(goal)"
+            v-for="marker in secondHalfProgressMarkers"
+            :key="`sh-${marker.id}`"
+            :class="['ep-marker', marker.kind, marker.side]"
+            :style="{ left: `${marker.left}%` }"
+            :title="marker.title"
+            :aria-label="marker.title"
+            role="img"
           >
-            <span class="goal-minute num">{{ goal.minute }}</span>
-            <span class="goal-player">{{ goalActor(goal) }}</span>
+            <CircleDot v-if="marker.kind === 'goal'" :size="13" stroke-width="2.6" aria-hidden="true" />
+            <span v-else class="ep-card" aria-hidden="true" />
           </span>
-        </span>
+        </div>
       </div>
       <div v-if="canOpenLive" class="micro-row">
         <span class="cluster home">
-          <span
-            v-for="c in homeCards"
-            :key="`h-${c.color}`"
-            class="stat-token"
-            role="img"
-            :title="c.title"
-            :aria-label="c.title"
-          >
-            <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
-            <span class="num">{{ c.count }}</span>
-            <span v-if="c.times.length" class="stat-times num">{{ c.times.join(' ') }}</span>
-          </span>
+          <template v-if="!hasHomeCardProgress">
+            <span
+              v-for="c in homeCards"
+              :key="`h-${c.color}`"
+              class="stat-token"
+              role="img"
+              :title="c.title"
+              :aria-label="c.title"
+            >
+              <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
+              <span class="num">{{ c.count }}</span>
+              <span v-if="c.times.length" class="stat-times num">{{ c.times.join(' ') }}</span>
+            </span>
+          </template>
           <span class="stat-token" role="img" :aria-label="`主队角球${snapshot?.corners[0] ?? 0}`">
             <Flag :size="13" class="stat-svg corner-svg" aria-hidden="true" />
             <span class="num">{{ snapshot?.corners[0] ?? 0 }}</span>
@@ -777,18 +848,20 @@ function injStatus(s: string): { text: string, cls: string } {
             <Flag :size="13" class="stat-svg corner-svg" aria-hidden="true" />
             <span class="num">{{ snapshot?.corners[1] ?? 0 }}</span>
           </span>
-          <span
-            v-for="c in awayCards"
-            :key="`a-${c.color}`"
-            class="stat-token"
-            role="img"
-            :title="c.title"
-            :aria-label="c.title"
-          >
-            <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
-            <span class="num">{{ c.count }}</span>
-            <span v-if="c.times.length" class="stat-times num">{{ c.times.join(' ') }}</span>
-          </span>
+          <template v-if="!hasAwayCardProgress">
+            <span
+              v-for="c in awayCards"
+              :key="`a-${c.color}`"
+              class="stat-token"
+              role="img"
+              :title="c.title"
+              :aria-label="c.title"
+            >
+              <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
+              <span class="num">{{ c.count }}</span>
+              <span v-if="c.times.length" class="stat-times num">{{ c.times.join(' ') }}</span>
+            </span>
+          </template>
         </span>
       </div>
     </section>
@@ -1355,58 +1428,105 @@ function injStatus(s: string): { text: string, cls: string } {
   font-size: 1.1rem;
 }
 
-.goal-row {
+.event-progress {
   display: grid;
-  width: min(100%, 620px);
-  grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-  margin: -1px auto 0;
-}
-
-.goal-list {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.goal-list.home {
-  justify-content: flex-end;
-}
-
-.goal-list.away {
-  justify-content: flex-start;
-}
-
-.goal-gap {
-  min-height: 1px;
-}
-
-.goal-pill {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 150px;
+  width: min(100%, 720px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 3px;
-  color: var(--muted);
-  font-size: 0.7rem;
-  font-weight: 740;
-  line-height: 1.2;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 5px 10px 7px;
+  border-radius: 5px;
+  background: #20242b;
 }
 
-.goal-minute {
-  flex: 0 0 auto;
-  color: var(--accent);
-  font-weight: 820;
-}
-
-.goal-player {
+.ep-half {
+  position: relative;
   min-width: 0;
-  overflow: hidden;
-  color: var(--ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  height: 30px;
+}
+
+.ep-track {
+  position: absolute;
+  top: 13px;
+  right: 0;
+  left: 0;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1edc43 0%, #069b18 100%);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.26);
+}
+
+.ep-label {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  color: rgb(255 255 255 / 0.58);
+  font-size: 0.58rem;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.ep-marker {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  transform: translateX(-50%);
+}
+
+.ep-marker.home {
+  top: 0;
+}
+
+.ep-marker.away {
+  top: 16px;
+}
+
+.ep-marker.goal {
+  width: 17px;
+  height: 17px;
+  border: 2px solid #3b3f47;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #3b3f47;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
+}
+
+.ep-marker.goal.away {
+  top: 15px;
+}
+
+.ep-marker.yellow,
+.ep-marker.red {
+  width: 10px;
+  height: 18px;
+}
+
+.ep-marker.yellow.home,
+.ep-marker.red.home {
+  top: 3px;
+}
+
+.ep-marker.yellow.away,
+.ep-marker.red.away {
+  top: 12px;
+}
+
+.ep-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.28);
+}
+
+.ep-marker.yellow .ep-card {
+  background: #f6b800;
+}
+
+.ep-marker.red .ep-card {
+  background: var(--buy);
 }
 
 .micro-row {
@@ -2050,14 +2170,10 @@ section.compare {
 }
 
 @media (max-width: 370px) {
-  .goal-row {
-    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
-    gap: 5px;
-  }
-
-  .goal-pill {
-    max-width: 116px;
-    font-size: 0.66rem;
+  .event-progress {
+    gap: 10px;
+    padding-right: 7px;
+    padding-left: 7px;
   }
 
   .micro-row {
