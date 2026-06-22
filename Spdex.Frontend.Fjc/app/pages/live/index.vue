@@ -323,6 +323,8 @@ function normalizeRefreshOptions(options?: RefreshOptions): { silent?: boolean }
 watch(
   () => liveTrades.data.value?.timestamp,
   () => {
+    syncTopTradeCollisionMarkers()
+
     const next = new Map(previousSignatures.value)
     for (const item of liveTrades.data.value?.items ?? []) {
       const eventId = Number(item.eventId)
@@ -487,6 +489,7 @@ function isLatestTopTrade(
 }
 
 const NEAR_TRADE_WINDOW_MS = 5_000
+const topTradeCollisionCountsByEventId = ref<Map<number, Map<string, number>>>(new Map())
 
 /**
  * 新进入 TOP10 的成交单与其他 TOP10 大单成交时间差 < 5 秒时，
@@ -534,6 +537,46 @@ function topTradeCollisionGroupSize(live: LiveMatchOddsEventItem | undefined): n
   }
 
   return linkedCount > 0 ? linkedCount + 1 : 0
+}
+
+function syncTopTradeCollisionMarkers() {
+  const next = new Map<number, Map<string, number>>()
+
+  for (const item of liveTrades.data.value?.items ?? []) {
+    const eventId = Number(item.eventId)
+    if (!Number.isFinite(eventId)) continue
+
+    const tradeKeys = new Set(item.topTrades.map(trade => trade.key))
+    const existing = topTradeCollisionCountsByEventId.value.get(eventId)
+    const markers = new Map<string, number>()
+
+    if (existing) {
+      for (const [key, count] of existing) {
+        if (tradeKeys.has(key)) markers.set(key, count)
+      }
+    }
+
+    const collisionCount = topTradeCollisionGroupSize(item)
+    const latestKey = item.latestTopTradeKey
+    if (collisionCount > 0 && latestKey && tradeKeys.has(latestKey)) {
+      markers.set(latestKey, markers.get(latestKey) ?? collisionCount)
+    }
+
+    if (markers.size > 0) {
+      next.set(eventId, markers)
+    }
+  }
+
+  topTradeCollisionCountsByEventId.value = next
+}
+
+function topTradeCollisionMarkerCount(
+  trade: LiveMatchOddsTopTradeSummary,
+  live: LiveMatchOddsEventItem | undefined,
+): number {
+  const eventId = Number(live?.eventId)
+  if (!Number.isFinite(eventId)) return 0
+  return topTradeCollisionCountsByEventId.value.get(eventId)?.get(trade.key) ?? 0
 }
 
 function liveEmptyText(item: MatchListItem): string {
@@ -890,7 +933,15 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                         {{ formatHkdMoney(tradeTotalDeltaHkd(trade)) }}
                       </td>
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
-                      <td>{{ formatBackLayBook(trade) }}</td>
+                      <td>
+                        {{ formatBackLayBook(trade) }}
+                        <span
+                          v-if="topTradeCollisionMarkerCount(trade, getLiveItem(item)) > 0"
+                          class="live-collision-count top-trade-collision-count"
+                        >
+                          [{{ topTradeCollisionMarkerCount(trade, getLiveItem(item)) }}]
+                        </span>
+                      </td>
                     </tr>
                     <tr v-if="(getLiveItem(item)?.topTrades?.length ?? 0) === 0">
                       <td colspan="8" class="empty-cell">{{ liveEmptyText(item) }}</td>
@@ -1377,6 +1428,10 @@ th.col-tg {
   color: #ff2d3f;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+.top-trade-collision-count {
+  margin-left: 10px;
 }
 
 .action-cell {

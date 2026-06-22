@@ -75,18 +75,13 @@ const activeWindow = computed<TimeWindowData | null>(() => windows.value[activeT
 const {
   expandedPcId, expandedOddsPcId,
   loadingPcId, failedPcIds, prevCache,
-  toggleExpand, toggleOddsExpand, retryFetchPrevious, prefetchAllPrevious,
+  toggleExpand, toggleOddsExpand, retryFetchPrevious,
   collapseAll, resetAll,
   getCurrentRows, getPreviousRows, getDiffRows,
 } = useDetailExpand()
 
 // 切换 Tab 时收起所有展开行
 watch(activeTab, () => collapseAll())
-
-// 自动预取当前 Tab 的前一条记录（用于深度高亮）
-watch(activeWindow, (w) => {
-  if (w?.items?.length) prefetchAllPrevious(w.items)
-}, { immediate: true })
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
