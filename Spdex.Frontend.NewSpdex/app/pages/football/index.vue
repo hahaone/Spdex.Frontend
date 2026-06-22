@@ -142,6 +142,7 @@ const listReturnQuery = computed(() => {
   if (status.value !== 'all') query.status = status.value
   if (lottery.value !== 'all') query.lottery = lottery.value
   if (league.value !== 'all') query.league = league.value
+  if (typeof route.query.view === 'string' && route.query.view) query.view = route.query.view
   if (metricKey.value) {
     query.metric = metricKey.value
     if (typeof route.query.events === 'string') query.events = route.query.events

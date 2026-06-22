@@ -2,9 +2,11 @@
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { CHART_MARKETS } from '~/composables/useChartSeries'
 import { formatHandicapLine } from '~/utils/handicap'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
+const detailRoute = computed(() => withMatchListContext(`/football/${eventId.value}`, route.query))
 
 function queryString(name: string): string | null {
   const value = route.query[name]
@@ -206,7 +208,7 @@ const chartTitle = computed(() => {
 <template>
   <div class="chart-page">
     <section class="header">
-      <NuxtLink :to="`/football/${eventId}`" class="back focus-ring">
+      <NuxtLink :to="detailRoute" class="back focus-ring">
         <ArrowLeft :size="15" />
         <span>返回详情</span>
       </NuxtLink>

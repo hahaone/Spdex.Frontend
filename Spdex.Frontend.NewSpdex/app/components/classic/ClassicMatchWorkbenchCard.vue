@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronUp, Zap } from '@lucide/vue'
+import { ChevronDown, ChevronUp, ExternalLink, Zap } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { MatchSummary } from '~/types/match'
 
@@ -57,7 +57,11 @@ const kickOff = computed(() => props.match.matchTime.slice(11, 16))
 // 竞彩场次序号补足 3 位(对齐旧站「第 001 场」);足彩序号不补位。
 const jcOrderText = computed(() => String(props.match.jcOrder ?? 0).padStart(3, '0'))
 // 未开赛不显示比分(原来固定 0-0);已开赛/已结束才显示。进行中额外显示近似进行时间(后端 liveMinute)。
-const scoreText = computed(() => (props.match.status === 'upcoming' ? '' : (props.match.scoreText || '')))
+const scorePending = computed(() => props.match.status === 'finished' && !props.match.scoreText)
+const scoreText = computed(() => {
+  if (props.match.status === 'upcoming') return ''
+  return props.match.scoreText || (scorePending.value ? '比分待同步' : '')
+})
 // 半场比分(回查/已结束多有值):非空才显,拼成 全场(半场) 如 2-1(0-0);无源不补(铁律)。
 const halfText = computed(() => (props.match.status === 'upcoming' ? '' : (props.match.halfScoreText || '')))
 const liveMinute = computed(() => props.match.liveMinute || '')
@@ -120,9 +124,12 @@ const bigBetText = computed(() => {
         <button v-else-if="showFlashQ" type="button" class="flashq-inline locked" :title="flashQLockMessage" aria-label="免费版暂未开放闪Q" disabled>
           <Zap :size="12" /><span>闪Q</span>
         </button>
+        <NuxtLink :to="detailTo" target="_blank" rel="noopener" class="open-inline" title="在新页面打开" aria-label="在新页面打开赛事">
+          <ExternalLink :size="12" />
+        </NuxtLink>
         <span class="num">开赛时间：{{ match.matchTime.slice(0, 10).replaceAll('-', '/') }} {{ kickOff }}</span>
         <span v-if="liveMinute" class="live-min num" title="近似进行时间(开赛至今;精确分钟见实时赛事)">{{ liveMinute }}</span>
-        <span v-if="scoreText" class="score num">{{ scoreText }}<template v-if="halfText">({{ halfText }})</template></span>
+        <span v-if="scoreText" :class="['score', 'num', { pending: scorePending }]">{{ scoreText }}<template v-if="halfText">({{ halfText }})</template></span>
       </div>
 
       <button type="button" class="collapse-btn" :aria-label="collapsed ? '展开赛事' : '收起赛事'" @click="emit('toggleCollapsed', match.eventId)">
@@ -254,6 +261,11 @@ const bigBetText = computed(() => {
   color: #9bf0b9;
 }
 
+.score.pending {
+  color: #ffd479;
+  font-size: 0.72rem;
+}
+
 /* 进行中近似进行时间:红色,深/浅卡头均可见。 */
 .live-min {
   color: #ff8a8a;
@@ -279,6 +291,24 @@ const bigBetText = computed(() => {
 .flashq-inline.locked {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.open-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  color: #e8e8e8;
+  text-decoration: none;
+}
+
+.open-inline:hover {
+  border-color: #fff;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .collapse-btn {

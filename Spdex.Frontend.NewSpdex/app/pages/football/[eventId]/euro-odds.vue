@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { useEuroOdds, type EuroBookRow, type EuroExtremes } from '~/composables/useEuroOdds'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 // 经典版「欧洲指数」（还原旧站 Match/View/EuroOdds）：各博彩公司 即时/初盘 1X2 赔率 + 凯利 + 返还率 + 凯利加权。
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
+const listRoute = computed(() => withMatchListContext('/football', route.query, { view: 'classic' }))
 
 const { data, pending, refresh } = useEuroOdds(eventId)
 
@@ -28,7 +30,7 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
     <section class="eo-card">
       <div class="eo-head">
         <div class="eo-head-left">
-          <NuxtLink to="/football?view=classic" class="eo-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
+          <NuxtLink :to="listRoute" class="eo-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
           <h1>欧洲指数</h1>
           <span class="eo-teams">{{ data?.homeTeam ?? '—' }} VS {{ data?.awayTeam ?? '—' }}</span>
         </div>

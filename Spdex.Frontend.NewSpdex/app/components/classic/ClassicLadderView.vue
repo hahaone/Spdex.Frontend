@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { useMatchLadder, LADDER_MARKETS, type LadderPoint } from '~/composables/useMatchLadder'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 // 经典版盘口明细共享视图（还原旧站 Match/View/BetFair）：某市场选一个选项 → 已成交汇总 + 价格/成交量走势 + 价位/买/卖/成交 阶梯。
 // 足球：标盘 / 进球 / 正确比分；篮球：标盘 / 进球(总分大小,主点线)。由 ?market= 与后端 Markets 决定。
@@ -15,6 +16,7 @@ const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 const queryMarket = computed(() => (typeof route.query.market === 'string' ? route.query.market : 'standard'))
 const basePath = computed(() => `/${props.sport}`)
+const listRoute = computed(() => withMatchListContext(basePath.value, route.query, { view: 'classic' }))
 
 const { data, market, activeKey, setMarket, setSelection, pending, refresh } = useMatchLadder(eventId)
 
@@ -128,7 +130,7 @@ watch(() => active.value?.key, () => {
     <section class="ld-card">
       <div class="ld-head">
         <div class="ld-head-left">
-          <NuxtLink :to="`${basePath}?view=classic`" class="ld-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
+          <NuxtLink :to="listRoute" class="ld-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
           <h1>{{ data?.homeTeam ?? '—' }} VS {{ data?.awayTeam ?? '—' }}</h1>
           <span class="ld-mk">{{ marketLabel }}</span>
         </div>

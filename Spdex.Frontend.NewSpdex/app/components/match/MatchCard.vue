@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, Zap } from '@lucide/vue'
+import { ChevronRight, ExternalLink, Zap } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { MatchSummary } from '~/types/match'
 import { formatHandicapLine } from '~/utils/handicap'
@@ -74,7 +74,11 @@ const statusLabel = computed(() => {
 })
 const totalTurnover = computed(() => fmtAmount(props.match.bfAmount ?? 0))
 const hasPoly = computed(() => props.match.polyIndex.some(v => v > 0))
-const scoreText = computed(() => (props.match.scoreText ? props.match.scoreText.replace('-', ' : ') : ''))
+const scorePending = computed(() => props.match.status === 'finished' && !props.match.scoreText)
+const scoreText = computed(() => {
+  if (props.match.scoreText) return props.match.scoreText.replace('-', ' : ')
+  return scorePending.value ? '比分待同步' : ''
+})
 const hasGoalsMarket = computed(() => props.twoWay && Boolean(
   props.match.goalsLine
   || props.match.goalsOdds?.some(value => value > 0)
@@ -124,6 +128,17 @@ const goalsTurnoverText = computed(() => {
         <span>闪Q</span>
       </button>
 
+      <NuxtLink
+        :to="linkTo"
+        target="_blank"
+        rel="noopener"
+        class="open-mini focus-ring"
+        title="在新页面打开"
+        aria-label="在新页面打开赛事"
+      >
+        <ExternalLink :size="13" />
+      </NuxtLink>
+
       <NuxtLink :to="linkTo" class="head-right focus-ring">
         <span :class="['status', `st-${match.status}`]">
           <i v-if="match.status === 'started'" class="live-dot" aria-hidden="true" />{{ statusLabel }}
@@ -135,7 +150,7 @@ const goalsTurnoverText = computed(() => {
     </div>
 
     <NuxtLink :to="linkTo" class="match-main focus-ring">
-      <div v-if="scoreText" class="score-strip">
+      <div v-if="scoreText" :class="['score-strip', { pending: scorePending }]">
         <span class="sc-label">比分</span>
         <span class="sc-main num">{{ scoreText }}</span>
         <span v-if="match.halfScoreText" class="sc-half">半 {{ match.halfScoreText }}</span>
@@ -216,7 +231,7 @@ const goalsTurnoverText = computed(() => {
 
 .card-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 8px;
   padding: 6px 9px;
@@ -226,7 +241,8 @@ const goalsTurnoverText = computed(() => {
 
 .card-head-main,
 .head-right,
-.flashq-mini {
+.flashq-mini,
+.open-mini {
   text-decoration: none;
 }
 
@@ -291,6 +307,24 @@ const goalsTurnoverText = computed(() => {
   white-space: nowrap;
 }
 
+.open-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.open-mini:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--brand-tint);
+}
+
 .flashq-mini.locked {
   cursor: not-allowed;
   border-color: #ddd0a2;
@@ -350,6 +384,16 @@ const goalsTurnoverText = computed(() => {
   padding: 3px 9px;
   background: #fbfdff;
   border-bottom: 1px solid var(--divider);
+}
+
+.score-strip.pending {
+  background: #fff9e6;
+  color: #9a6700;
+}
+
+.score-strip.pending .sc-main {
+  font-size: 0.75rem;
+  font-weight: 820;
 }
 
 .sc-label { font-size: 0.64rem; font-weight: 800; color: var(--sell); }

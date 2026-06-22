@@ -3,6 +3,7 @@ import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Zap } from '@lucide/vue'
 import type { MarketMetricRow, MarketTab } from '~/types/market'
 import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
 import { formatHandicapLine } from '~/utils/handicap'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
@@ -16,7 +17,7 @@ const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 const flashQUrl = computed(() => buildFlashQLink(eventId.value))
 const footballBackRoute = computed(() => {
   const query: Record<string, string> = {}
-  for (const key of ['date', 'day', 'status', 'lottery', 'league', 'metric', 'events']) {
+  for (const key of ['date', 'day', 'status', 'lottery', 'league', 'metric', 'events', 'view']) {
     const value = route.query[key]
     if (typeof value === 'string' && value) query[key] = value
   }
@@ -190,9 +191,11 @@ const ladderMarket = ref<'standard' | 'goals' | 'cs'>('standard')
 const ladderAnchor = ref<HTMLElement | null>(null)
 
 function chartRoute(marketName: string, metricName: string, series?: 'home' | 'draw' | 'away') {
-  const query: Record<string, string> = { market: marketName, metric: metricName }
-  if (series) query.series = series
-  return { path: `/football/${eventId.value}/chart`, query }
+  return withMatchListContext(`/football/${eventId.value}/chart`, route.query, {
+    market: marketName,
+    metric: metricName,
+    series,
+  })
 }
 
 function parseAmountText(value: string | undefined): number {
@@ -416,7 +419,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
             <NuxtLink :to="chartRoute('standard', 'exchange')" class="shortcut-link focus-ring">挂牌倾向</NuxtLink>
             <NuxtLink :to="chartRoute('goals', 'exchange')" class="shortcut-link focus-ring">进球挂牌</NuxtLink>
             <NuxtLink :to="chartRoute('asianindex', 'index')" class="shortcut-link focus-ring">亚洲指数</NuxtLink>
-            <NuxtLink v-if="access.cs" :to="`/football/${eventId}/correct-score`" class="shortcut-link focus-ring">正确比分</NuxtLink>
+            <NuxtLink v-if="access.cs" :to="withMatchListContext(`/football/${eventId}/correct-score`, route.query)" class="shortcut-link focus-ring">正确比分</NuxtLink>
           </div>
           <div v-if="goalsBalance" class="stat-row">
             <span>进球均衡</span>

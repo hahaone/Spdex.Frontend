@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { useOrderDetail, type OrderRow, type OrderSelection } from '~/composables/useOrderDetail'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 // 经典版「完整明细」共享视图（还原旧站 op1 Match/View/Normal + Details / NBA/View/...）。
 // 足球与篮球共用：sport 决定返回列表/大注提示的链接前缀；篮球为 2-way、进球=总分大小(主点线)。
@@ -17,6 +18,8 @@ const market = computed(() => (typeof route.query.market === 'string' ? route.qu
 // 大球明细/小球明细 → ?market=goals&side=over|under：进入即定位到对应选项 tab。
 const side = computed(() => (typeof route.query.side === 'string' ? route.query.side : ''))
 const basePath = computed(() => `/${props.sport}`)
+const listRoute = computed(() => withMatchListContext(basePath.value, route.query, { view: 'classic' }))
+const bigTradesRoute = computed(() => withMatchListContext(`${basePath.value}/${eventId.value}/trades`, route.query))
 
 // tab：'all'（综合）或某选项 key，同时作为服务端分页的 side；page：服务端分页页码。
 const tab = ref<string>(side.value === 'over' || side.value === 'under' ? side.value : 'all')
@@ -97,13 +100,13 @@ function attrClass(a: string): string {
       <!-- 头部 -->
       <div class="dp-head">
         <div class="dp-head-left">
-          <NuxtLink :to="`${basePath}?view=classic`" class="dp-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
+          <NuxtLink :to="listRoute" class="dp-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
           <h1>{{ pageTitle }}</h1>
           <span class="dp-teams">{{ data?.homeTeam ?? '—' }} VS {{ data?.awayTeam ?? '—' }}</span>
         </div>
         <div class="dp-head-right">
           <span v-if="data?.matchTime" class="dp-time num">比赛时间: {{ data.matchTime }}</span>
-          <NuxtLink :to="`${basePath}/${eventId}/trades`" class="dp-bignote">大注提示 »</NuxtLink>
+          <NuxtLink :to="bigTradesRoute" class="dp-bignote">大注提示 »</NuxtLink>
           <button type="button" class="dp-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
             <RefreshCw :size="13" :class="{ spinning: pending }" />
           </button>

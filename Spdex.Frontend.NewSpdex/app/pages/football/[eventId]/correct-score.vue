@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { useCorrectScore, type CsBlock, type CsCell, type CsScore } from '~/composables/useCorrectScore'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 // 经典版「正确比分明细」（还原旧站 Match/View/CorrectScore）：
 // 19 比分列 × {赔率/成交/锁定/比例/盈亏/指数} 行,热力着色;多时间块(明细/2小时数据/快速回顾)。
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
+const listRoute = computed(() => withMatchListContext('/football', route.query, { view: 'classic' }))
 const reviewMin = ref(360)
 
 const { data, pending, refresh } = useCorrectScore(eventId, reviewMin)
@@ -90,7 +92,7 @@ function money(n: number): string { return Math.round(n).toLocaleString('en-US')
     <section class="cs-card">
       <div class="cs-head">
         <div class="cs-head-left">
-          <NuxtLink to="/football?view=classic" class="cs-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
+          <NuxtLink :to="listRoute" class="cs-back"><ArrowLeft :size="14" /><span>返回列表</span></NuxtLink>
           <h1>正确比分明细</h1>
           <span class="cs-teams">{{ data?.homeTeam ?? '—' }} VS {{ data?.awayTeam ?? '—' }}</span>
         </div>

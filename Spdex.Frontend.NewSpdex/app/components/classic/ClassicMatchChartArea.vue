@@ -2,6 +2,7 @@
 import { RefreshCw } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { ChartPoint } from '~/types/market'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 type TradeDirection = 'home' | 'draw' | 'away'
 type SeriesSelection = TradeDirection | 'all' | null
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<{
 })
 
 const eventIdRef = computed(() => props.eventId)
+const route = useRoute()
 const isBasket = computed(() => props.sport === 'basketball')
 const basePath = computed(() => `/${props.sport}`)
 // 篮球走势矩阵按钮更少 → 右侧标签组更矮;走势图相应压低,与右侧高度看齐。足球保持 240。
@@ -295,28 +297,30 @@ function refreshChart() {
 // 经典版「明细图表」入口(还原旧站),按运动分流:
 // 足球:明细 / 进球明细 / 比分明细 / 欧洲指数 / 标盘 / 进球 / 正确比分;
 // 篮球:明细 / 大球明细 / 小球明细 / 标盘 / 进球(2-way、总分大小;无欧赔/比分/正确比分)。
-interface DetailBtn { label: string, to: string, tone: 'grey' | 'green' | 'blue' }
+interface DetailBtn { label: string, to: RouteLocationRaw, tone: 'grey' | 'green' | 'blue' }
 const detailButtons = computed<DetailBtn[]>(() => {
   const base = `${basePath.value}/${props.eventId}`
+  const to = (suffix: string, extra: Record<string, string> = {}) =>
+    withMatchListContext(`${base}${suffix}`, route.query, extra)
   if (isBasket.value) {
     return [
-      { label: '明细', to: `${base}/detail`, tone: 'grey' },
-      { label: '大球明细', to: `${base}/detail?market=goals&side=over`, tone: 'grey' },
-      { label: '小球明细', to: `${base}/detail?market=goals&side=under`, tone: 'grey' },
-      { label: '标盘', to: `${base}/ladder?market=standard`, tone: 'blue' },
-      { label: '进球', to: `${base}/ladder?market=goals`, tone: 'blue' },
+      { label: '明细', to: to('/detail'), tone: 'grey' },
+      { label: '大球明细', to: to('/detail', { market: 'goals', side: 'over' }), tone: 'grey' },
+      { label: '小球明细', to: to('/detail', { market: 'goals', side: 'under' }), tone: 'grey' },
+      { label: '标盘', to: to('/ladder', { market: 'standard' }), tone: 'blue' },
+      { label: '进球', to: to('/ladder', { market: 'goals' }), tone: 'blue' },
     ]
   }
   const buttons: DetailBtn[] = [
-    { label: '明细', to: `${base}/detail`, tone: 'grey' },
-    { label: '进球明细', to: `${base}/detail?market=goals`, tone: 'grey' },
-    { label: '欧洲指数', to: `${base}/euro-odds`, tone: 'green' },
-    { label: '标盘', to: `${base}/ladder?market=standard`, tone: 'blue' },
-    { label: '进球', to: `${base}/ladder?market=goals`, tone: 'blue' },
+    { label: '明细', to: to('/detail'), tone: 'grey' },
+    { label: '进球明细', to: to('/detail', { market: 'goals' }), tone: 'grey' },
+    { label: '欧洲指数', to: to('/euro-odds'), tone: 'green' },
+    { label: '标盘', to: to('/ladder', { market: 'standard' }), tone: 'blue' },
+    { label: '进球', to: to('/ladder', { market: 'goals' }), tone: 'blue' },
   ]
   if (canViewScoreMarkets.value) {
-    buttons.splice(2, 0, { label: '比分明细', to: `${base}/correct-score`, tone: 'grey' })
-    buttons.push({ label: '正确比分', to: `${base}/ladder?market=cs`, tone: 'blue' })
+    buttons.splice(2, 0, { label: '比分明细', to: to('/correct-score'), tone: 'grey' })
+    buttons.push({ label: '正确比分', to: to('/ladder', { market: 'cs' }), tone: 'blue' })
   }
   return buttons
 })

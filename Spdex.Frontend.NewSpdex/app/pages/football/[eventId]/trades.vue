@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
 import { useBigTrades } from '~/composables/useBigTrades'
+import { withMatchListContext } from '~/utils/matchNavigation'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
+const detailRoute = computed(() => withMatchListContext(`/football/${eventId.value}`, route.query))
 
 const { data, pending, refresh } = useBigTrades(eventId, 12)
 
@@ -27,7 +29,7 @@ function sideClass(side: string): string {
 <template>
   <div class="bt-page">
     <section class="bt-header">
-      <NuxtLink :to="`/football/${eventId}`" class="back focus-ring">
+      <NuxtLink :to="detailRoute" class="back focus-ring">
         <ArrowLeft :size="15" />
         <span>返回详情</span>
       </NuxtLink>
