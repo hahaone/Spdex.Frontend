@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, BarChart3, CircleDot, Flag, Lock } from '@lucide/vue'
+import { ArrowLeft, BarChart3, Flag, Lock } from '@lucide/vue'
 import type { AnalysisReplayPoint, LiveCardBadge, LiveEvent } from '~/composables/useLiveSnapshot'
 
 const route = useRoute()
@@ -23,9 +23,11 @@ function eventTone(type: string): string {
   }
 }
 function eventIcon(type: string) {
-  if (type === 'goal' || type === 'penalty') return CircleDot
   if (type === 'corner') return Flag
   return null
+}
+function useFootballIcon(type: string): boolean {
+  return type === 'goal'
 }
 
 type CardMarker = LiveCardBadge & { times: string[], title: string }
@@ -82,7 +84,7 @@ type EventProgressMarker = {
 }
 
 function progressKind(type: string): EventProgressKind | null {
-  if (type === 'goal' || type === 'penalty') return 'goal'
+  if (type === 'goal') return 'goal'
   if (type === 'yellow') return 'yellow'
   if (type === 'red') return 'red'
   return null
@@ -106,13 +108,28 @@ function eventProgressTitle(event: LiveEvent, kind: EventProgressKind): string {
   return [sideName, event.minute, label, event.player || event.text || event.rawText].filter(Boolean).join(' · ')
 }
 
+function isScoringGoalEvent(event: LiveEvent): boolean {
+  if (event.type !== 'goal') return false
+  const text = `${event.rawText || ''} ${event.text || ''}`.toLowerCase()
+  return !/\b(disallow(?:ed)?|no goal|goal kick|cancelled|canceled|chalked off|ruled out|void)\b/.test(text)
+}
+
 const eventProgressMarkers = computed<EventProgressMarker[]>(() => {
-  const events = snapshot.value?.events ?? []
+  const s = snapshot.value
+  const events = s?.events ?? []
+  const visibleGoalBudget = {
+    home: Math.max(0, s?.score[0] ?? 0),
+    away: Math.max(0, s?.score[1] ?? 0),
+  }
   return events.reduce<EventProgressMarker[]>((markers, event, index) => {
     if (event.side !== 'home' && event.side !== 'away') return markers
     const kind = progressKind(event.type)
     const parsed = parseEventMinute(event.minute)
     if (!kind || !parsed) return markers
+    if (kind === 'goal') {
+      if (!isScoringGoalEvent(event) || visibleGoalBudget[event.side] <= 0) return markers
+      visibleGoalBudget[event.side] -= 1
+    }
 
     const half: EventProgressHalf = parsed.base <= 45 ? 'first' : 'second'
     const halfMinute = half === 'first'
@@ -800,7 +817,7 @@ function injStatus(s: string): { text: string, cls: string } {
             :aria-label="marker.title"
             role="img"
           >
-            <CircleDot v-if="marker.kind === 'goal'" :size="13" stroke-width="2.6" aria-hidden="true" />
+            <span v-if="marker.kind === 'goal'" class="ep-ball" aria-hidden="true">&#9917;</span>
             <span v-else class="ep-card" aria-hidden="true" />
           </span>
         </div>
@@ -816,7 +833,7 @@ function injStatus(s: string): { text: string, cls: string } {
             :aria-label="marker.title"
             role="img"
           >
-            <CircleDot v-if="marker.kind === 'goal'" :size="13" stroke-width="2.6" aria-hidden="true" />
+            <span v-if="marker.kind === 'goal'" class="ep-ball" aria-hidden="true">&#9917;</span>
             <span v-else class="ep-card" aria-hidden="true" />
           </span>
         </div>
@@ -1197,7 +1214,8 @@ function injStatus(s: string): { text: string, cls: string } {
         >
           <span class="minute num">{{ event.minute }}</span>
           <b>
-            <component :is="eventIcon(event.type)" v-if="eventIcon(event.type)" class="event-icon" :size="13" />
+            <span v-if="useFootballIcon(event.type)" class="event-ball" aria-hidden="true">&#9917;</span>
+            <component :is="eventIcon(event.type)" v-else-if="eventIcon(event.type)" class="event-icon" :size="13" />
             <span>{{ event.text }}</span>
           </b>
         </div>
@@ -1436,8 +1454,10 @@ function injStatus(s: string): { text: string, cls: string } {
   gap: 16px;
   margin: 0 auto;
   padding: 5px 10px 7px;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: #20242b;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.06);
 }
 
 .ep-half {
@@ -1454,14 +1474,14 @@ function injStatus(s: string): { text: string, cls: string } {
   height: 5px;
   border-radius: 999px;
   background: linear-gradient(180deg, #1edc43 0%, #069b18 100%);
-  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.26);
+  box-shadow: inset 0 -1px 0 rgb(15 23 42 / 0.12), 0 0 0 1px rgb(22 163 74 / 0.08);
 }
 
 .ep-label {
   position: absolute;
   right: 0;
   bottom: -2px;
-  color: rgb(255 255 255 / 0.58);
+  color: var(--muted);
   font-size: 0.58rem;
   font-weight: 760;
   line-height: 1;
@@ -1485,17 +1505,23 @@ function injStatus(s: string): { text: string, cls: string } {
 }
 
 .ep-marker.goal {
-  width: 17px;
-  height: 17px;
-  border: 2px solid #3b3f47;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgb(148 163 184 / 0.46);
   border-radius: 999px;
-  background: #f8fafc;
-  color: #3b3f47;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.16);
 }
 
 .ep-marker.goal.away {
   top: 15px;
+}
+
+.ep-ball,
+.event-ball {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .ep-marker.yellow,
@@ -1518,7 +1544,7 @@ function injStatus(s: string): { text: string, cls: string } {
   width: 100%;
   height: 100%;
   border-radius: 2px;
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.28);
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.10), 0 1px 2px rgb(15 23 42 / 0.16);
 }
 
 .ep-marker.yellow .ep-card {
@@ -1559,8 +1585,9 @@ function injStatus(s: string): { text: string, cls: string } {
 .half {
   padding: 1px 7px;
   border-radius: 3px;
-  background: #1a2233;
-  color: #fff;
+  border: 1px solid var(--brand-tint-strong);
+  background: var(--brand-tint);
+  color: var(--brand-deep);
   font-size: 0.72rem;
   font-weight: 760;
 }
@@ -1716,6 +1743,11 @@ section.compare {
 .event-icon {
   flex: 0 0 auto;
   stroke-width: 2.3;
+}
+
+.event-ball {
+  flex: 0 0 auto;
+  font-size: 11px;
 }
 
 .event-row.goal b {
