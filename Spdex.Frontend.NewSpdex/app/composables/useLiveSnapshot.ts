@@ -24,6 +24,9 @@ export interface LiveEvent {
   side: 'home' | 'away'
   type: LiveEventType
   text: string
+  player?: string | null
+  team?: string | null
+  rawText?: string | null
 }
 
 interface BackendStatPair {

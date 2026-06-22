@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, BarChart3, CircleDot, Flag, Lock } from '@lucide/vue'
-import type { AnalysisReplayPoint } from '~/composables/useLiveSnapshot'
+import type { AnalysisReplayPoint, LiveCardBadge, LiveEvent } from '~/composables/useLiveSnapshot'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
@@ -28,8 +28,54 @@ function eventIcon(type: string) {
   return null
 }
 
-const homeCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'home') ?? [])
-const awayCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'away') ?? [])
+type CardMarker = LiveCardBadge & { times: string[], title: string }
+
+function cardLabel(color: string): string {
+  return color === 'red' ? '红牌' : '黄牌'
+}
+
+function cardMarkers(side: 'home' | 'away'): CardMarker[] {
+  const s = snapshot.value
+  if (!s) return []
+  return s.cardBadges
+    .filter(b => b.side === side)
+    .map((badge) => {
+      const times = s.events
+        .filter(e => e.side === side && e.type === badge.color && e.minute)
+        .map(e => e.minute)
+      const sideName = side === 'home' ? '主队' : '客队'
+      const label = cardLabel(badge.color)
+      return {
+        ...badge,
+        times,
+        title: times.length
+          ? `${sideName}${label}${badge.count}张：${times.join('、')}`
+          : `${sideName}${label}${badge.count}张`,
+      }
+    })
+}
+
+const homeCards = computed(() => cardMarkers('home'))
+const awayCards = computed(() => cardMarkers('away'))
+
+const homeGoalEvents = computed(() => goalEvents('home'))
+const awayGoalEvents = computed(() => goalEvents('away'))
+const hasGoalEvents = computed(() => homeGoalEvents.value.length > 0 || awayGoalEvents.value.length > 0)
+
+function goalEvents(side: 'home' | 'away'): LiveEvent[] {
+  return snapshot.value?.events.filter(e => e.side === side && (e.type === 'goal' || e.type === 'penalty')) ?? []
+}
+
+function goalActor(event: LiveEvent): string {
+  if (event.player) return event.player
+  if (event.type === 'penalty') return '点球'
+  return '进球'
+}
+
+function goalTitle(event: LiveEvent): string {
+  const parts = [event.minute, event.text || goalActor(event), event.rawText].filter(Boolean)
+  return parts.join(' · ')
+}
 
 const statusLabel = computed(() => {
   const s = snapshot.value?.status
@@ -681,6 +727,31 @@ function injStatus(s: string): { text: string, cls: string } {
         </b>
         <span class="team away">{{ match?.awayTeam || snapshot?.awayTeam || '客队' }}</span>
       </div>
+      <div v-if="canOpenLive && hasGoalEvents" class="goal-row" aria-label="进球明细">
+        <span class="goal-list home">
+          <span
+            v-for="goal in homeGoalEvents"
+            :key="`hg-${goal.minute}-${goal.text}`"
+            class="goal-pill"
+            :title="goalTitle(goal)"
+          >
+            <span class="goal-minute num">{{ goal.minute }}</span>
+            <span class="goal-player">{{ goalActor(goal) }}</span>
+          </span>
+        </span>
+        <span class="goal-gap" aria-hidden="true" />
+        <span class="goal-list away">
+          <span
+            v-for="goal in awayGoalEvents"
+            :key="`ag-${goal.minute}-${goal.text}`"
+            class="goal-pill"
+            :title="goalTitle(goal)"
+          >
+            <span class="goal-minute num">{{ goal.minute }}</span>
+            <span class="goal-player">{{ goalActor(goal) }}</span>
+          </span>
+        </span>
+      </div>
       <div v-if="canOpenLive" class="micro-row">
         <span class="cluster home">
           <span
@@ -688,10 +759,12 @@ function injStatus(s: string): { text: string, cls: string } {
             :key="`h-${c.color}`"
             class="stat-token"
             role="img"
-            :aria-label="`主队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`"
+            :title="c.title"
+            :aria-label="c.title"
           >
             <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
             <span class="num">{{ c.count }}</span>
+            <span v-if="c.times.length" class="stat-times num">{{ c.times.join(' ') }}</span>
           </span>
           <span class="stat-token" role="img" :aria-label="`主队角球${snapshot?.corners[0] ?? 0}`">
             <Flag :size="13" class="stat-svg corner-svg" aria-hidden="true" />
@@ -709,10 +782,12 @@ function injStatus(s: string): { text: string, cls: string } {
             :key="`a-${c.color}`"
             class="stat-token"
             role="img"
-            :aria-label="`客队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`"
+            :title="c.title"
+            :aria-label="c.title"
           >
             <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
             <span class="num">{{ c.count }}</span>
+            <span v-if="c.times.length" class="stat-times num">{{ c.times.join(' ') }}</span>
           </span>
         </span>
       </div>
@@ -1280,9 +1355,63 @@ function injStatus(s: string): { text: string, cls: string } {
   font-size: 1.1rem;
 }
 
+.goal-row {
+  display: grid;
+  width: min(100%, 620px);
+  grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  margin: -1px auto 0;
+}
+
+.goal-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.goal-list.home {
+  justify-content: flex-end;
+}
+
+.goal-list.away {
+  justify-content: flex-start;
+}
+
+.goal-gap {
+  min-height: 1px;
+}
+
+.goal-pill {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 150px;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 740;
+  line-height: 1.2;
+}
+
+.goal-minute {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-weight: 820;
+}
+
+.goal-player {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .micro-row {
   display: grid;
-  width: min(100%, 340px);
+  width: min(100%, 560px);
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
@@ -1358,6 +1487,16 @@ function injStatus(s: string): { text: string, cls: string } {
 
 .stat-token .num {
   color: var(--ink);
+}
+
+.stat-times {
+  max-width: 92px;
+  overflow: hidden;
+  color: var(--muted) !important;
+  font-size: 0.68rem;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 section.timeline,
@@ -1911,6 +2050,28 @@ section.compare {
 }
 
 @media (max-width: 370px) {
+  .goal-row {
+    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .goal-pill {
+    max-width: 116px;
+    font-size: 0.66rem;
+  }
+
+  .micro-row {
+    gap: 6px;
+  }
+
+  .cluster {
+    gap: 4px;
+  }
+
+  .stat-times {
+    max-width: 52px;
+  }
+
   .odds-row {
     grid-template-columns: 52px repeat(3, minmax(0, 1fr));
     gap: 5px;
