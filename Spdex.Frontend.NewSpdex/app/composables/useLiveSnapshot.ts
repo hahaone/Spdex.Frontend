@@ -1,6 +1,6 @@
 /**
  * 实时赛况 snapshot：比分、分钟、半场、角球、红黄牌、事件时间线、xG/射门统计。
- * 调 /api/newspdex/live/{eventId}/snapshot。
+ * 调 /api/newspdex/live/{eventId}/snapshot，并显式包含赛中分析/回放走势大字段。
  * 进行中赛事每 30 秒自动刷新；其他状态不刷新。
  */
 
@@ -247,7 +247,7 @@ export function useLiveSnapshot(eventId: MaybeRef<number>, enabled: MaybeRef<boo
   const enabledRef = computed(() => unref(enabled))
 
   const result = useApiFetch<ApiResponse<BackendSnapshot>>(
-    () => `/api/newspdex/live/${idRef.value}/snapshot`,
+    () => `/api/newspdex/live/${idRef.value}/snapshot?include=analysis,analysisReplay`,
     {
       key: () => `newspdex-live-snapshot-${idRef.value}`,
       server: false,
