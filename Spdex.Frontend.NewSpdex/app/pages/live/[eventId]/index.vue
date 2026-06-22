@@ -682,14 +682,38 @@ function injStatus(s: string): { text: string, cls: string } {
         <span class="team away">{{ match?.awayTeam || snapshot?.awayTeam || '客队' }}</span>
       </div>
       <div v-if="canOpenLive" class="micro-row">
-        <span class="cluster">
-          <span v-for="c in homeCards" :key="`h-${c.color}`" :class="['card-badge', c.color]" role="img" :aria-label="`主队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
-          <span class="num">角 {{ snapshot?.corners[0] ?? 0 }}</span>
+        <span class="cluster home">
+          <span
+            v-for="c in homeCards"
+            :key="`h-${c.color}`"
+            class="stat-token"
+            role="img"
+            :aria-label="`主队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`"
+          >
+            <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
+            <span class="num">{{ c.count }}</span>
+          </span>
+          <span class="stat-token" role="img" :aria-label="`主队角球${snapshot?.corners[0] ?? 0}`">
+            <Flag :size="13" class="stat-svg corner-svg" aria-hidden="true" />
+            <span class="num">{{ snapshot?.corners[0] ?? 0 }}</span>
+          </span>
         </span>
         <span class="half num">{{ snapshot?.halfScore ?? '-' }}</span>
-        <span class="cluster">
-          <span class="num">{{ snapshot?.corners[1] ?? 0 }} 角</span>
-          <span v-for="c in awayCards" :key="`a-${c.color}`" :class="['card-badge', c.color]" role="img" :aria-label="`客队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
+        <span class="cluster away">
+          <span class="stat-token" role="img" :aria-label="`客队角球${snapshot?.corners[1] ?? 0}`">
+            <Flag :size="13" class="stat-svg corner-svg" aria-hidden="true" />
+            <span class="num">{{ snapshot?.corners[1] ?? 0 }}</span>
+          </span>
+          <span
+            v-for="c in awayCards"
+            :key="`a-${c.color}`"
+            class="stat-token"
+            role="img"
+            :aria-label="`客队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`"
+          >
+            <span :class="['stat-icon', 'card-icon', c.color]" aria-hidden="true" />
+            <span class="num">{{ c.count }}</span>
+          </span>
         </span>
       </div>
     </section>
@@ -1257,10 +1281,12 @@ function injStatus(s: string): { text: string, cls: string } {
 }
 
 .micro-row {
-  display: flex;
+  display: grid;
+  width: min(100%, 340px);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
+  margin: -2px auto 0;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 720;
@@ -1269,7 +1295,16 @@ function injStatus(s: string): { text: string, cls: string } {
 .cluster {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cluster.home {
+  justify-self: end;
+}
+
+.cluster.away {
+  justify-self: start;
 }
 
 .half {
@@ -1281,23 +1316,47 @@ function injStatus(s: string): { text: string, cls: string } {
   font-weight: 760;
 }
 
-.card-badge {
-  display: inline-grid;
-  min-width: 17px;
-  height: 17px;
-  place-items: center;
-  border-radius: 2px;
-  color: #fff;
-  font-size: 0.66rem;
-  font-weight: 760;
+.stat-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 780;
+  line-height: 1;
 }
 
-.card-badge.red {
+.stat-icon {
+  flex: 0 0 auto;
+}
+
+.card-icon {
+  width: 8px;
+  height: 13px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.card-icon.red {
   background: var(--buy);
 }
 
-.card-badge.yellow {
-  background: #d5b300;
+.card-icon.yellow {
+  background: #f6b800;
+}
+
+.stat-svg {
+  flex: 0 0 auto;
+  stroke-width: 2.2;
+}
+
+.corner-svg {
+  color: #16a34a;
+  fill: rgba(22, 163, 74, 0.16);
+}
+
+.stat-token .num {
   color: var(--ink);
 }
 
