@@ -11,6 +11,7 @@ const FX_RATE_REFRESH_INTERVAL_MS = 15 * 60_000
 const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
 const EFFECTIVE_LIVE_BIG_TRADE_HKD = 156_000
 const LIVE_TRADE_COMPARE_THRESHOLD_HKD = 40_000
+const LIVE_RUNNING_WINDOW_MS = 4 * 60 * 60 * 1000
 const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const DRAW_SELECTION_ID = 58805
@@ -87,7 +88,7 @@ function isFinishedMatch(item: MatchListItem): boolean {
 
   const startedAt = new Date(item.match.matchTime).getTime()
   if (!Number.isFinite(startedAt)) return false
-  return Date.now() - startedAt > 2.5 * 60 * 60 * 1000
+  return Date.now() - startedAt > LIVE_RUNNING_WINDOW_MS
 }
 
 const apiVisibleMatches = computed(() => {
