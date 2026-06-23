@@ -673,11 +673,7 @@ interface TopTradeCollisionHistoryRecord {
 const visibleTopTradeCollisionHistory = computed(() =>
   isTopTradeCollisionHistoryOpen.value
     ? topTradeCollisionHistory.value
-    : topTradeCollisionHistory.value.slice(0, 5),
-)
-
-const hiddenTopTradeCollisionHistoryCount = computed(() =>
-  Math.max(0, topTradeCollisionHistory.value.length - visibleTopTradeCollisionHistory.value.length),
+    : [],
 )
 
 function findMatchByEventId(eventId: number): MatchListItem | undefined {
@@ -1126,7 +1122,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
           <button type="button" @click="clearTopTradeCollisionHistory">清空</button>
         </div>
       </div>
-      <div class="collision-history-list">
+      <div v-if="isTopTradeCollisionHistoryOpen" class="collision-history-list">
         <button
           v-for="record in visibleTopTradeCollisionHistory"
           :key="record.key"
@@ -1147,9 +1143,6 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             </template>
           </span>
         </button>
-        <div v-if="hiddenTopTradeCollisionHistoryCount > 0" class="collision-history-more">
-          还有 {{ hiddenTopTradeCollisionHistoryCount }} 条，点击“展开”查看
-        </div>
       </div>
     </section>
 
@@ -1458,7 +1451,7 @@ select {
 
 .collision-history {
   border: 1px solid #ffd6dc;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff7f8;
   overflow: hidden;
 }
@@ -1467,38 +1460,47 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid #ffe1e6;
 }
 
+.collision-history-head > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
 .collision-history-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
   color: #c81e32;
 }
 
 .collision-history-subtitle {
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: 0;
+  font-size: 11px;
   color: #8d5e66;
 }
 
 .collision-history-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 11px;
   color: #9a5260;
   white-space: nowrap;
 }
 
 .collision-history-actions button {
-  height: 28px;
+  height: 24px;
+  padding: 0 8px;
   border: 1px solid #ffc2cc;
   border-radius: 6px;
   background: #fff;
   color: #c81e32;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -1511,10 +1513,12 @@ select {
 
 .collision-history-item {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(280px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 12px;
   border: 0;
   background: #fff;
-  padding: 9px 14px;
+  padding: 6px 10px;
   text-align: left;
   cursor: pointer;
 }
@@ -1528,12 +1532,14 @@ select {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 5px 7px;
 }
 
 .collision-history-main {
   color: #253044;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.25;
 }
 
 .collision-history-main strong {
@@ -1541,16 +1547,10 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-.collision-history-detail,
-.collision-history-more {
+.collision-history-detail {
   color: #6f7888;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.collision-history-more {
-  background: #fff;
-  padding: 8px 14px;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .table-wrap {
