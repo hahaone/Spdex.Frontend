@@ -628,7 +628,7 @@ interface TopTradeCollisionHistoryRecord {
 const visibleTopTradeCollisionHistory = computed(() =>
   isTopTradeCollisionHistoryOpen.value
     ? topTradeCollisionHistory.value
-    : [],
+    : topTradeCollisionHistory.value.slice(0, 3),
 )
 
 function findMatchByEventId(eventId: number): MatchListItem | undefined {
@@ -649,7 +649,7 @@ function recordTopTradeCollisionHistory(
   const match = findMatchByEventId(eventId)
   const recordKey = `${eventId}|${latest.key}`
   const record = buildTopTradeCollisionHistoryRecord(eventId, match, latest, collisionGroup, collisionCount, recordKey)
-  mergeTopTradeCollisionHistoryRecord(record, true)
+  mergeTopTradeCollisionHistoryRecord(record)
 }
 
 function recordTopTradeCollisionHistoryFromServer(collision: LiveMatchOddsTopTradeCollisionRecord) {
@@ -670,10 +670,10 @@ function recordTopTradeCollisionHistoryFromServer(collision: LiveMatchOddsTopTra
     trigger: buildTopTradeCollisionHistoryMember(collision.trigger, match),
     linked: collision.linked.map(trade => buildTopTradeCollisionHistoryMember(trade, match)),
   }
-  mergeTopTradeCollisionHistoryRecord(record, false)
+  mergeTopTradeCollisionHistoryRecord(record)
 }
 
-function mergeTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord, openOnNew: boolean) {
+function mergeTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord) {
   const existingIndex = topTradeCollisionHistory.value.findIndex(item => item.key === record.key)
   let next: TopTradeCollisionHistoryRecord[]
 
@@ -687,7 +687,6 @@ function mergeTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRec
     }
   } else {
     next = [record, ...topTradeCollisionHistory.value]
-    if (openOnNew) isTopTradeCollisionHistoryOpen.value = true
   }
 
   topTradeCollisionHistory.value = next.slice(0, TOP_TRADE_COLLISION_HISTORY_LIMIT)
@@ -1079,7 +1078,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
           <button type="button" @click="clearTopTradeCollisionHistory">清空</button>
         </div>
       </div>
-      <div v-if="isTopTradeCollisionHistoryOpen" class="collision-history-list">
+      <div class="collision-history-list">
         <button
           v-for="record in visibleTopTradeCollisionHistory"
           :key="record.key"
