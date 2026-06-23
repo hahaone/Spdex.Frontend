@@ -80,6 +80,7 @@ type EventProgressMarker = {
   kind: EventProgressKind
   left: number
   minute: string
+  detail: string
   title: string
 }
 
@@ -106,6 +107,39 @@ function eventProgressTitle(event: LiveEvent, kind: EventProgressKind): string {
     : (match.value?.awayTeam || snapshot.value?.awayTeam || '客队')
   const label = kind === 'red' ? '红牌' : '黄牌'
   return [sideName, event.minute, label, event.player || event.text || event.rawText].filter(Boolean).join(' · ')
+}
+
+function teamNameSet(event: LiveEvent): Set<string> {
+  return new Set(
+    [
+      event.team,
+      match.value?.homeTeam,
+      match.value?.awayTeam,
+      snapshot.value?.homeTeam,
+      snapshot.value?.awayTeam,
+      '主队',
+      '客队',
+    ]
+      .filter((value): value is string => !!value?.trim())
+      .map(value => value.trim()),
+  )
+}
+
+function goalDetailActor(event: LiveEvent): string {
+  if (event.player?.trim()) return event.player.trim()
+  const teams = teamNameSet(event)
+  const actor = (event.text || '')
+    .split('·')
+    .map(part => part.trim())
+    .find(part => part && part !== '进球' && part !== '点球' && !teams.has(part))
+  if (actor) return actor
+  return event.type === 'penalty' ? '点球' : ''
+}
+
+function eventProgressDetail(event: LiveEvent, kind: EventProgressKind): string {
+  if (kind !== 'goal') return event.minute
+  const actor = goalDetailActor(event)
+  return [event.minute, actor].filter(Boolean).join(' ')
 }
 
 function isScoringGoalEvent(event: LiveEvent): boolean {
@@ -143,6 +177,7 @@ const eventProgressMarkers = computed<EventProgressMarker[]>(() => {
       kind,
       left: Math.max(0, Math.min(100, (halfMinute / 45) * 100)),
       minute: event.minute,
+      detail: eventProgressDetail(event, kind),
       title: eventProgressTitle(event, kind),
     })
     return markers
@@ -151,6 +186,9 @@ const eventProgressMarkers = computed<EventProgressMarker[]>(() => {
 const firstHalfProgressMarkers = computed(() => eventProgressMarkers.value.filter(marker => marker.half === 'first'))
 const secondHalfProgressMarkers = computed(() => eventProgressMarkers.value.filter(marker => marker.half === 'second'))
 const hasEventProgress = computed(() => eventProgressMarkers.value.length > 0)
+const homeEventProgressDetails = computed(() => eventProgressMarkers.value.filter(marker => marker.side === 'home'))
+const awayEventProgressDetails = computed(() => eventProgressMarkers.value.filter(marker => marker.side === 'away'))
+const hasEventProgressDetails = computed(() => homeEventProgressDetails.value.length > 0 || awayEventProgressDetails.value.length > 0)
 const hasHomeCardProgress = computed(() => eventProgressMarkers.value.some(marker => marker.side === 'home' && (marker.kind === 'yellow' || marker.kind === 'red')))
 const hasAwayCardProgress = computed(() => eventProgressMarkers.value.some(marker => marker.side === 'away' && (marker.kind === 'yellow' || marker.kind === 'red')))
 
@@ -837,6 +875,34 @@ function injStatus(s: string): { text: string, cls: string } {
             <span v-else class="ep-card" aria-hidden="true" />
           </span>
         </div>
+      </div>
+      <div v-if="canOpenLive && hasEventProgressDetails" class="event-detail-row" aria-label="进球和红黄牌明细">
+        <span class="event-detail-cluster home">
+          <span
+            v-for="marker in homeEventProgressDetails"
+            :key="`hd-${marker.id}`"
+            :class="['event-detail-token', marker.kind]"
+            :title="marker.title"
+            :aria-label="marker.title"
+          >
+            <span v-if="marker.kind === 'goal'" class="event-detail-ball" aria-hidden="true">&#9917;</span>
+            <span v-else :class="['event-detail-card', marker.kind]" aria-hidden="true" />
+            <span class="event-detail-text num">{{ marker.detail }}</span>
+          </span>
+        </span>
+        <span class="event-detail-cluster away">
+          <span
+            v-for="marker in awayEventProgressDetails"
+            :key="`ad-${marker.id}`"
+            :class="['event-detail-token', marker.kind]"
+            :title="marker.title"
+            :aria-label="marker.title"
+          >
+            <span v-if="marker.kind === 'goal'" class="event-detail-ball" aria-hidden="true">&#9917;</span>
+            <span v-else :class="['event-detail-card', marker.kind]" aria-hidden="true" />
+            <span class="event-detail-text num">{{ marker.detail }}</span>
+          </span>
+        </span>
       </div>
       <div v-if="canOpenLive" class="micro-row">
         <span class="cluster home">
@@ -1555,6 +1621,94 @@ function injStatus(s: string): { text: string, cls: string } {
   background: var(--buy);
 }
 
+.event-detail-row {
+  display: grid;
+  width: min(100%, 720px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 16px;
+  align-items: start;
+  margin: -3px auto 0;
+}
+
+.event-detail-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  align-items: center;
+}
+
+.event-detail-cluster.home {
+  justify-content: flex-end;
+}
+
+.event-detail-cluster.away {
+  justify-content: flex-start;
+}
+
+.event-detail-token {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 780;
+  line-height: 1.25;
+}
+
+.event-detail-token.goal {
+  background: #f8fbff;
+  color: var(--ink);
+}
+
+.event-detail-token.yellow {
+  border-color: #f0d58a;
+  background: #fff8df;
+  color: #8a6212;
+}
+
+.event-detail-token.red {
+  border-color: #f3b4c0;
+  background: #fde8eb;
+  color: #b1253c;
+}
+
+.event-detail-ball {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.event-detail-card {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.08);
+}
+
+.event-detail-card.yellow {
+  background: #f6b800;
+}
+
+.event-detail-card.red {
+  background: var(--buy);
+}
+
+.event-detail-text {
+  min-width: 0;
+  max-width: 118px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .micro-row {
   display: grid;
   width: min(100%, 560px);
@@ -2206,6 +2360,21 @@ section.compare {
     gap: 10px;
     padding-right: 7px;
     padding-left: 7px;
+  }
+
+  .event-detail-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .event-detail-cluster,
+  .event-detail-cluster.home,
+  .event-detail-cluster.away {
+    justify-content: center;
+  }
+
+  .event-detail-text {
+    max-width: 92px;
   }
 
   .micro-row {
