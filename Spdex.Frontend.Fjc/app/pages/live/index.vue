@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ApiResponse } from '~/types/api'
 import type { MatchListItem, MatchListResult } from '~/types/match'
-import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeSummary, LiveXgItem, LiveXgReplay } from '~/types/live'
+import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeCollisionRecord, LiveMatchOddsTopTradeSummary, LiveXgItem, LiveXgReplay } from '~/types/live'
 import type { LiveXgRef } from '~/composables/useLiveXg'
 import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatMoney } from '~/utils/formatters'
 
@@ -14,6 +14,9 @@ const LIVE_TRADE_COMPARE_THRESHOLD_HKD = 40_000
 const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const DRAW_SELECTION_ID = 58805
+const TOP_TRADE_COLLISION_HISTORY_LIMIT = 200
+const TOP_TRADE_COLLISION_MARKER_STORAGE_PREFIX = 'spdex-fjcx-live-top-trade-collision-markers'
+const TOP_TRADE_COLLISION_HISTORY_STORAGE_PREFIX = 'spdex-fjcx-live-top-trade-collisions'
 
 const { isJcOnly } = useAuth()
 
@@ -309,6 +312,10 @@ const refreshCountdownSeconds = computed(() =>
 const expandedEventIds = ref<Set<number>>(new Set())
 const flashEventIds = ref<Set<number>>(new Set())
 const previousSignatures = ref<Map<number, string>>(new Map())
+const topTradeCollisionHistory = ref<TopTradeCollisionHistoryRecord[]>([])
+const topTradeCollisionCountsByEventId = ref<Map<number, Map<string, number>>>(new Map())
+const previousTopTradeKeysByEventId = ref<Map<number, Set<string>>>(new Map())
+const isTopTradeCollisionHistoryOpen = ref(false)
 let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let liveTradeRefreshTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -318,6 +325,22 @@ type RefreshOptions = { silent?: boolean } | PointerEvent
 
 function normalizeRefreshOptions(options?: RefreshOptions): { silent?: boolean } {
   return options && 'silent' in options ? options : {}
+}
+
+const topTradeCollisionHistoryStorageKey = computed(() =>
+  `${TOP_TRADE_COLLISION_HISTORY_STORAGE_PREFIX}:${selectedDate.value}`,
+)
+const topTradeCollisionMarkerStorageKey = computed(() =>
+  `${TOP_TRADE_COLLISION_MARKER_STORAGE_PREFIX}:${selectedDate.value}`,
+)
+
+if (import.meta.client) {
+  watch(topTradeCollisionHistoryStorageKey, () => {
+    loadTopTradeCollisionHistory()
+  }, { immediate: true })
+  watch(topTradeCollisionMarkerStorageKey, () => {
+    loadTopTradeCollisionMarkers()
+  }, { immediate: true })
 }
 
 watch(
@@ -489,7 +512,6 @@ function isLatestTopTrade(
 }
 
 const NEAR_TRADE_WINDOW_MS = 5_000
-const topTradeCollisionCountsByEventId = ref<Map<number, Map<string, number>>>(new Map())
 
 /**
  * 新进入 TOP10 的成交单与其他 TOP10 大单成交时间差 < 5 秒时，
@@ -499,54 +521,56 @@ function topTradeTimeClass(
   trade: LiveMatchOddsTopTradeSummary,
   live: LiveMatchOddsEventItem | undefined,
 ): string {
-  if (!live?.latestTopTradeKey) return ''
-  const latest = live.topTrades.find(item => item.key === live.latestTopTradeKey)
-  if (!latest) return ''
-  const latestTime = Date.parse(latest.timestamp)
+  if (!live) return ''
+  const eventId = Number(live.eventId)
+  if (!Number.isFinite(eventId)) return ''
+  const markers = topTradeCollisionCountsByEventId.value.get(eventId)
+  if (!markers || markers.size === 0) return ''
+
   const tradeTime = Date.parse(trade.timestamp)
-  if (Number.isNaN(latestTime) || Number.isNaN(tradeTime)) return ''
+  if (Number.isNaN(tradeTime)) return ''
 
-  const isLatest = trade.key === live.latestTopTradeKey
-  const isNearLatest = Math.abs(tradeTime - latestTime) < NEAR_TRADE_WINDOW_MS
-  if (!isLatest) return isNearLatest ? 'time-near-collision-linked' : ''
-
-  for (const other of live.topTrades) {
-    if (other.key === trade.key) continue
-    const otherTime = Date.parse(other.timestamp)
-    if (Number.isNaN(otherTime)) continue
-    if (Math.abs(latestTime - otherTime) < NEAR_TRADE_WINDOW_MS) {
+  for (const triggerKey of markers.keys()) {
+    const trigger = live.topTrades.find(item => item.key === triggerKey)
+    if (!trigger) continue
+    if (trade.key === triggerKey) {
       return 'time-near-collision-latest'
+    }
+    const triggerTime = Date.parse(trigger.timestamp)
+    if (!Number.isNaN(triggerTime) && Math.abs(triggerTime - tradeTime) < NEAR_TRADE_WINDOW_MS) {
+      return 'time-near-collision-linked'
     }
   }
   return ''
 }
 
-function topTradeCollisionGroupSize(live: LiveMatchOddsEventItem | undefined): number {
-  if (!live?.latestTopTradeKey) return 0
+function topTradeCollisionGroup(live: LiveMatchOddsEventItem | undefined): LiveMatchOddsTopTradeSummary[] {
+  if (!live?.latestTopTradeKey) return []
   const latest = live.topTrades.find(item => item.key === live.latestTopTradeKey)
-  if (!latest) return 0
+  if (!latest) return []
   const latestTime = Date.parse(latest.timestamp)
-  if (Number.isNaN(latestTime)) return 0
+  if (Number.isNaN(latestTime)) return []
 
-  let linkedCount = 0
-  for (const other of live.topTrades) {
-    if (other.key === latest.key) continue
-    const otherTime = Date.parse(other.timestamp)
-    if (Number.isNaN(otherTime)) continue
-    if (Math.abs(latestTime - otherTime) < NEAR_TRADE_WINDOW_MS) linkedCount += 1
-  }
-
-  return linkedCount > 0 ? linkedCount + 1 : 0
+  return live.topTrades
+    .filter((trade) => {
+      const tradeTime = Date.parse(trade.timestamp)
+      return !Number.isNaN(tradeTime) && Math.abs(latestTime - tradeTime) < NEAR_TRADE_WINDOW_MS
+    })
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
 }
 
 function syncTopTradeCollisionMarkers() {
   const next = new Map<number, Map<string, number>>()
+  const previousKeysByEventId = previousTopTradeKeysByEventId.value
+  const nextPreviousKeysByEventId = new Map<number, Set<string>>()
+  const serverCollisionsByEventId = groupServerTopTradeCollisions()
 
   for (const item of liveTrades.data.value?.items ?? []) {
     const eventId = Number(item.eventId)
     if (!Number.isFinite(eventId)) continue
 
     const tradeKeys = new Set(item.topTrades.map(trade => trade.key))
+    nextPreviousKeysByEventId.set(eventId, tradeKeys)
     const existing = topTradeCollisionCountsByEventId.value.get(eventId)
     const markers = new Map<string, number>()
 
@@ -556,10 +580,21 @@ function syncTopTradeCollisionMarkers() {
       }
     }
 
-    const collisionCount = topTradeCollisionGroupSize(item)
+    for (const collision of serverCollisionsByEventId.get(eventId) ?? []) {
+      if (collision.trigger && tradeKeys.has(collision.trigger.key)) {
+        markers.set(collision.trigger.key, Math.max(markers.get(collision.trigger.key) ?? 0, collision.count))
+      }
+      recordTopTradeCollisionHistoryFromServer(collision)
+    }
+
+    const collisionGroup = topTradeCollisionGroup(item)
+    const collisionCount = collisionGroup.length > 1 ? collisionGroup.length : 0
     const latestKey = item.latestTopTradeKey
-    if (collisionCount > 0 && latestKey && tradeKeys.has(latestKey)) {
+    const previousKeys = previousKeysByEventId.get(eventId)
+    const latestEnteredTop10 = !!latestKey && previousKeys != null && !previousKeys.has(latestKey)
+    if (collisionCount > 0 && latestEnteredTop10 && tradeKeys.has(latestKey)) {
       markers.set(latestKey, markers.get(latestKey) ?? collisionCount)
+      recordTopTradeCollisionHistory(item, collisionGroup, collisionCount)
     }
 
     if (markers.size > 0) {
@@ -567,7 +602,21 @@ function syncTopTradeCollisionMarkers() {
     }
   }
 
+  previousTopTradeKeysByEventId.value = nextPreviousKeysByEventId
   topTradeCollisionCountsByEventId.value = next
+  saveTopTradeCollisionMarkers(next)
+}
+
+function groupServerTopTradeCollisions(): Map<number, LiveMatchOddsTopTradeCollisionRecord[]> {
+  const groups = new Map<number, LiveMatchOddsTopTradeCollisionRecord[]>()
+  for (const collision of liveTrades.data.value?.topTradeCollisions ?? []) {
+    const eventId = Number(collision.eventId)
+    if (!Number.isFinite(eventId) || !collision.trigger || collision.count <= 1) continue
+    const items = groups.get(eventId) ?? []
+    items.push(collision)
+    groups.set(eventId, items)
+  }
+  return groups
 }
 
 function topTradeCollisionMarkerCount(
@@ -577,6 +626,257 @@ function topTradeCollisionMarkerCount(
   const eventId = Number(live?.eventId)
   if (!Number.isFinite(eventId)) return 0
   return topTradeCollisionCountsByEventId.value.get(eventId)?.get(trade.key) ?? 0
+}
+
+function topTradeCollisionDisplayCount(live: LiveMatchOddsEventItem | undefined): number {
+  return retainedTopTradeCollisionCount(live)
+}
+
+function retainedTopTradeCollisionCount(live: LiveMatchOddsEventItem | undefined): number {
+  const eventId = Number(live?.eventId)
+  if (!Number.isFinite(eventId)) return 0
+  const markers = topTradeCollisionCountsByEventId.value.get(eventId)
+  if (!markers || markers.size === 0) return 0
+  return Math.max(...markers.values())
+}
+
+interface TopTradeCollisionStoredMarker {
+  eventId: number
+  trades: Array<{ key: string; count: number }>
+}
+
+interface TopTradeCollisionHistoryMember {
+  key: string
+  rank: number
+  time: string
+  runner: string
+  side: string
+  price: string
+  amount: string
+  book: string
+}
+
+interface TopTradeCollisionHistoryRecord {
+  key: string
+  eventId: number
+  league: string
+  matchTime: string
+  homeTeam: string
+  guestTeam: string
+  count: number
+  triggeredAt: string
+  detectedAt: string
+  trigger: TopTradeCollisionHistoryMember
+  linked: TopTradeCollisionHistoryMember[]
+}
+
+const visibleTopTradeCollisionHistory = computed(() =>
+  isTopTradeCollisionHistoryOpen.value
+    ? topTradeCollisionHistory.value
+    : topTradeCollisionHistory.value.slice(0, 5),
+)
+
+const hiddenTopTradeCollisionHistoryCount = computed(() =>
+  Math.max(0, topTradeCollisionHistory.value.length - visibleTopTradeCollisionHistory.value.length),
+)
+
+function findMatchByEventId(eventId: number): MatchListItem | undefined {
+  return matchCandidates.value.find(item => item.match.eventId === eventId)
+}
+
+function recordTopTradeCollisionHistory(
+  live: LiveMatchOddsEventItem,
+  collisionGroup: LiveMatchOddsTopTradeSummary[],
+  collisionCount: number,
+) {
+  const eventId = Number(live.eventId)
+  const latestKey = live.latestTopTradeKey
+  if (!Number.isFinite(eventId) || !latestKey || collisionCount <= 1) return
+  const latest = collisionGroup.find(trade => trade.key === latestKey)
+  if (!latest) return
+
+  const match = findMatchByEventId(eventId)
+  const recordKey = `${eventId}|${latest.key}`
+  const record = buildTopTradeCollisionHistoryRecord(eventId, match, latest, collisionGroup, collisionCount, recordKey)
+  mergeTopTradeCollisionHistoryRecord(record, true)
+}
+
+function recordTopTradeCollisionHistoryFromServer(collision: LiveMatchOddsTopTradeCollisionRecord) {
+  const eventId = Number(collision.eventId)
+  if (!Number.isFinite(eventId) || !collision.trigger || collision.count <= 1) return
+
+  const match = findMatchByEventId(eventId)
+  const record: TopTradeCollisionHistoryRecord = {
+    key: `${eventId}|${collision.trigger.key}`,
+    eventId,
+    league: match?.match.sortName ?? '-',
+    matchTime: match ? formatMatchTimeSlash(match.match.matchTime) : '-',
+    homeTeam: match?.match.homeTeam ?? '-',
+    guestTeam: match?.match.guestTeam ?? '-',
+    count: collision.count,
+    triggeredAt: formatTradeTime(collision.triggeredAtUtc || collision.trigger.timestamp),
+    detectedAt: formatTradeTime(collision.detectedAtUtc),
+    trigger: buildTopTradeCollisionHistoryMember(collision.trigger, match),
+    linked: collision.linked.map(trade => buildTopTradeCollisionHistoryMember(trade, match)),
+  }
+  mergeTopTradeCollisionHistoryRecord(record, false)
+}
+
+function mergeTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord, openOnNew: boolean) {
+  const existingIndex = topTradeCollisionHistory.value.findIndex(item => item.key === record.key)
+  let next: TopTradeCollisionHistoryRecord[]
+
+  if (existingIndex >= 0) {
+    next = [...topTradeCollisionHistory.value]
+    const existing = next[existingIndex]!
+    next[existingIndex] = {
+      ...record,
+      detectedAt: existing.detectedAt,
+      count: Math.max(existing.count, record.count),
+    }
+  } else {
+    next = [record, ...topTradeCollisionHistory.value]
+    if (openOnNew) isTopTradeCollisionHistoryOpen.value = true
+  }
+
+  topTradeCollisionHistory.value = next.slice(0, TOP_TRADE_COLLISION_HISTORY_LIMIT)
+  saveTopTradeCollisionHistory()
+}
+
+function buildTopTradeCollisionHistoryRecord(
+  eventId: number,
+  match: MatchListItem | undefined,
+  latest: LiveMatchOddsTopTradeSummary,
+  collisionGroup: LiveMatchOddsTopTradeSummary[],
+  collisionCount: number,
+  recordKey: string,
+): TopTradeCollisionHistoryRecord {
+  return {
+    key: recordKey,
+    eventId,
+    league: match?.match.sortName ?? '-',
+    matchTime: match ? formatMatchTimeSlash(match.match.matchTime) : '-',
+    homeTeam: match?.match.homeTeam ?? '-',
+    guestTeam: match?.match.guestTeam ?? '-',
+    count: collisionCount,
+    triggeredAt: formatTradeTime(latest.timestamp),
+    detectedAt: formatTradeTime(new Date().toISOString()),
+    trigger: buildTopTradeCollisionHistoryMember(latest, match),
+    linked: collisionGroup
+      .filter(trade => trade.key !== latest.key)
+      .map(trade => buildTopTradeCollisionHistoryMember(trade, match)),
+  }
+}
+
+function buildTopTradeCollisionHistoryMember(
+  trade: LiveMatchOddsTopTradeSummary,
+  match: MatchListItem | undefined,
+): TopTradeCollisionHistoryMember {
+  return {
+    key: trade.key,
+    rank: trade.rank,
+    time: formatTradeTime(trade.timestamp),
+    runner: match ? runnerLabel(trade, match) : (trade.runnerName || trade.selectionId || '-'),
+    side: sideLabel(trade.sideHint),
+    price: formatPriceMove(trade),
+    amount: formatHkdMoney(tradeTotalDeltaHkd(trade)),
+    book: formatBackLayBook(trade),
+  }
+}
+
+function openTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord) {
+  const next = new Set(expandedEventIds.value)
+  next.add(record.eventId)
+  expandedEventIds.value = next
+}
+
+function clearTopTradeCollisionHistory() {
+  topTradeCollisionHistory.value = []
+  if (import.meta.client) localStorage.removeItem(topTradeCollisionHistoryStorageKey.value)
+}
+
+function saveTopTradeCollisionMarkers(markers = topTradeCollisionCountsByEventId.value) {
+  if (!import.meta.client) return
+  const payload: TopTradeCollisionStoredMarker[] = [...markers.entries()].map(([eventId, tradeMarkers]) => ({
+    eventId,
+    trades: [...tradeMarkers.entries()].map(([key, count]) => ({ key, count })),
+  }))
+  localStorage.setItem(topTradeCollisionMarkerStorageKey.value, JSON.stringify(payload))
+}
+
+function loadTopTradeCollisionMarkers() {
+  if (!import.meta.client) return
+  try {
+    const raw = localStorage.getItem(topTradeCollisionMarkerStorageKey.value)
+    if (!raw) {
+      topTradeCollisionCountsByEventId.value = new Map()
+      return
+    }
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      topTradeCollisionCountsByEventId.value = new Map()
+      return
+    }
+
+    const next = new Map<number, Map<string, number>>()
+    for (const item of parsed) {
+      if (!isTopTradeCollisionStoredMarker(item)) continue
+      const markers = new Map<string, number>()
+      for (const trade of item.trades) markers.set(trade.key, trade.count)
+      if (markers.size > 0) next.set(item.eventId, markers)
+    }
+    topTradeCollisionCountsByEventId.value = next
+  } catch {
+    topTradeCollisionCountsByEventId.value = new Map()
+  }
+}
+
+function isTopTradeCollisionStoredMarker(value: unknown): value is TopTradeCollisionStoredMarker {
+  if (!value || typeof value !== 'object') return false
+  const marker = value as Partial<TopTradeCollisionStoredMarker>
+  return typeof marker.eventId === 'number'
+    && Array.isArray(marker.trades)
+    && marker.trades.every(trade =>
+      trade
+      && typeof trade === 'object'
+      && typeof trade.key === 'string'
+      && typeof trade.count === 'number',
+    )
+}
+
+function saveTopTradeCollisionHistory() {
+  if (!import.meta.client) return
+  localStorage.setItem(
+    topTradeCollisionHistoryStorageKey.value,
+    JSON.stringify(topTradeCollisionHistory.value),
+  )
+}
+
+function loadTopTradeCollisionHistory() {
+  if (!import.meta.client) return
+  try {
+    const raw = localStorage.getItem(topTradeCollisionHistoryStorageKey.value)
+    if (!raw) {
+      topTradeCollisionHistory.value = []
+      return
+    }
+    const parsed: unknown = JSON.parse(raw)
+    topTradeCollisionHistory.value = Array.isArray(parsed)
+      ? parsed.filter(isTopTradeCollisionHistoryRecord).slice(0, TOP_TRADE_COLLISION_HISTORY_LIMIT)
+      : []
+  } catch {
+    topTradeCollisionHistory.value = []
+  }
+}
+
+function isTopTradeCollisionHistoryRecord(value: unknown): value is TopTradeCollisionHistoryRecord {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Partial<TopTradeCollisionHistoryRecord>
+  return typeof record.key === 'string'
+    && typeof record.eventId === 'number'
+    && typeof record.count === 'number'
+    && typeof record.trigger === 'object'
+    && Array.isArray(record.linked)
 }
 
 function liveEmptyText(item: MatchListItem): string {
@@ -812,6 +1112,47 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
       </div>
     </div>
 
+    <section v-if="topTradeCollisionHistory.length > 0" class="collision-history">
+      <div class="collision-history-head">
+        <div>
+          <div class="collision-history-title">5秒多单记录</div>
+          <div class="collision-history-subtitle">记录触发过的现场 TOP10 5秒多单，刷新后仍保留</div>
+        </div>
+        <div class="collision-history-actions">
+          <span>{{ topTradeCollisionHistory.length }} 条</span>
+          <button type="button" @click="isTopTradeCollisionHistoryOpen = !isTopTradeCollisionHistoryOpen">
+            {{ isTopTradeCollisionHistoryOpen ? '收起' : '展开' }}
+          </button>
+          <button type="button" @click="clearTopTradeCollisionHistory">清空</button>
+        </div>
+      </div>
+      <div class="collision-history-list">
+        <button
+          v-for="record in visibleTopTradeCollisionHistory"
+          :key="record.key"
+          type="button"
+          class="collision-history-item"
+          @click="openTopTradeCollisionHistoryRecord(record)"
+        >
+          <span class="collision-history-main">
+            <strong>[{{ record.count }}]</strong>
+            <span>{{ record.triggeredAt }}</span>
+            <span>{{ record.league }}</span>
+            <span>{{ record.homeTeam }} v {{ record.guestTeam }}</span>
+          </span>
+          <span class="collision-history-detail">
+            触发 #{{ record.trigger.rank }} {{ record.trigger.runner }} {{ record.trigger.side }} {{ record.trigger.amount }} {{ record.trigger.price }}
+            <template v-if="record.linked.length > 0">
+              ｜关联 {{ record.linked.map(item => `#${item.rank} ${item.runner} ${item.amount}`).join('，') }}
+            </template>
+          </span>
+        </button>
+        <div v-if="hiddenTopTradeCollisionHistoryCount > 0" class="collision-history-more">
+          还有 {{ hiddenTopTradeCollisionHistoryCount }} 条，点击“展开”查看
+        </div>
+      </div>
+    </section>
+
     <div class="table-wrap" :class="{ 'is-loading': isInitialLoading }">
       <div v-if="isInitialLoading" class="loading-overlay">
         <div class="loading-spinner" />
@@ -854,8 +1195,8 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                   <span>现场价位 {{ formatLiveLtp(getLiveItem(item), item) }}</span>
                   <span :class="['mobile-live-max', liveMaxPromptClass(getLiveItem(item), item)]">
                     现场最大单 {{ formatLiveSummary(getLiveItem(item), item) }}
-                    <span v-if="topTradeCollisionGroupSize(getLiveItem(item)) > 0" class="live-collision-count">
-                      [{{ topTradeCollisionGroupSize(getLiveItem(item)) }}]
+                    <span v-if="topTradeCollisionDisplayCount(getLiveItem(item)) > 0" class="live-collision-count">
+                      [{{ topTradeCollisionDisplayCount(getLiveItem(item)) }}]
                     </span>
                   </span>
                 </div>
@@ -879,8 +1220,8 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                 ]"
               >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
-                <span v-if="topTradeCollisionGroupSize(getLiveItem(item)) > 0" class="live-collision-count">
-                  [{{ topTradeCollisionGroupSize(getLiveItem(item)) }}]
+                <span v-if="topTradeCollisionDisplayCount(getLiveItem(item)) > 0" class="live-collision-count">
+                  [{{ topTradeCollisionDisplayCount(getLiveItem(item)) }}]
                 </span>
               </td>
               <td class="xg-cell">{{ formatXg(item) }}</td>
@@ -1113,6 +1454,103 @@ select {
 
 .error-text {
   color: #c73737;
+}
+
+.collision-history {
+  border: 1px solid #ffd6dc;
+  border-radius: 10px;
+  background: #fff7f8;
+  overflow: hidden;
+}
+
+.collision-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #ffe1e6;
+}
+
+.collision-history-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #c81e32;
+}
+
+.collision-history-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #8d5e66;
+}
+
+.collision-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #9a5260;
+  white-space: nowrap;
+}
+
+.collision-history-actions button {
+  height: 28px;
+  border: 1px solid #ffc2cc;
+  border-radius: 6px;
+  background: #fff;
+  color: #c81e32;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.collision-history-list {
+  display: grid;
+  gap: 1px;
+  background: #ffe1e6;
+}
+
+.collision-history-item {
+  display: grid;
+  gap: 4px;
+  border: 0;
+  background: #fff;
+  padding: 9px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collision-history-item:hover {
+  background: #fffafa;
+}
+
+.collision-history-main,
+.collision-history-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.collision-history-main {
+  color: #253044;
+  font-weight: 800;
+}
+
+.collision-history-main strong {
+  color: #ff2d3f;
+  font-variant-numeric: tabular-nums;
+}
+
+.collision-history-detail,
+.collision-history-more {
+  color: #6f7888;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.collision-history-more {
+  background: #fff;
+  padding: 8px 14px;
 }
 
 .table-wrap {

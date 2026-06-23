@@ -7,6 +7,7 @@ export interface LiveMatchOddsTopTradesResponse {
   scope: string
   timestamp: string
   missingEvents: LiveMatchOddsMissingEvent[]
+  topTradeCollisions?: LiveMatchOddsTopTradeCollisionRecord[]
 }
 
 export interface LiveExchangeRateResponse {
@@ -85,6 +86,17 @@ export interface LiveMatchOddsTopTradeSummary {
   bestLayPrice?: number | null
   bestLaySize?: number | null
   sideHint: 'backPressure' | 'layPressure' | 'unknown' | string
+}
+
+export interface LiveMatchOddsTopTradeCollisionRecord {
+  eventId: string
+  marketId: string
+  triggerTradeKey: string
+  count: number
+  triggeredAtUtc: string
+  detectedAtUtc: string
+  trigger?: LiveMatchOddsTopTradeSummary | null
+  linked: LiveMatchOddsTopTradeSummary[]
 }
 
 // ── 现场频道 BSW xG（B+ 统一口径）──

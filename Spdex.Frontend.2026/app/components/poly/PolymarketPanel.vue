@@ -222,6 +222,44 @@ function lineTopTradeKey(trade: PolymarketTradeTick): string {
   ].join('|')
 }
 
+interface ExactScoreTopTradeRow {
+  key: string
+  score: string
+  trade: PolymarketTradeTick
+  delta: number | null
+}
+
+const exactScoreTopTrades = computed<ExactScoreTopTradeRow[]>(() => {
+  if (!isExactScoreFamily.value) return []
+  const seen = new Set<string>()
+  const rows: ExactScoreTopTradeRow[] = []
+  for (const entry of lineScopedMarkets.value) {
+    const market = findTradeMarketByKey(entry.key)
+    if (!market) continue
+    const score = localizeName(entry.optionLabel)
+    const sourceTrades = [...(market.topTrades ?? []), ...(market.recentTrades ?? [])]
+    for (const trade of sourceTrades) {
+      const key = lineTopTradeKey(trade)
+      if (seen.has(key)) continue
+      seen.add(key)
+      rows.push({
+        key,
+        score,
+        trade,
+        delta: lineTopTradeDelta(trade),
+      })
+    }
+  }
+  return rows.sort((a, b) => b.trade.size - a.trade.size).slice(0, 10)
+})
+
+function exactScoreTradeOutcome(trade: PolymarketTradeTick): string {
+  if (trade.outcomeIndex === 0) return 'Yes'
+  if (trade.outcomeIndex === 1) return 'No'
+  const raw = trade.outcome?.trim()
+  return raw || '-'
+}
+
 function signedLineValue(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}`
 }
@@ -247,10 +285,25 @@ function lineTopTradeMarketLine(entry: MarketEntry): string {
   return entry.lineLabel === '默认' ? localizeName(entry.optionLabel) : entry.lineLabel
 }
 
-function lineTopTradeDirection(entry: MarketEntry): string {
-  const label = localizeName(entry.optionLabel).trim()
+function isGenericLineOutcome(outcome: string): boolean {
+  return ['yes', 'no', 'over', 'under'].includes(outcome.trim().toLowerCase())
+}
+
+function stripLineSuffix(label: string): string {
+  return label
+    .replace(/\s*\([+-]?\d+(?:\.\d+)?\)\s*$/, '')
+    .replace(/\s+[+-]?\d+(?:\.\d+)?\s*$/, '')
+    .trim()
+}
+
+function lineTopTradeDirection(entry: MarketEntry, trade: PolymarketTradeTick): string {
+  const rawOutcome = trade.outcome?.trim() ?? ''
+  const source = entry.familyKey === 'spread' && rawOutcome && !isGenericLineOutcome(rawOutcome)
+    ? rawOutcome
+    : entry.optionLabel
+  const label = localizeName(source).trim()
   if (!label) return '-'
-  if (entry.familyKey === 'spread') return label.replace(/\s*\([+-]?\d+(?:\.\d+)?\)\s*$/, '').trim() || label
+  if (entry.familyKey === 'spread') return stripLineSuffix(label) || label
   if (entry.familyKey === 'totals') return label.replace(/\s+\d+(?:\.\d+)?\s*$/, '').trim() || label
   return label
 }
@@ -313,7 +366,7 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
       rows.push({
         key: tradeKey,
         line: lineTopTradeMarketLine(sideEntry),
-        direction: lineTopTradeDirection(sideEntry),
+        direction: lineTopTradeDirection(sideEntry, trade),
         trade,
         delta: lineTopTradeDelta(trade),
       })
@@ -782,6 +835,63 @@ const polyIndex = computed<PolyIndexEntry[]>(() => {
                 </span>
               </td>
               <td class="px-3 py-2 text-gray-500">{{ row.direction }}</td>
+              <td class="px-3 py-2 max-w-[160px] truncate">
+                <a
+                  v-if="lineTopTraderUrl(row.trade)"
+                  :href="lineTopTraderUrl(row.trade) ?? undefined"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-blue-500 hover:underline"
+                  @click.stop
+                >{{ lineTopTraderDisplay(row.trade) }}</a>
+                <span v-else class="text-gray-400">{{ lineTopTraderDisplay(row.trade) }}</span>
+              </td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-900 tabular-nums">{{ formatLineTopPrice(row.trade.price) }}</td>
+              <td class="px-3 py-2 text-right font-semibold tabular-nums" :class="lineTopDeltaClass(row.delta)">{{ formatLineTopDelta(row.delta) }}</td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-700 tabular-nums">{{ formatLineTopSize(row.trade.size) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div v-if="isExactScoreFamily && exactScoreTopTrades.length > 0" class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-gray-900">综合TOP10</div>
+          <div class="text-xs text-gray-400 mt-0.5">准确比分所有比分项大注排序</div>
+        </div>
+        <span class="text-xs text-gray-400 tabular-nums">{{ exactScoreTopTrades.length }} 笔</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+          <thead class="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400">
+            <tr>
+              <th class="px-3 py-2 text-left">比分项</th>
+              <th class="px-3 py-2 text-left">P标记</th>
+              <th class="px-3 py-2 text-left">Buy/Sell</th>
+              <th class="px-3 py-2 text-left">Yes/No</th>
+              <th class="px-3 py-2 text-left">交易者</th>
+              <th class="px-3 py-2 text-right">价格</th>
+              <th class="px-3 py-2 text-right">价差</th>
+              <th class="px-3 py-2 text-right">成交量</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in exactScoreTopTrades" :key="row.key" class="border-t border-gray-100 hover:bg-gray-50">
+              <td class="px-3 py-2 font-semibold text-gray-900 tabular-nums">{{ row.score }}</td>
+              <td class="px-3 py-2">
+                <span v-if="kickoffUtc" class="inline-flex min-w-6 justify-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">
+                  {{ getTimeMark(row.trade.timestampUtc) }}
+                </span>
+                <span v-else class="text-gray-300">-</span>
+              </td>
+              <td class="px-3 py-2">
+                <span class="inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold" :class="lineTopTradeSideClass(row.trade)">
+                  {{ lineTopTradeSide(row.trade) }}
+                </span>
+              </td>
+              <td class="px-3 py-2 text-gray-500">{{ exactScoreTradeOutcome(row.trade) }}</td>
               <td class="px-3 py-2 max-w-[160px] truncate">
                 <a
                   v-if="lineTopTraderUrl(row.trade)"

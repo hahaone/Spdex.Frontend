@@ -449,10 +449,25 @@ function lineTopTradeMarketLine(entry: MarketEntry): string {
   return entry.lineLabel === '默认' ? localizeName(entry.optionLabel) : entry.lineLabel
 }
 
-function lineTopTradeDirection(entry: MarketEntry): string {
-  const label = localizeName(entry.optionLabel).trim()
+function isGenericLineOutcome(outcome: string): boolean {
+  return ['yes', 'no', 'over', 'under'].includes(outcome.trim().toLowerCase())
+}
+
+function stripLineSuffix(label: string): string {
+  return label
+    .replace(/\s*\([+-]?\d+(?:\.\d+)?\)\s*$/, '')
+    .replace(/\s+[+-]?\d+(?:\.\d+)?\s*$/, '')
+    .trim()
+}
+
+function lineTopTradeDirection(entry: MarketEntry, trade: PolymarketTradeTick): string {
+  const rawOutcome = trade.outcome?.trim() ?? ''
+  const source = entry.familyKey === 'spread' && rawOutcome && !isGenericLineOutcome(rawOutcome)
+    ? rawOutcome
+    : entry.optionLabel
+  const label = localizeName(source).trim()
   if (!label) return '-'
-  if (entry.familyKey === 'spread') return label.replace(/\s*\([+-]?\d+(?:\.\d+)?\)\s*$/, '').trim() || label
+  if (entry.familyKey === 'spread') return stripLineSuffix(label) || label
   if (entry.familyKey === 'totals') return label.replace(/\s+\d+(?:\.\d+)?\s*$/, '').trim() || label
   return label
 }
@@ -515,7 +530,7 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
       rows.push({
         key: tradeKey,
         line: lineTopTradeMarketLine(sideEntry),
-        direction: lineTopTradeDirection(sideEntry),
+        direction: lineTopTradeDirection(sideEntry, trade),
         trade,
         delta: lineTopTradeDelta(trade),
       })
