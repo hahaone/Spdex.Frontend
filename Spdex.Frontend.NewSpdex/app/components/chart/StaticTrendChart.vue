@@ -17,6 +17,8 @@ const props = defineProps<{
   barMode?: boolean
   /** 多价位线：同时画 主/平/客 三条价位线（成交「所有」），而非单条。 */
   multiPrice?: boolean
+  /** Tooltip 是否显示成交量。纯指标图（如凯利方差）不带成交量。 */
+  showVolume?: boolean
   /** 开启框选缩放：横向拖动选时间区间→emit('zoom')；双击→emit('reset')。 */
   zoomable?: boolean
 }>()
@@ -506,7 +508,7 @@ function onDocPointerDown(e: PointerEvent) {
         <span class="tl">{{ r.label }}</span>
         <b class="tv">{{ r.missing ? '-' : fmtValue(r.value) }}</b>
       </div>
-      <div class="tip-row">
+      <div v-if="showVolume !== false" class="tip-row">
         <i class="volume" />
         <span class="tl">成交量</span>
         <b class="tv">{{ fmtAmount(tooltip.volume) }}</b>

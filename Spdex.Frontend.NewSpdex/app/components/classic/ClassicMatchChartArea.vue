@@ -118,6 +118,7 @@ const baseline = computed<number | null>(() => {
 })
 // 成交系=成交柱(全方向);比例=堆叠面积、其余=折线,均无柱。
 const barMode = computed(() => chartKind.value === 'traded')
+const showTooltipVolume = computed(() => metric.value === 'tradeflow' || metric.value === 'traded' || metric.value === 'volume')
 // 成交系选「所有」→ 主/平/客三条价位线;单方向→单条价位线。
 const multiPrice = computed(() => chartKind.value === 'traded' && seriesOnly.value === 'all')
 // 仅成交系有方向下拉(所有/主/平/客);比例与折线默认全部方向同呈现。
@@ -413,6 +414,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
               :baseline="baseline"
               :bar-mode="barMode"
               :multi-price="multiPrice"
+              :show-volume="showTooltipVolume"
               :height="chartHeight"
               zoomable
               @zoom="onZoom"

@@ -138,6 +138,7 @@ const baseline = computed<number | null>(() => {
 })
 // 成交变化用柱状图。
 const barMode = computed(() => metric.value === 'traded')
+const showTooltipVolume = computed(() => metric.value === 'tradeflow' || metric.value === 'traded' || metric.value === 'volume')
 
 // ── E1 成交明细（原始成交走势）：单独走 tradeflow 通道 ──
 const isTradeFlow = computed(() => metric.value === 'tradeflow')
@@ -337,6 +338,7 @@ const chartTitle = computed(() => {
           :only="seriesOnly"
           :baseline="baseline"
           :bar-mode="barMode"
+          :show-volume="showTooltipVolume"
           :height="chartHeight"
         />
         <div v-else class="chart-placeholder">
