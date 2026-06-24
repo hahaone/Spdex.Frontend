@@ -14,6 +14,7 @@ interface UseDetailExpandOptions {
 
 export function useDetailExpand(options: UseDetailExpandOptions = {}) {
   const { previousEndpoint = '/api/bighold/previous' } = options
+  let prefetchRunId = 0
 
   // ── 行展开状态 ──
   const expandedPcId = ref<number | null>(null)         // Back/Lay/Traded 层展开的行
@@ -70,18 +71,26 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
 
   /**
    * 批量预取所有 items 的前一条记录（用于页面加载后自动触发深度高亮）。
-   * 并发请求，已缓存的会被 fetchPrevious 内部跳过。
+   * 使用低并发队列，避免标盘打开时瞬间发出过多 previous 请求。
    */
-  async function prefetchAllPrevious(items: BigHoldItemView[]) {
-    const tasks = items
-      .filter(item => !prevCache.has(item.pcId))
-      .map(async (item) => {
+  async function prefetchAllPrevious(items: BigHoldItemView[], concurrency = 3) {
+    const runId = ++prefetchRunId
+    const queue = items.filter(item => !prevCache.has(item.pcId))
+    let index = 0
+
+    async function worker() {
+      while (runId === prefetchRunId && index < queue.length) {
+        const item = queue[index++]
+        if (!item || prevCache.has(item.pcId)) continue
         const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
         if (prev?.rawData) {
           previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
         }
-      })
-    await Promise.allSettled(tasks)
+      }
+    }
+
+    const workerCount = Math.max(1, Math.min(concurrency, queue.length))
+    await Promise.allSettled(Array.from({ length: workerCount }, () => worker()))
   }
 
   /** 获取当前记录解析数据 */
@@ -110,6 +119,7 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
 
   /** 排序切换时重置所有状态 */
   function resetAll() {
+    prefetchRunId++
     collapseAll()
     clearCache()
     currentParsedCache.clear()

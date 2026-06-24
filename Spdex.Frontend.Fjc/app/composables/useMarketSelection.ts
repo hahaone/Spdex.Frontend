@@ -103,8 +103,9 @@ function marketOptionMeta(
   primaryLink: PolymarketSoccerMatchLink | null,
 ): { label: string; order: number } {
   const cleaned = normalizedQuestion(question)
-  const family = marketFamily(type, question)
-  const lineValue = parseLineValue(type, question, groupItemTitle)
+  const classificationText = normalizedQuestion([question, groupItemTitle].filter(Boolean).join(' '))
+  const family = marketFamily(type, classificationText || question)
+  const lineValue = parseLineValue(type, classificationText || question, groupItemTitle)
   const lineText = lineValue === null ? '' : formatLineLabel(lineValue)
 
   if (family === 'moneyline' || family === 'half') {
@@ -126,7 +127,7 @@ function marketOptionMeta(
 
   if (family === 'team_totals') {
     // 球队总分：YES=Over → 「队 大 线」（counter 给「队 小 线」）。队名区分两队，避免再撞一起。
-    const team = teamTotalsTeam(question)
+    const team = teamTotalsTeam(classificationText) || teamTotalsTeam(question)
     return { label: [team, '大', lineText].filter(Boolean).join(' '), order: 0 }
   }
 
@@ -182,9 +183,10 @@ function buildMarketEntry(
   groupItemTitle: string | null | undefined,
   primaryLink: PolymarketSoccerMatchLink | null,
 ): MarketEntry {
-  const categoryKey = marketCategory(sportsType, question)
-  const familyKey = marketFamily(sportsType, question)
-  const lineValue = parseLineValue(sportsType, question, groupItemTitle)
+  const classificationText = normalizedQuestion([question, groupItemTitle].filter(Boolean).join(' '))
+  const categoryKey = marketCategory(sportsType, classificationText || question)
+  const familyKey = marketFamily(sportsType, classificationText || question)
+  const lineValue = parseLineValue(sportsType, classificationText || question, groupItemTitle)
   const lineLabel = lineValue === null ? 'default' : formatLineLabel(lineValue)
   const option = marketOptionMeta(sportsType, question, groupItemTitle, primaryLink)
 
@@ -298,7 +300,7 @@ export function useMarketSelection(
       const key = tradeMarketKey(market, index)
       if (seenKeys.has(key)) return
       seenKeys.add(key)
-      questionByKey.set(key, market.question)
+      questionByKey.set(key, normalizedQuestion([market.question, market.groupItemTitle].filter(Boolean).join(' ')) || market.question)
       entries.push(buildMarketEntry(key, market.sportsMarketType, market.question, market.groupItemTitle, link))
     })
 

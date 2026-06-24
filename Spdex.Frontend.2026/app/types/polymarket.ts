@@ -46,6 +46,7 @@ export interface PolymarketMarketTradesAggregate {
   marketId: string
   conditionId: string
   question: string
+  groupItemTitle: string | null
   sportsMarketType: string
   tradeCount: number
   buyCount: number

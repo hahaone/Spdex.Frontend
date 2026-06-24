@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 // ─── Types ───
 
 export type MarketCategoryKey = 'match' | 'exact' | 'half' | 'corners' | 'player_props' | 'other'
-export type MarketFamilyKey = 'moneyline' | 'spread' | 'totals' | 'btts' | 'exact' | 'half' | 'other'
+export type MarketFamilyKey = 'moneyline' | 'spread' | 'totals' | 'team_totals' | 'btts' | 'exact' | 'half' | 'other'
 
 // ─── Market type normalization ───
 
@@ -51,9 +51,17 @@ export function isHalftimeMarket(type: string, question = ''): boolean {
   return t === 'soccer_halftime_result'
     || t.includes('halftime')
     || t.includes('half_time')
+    || t.includes('first_half')
+    || t.includes('second_half')
+    || t.includes('1st_half')
+    || t.includes('2nd_half')
     || q.includes('halftime')
     || q.includes('half-time')
     || q.includes('at halftime')
+    || q.includes('1st half')
+    || q.includes('2nd half')
+    || q.includes('first half')
+    || q.includes('second half')
 }
 
 export function isSpreadMarket(type: string, question = ''): boolean {
@@ -65,16 +73,27 @@ export function isSpreadMarket(type: string, question = ''): boolean {
     || q.startsWith('spread:')
 }
 
-export function isTotalsMarket(type: string, question = ''): boolean {
+export function isAnyTotalsLike(type: string, question = ''): boolean {
   const t = normalizeMarketType(type)
   const q = normalizeMarketType(question)
-  return t === 'totals'
-    || t === 'total'
-    || t === 'total_goals'
-    || t.includes('total')
+  return t.includes('total')
     || q.includes('o/u')
     || q.includes('over ')
     || q.includes('under ')
+}
+
+function isTeamTotalsType(type: string): boolean {
+  return normalizeMarketType(type).includes('team_total')
+}
+
+export function isTotalsMarket(type: string, question = ''): boolean {
+  return isAnyTotalsLike(type, question)
+    && !isTeamTotalsType(type)
+    && !isHalftimeMarket(type, question)
+}
+
+export function isTeamTotalsMarket(type: string, question = ''): boolean {
+  return isTeamTotalsType(type) && !isHalftimeMarket(type, question)
 }
 
 export function isBttsMarket(type: string, question = ''): boolean {
@@ -104,7 +123,7 @@ export function isMoneylineMarket(type: string, question = ''): boolean {
  * 其他: 保持 Yes/No
  */
 export function outcomeLabel(outcome: string, sportsMarketType: string, question = ''): string {
-  if (isTotalsMarket(sportsMarketType, question)) {
+  if (isAnyTotalsLike(sportsMarketType, question)) {
     return outcome === 'Yes' ? 'Over' : outcome === 'No' ? 'Under' : outcome
   }
   if (isSpreadMarket(sportsMarketType, question)) {
@@ -124,6 +143,7 @@ export function marketCategory(type: string, question: string): MarketCategoryKe
     isMoneylineMarket(type, question)
     || isSpreadMarket(type, question)
     || isTotalsMarket(type, question)
+    || isTeamTotalsMarket(type, question)
     || isBttsMarket(type, question)
   ) {
     return 'match'
@@ -135,6 +155,7 @@ export function marketFamily(type: string, question: string): MarketFamilyKey {
   if (isExactScoreMarket(type, question)) return 'exact'
   if (isHalftimeMarket(type, question)) return 'half'
   if (isSpreadMarket(type, question)) return 'spread'
+  if (isTeamTotalsMarket(type, question)) return 'team_totals'
   if (isTotalsMarket(type, question)) return 'totals'
   if (isBttsMarket(type, question)) return 'btts'
   if (isMoneylineMarket(type, question)) return 'moneyline'
@@ -168,6 +189,7 @@ export function marketFamilyLabel(key: MarketFamilyKey): string {
     case 'moneyline': return '独赢'
     case 'spread': return '让分'
     case 'totals': return '总分'
+    case 'team_totals': return '球队总分'
     case 'btts': return '双方进球'
     case 'exact': return '准确比分'
     case 'half': return '半场结果'
@@ -180,38 +202,53 @@ export function marketFamilyOrder(key: MarketFamilyKey): number {
     case 'moneyline': return 0
     case 'spread': return 1
     case 'totals': return 2
-    case 'btts': return 3
-    case 'exact': return 4
-    case 'half': return 5
+    case 'team_totals': return 3
+    case 'btts': return 4
+    case 'exact': return 5
+    case 'half': return 6
     default: return 9
   }
 }
 
 // ─── Line parsing ───
 
-export function parseLineValue(type: string, question: string): number | null {
+export function parseLineValue(
+  type: string,
+  question: string,
+  groupItemTitle: string | null | undefined = null,
+): number | null {
+  const sources = [groupItemTitle, question].filter(
+    (s): s is string => typeof s === 'string' && s.trim().length > 0,
+  )
+
   if (isSpreadMarket(type, question)) {
-    const match = question.match(/([+-]?\d+(?:\.\d+)?)(?!.*[+-]?\d)/)
-    if (!match) return null
-    const value = Number(match[1])
-    return Number.isFinite(value) ? Math.abs(value) : null
+    for (const src of sources) {
+      const match = src.match(/([+-]?\d+(?:\.\d+)?)(?!.*[+-]?\d)/)
+      if (match) {
+        const value = Number(match[1])
+        if (Number.isFinite(value)) return Math.abs(value)
+      }
+    }
+    return null
   }
 
-  if (isTotalsMarket(type, question)) {
-    const ou = question.match(/O\/U\s*([0-9]+(?:\.[0-9]+)?)/i)
-    if (ou) {
-      const value = Number(ou[1])
-      return Number.isFinite(value) ? value : null
-    }
-    const overUnder = question.match(/(?:over|under)\s*([0-9]+(?:\.[0-9]+)?)/i)
-    if (overUnder) {
-      const value = Number(overUnder[1])
-      return Number.isFinite(value) ? value : null
-    }
-    const trailing = question.match(/([0-9]+(?:\.[0-9]+)?)(?!.*[0-9])/)
-    if (trailing) {
-      const value = Number(trailing[1])
-      return Number.isFinite(value) ? value : null
+  if (isAnyTotalsLike(type, question)) {
+    for (const src of sources) {
+      const ou = src.match(/O\/U\s*([0-9]+(?:\.[0-9]+)?)/i)
+      if (ou) {
+        const value = Number(ou[1])
+        if (Number.isFinite(value)) return value
+      }
+      const overUnder = src.match(/(?:over|under)\s*([0-9]+(?:\.[0-9]+)?)/i)
+      if (overUnder) {
+        const value = Number(overUnder[1])
+        if (Number.isFinite(value)) return value
+      }
+      const trailing = src.match(/([0-9]+(?:\.[0-9]+)?)(?!.*[0-9])/)
+      if (trailing) {
+        const value = Number(trailing[1])
+        if (Number.isFinite(value)) return value
+      }
     }
   }
 

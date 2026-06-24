@@ -277,6 +277,11 @@ function teamSideLabel(team: string): string {
 
 function lineTopTradeMarketLine(entry: MarketEntry): string {
   if (entry.familyKey === 'totals') return entry.lineLabel === '默认' ? 'OU' : `OU${entry.lineLabel}`
+  if (entry.familyKey === 'team_totals') {
+    const team = stripLineSuffix(entry.optionLabel).replace(/\s*[大小]\s*$/, '').trim()
+    const line = entry.lineLabel === '默认' ? 'OU' : `OU${entry.lineLabel}`
+    return team ? `${teamSideLabel(team)}${line}` : line
+  }
   if (entry.familyKey === 'spread') {
     const match = entry.optionLabel.match(/(.+?)\s*\(([+-]?\d+(?:\.\d+)?)\)/)
     if (match) return `${teamSideLabel(match[1]!.trim())}${signedLineValue(Number(match[2]))}`
@@ -305,6 +310,11 @@ function lineTopTradeDirection(entry: MarketEntry, trade: PolymarketTradeTick): 
   if (!label) return '-'
   if (entry.familyKey === 'spread') return stripLineSuffix(label) || label
   if (entry.familyKey === 'totals') return label.replace(/\s+\d+(?:\.\d+)?\s*$/, '').trim() || label
+  if (entry.familyKey === 'team_totals') {
+    const withoutLine = label.replace(/\s+\d+(?:\.\d+)?\s*$/, '').trim()
+    const direction = withoutLine.match(/\s([大小])$/)?.[1]
+    return direction ?? withoutLine
+  }
   return label
 }
 
@@ -315,7 +325,11 @@ function lineTopTradeDelta(trade: PolymarketTradeTick): number | null {
   return lineTopTradeDeltaMap.value.get(lineTopTradeKey(trade)) ?? null
 }
 
-const isLineTopFamily = computed(() => activeFamilyKey.value === 'spread' || activeFamilyKey.value === 'totals')
+const isLineTopFamily = computed(() => (
+  activeFamilyKey.value === 'spread'
+  || activeFamilyKey.value === 'totals'
+  || activeFamilyKey.value === 'team_totals'
+))
 
 const lineTopTradeDeltaMap = computed(() => {
   const map = new Map<string, number | null>()
@@ -375,11 +389,11 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
   return rows.sort((a, b) => b.trade.size - a.trade.size).slice(0, 10)
 })
 
-const lineTopTradeSubtitle = computed(() => (
-  activeFamilyKey.value === 'spread'
-    ? '让分所有盘口大注排序'
-    : '总分所有盘口大注排序'
-))
+const lineTopTradeSubtitle = computed(() => {
+  if (activeFamilyKey.value === 'spread') return '让分所有盘口大注排序'
+  if (activeFamilyKey.value === 'team_totals') return '球队总分所有盘口大注排序'
+  return '总分所有盘口大注排序'
+})
 
 function getTimeMark(tradeUtc: string): string {
   if (!kickoffUtc.value) return ''
