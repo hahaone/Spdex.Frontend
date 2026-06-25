@@ -183,11 +183,41 @@ const timeLabels = computed(() => {
   if (!bs.length) return []
   const idxs = bs.length <= 3 ? bs.map((_, i) => i) : [0, Math.floor(bs.length / 2), bs.length - 1]
   const bw = bucketW.value
-  return idxs.map(i => ({ x: i * bw + bw / 2, label: hm(bs[i]!.time) }))
+  return idxs.map(i => ({ x: i * bw + bw / 2, label: fmtAxisTime(bs[i]!.time) }))
 })
-function hm(iso: string): string {
-  const t = iso.indexOf('T')
-  return t < 0 ? iso : iso.slice(t + 1, t + 6)
+
+function timeParts(rawTime?: string | null): { ymd?: string, md?: string, hm: string } {
+  const raw = (rawTime ?? '').trim()
+  if (!raw) return { hm: '' }
+
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}:\d{2})/)
+  if (ymd?.[1] && ymd[2] && ymd[3] && ymd[4]) {
+    return {
+      ymd: `${ymd[1]}-${ymd[2]}-${ymd[3]}`,
+      md: `${ymd[2]}-${ymd[3]}`,
+      hm: ymd[4],
+    }
+  }
+
+  const md = raw.match(/^(\d{2})-(\d{2})\s+(\d{2}:\d{2})/)
+  if (md?.[1] && md[2] && md[3]) {
+    return { md: `${md[1]}-${md[2]}`, hm: md[3] }
+  }
+
+  const t = raw.indexOf('T')
+  return { hm: t < 0 ? raw : raw.slice(t + 1, t + 6) }
+}
+
+function fmtAxisTime(rawTime?: string | null): string {
+  const p = timeParts(rawTime)
+  return p.md ? `${p.md} ${p.hm}` : p.hm
+}
+
+function fmtTipTime(rawTime?: string | null): string {
+  const p = timeParts(rawTime)
+  if (p.ymd) return `${p.ymd} ${p.hm}`
+  if (p.md) return `${p.md} ${p.hm}`
+  return p.hm
 }
 
 const totalH = computed(() => props.height)
@@ -282,7 +312,7 @@ const tip = computed(() => {
   if (!b) return null
   const chartW = chartRef.value?.clientWidth ?? 320
   return {
-    time: hm(b.time),
+    time: fmtTipTime(b.time),
     rows: visibleAttrs.value.map(a => ({ label: a, value: b.items[a] ?? 0, color: attrColor(a) })).filter(r => r.value > 0),
     price: showPrice.value ? b.price : null,
     rightSide: tipLeft.value > chartW * 0.58,

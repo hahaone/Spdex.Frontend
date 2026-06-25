@@ -263,21 +263,37 @@ function fmtValue(v: number): string {
   }
 }
 
-function timeParts(point?: ChartPoint): { ymd?: string, hm: string } {
-  const raw = point?.ts || point?.time || ''
-  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
-  if (match?.[1] && match[2]) return { ymd: match[1], hm: match[2] }
-  return { hm: point?.time || '' }
+function timeParts(point?: ChartPoint): { ymd?: string, md?: string, hm: string } {
+  const raw = (point?.ts || point?.time || '').trim()
+  if (!raw) return { hm: '' }
+
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}:\d{2})/)
+  if (ymd?.[1] && ymd[2] && ymd[3] && ymd[4]) {
+    return {
+      ymd: `${ymd[1]}-${ymd[2]}-${ymd[3]}`,
+      md: `${ymd[2]}-${ymd[3]}`,
+      hm: ymd[4],
+    }
+  }
+
+  const md = raw.match(/^(\d{2})-(\d{2})\s+(\d{2}:\d{2})/)
+  if (md?.[1] && md[2] && md[3]) {
+    return { md: `${md[1]}-${md[2]}`, hm: md[3] }
+  }
+
+  return { hm: point?.time || raw }
 }
 
 function fmtAxisTime(point?: ChartPoint): string {
   const p = timeParts(point)
-  return p.ymd ? `${p.ymd.slice(5)} ${p.hm}` : p.hm
+  return p.md ? `${p.md} ${p.hm}` : p.hm
 }
 
 function fmtTipTime(point?: ChartPoint): string {
   const p = timeParts(point)
-  return p.ymd ? `${p.ymd} ${p.hm}` : p.hm
+  if (p.ymd) return `${p.ymd} ${p.hm}`
+  if (p.md) return `${p.md} ${p.hm}`
+  return p.hm
 }
 
 const yTicks = computed(() => {
