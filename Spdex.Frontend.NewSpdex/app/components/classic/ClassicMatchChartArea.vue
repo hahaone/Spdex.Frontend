@@ -62,7 +62,14 @@ const timeOptions = [
   { label: '全部', value: 'all' },
 ]
 const chartHoursBack = computed(() => RANGE_HOURS[timeRange.value] ?? 24)
-const chartExtraQuery = computed(() => market.value === 'asianindex' ? { hoursBack: chartHoursBack.value } : {})
+const chartExtraQuery = computed(() => {
+  const query: Record<string, string | number> = {}
+  if (market.value === 'asianindex' || metric.value === 'exchange')
+    query.hoursBack = chartHoursBack.value
+  if (metric.value === 'exchange')
+    query.granularity = 'raw'
+  return query
+})
 
 // 「全部」时间段点数可达数千,折线糊成一团 + 圆点云遮挡。超过上限按桶均值抽稀到 ~240 点,
 // 既保留趋势形状又去抖动;首尾保留真实时间点,端点不被桶中点偏移。0 视作缺失(payout 例外,0/负有意义)。

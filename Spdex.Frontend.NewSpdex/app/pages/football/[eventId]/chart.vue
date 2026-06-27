@@ -103,8 +103,10 @@ const chartExtraQuery = computed(() => {
     query.scoreGroup = scoreGroup.value
     query.selection = scoreSelection.value
   }
-  if (market.value === 'asianindex')
+  if (market.value === 'asianindex' || metric.value === 'exchange')
     query.hoursBack = chartHoursBack.value
+  if (metric.value === 'exchange')
+    query.granularity = 'raw'
   return query
 })
 
