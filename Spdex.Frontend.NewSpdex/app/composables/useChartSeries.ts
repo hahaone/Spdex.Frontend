@@ -161,6 +161,7 @@ export function useChartSeries(
       key: () => `newspdex-chart-${idRef.value}-${typeRef.value}-${JSON.stringify(query.value)}`,
       server: false,
       query,
+      timeout: 45_000,
       ...(manualRefresh
         ? { immediate: false, watch: false }
         : { watch: [idRef, typeRef, extraQueryRef] }),

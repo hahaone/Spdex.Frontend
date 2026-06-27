@@ -88,9 +88,6 @@ watch(metrics, () => {
 
 // 组合成后端的复合 type："standard.bfindex" 等
 const graphType = computed(() => `${market.value}.${metric.value}`)
-const chartExtraQuery = computed(() => isCorrectScore.value
-  ? { scoreGroup: scoreGroup.value, selection: scoreSelection.value }
-  : {})
 
 const timeOptions = [
   { label: '2H', value: '2h' },
@@ -98,6 +95,18 @@ const timeOptions = [
   { label: '24H', value: '24h' },
   { label: '全部', value: 'all' },
 ]
+const RANGE_HOURS: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24 }
+const chartHoursBack = computed(() => RANGE_HOURS[timeRange.value] ?? 24)
+const chartExtraQuery = computed(() => {
+  const query: Record<string, string | number | null | undefined> = {}
+  if (isCorrectScore.value) {
+    query.scoreGroup = scoreGroup.value
+    query.selection = scoreSelection.value
+  }
+  if (market.value === 'asianindex')
+    query.hoursBack = chartHoursBack.value
+  return query
+})
 
 const match = computed(() => detail.value?.match)
 const matchHandicap = computed(() => formatHandicapLine(match.value?.handicap))
@@ -120,7 +129,6 @@ const isDesktop = useIsDesktop()
 const chartHeight = computed(() => (isDesktop.value ? 360 : 220))
 
 // 时间范围过滤（按最后一个点往前推 N 小时；不再退回全部，避免范围标签与横轴不一致）
-const RANGE_HOURS: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24 }
 const displayPoints = computed(() => {
   const all = points.value
   const h = RANGE_HOURS[timeRange.value]
