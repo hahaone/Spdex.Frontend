@@ -48,7 +48,7 @@ const lotteryOptions = [
 
 const dayToDate = (d: string): string | undefined => {
   const now = new Date()
-  // "today" = 过去 4h ~ 明天中午 12:00（后端 today-window 窗口；与今日篮球一致，不再纳入 +14 天的远期赛事）
+  // "today" = 过去 2h ~ 明天中午 12:00（后端 today-window 窗口；与今日篮球一致，不再纳入 +14 天的远期赛事）
   if (d === 'today') return 'today-window'
   if (d === 'yesterday') {
     const prev = new Date(now)

@@ -39,7 +39,7 @@ const lotteryOptions = [{ label: '不限', value: 'all' }]
 
 const dayToDate = (d: string): string | undefined => {
   const now = new Date()
-  // "today" 走特殊时间窗：过去 4 小时 ~ 明天中午 12:00（NewSpdex 移动端定义）
+  // "today" 走特殊时间窗：过去 2 小时 ~ 明天中午 12:00（NewSpdex 移动端定义）
   if (d === 'today') return 'today-window'
   if (d === 'tomorrow') {
     const next = new Date(now)

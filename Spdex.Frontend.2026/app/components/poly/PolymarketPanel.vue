@@ -275,7 +275,7 @@ function teamSideLabel(team: string): string {
   return localized || team
 }
 
-function lineTopTradeMarketLine(entry: MarketEntry): string {
+function lineTopTradeMarketLine(entry: MarketEntry, market: PolymarketMarketTradesAggregate | null = null): string {
   if (entry.familyKey === 'totals') return entry.lineLabel === '默认' ? 'OU' : `OU${entry.lineLabel}`
   if (entry.familyKey === 'team_totals') {
     const team = stripLineSuffix(entry.optionLabel).replace(/\s*[大小]\s*$/, '').trim()
@@ -286,6 +286,10 @@ function lineTopTradeMarketLine(entry: MarketEntry): string {
     const match = entry.optionLabel.match(/(.+?)\s*\(([+-]?\d+(?:\.\d+)?)\)/)
     if (match) return `${teamSideLabel(match[1]!.trim())}${signedLineValue(Number(match[2]))}`
     return localizeName(entry.optionLabel)
+  }
+  if (entry.familyKey === 'other') {
+    const marketLabel = [market?.groupItemTitle, market?.question].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+    return localizeName(marketLabel || entry.optionLabel)
   }
   return entry.lineLabel === '默认' ? localizeName(entry.optionLabel) : entry.lineLabel
 }
@@ -315,6 +319,10 @@ function lineTopTradeDirection(entry: MarketEntry, trade: PolymarketTradeTick): 
     const direction = withoutLine.match(/\s([大小])$/)?.[1]
     return direction ?? withoutLine
   }
+  if (entry.familyKey === 'other') {
+    const outcome = rawOutcome ? localizeName(rawOutcome).trim() : ''
+    return outcome || label
+  }
   return label
 }
 
@@ -329,6 +337,7 @@ const isLineTopFamily = computed(() => (
   activeFamilyKey.value === 'spread'
   || activeFamilyKey.value === 'totals'
   || activeFamilyKey.value === 'team_totals'
+  || activeFamilyKey.value === 'other'
 ))
 
 const lineTopTradeDeltaMap = computed(() => {
@@ -379,7 +388,7 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
       const sideEntry = familyEntries.find(item => item.side === side) ?? entry
       rows.push({
         key: tradeKey,
-        line: lineTopTradeMarketLine(sideEntry),
+        line: lineTopTradeMarketLine(sideEntry, market),
         direction: lineTopTradeDirection(sideEntry, trade),
         trade,
         delta: lineTopTradeDelta(trade),
@@ -392,6 +401,7 @@ const lineTopTrades = computed<LineTopTradeRow[]>(() => {
 const lineTopTradeSubtitle = computed(() => {
   if (activeFamilyKey.value === 'spread') return '让分所有盘口大注排序'
   if (activeFamilyKey.value === 'team_totals') return '球队总分所有盘口大注排序'
+  if (activeFamilyKey.value === 'other') return '其他市场所有选项大注排序'
   return '总分所有盘口大注排序'
 })
 
