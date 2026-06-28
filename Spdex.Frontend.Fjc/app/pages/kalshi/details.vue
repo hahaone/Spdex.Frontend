@@ -151,7 +151,7 @@ const graphSeries = computed<TrendChartSeries[]>(() => {
     if (dataPoints.length === 0 && lastPct != null) {
       dataPoints.push({ ts: cutoffMs ?? Date.now(), price: clampProbability(lastPct) })
     }
-    const slot = runnerSlot(item.runner) ?? slotOrder[index]
+    const slot = runnerSlot(item.runner) ?? runnerSlotFromTicker(item.marketTicker) ?? slotOrder[index]
     series.push({
       key: item.key,
       label: localizeRunner(item.runner, slot),
@@ -216,7 +216,7 @@ const eventVolume = computed(() => {
 const displayRunners = computed<RunnerDisplay[]>(() => {
   const rowsBySlot = new Map<RunnerSlot, RunnerDisplay>()
   markets.value.forEach((market, index) => {
-    const slot = runnerSlot(market.label) ?? slotOrder[index]
+    const slot = runnerSlot(market.label) ?? runnerSlotFromTicker(market.marketTicker) ?? slotOrder[index]
     if (!slot || rowsBySlot.has(slot)) return
     const volume = marketVolume(market)
     const lastPct = marketYesProbability(market)
@@ -332,6 +332,26 @@ function runnerSlot(name: string | null | undefined): RunnerSlot | null {
   if (homeNames.includes(raw)) return 'home'
   if (awayNames.includes(raw)) return 'away'
   return null
+}
+
+function runnerSlotFromTicker(marketTicker: string | null | undefined): RunnerSlot | null {
+  const suffix = tickerSuffix(marketTicker)
+  if (!suffix) return null
+  if (suffix === 'TIE' || suffix === 'DRAW') return 'draw'
+  const eventSuffix = tickerSuffix(eventTrades.value?.eventTicker ?? kalshiEventTicker.value)
+  if (!eventSuffix || eventSuffix.length < 6) return null
+  const homeCode = eventSuffix.slice(-6, -3)
+  const awayCode = eventSuffix.slice(-3)
+  if (suffix === homeCode) return 'home'
+  if (suffix === awayCode) return 'away'
+  return null
+}
+
+function tickerSuffix(ticker: string | null | undefined): string | null {
+  const raw = (ticker ?? '').trim().toUpperCase()
+  if (!raw) return null
+  const dash = raw.lastIndexOf('-')
+  return dash >= 0 ? raw.slice(dash + 1) : raw
 }
 
 function fallbackRunnerLabel(slot: RunnerSlot): string {
