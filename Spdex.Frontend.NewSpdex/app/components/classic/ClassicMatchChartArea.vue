@@ -54,6 +54,7 @@ const graphType = computed(() => `${market.value}.${metric.value}`)
 const chartType = computed(() => (chartKind.value === 'traded' ? `${market.value}.traded` : graphType.value))
 
 const RANGE_HOURS: Record<string, number> = { '3h': 3, '6h': 6, '12h': 12, '24h': 24 }
+const FULL_RANGE_HOURS = 14 * 24
 const timeOptions = [
   { label: '3小时', value: '3h' },
   { label: '6小时', value: '6h' },
@@ -61,10 +62,10 @@ const timeOptions = [
   { label: '24小时', value: '24h' },
   { label: '全部', value: 'all' },
 ]
-const chartHoursBack = computed(() => RANGE_HOURS[timeRange.value] ?? 24)
+const chartHoursBack = computed(() => timeRange.value === 'all' ? FULL_RANGE_HOURS : RANGE_HOURS[timeRange.value])
 const chartExtraQuery = computed(() => {
   const query: Record<string, string | number> = {}
-  if (market.value === 'asianindex' || metric.value === 'exchange')
+  if ((market.value === 'asianindex' || metric.value === 'exchange') && chartHoursBack.value)
     query.hoursBack = chartHoursBack.value
   if (metric.value === 'exchange')
     query.granularity = 'raw'

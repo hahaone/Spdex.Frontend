@@ -96,14 +96,15 @@ const timeOptions = [
   { label: '全部', value: 'all' },
 ]
 const RANGE_HOURS: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24 }
-const chartHoursBack = computed(() => RANGE_HOURS[timeRange.value] ?? 24)
+const FULL_RANGE_HOURS = 14 * 24
+const chartHoursBack = computed(() => timeRange.value === 'all' ? FULL_RANGE_HOURS : RANGE_HOURS[timeRange.value])
 const chartExtraQuery = computed(() => {
   const query: Record<string, string | number | null | undefined> = {}
   if (isCorrectScore.value) {
     query.scoreGroup = scoreGroup.value
     query.selection = scoreSelection.value
   }
-  if (market.value === 'asianindex' || metric.value === 'exchange')
+  if ((market.value === 'asianindex' || metric.value === 'exchange') && chartHoursBack.value)
     query.hoursBack = chartHoursBack.value
   if (metric.value === 'exchange')
     query.granularity = 'raw'
