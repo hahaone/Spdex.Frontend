@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BigHoldItemView, PriceSizeRow, TimeWindowData } from '~/types/bighold'
-import type { AsianTimeWindowData } from '~/types/asianbighold'
+import type { AsianResonanceWindow } from '~/types/asianbighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
@@ -16,7 +16,10 @@ const queryParams = computed(() => ({
   id: eventId.value,
   order: orderParam.value,
 }))
-const { data, pending, error, refreshing, manualRefresh } = useBigHold(queryParams)
+const { data, pending, error, refreshing, manualRefresh } = useBigHold(queryParams, {
+  server: false,
+  lazy: true,
+})
 
 // ── Polymarket 数据（延迟加载，点击按钮后才请求） ──
 const polyEnabled = ref(false)
@@ -32,13 +35,21 @@ const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
 const windows = computed(() => result.value?.windows ?? [])
 
-// ── 跨表共振：额外请求亚盘数据，提取 RefreshTime 集合 ──
-const asianQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
-const { data: asianData } = useAsianBigHold(asianQueryParams)
+// ── 跨表共振：额外请求亚盘轻量摘要，提取 RefreshTime 集合和分时主客量 ──
+const asianQueryParams = computed(() => ({ id: eventId.value }))
+const { data: asianResonanceData, refresh: refreshAsianResonance } = useAsianBigHoldResonance(asianQueryParams, {
+  server: false,
+  lazy: true,
+  immediate: false,
+})
+
+watch(result, (value) => {
+  if (value?.match) refreshAsianResonance()
+}, { immediate: true })
 
 const asianWindowsByOffset = computed(() => {
-  const map = new Map<number, AsianTimeWindowData>()
-  for (const w of asianData.value?.data?.windows ?? []) {
+  const map = new Map<number, AsianResonanceWindow>()
+  for (const w of asianResonanceData.value?.data?.windows ?? []) {
     map.set(w.hoursOffset, w)
   }
   return map
@@ -47,10 +58,10 @@ const asianWindowsByOffset = computed(() => {
 /** 亚盘当前分时大注的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
 const asianTimeSet = computed<Set<string>>(() => {
   const set = new Set<string>()
-  const asian = asianData.value?.data
+  const asian = asianResonanceData.value?.data
   if (!asian) return set
-  // bigList（当前大注 TOP10）
-  for (const item of asian.bigList ?? [])
+  // bigTimes（当前亚盘大注 TOP10）
+  for (const item of asian.bigTimes ?? [])
     set.add(item.refreshTime.substring(0, 19))
   return set
 })
@@ -74,19 +85,27 @@ const activeWindow = computed<TimeWindowData | null>(() => windows.value[activeT
 // ── 行展开 & 前一条记录（使用共享 composable） ──
 const {
   expandedPcId, expandedOddsPcId,
-  loadingPcId, failedPcIds, prevCache,
+  loadingPcId, failedPcIds, prevCache, currentCache,
   toggleExpand, toggleOddsExpand, retryFetchPrevious, prefetchAllPrevious,
   collapseAll, resetAll,
   getCurrentRows, getPreviousRows, getDiffRows,
-} = useDetailExpand()
+} = useDetailExpand({ batchEndpoint: '/api/bighold/details/batch' })
 
 // 切换 Tab 时收起所有展开行
 watch(activeTab, () => collapseAll())
 
 // 自动预取当前 Tab 的前一条记录（用于 TOP20 大单深度高亮）
+let previousPrefetchTimer: ReturnType<typeof setTimeout> | null = null
 watch(activeWindow, (w) => {
-  if (w?.items?.length) prefetchAllPrevious(w.items)
+  if (previousPrefetchTimer) clearTimeout(previousPrefetchTimer)
+  if (import.meta.client && w?.items?.length) {
+    previousPrefetchTimer = setTimeout(() => prefetchAllPrevious(w.items), 600)
+  }
 }, { immediate: true })
+
+onBeforeUnmount(() => {
+  if (previousPrefetchTimer) clearTimeout(previousPrefetchTimer)
+})
 
 // ── 排序 ──
 function setOrder(newOrder: number) {
@@ -306,11 +325,11 @@ function windowRatioDisplay(w: TimeWindowData): string {
   return `${hp}% | ${dp}% | ${ap}%`
 }
 
-function asianWindowFor(w: TimeWindowData): AsianTimeWindowData | undefined {
+function asianWindowFor(w: TimeWindowData): AsianResonanceWindow | undefined {
   return asianWindowsByOffset.value.get(w.hoursOffset)
 }
 
-function asianSideTotal(w: AsianTimeWindowData | undefined, side: 'home' | 'away'): number {
+function asianSideTotal(w: AsianResonanceWindow | undefined, side: 'home' | 'away'): number {
   if (!w) return 0
   return side === 'home'
     ? (w.homeSubtotal?.grandTotalBet ?? 0)
@@ -378,7 +397,7 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
 <template>
   <div class="detail-page">
     <!-- 加载/错误状态 -->
-    <div v-if="pending" class="loading">加载中...</div>
+    <div v-if="pending || (!error && !result && eventId > 0)" class="loading">加载中...</div>
     <div v-else-if="error || !result" class="error-msg">
       {{ error ? '数据加载失败' : '赛事不存在' }}
       <NuxtLink to="/" class="back-link">&larr; 返回首页</NuxtLink>
@@ -599,7 +618,7 @@ function formatAsianSidePercent(idx: number, side: 'home' | 'away'): string {
                 >
                   <td>{{ idx + 1 }}</td>
                   <td
-                    :class="['sel-cell', 'sel-' + item.selection, { 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
+                    :class="['sel-cell', 'sel-' + item.selection, { 'sel-depth-highlight': currentCache.has(item.pcId) && prevCache.has(item.pcId) && isBigHighlighted(currentCache.get(item.pcId)?.rawData ?? null, prevCache.get(item.pcId)?.rawData) }]"
                     title="点击展开 Back/Lay/Traded 明细"
                     @click="toggleExpand(item)"
                   >{{ item.selection }}</td>

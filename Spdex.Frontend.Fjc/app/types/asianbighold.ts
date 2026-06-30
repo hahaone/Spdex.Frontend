@@ -189,4 +189,22 @@ export interface AsianBigHoldPageResult {
   odds0: AsianOdds0 | null
 }
 
+export interface AsianResonanceWindow {
+  label: string
+  hoursOffset: number
+  homeSubtotal: AsianHcSubtotal
+  awaySubtotal: AsianHcSubtotal
+}
+
+export interface AsianResonanceBigTime {
+  pcId: number
+  refreshTime: string
+}
+
+export interface AsianBigHoldResonanceResult {
+  match: AsianMatchInfo
+  windows: AsianResonanceWindow[]
+  bigTimes: AsianResonanceBigTime[]
+}
+
 /** PriceSizeRow 从 bighold.ts 导入复用 */

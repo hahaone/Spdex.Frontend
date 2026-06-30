@@ -10,10 +10,12 @@ import { calcTradedDiff, parseRawData } from '~/utils/parseRawData'
 interface UseDetailExpandOptions {
   /** useBigHoldDetail 的 API 端点，默认 '/api/bighold/previous' */
   previousEndpoint?: string
+  /** 批量获取当前记录 + 前一条记录的端点。仅标盘页启用。 */
+  batchEndpoint?: string
 }
 
 export function useDetailExpand(options: UseDetailExpandOptions = {}) {
-  const { previousEndpoint = '/api/bighold/previous' } = options
+  const { previousEndpoint = '/api/bighold/previous', batchEndpoint } = options
   let prefetchRunId = 0
 
   // ── 行展开状态 ──
@@ -21,7 +23,15 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
   const expandedOddsPcId = ref<number | null>(null)     // LastPrice 层展开的行
 
   // ── 前一条记录懒加载 ──
-  const { fetchPrevious, clearCache, loadingPcId, failedPcIds, cache: prevCache } = useBigHoldDetail(previousEndpoint)
+  const {
+    fetchPrevious,
+    fetchDetailsBatch,
+    clearCache,
+    loadingPcId,
+    failedPcIds,
+    cache: prevCache,
+    currentCache,
+  } = useBigHoldDetail(previousEndpoint)
 
   // ── RawData 解析缓存 ──
   const currentParsedCache = reactive(new Map<number, PriceSizeRow[]>())
@@ -37,18 +47,7 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
     expandedPcId.value = item.pcId
     expandedOddsPcId.value = null
 
-    // 解析当前记录 RawData（缓存）
-    if (!currentParsedCache.has(item.pcId)) {
-      currentParsedCache.set(item.pcId, parseRawData(item.rawData))
-    }
-
-    // 懒加载前一条记录
-    if (!prevCache.has(item.pcId)) {
-      const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
-      if (prev?.rawData) {
-        previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
-      }
-    }
+    await ensureRowDetails(item)
   }
 
   /** 切换 LastPrice 层展开/收起，与 Back/Lay/Traded 层互斥 */
@@ -63,6 +62,12 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
 
   /** 重试加载前一条记录 */
   async function retryFetchPrevious(item: BigHoldItemView) {
+    if (batchEndpoint) {
+      await fetchDetailsBatch([item], batchEndpoint)
+      hydrateParsedCaches(item)
+      return
+    }
+
     const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
     if (prev?.rawData) {
       previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
@@ -75,6 +80,20 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
    */
   async function prefetchAllPrevious(items: BigHoldItemView[], concurrency = 3) {
     const runId = ++prefetchRunId
+
+    if (batchEndpoint) {
+      const queue = items.filter(item => !currentCache.has(item.pcId) || !prevCache.has(item.pcId))
+      if (queue.length === 0) return
+
+      const chunkSize = 20
+      for (let i = 0; runId === prefetchRunId && i < queue.length; i += chunkSize) {
+        const chunk = queue.slice(i, i + chunkSize)
+        await fetchDetailsBatch(chunk, batchEndpoint)
+        for (const item of chunk) hydrateParsedCaches(item)
+      }
+      return
+    }
+
     const queue = items.filter(item => !prevCache.has(item.pcId))
     let index = 0
 
@@ -91,6 +110,42 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
 
     const workerCount = Math.max(1, Math.min(concurrency, queue.length))
     await Promise.allSettled(Array.from({ length: workerCount }, () => worker()))
+  }
+
+  async function ensureRowDetails(item: BigHoldItemView) {
+    if (batchEndpoint) {
+      if (!currentCache.has(item.pcId) || !prevCache.has(item.pcId)) {
+        await fetchDetailsBatch([item], batchEndpoint)
+      }
+      hydrateParsedCaches(item)
+      return
+    }
+
+    // 兼容其它 BigHold 页面：当前 RawData 仍来自主列表，前一条仍懒加载。
+    if (!currentParsedCache.has(item.pcId)) {
+      currentParsedCache.set(item.pcId, parseRawData(item.rawData))
+    }
+
+    if (!prevCache.has(item.pcId)) {
+      const prev = await fetchPrevious(item.pcId, item.marketId, item.selectionId, item.refreshTime)
+      if (prev?.rawData) {
+        previousParsedCache.set(item.pcId, parseRawData(prev.rawData))
+      }
+    }
+  }
+
+  function hydrateParsedCaches(item: BigHoldItemView) {
+    if (!currentParsedCache.has(item.pcId)) {
+      const current = currentCache.get(item.pcId)
+      currentParsedCache.set(item.pcId, parseRawData(current?.rawData ?? item.rawData))
+    }
+
+    if (!previousParsedCache.has(item.pcId)) {
+      const previous = prevCache.get(item.pcId)
+      if (previous?.rawData) {
+        previousParsedCache.set(item.pcId, parseRawData(previous.rawData))
+      }
+    }
   }
 
   /** 获取当前记录解析数据 */
@@ -133,6 +188,7 @@ export function useDetailExpand(options: UseDetailExpandOptions = {}) {
     loadingPcId,
     failedPcIds,
     prevCache,
+    currentCache,
     // 操作
     toggleExpand,
     toggleOddsExpand,

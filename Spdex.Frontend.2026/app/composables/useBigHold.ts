@@ -6,10 +6,11 @@ interface BigHoldParams {
   order?: number
 }
 
-export function useBigHold(params: Ref<BigHoldParams>) {
+export function useBigHold(params: Ref<BigHoldParams>, opts: Record<string, unknown> = {}) {
   const result = useApiFetch<ApiResponse<BigHoldPageResult>>('/api/bighold', {
     params,
     watch: [params],
+    ...opts,
   })
 
   /** 手动刷新数据（重新请求 API） */

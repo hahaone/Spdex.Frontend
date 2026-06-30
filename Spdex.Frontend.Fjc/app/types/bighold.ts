@@ -80,6 +80,26 @@ export interface PreviousRecordResult {
   lastOdds: number
 }
 
+/** 批量行展开明细请求项 */
+export interface BigHoldBatchDetailRequestItem {
+  pcId: number
+  marketId: number
+  selectionId: number
+  refreshTime: string
+}
+
+/** 批量行展开明细单项响应 */
+export interface BigHoldBatchDetailItem {
+  pcId: number
+  current: PreviousRecordResult | null
+  previous: PreviousRecordResult | null
+}
+
+/** 批量行展开明细响应 */
+export interface BigHoldBatchDetailResult {
+  items: BigHoldBatchDetailItem[]
+}
+
 /** LastPrice 挂牌数据 */
 export interface LastPriceData {
   selectionId: number
