@@ -3,7 +3,7 @@
     <NSpace class="mb-4" justify="space-between" align="center">
       <div>
         <h2 class="text-xl font-semibold">NewSpdex 防刷</h2>
-        <p class="mt-1 text-xs text-gray-400">查看防刷命中状态，添加或解除用户/IP 运行时封禁。</p>
+        <p class="mt-1 text-xs text-gray-400">查看防刷命中状态，调整热更新参数，添加或解除用户/IP 运行时封禁。</p>
       </div>
       <NSpace>
         <NButton :loading="loading" @click="load">刷新</NButton>
@@ -33,6 +33,77 @@
         </NCard>
       </NGi>
     </NGrid>
+
+    <NCard size="small" title="防刷参数" class="mb-4">
+      <template #header-extra>
+        <NSpace>
+          <NTag size="small" :type="hasRuntimeConfig ? 'warning' : 'success'">
+            {{ hasRuntimeConfig ? '运行时覆盖' : 'appsettings' }}
+          </NTag>
+          <NTag size="small" :type="configSnapshot?.redisAvailable ? 'success' : 'default'">
+            Redis {{ configSnapshot?.redisAvailable ? '可用' : '不可用' }}
+          </NTag>
+          <NButton size="small" :loading="configLoading" @click="loadConfig">刷新参数</NButton>
+          <NButton v-if="hasRuntimeConfig" size="small" tertiary type="warning" :loading="savingConfig" @click="resetConfig">恢复默认</NButton>
+          <NButton size="small" type="primary" :loading="savingConfig" @click="saveConfig">保存并热更新</NButton>
+        </NSpace>
+      </template>
+
+      <NForm label-placement="top" size="small">
+        <NGrid :cols="4" :x-gap="12" responsive="screen">
+          <NGi>
+            <NFormItem label="防刷开关">
+              <NSwitch v-model:value="configForm.enabled" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="统计窗口">
+              <NInputNumber v-model:value="configForm.windowSeconds" :min="10" :max="3600" style="width:100%">
+                <template #suffix>秒</template>
+              </NInputNumber>
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="重接口请求阈值">
+              <NInputNumber v-model:value="configForm.maxHeavyRequestsPerWindow" :min="10" :max="10000" style="width:100%" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="不同赛事阈值">
+              <NInputNumber v-model:value="configForm.maxDistinctEventsPerWindow" :min="3" :max="10000" style="width:100%" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="订单明细页阈值">
+              <NInputNumber v-model:value="configForm.maxDistinctOrderPagesPerWindow" :min="3" :max="10000" style="width:100%" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="冷却时长">
+              <NInputNumber v-model:value="configForm.cooldownMinutes" :min="1" :max="1440" style="width:100%">
+                <template #suffix>分钟</template>
+              </NInputNumber>
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="状态保留">
+              <NInputNumber v-model:value="configForm.stateTtlMinutes" :min="5" :max="1440" style="width:100%">
+                <template #suffix>分钟</template>
+              </NInputNumber>
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="最后更新">
+              <NText depth="3">{{ configSnapshot?.runtimeUpdatedAt ? `${fmt(configSnapshot.runtimeUpdatedAt)} ${configSnapshot.runtimeUpdatedBy || ''}` : '—' }}</NText>
+            </NFormItem>
+          </NGi>
+        </NGrid>
+
+        <NFormItem label="重接口路径前缀">
+          <NDynamicTags v-model:value="configForm.heavyPathPrefixes" />
+        </NFormItem>
+      </NForm>
+    </NCard>
 
     <NGrid :cols="2" :x-gap="12" responsive="screen" class="mb-4">
       <NGi>
@@ -139,17 +210,62 @@ interface SecurityBlocksResult {
   recentActors: ActorSnapshot[]
 }
 
+interface RuntimeConfig {
+  enabled: boolean
+  heavyPathPrefixes: string[]
+  windowSeconds: number
+  maxHeavyRequestsPerWindow: number
+  maxDistinctEventsPerWindow: number
+  maxDistinctOrderPagesPerWindow: number
+  cooldownMinutes: number
+  stateTtlMinutes: number
+}
+
+interface ConfigSnapshot {
+  appSettings: RuntimeConfig
+  effective: RuntimeConfig
+  runtimeOverride?: RuntimeConfig | null
+  runtimeUpdatedAt?: string | null
+  runtimeUpdatedBy?: string | null
+  redisAvailable: boolean
+}
+
 const api = useAdminApi()
 const message = useMessage()
 const dialog = useDialog()
 
 const loading = ref(false)
+const configLoading = ref(false)
 const saving = ref(false)
+const savingConfig = ref(false)
 const staticBlocks = ref<BlockEntry[]>([])
 const runtimeBlocks = ref<BlockEntry[]>([])
 const recentActors = ref<ActorSnapshot[]>([])
+const configSnapshot = ref<ConfigSnapshot | null>(null)
+
+const defaultConfig = (): RuntimeConfig => ({
+  enabled: true,
+  heavyPathPrefixes: [
+    '/api/newspdex/charts',
+    '/api/newspdex/order-detail',
+    '/api/newspdex/big-trades',
+    '/api/newspdex/trades',
+    '/api/newspdex/ladder',
+    '/api/newspdex/correct-score',
+    '/api/newspdex/inner-outer',
+  ],
+  windowSeconds: 60,
+  maxHeavyRequestsPerWindow: 80,
+  maxDistinctEventsPerWindow: 20,
+  maxDistinctOrderPagesPerWindow: 25,
+  cooldownMinutes: 10,
+  stateTtlMinutes: 30,
+})
+
+const configForm = reactive<RuntimeConfig>(defaultConfig())
 
 const cooldownCount = computed(() => recentActors.value.filter(a => isFuture(a.cooldownUntil)).length)
+const hasRuntimeConfig = computed(() => !!configSnapshot.value?.runtimeOverride)
 
 const targetOptions = [
   { label: '用户名', value: 'user' },
@@ -172,6 +288,10 @@ const targetPlaceholder = computed(() => {
 })
 
 async function load() {
+  await Promise.all([loadBlocks(), loadConfig()])
+}
+
+async function loadBlocks() {
   loading.value = true
   const res = await api.get<SecurityBlocksResult>('newspdex/security/blocks')
   loading.value = false
@@ -183,6 +303,90 @@ async function load() {
   staticBlocks.value = res.data.staticBlocks ?? []
   runtimeBlocks.value = res.data.runtimeBlocks ?? []
   recentActors.value = res.data.recentActors ?? []
+}
+
+async function loadConfig() {
+  configLoading.value = true
+  const res = await api.get<ConfigSnapshot>('newspdex/security/config')
+  configLoading.value = false
+  if (res.code !== 0 || !res.data) {
+    message.error(res.message || '参数加载失败')
+    return
+  }
+
+  configSnapshot.value = res.data
+  applyConfig(res.data.effective)
+}
+
+function applyConfig(config: RuntimeConfig) {
+  Object.assign(configForm, {
+    enabled: config.enabled,
+    heavyPathPrefixes: [...(config.heavyPathPrefixes ?? [])],
+    windowSeconds: config.windowSeconds,
+    maxHeavyRequestsPerWindow: config.maxHeavyRequestsPerWindow,
+    maxDistinctEventsPerWindow: config.maxDistinctEventsPerWindow,
+    maxDistinctOrderPagesPerWindow: config.maxDistinctOrderPagesPerWindow,
+    cooldownMinutes: config.cooldownMinutes,
+    stateTtlMinutes: config.stateTtlMinutes,
+  })
+}
+
+function normalizeConfigForm(): RuntimeConfig {
+  return {
+    enabled: !!configForm.enabled,
+    heavyPathPrefixes: [...new Set((configForm.heavyPathPrefixes ?? [])
+      .map(x => x.trim())
+      .filter(Boolean)
+      .map(x => x.startsWith('/') ? x : `/${x}`))],
+    windowSeconds: Number(configForm.windowSeconds) || 60,
+    maxHeavyRequestsPerWindow: Number(configForm.maxHeavyRequestsPerWindow) || 80,
+    maxDistinctEventsPerWindow: Number(configForm.maxDistinctEventsPerWindow) || 20,
+    maxDistinctOrderPagesPerWindow: Number(configForm.maxDistinctOrderPagesPerWindow) || 25,
+    cooldownMinutes: Number(configForm.cooldownMinutes) || 10,
+    stateTtlMinutes: Number(configForm.stateTtlMinutes) || 30,
+  }
+}
+
+async function saveConfig() {
+  const payload = normalizeConfigForm()
+  if (payload.enabled && payload.heavyPathPrefixes.length === 0) {
+    message.warning('请至少保留一个重接口路径前缀')
+    return
+  }
+
+  savingConfig.value = true
+  const res = await api.put<ConfigSnapshot>('newspdex/security/config', payload)
+  savingConfig.value = false
+  if (res.code === 0 && res.data) {
+    configSnapshot.value = res.data
+    applyConfig(res.data.effective)
+    message.success('参数已热更新')
+  }
+  else {
+    message.error(res.message || '保存失败')
+  }
+}
+
+function resetConfig() {
+  dialog.warning({
+    title: '恢复默认参数',
+    content: '确认恢复为后端 appsettings 中的防刷参数？',
+    positiveText: '恢复',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      savingConfig.value = true
+      const res = await api.del<ConfigSnapshot>('newspdex/security/config/runtime')
+      savingConfig.value = false
+      if (res.code === 0 && res.data) {
+        configSnapshot.value = res.data
+        applyConfig(res.data.effective)
+        message.success('已恢复默认参数')
+      }
+      else {
+        message.error(res.message || '恢复失败')
+      }
+    },
+  })
 }
 
 function openBlock(targetType = 'user', target = '') {
