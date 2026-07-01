@@ -142,6 +142,8 @@
         :loading="loading"
         :pagination="{ pageSize: 20 }"
         :row-key="(r: ActorSnapshot) => r.actorKey"
+        :scroll-x="1840"
+        :single-line="false"
       />
     </NCard>
 
@@ -201,6 +203,9 @@ interface ActorSnapshot {
   distinctOrderPages: number
   cooldownUntil?: string | null
   cooldownReason?: string | null
+  cooldownRequestCount?: number | null
+  cooldownElapsedSeconds?: number | null
+  cooldownRequestsPerSecond?: number | null
   lastSeen: string
 }
 
@@ -510,6 +515,34 @@ function cooldownReason(row: ActorSnapshot) {
   return `${labels[metric] || metric} > ${limit}（旧记录未保存实际值）`
 }
 
+function trimNumber(value: number, digits = 2) {
+  return value.toFixed(digits).replace(/\.?0+$/, '')
+}
+
+function triggerRate(row: ActorSnapshot) {
+  const rate = row.cooldownRequestsPerSecond
+  return typeof rate === 'number' && Number.isFinite(rate) ? rate : null
+}
+
+function triggerRateText(row: ActorSnapshot) {
+  const rate = triggerRate(row)
+  if (rate === null) return '—'
+  return `${trimNumber(rate, rate >= 10 ? 1 : 2)} 次/秒`
+}
+
+function triggerRateTag(row: ActorSnapshot) {
+  const rate = triggerRate(row)
+  if (rate === null) return '—'
+
+  const tagType = rate >= 5 ? 'error' : rate >= 2 ? 'warning' : 'info'
+  const elapsed = typeof row.cooldownElapsedSeconds === 'number'
+    ? `${trimNumber(row.cooldownElapsedSeconds, row.cooldownElapsedSeconds >= 10 ? 0 : 1)} 秒`
+    : '触发窗口'
+  const count = typeof row.cooldownRequestCount === 'number' ? row.cooldownRequestCount : null
+  const title = count ? `${elapsed}内 ${count} 次` : elapsed
+  return h(NTag, { size: 'small', type: tagType, title }, { default: () => triggerRateText(row) })
+}
+
 const runtimeColumns = [
   { title: '类型', key: 'targetType', width: 90, render: (r: BlockEntry) => typeTag(r.targetType) },
   { title: '目标', key: 'target' },
@@ -530,20 +563,27 @@ const staticColumns = [
 ]
 
 const actorColumns = [
-  { title: '用户', key: 'user', minWidth: 170, render: (r: ActorSnapshot) => actorUser(r) },
+  { title: '用户', key: 'user', width: 230, render: (r: ActorSnapshot) => actorUser(r) },
   { title: 'IP', key: 'ip', width: 150 },
   { title: '重接口请求', key: 'requestCount', width: 110 },
   { title: '不同赛事', key: 'distinctEvents', width: 100 },
   { title: '明细页', key: 'distinctOrderPages', width: 90 },
   {
+    title: '触发频率',
+    key: 'cooldownRequestsPerSecond',
+    width: 150,
+    sorter: (a: ActorSnapshot, b: ActorSnapshot) => (a.cooldownRequestsPerSecond ?? -1) - (b.cooldownRequestsPerSecond ?? -1),
+    render: (r: ActorSnapshot) => triggerRateTag(r),
+  },
+  {
     title: '状态',
     key: 'cooldownUntil',
-    width: 170,
+    width: 230,
     render: (r: ActorSnapshot) => isFuture(r.cooldownUntil)
       ? h(NTag, { size: 'small', type: 'error' }, { default: () => `冷却至 ${fmt(r.cooldownUntil)}` })
       : h(NTag, { size: 'small' }, { default: () => '正常' }),
   },
-  { title: '原因', key: 'cooldownReason', minWidth: 230, ellipsis: { tooltip: true }, render: (r: ActorSnapshot) => cooldownReason(r) },
+  { title: '原因', key: 'cooldownReason', width: 420, ellipsis: { tooltip: true }, render: (r: ActorSnapshot) => cooldownReason(r) },
   { title: '最后触发', key: 'lastSeen', width: 170, render: (r: ActorSnapshot) => fmt(r.lastSeen) },
   {
     title: '操作',
