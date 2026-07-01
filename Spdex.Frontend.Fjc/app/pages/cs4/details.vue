@@ -59,11 +59,11 @@ const activeWindow = computed<UoTimeWindowData | null>(() => windows.value[activ
 // ── 行展开 & 前一条记录（使用共享 composable） ──
 const {
   expandedPcId, expandedOddsPcId,
-  loadingPcId, failedPcIds, prevCache,
+  loadingPcId, failedPcIds, prevCache, currentCache,
   toggleExpand, toggleOddsExpand, retryFetchPrevious, prefetchAllPrevious,
   collapseAll, resetAll,
   getCurrentRows, getPreviousRows, getDiffRows,
-} = useDetailExpand({ previousEndpoint: '/api/uobighold/previous' })
+} = useDetailExpand({ previousEndpoint: '/api/uobighold/previous', batchEndpoint: '/api/uobighold/details/batch' })
 
 watch(activeTab, () => collapseAll())
 
@@ -302,7 +302,7 @@ function windowRatioDisplay(w: typeof windows.value[0]): string {
               <template v-for="item in activeWindow.items" :key="item.pcId">
                 <tr :class="['main-row', { 'row-expanded': expandedPcId === item.pcId || expandedOddsPcId === item.pcId, 'row-resonant': isResonant(item) }]">
                   <td
-                    :class="['sel-cell', item.selection === '大' ? 'sel-over' : 'sel-under', { 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(item.rawData, prevCache.get(item.pcId)?.rawData) }]"
+                    :class="['sel-cell', item.selection === '大' ? 'sel-over' : 'sel-under', { 'sel-depth-highlight': prevCache.has(item.pcId) && isBigHighlighted(currentCache.get(item.pcId)?.rawData ?? item.rawData, prevCache.get(item.pcId)?.rawData) }]"
                     title="点击展开 Back/Lay/Traded 明细"
                     @click="toggleExpand(item)"
                   >{{ item.selection }}</td>
