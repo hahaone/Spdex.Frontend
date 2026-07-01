@@ -1,0 +1,344 @@
+<template>
+  <div>
+    <NSpace class="mb-4" justify="space-between" align="center">
+      <div>
+        <h2 class="text-xl font-semibold">NewSpdex 防刷</h2>
+        <p class="mt-1 text-xs text-gray-400">查看防刷命中状态，添加或解除用户/IP 运行时封禁。</p>
+      </div>
+      <NSpace>
+        <NButton :loading="loading" @click="load">刷新</NButton>
+        <NButton type="primary" @click="() => openBlock()">新增封禁</NButton>
+      </NSpace>
+    </NSpace>
+
+    <NGrid :cols="4" :x-gap="12" responsive="screen" class="mb-4">
+      <NGi>
+        <NCard size="small">
+          <NStatistic label="最近触发用户/IP" :value="recentActors.length" />
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard size="small">
+          <NStatistic label="运行时封禁" :value="runtimeBlocks.length" />
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard size="small">
+          <NStatistic label="配置封禁" :value="staticBlocks.length" />
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard size="small">
+          <NStatistic label="冷却中" :value="cooldownCount" />
+        </NCard>
+      </NGi>
+    </NGrid>
+
+    <NGrid :cols="2" :x-gap="12" responsive="screen" class="mb-4">
+      <NGi>
+        <NCard size="small" title="运行时封禁">
+          <template #header-extra>
+            <NButton v-if="runtimeBlocks.length" size="small" tertiary type="error" @click="clearRuntime">清空运行时封禁</NButton>
+          </template>
+          <NDataTable
+            :columns="runtimeColumns"
+            :data="runtimeBlocks"
+            :loading="loading"
+            :pagination="{ pageSize: 10 }"
+            :row-key="blockKey"
+          />
+        </NCard>
+      </NGi>
+
+      <NGi>
+        <NCard size="small" title="配置封禁">
+          <NDataTable
+            :columns="staticColumns"
+            :data="staticBlocks"
+            :loading="loading"
+            :pagination="{ pageSize: 10 }"
+            :row-key="blockKey"
+          />
+          <p class="mt-2 text-xs text-gray-400">配置封禁来自后端环境变量或 appsettings，不能在页面中删除。</p>
+        </NCard>
+      </NGi>
+    </NGrid>
+
+    <NCard size="small" title="最近触发用户 / IP">
+      <NDataTable
+        :columns="actorColumns"
+        :data="recentActors"
+        :loading="loading"
+        :pagination="{ pageSize: 20 }"
+        :row-key="(r: ActorSnapshot) => r.actorKey"
+      />
+    </NCard>
+
+    <NModal v-model:show="showBlock" preset="card" title="新增运行时封禁" style="width:460px">
+      <NForm label-placement="left" label-width="90">
+        <NFormItem label="类型">
+          <NSelect v-model:value="blockForm.targetType" :options="targetOptions" />
+        </NFormItem>
+        <NFormItem label="目标">
+          <NInput v-model:value="blockForm.target" :placeholder="targetPlaceholder" />
+        </NFormItem>
+        <NFormItem label="时长">
+          <NInputNumber
+            v-model:value="blockForm.durationMinutes"
+            :min="1"
+            :max="43200"
+            clearable
+            style="width:100%"
+            placeholder="留空表示直到服务重启或手动解除"
+          >
+            <template #suffix>分钟</template>
+          </NInputNumber>
+        </NFormItem>
+        <NFormItem label="原因">
+          <NInput v-model:value="blockForm.reason" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="可选" />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showBlock = false">取消</NButton>
+          <NButton type="primary" :loading="saving" @click="submitBlock">确定</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { h } from 'vue'
+import { NButton, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
+
+interface BlockEntry {
+  targetType: string
+  target: string
+  reason?: string | null
+  createdAt: string
+  expiresAt?: string | null
+}
+
+interface ActorSnapshot {
+  actorKey: string
+  userId?: string | null
+  userName?: string | null
+  ip: string
+  requestCount: number
+  distinctEvents: number
+  distinctOrderPages: number
+  cooldownUntil?: string | null
+  cooldownReason?: string | null
+  lastSeen: string
+}
+
+interface SecurityBlocksResult {
+  staticBlocks: BlockEntry[]
+  runtimeBlocks: BlockEntry[]
+  recentActors: ActorSnapshot[]
+}
+
+const api = useAdminApi()
+const message = useMessage()
+const dialog = useDialog()
+
+const loading = ref(false)
+const saving = ref(false)
+const staticBlocks = ref<BlockEntry[]>([])
+const runtimeBlocks = ref<BlockEntry[]>([])
+const recentActors = ref<ActorSnapshot[]>([])
+
+const cooldownCount = computed(() => recentActors.value.filter(a => isFuture(a.cooldownUntil)).length)
+
+const targetOptions = [
+  { label: '用户名', value: 'user' },
+  { label: '用户 ID', value: 'userId' },
+  { label: 'IP', value: 'ip' },
+]
+
+const showBlock = ref(false)
+const blockForm = reactive({
+  targetType: 'user',
+  target: '',
+  durationMinutes: 1440 as number | null,
+  reason: '',
+})
+
+const targetPlaceholder = computed(() => {
+  if (blockForm.targetType === 'ip') return '例如 115.227.156.106'
+  if (blockForm.targetType === 'userId') return '例如 12345'
+  return '例如 jingjiahao'
+})
+
+async function load() {
+  loading.value = true
+  const res = await api.get<SecurityBlocksResult>('newspdex/security/blocks')
+  loading.value = false
+  if (res.code !== 0 || !res.data) {
+    message.error(res.message || '加载失败')
+    return
+  }
+
+  staticBlocks.value = res.data.staticBlocks ?? []
+  runtimeBlocks.value = res.data.runtimeBlocks ?? []
+  recentActors.value = res.data.recentActors ?? []
+}
+
+function openBlock(targetType = 'user', target = '') {
+  Object.assign(blockForm, {
+    targetType,
+    target,
+    durationMinutes: 1440,
+    reason: '',
+  })
+  showBlock.value = true
+}
+
+async function submitBlock() {
+  if (!blockForm.target.trim()) {
+    message.warning('请输入封禁目标')
+    return
+  }
+
+  saving.value = true
+  const res = await api.post('newspdex/security/blocks', {
+    targetType: blockForm.targetType,
+    target: blockForm.target.trim(),
+    durationMinutes: blockForm.durationMinutes,
+    reason: blockForm.reason.trim() || null,
+  })
+  saving.value = false
+
+  if (res.code === 0) {
+    message.success('已添加封禁')
+    showBlock.value = false
+    load()
+  }
+  else {
+    message.error(res.message || '添加失败')
+  }
+}
+
+function removeBlock(row: BlockEntry) {
+  dialog.warning({
+    title: '解除封禁',
+    content: `确认解除 ${typeLabel(row.targetType)} ${row.target}？`,
+    positiveText: '解除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const res = await api.del('newspdex/security/blocks', {
+        targetType: row.targetType,
+        target: row.target,
+      })
+      if (res.code === 0) {
+        message.success('已解除')
+        load()
+      }
+      else {
+        message.error(res.message || '解除失败')
+      }
+    },
+  })
+}
+
+function clearRuntime() {
+  dialog.warning({
+    title: '清空运行时封禁',
+    content: '确认清空所有运行时封禁？配置封禁不会受影响。',
+    positiveText: '清空',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const res = await api.del('newspdex/security/blocks/runtime')
+      if (res.code === 0) {
+        message.success('已清空')
+        load()
+      }
+      else {
+        message.error(res.message || '清空失败')
+      }
+    },
+  })
+}
+
+function blockKey(row: BlockEntry) {
+  return `${row.targetType}:${row.target}:${row.createdAt}`
+}
+
+function typeLabel(type: string) {
+  if (type === 'ip') return 'IP'
+  if (type === 'userId') return '用户 ID'
+  return '用户名'
+}
+
+function typeTag(type: string) {
+  const tagType = type === 'ip' ? 'warning' : type === 'userId' ? 'info' : 'success'
+  return h(NTag, { size: 'small', type: tagType }, { default: () => typeLabel(type) })
+}
+
+function fmt(d?: string | null) {
+  if (!d || d.startsWith('0001-')) return '—'
+  return d.replace('T', ' ').substring(0, 19)
+}
+
+function isFuture(d?: string | null) {
+  return !!d && new Date(d).getTime() > Date.now()
+}
+
+function actorUser(row: ActorSnapshot) {
+  if (row.userName && row.userId) return `${row.userName} #${row.userId}`
+  return row.userName || row.userId || '匿名'
+}
+
+const runtimeColumns = [
+  { title: '类型', key: 'targetType', width: 90, render: (r: BlockEntry) => typeTag(r.targetType) },
+  { title: '目标', key: 'target' },
+  { title: '原因', key: 'reason', render: (r: BlockEntry) => r.reason || '—' },
+  { title: '到期', key: 'expiresAt', width: 170, render: (r: BlockEntry) => fmt(r.expiresAt) },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 90,
+    render: (r: BlockEntry) => h(NButton, { size: 'small', type: 'error', tertiary: true, onClick: () => removeBlock(r) }, { default: () => '解除' }),
+  },
+]
+
+const staticColumns = [
+  { title: '类型', key: 'targetType', width: 90, render: (r: BlockEntry) => typeTag(r.targetType) },
+  { title: '目标', key: 'target' },
+  { title: '原因', key: 'reason', render: (r: BlockEntry) => r.reason || 'configured' },
+]
+
+const actorColumns = [
+  { title: '用户', key: 'user', minWidth: 170, render: (r: ActorSnapshot) => actorUser(r) },
+  { title: 'IP', key: 'ip', width: 150 },
+  { title: '重接口请求', key: 'requestCount', width: 110 },
+  { title: '不同赛事', key: 'distinctEvents', width: 100 },
+  { title: '明细页', key: 'distinctOrderPages', width: 90 },
+  {
+    title: '状态',
+    key: 'cooldownUntil',
+    width: 170,
+    render: (r: ActorSnapshot) => isFuture(r.cooldownUntil)
+      ? h(NTag, { size: 'small', type: 'error' }, { default: () => `冷却至 ${fmt(r.cooldownUntil)}` })
+      : h(NTag, { size: 'small' }, { default: () => '正常' }),
+  },
+  { title: '原因', key: 'cooldownReason', render: (r: ActorSnapshot) => r.cooldownReason || '—' },
+  { title: '最后触发', key: 'lastSeen', width: 170, render: (r: ActorSnapshot) => fmt(r.lastSeen) },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 190,
+    render: (r: ActorSnapshot) => h(NSpace, { size: 'small' }, {
+      default: () => [
+        r.userName
+          ? h(NButton, { size: 'small', onClick: () => openBlock('user', r.userName || '') }, { default: () => '封用户名' })
+          : null,
+        h(NButton, { size: 'small', onClick: () => openBlock('ip', r.ip) }, { default: () => '封 IP' }),
+      ].filter(Boolean),
+    }),
+  },
+]
+
+onMounted(load)
+</script>

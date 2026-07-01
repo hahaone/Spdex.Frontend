@@ -61,6 +61,7 @@ const menuOptions = computed(() => {
   if (can(P.planView)) items.push({ label: '套餐定价', key: '/plans' })
   if (can(P.signalView)) items.push({ label: '信号引擎', key: '/signals' })
   if (can(P.analyticsView)) items.push({ label: '访问统计', key: '/analytics' })
+  if (can(P.systemAdminManage)) items.push({ label: 'NewSpdex 防刷', key: '/system/newspdex-security' })
   if (can(P.systemAuditView)) items.push({ label: '审计日志', key: '/system/audit' })
   if (can(P.systemAdminManage)) items.push({ label: '管理员', key: '/system/admins' })
   return items
