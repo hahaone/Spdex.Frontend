@@ -494,10 +494,26 @@ function actorUser(row: ActorSnapshot) {
   return row.userName || row.userId || '匿名'
 }
 
+function cooldownReason(row: ActorSnapshot) {
+  const reason = row.cooldownReason || ''
+  if (!reason) return '—'
+  const legacy = reason.match(/^(heavy-requests|distinct-events|order-pages)>(\d+)$/)
+  if (!legacy) return reason
+
+  const metric = legacy[1] || ''
+  const limit = legacy[2] || ''
+  const labels: Record<string, string> = {
+    'heavy-requests': '重接口请求',
+    'distinct-events': '不同赛事',
+    'order-pages': '明细页',
+  }
+  return `${labels[metric] || metric} > ${limit}（旧记录未保存实际值）`
+}
+
 const runtimeColumns = [
   { title: '类型', key: 'targetType', width: 90, render: (r: BlockEntry) => typeTag(r.targetType) },
   { title: '目标', key: 'target' },
-  { title: '原因', key: 'reason', render: (r: BlockEntry) => r.reason || '—' },
+  { title: '原因', key: 'reason', minWidth: 180, ellipsis: { tooltip: true }, render: (r: BlockEntry) => r.reason || '—' },
   { title: '到期', key: 'expiresAt', width: 170, render: (r: BlockEntry) => fmt(r.expiresAt) },
   {
     title: '操作',
@@ -510,7 +526,7 @@ const runtimeColumns = [
 const staticColumns = [
   { title: '类型', key: 'targetType', width: 90, render: (r: BlockEntry) => typeTag(r.targetType) },
   { title: '目标', key: 'target' },
-  { title: '原因', key: 'reason', render: (r: BlockEntry) => r.reason || 'configured' },
+  { title: '原因', key: 'reason', minWidth: 180, ellipsis: { tooltip: true }, render: (r: BlockEntry) => r.reason || 'configured' },
 ]
 
 const actorColumns = [
@@ -527,7 +543,7 @@ const actorColumns = [
       ? h(NTag, { size: 'small', type: 'error' }, { default: () => `冷却至 ${fmt(r.cooldownUntil)}` })
       : h(NTag, { size: 'small' }, { default: () => '正常' }),
   },
-  { title: '原因', key: 'cooldownReason', render: (r: ActorSnapshot) => r.cooldownReason || '—' },
+  { title: '原因', key: 'cooldownReason', minWidth: 230, ellipsis: { tooltip: true }, render: (r: ActorSnapshot) => cooldownReason(r) },
   { title: '最后触发', key: 'lastSeen', width: 170, render: (r: ActorSnapshot) => fmt(r.lastSeen) },
   {
     title: '操作',
