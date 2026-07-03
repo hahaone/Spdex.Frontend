@@ -955,7 +955,7 @@ function formatHkdCompact(amount: number | null | undefined): string {
 }
 
 function tradeTotalDelta(trade: LiveMatchOddsTopTradeSummary): number {
-  return trade.tradedSizeDelta || trade.runnerMatchedDelta || trade.amount || trade.snapshotTotalMatchedDelta
+  return trade.snapshotTotalMatchedDelta || trade.amount || trade.runnerMatchedDelta || trade.tradedSizeDelta || 0
 }
 
 function tradeTotalDeltaHkd(trade: LiveMatchOddsTopTradeSummary): number {
