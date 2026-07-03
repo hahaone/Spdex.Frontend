@@ -33,17 +33,27 @@ export interface BigTradesData {
   lockMessage: string | null
 }
 
-export function useBigTrades(eventId: MaybeRef<number>, perGroup = 10) {
+export function useBigTrades(eventId: MaybeRef<number>, perGroup = 10, enabled?: MaybeRef<boolean>) {
   const idRef = computed(() => unref(eventId))
+  const enabledRef = computed(() => enabled == null ? true : unref(enabled))
+  const manualRefresh = enabled != null
 
   const result = useApiFetch<ApiResponse<BigTradesData>>(
     () => `/api/newspdex/big-trades/${idRef.value}?perGroup=${perGroup}`,
     {
       key: () => `newspdex-bigtrades-${idRef.value}-${perGroup}`,
       server: false,
-      watch: [idRef],
+      ...(manualRefresh
+        ? { immediate: false, watch: false }
+        : { watch: [idRef] }),
     },
   )
+
+  if (manualRefresh) {
+    watch([idRef, enabledRef], () => {
+      if (enabledRef.value && idRef.value > 0) result.refresh()
+    }, { immediate: true })
+  }
 
   const data = computed<BigTradesData | null>(() => result.data.value?.data ?? null)
 
@@ -58,7 +68,11 @@ export function useBigTrades(eventId: MaybeRef<number>, perGroup = 10) {
   }
 
   // 60s 轮询（成交持续变化）
-  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
+  usePolling(
+    () => { if (enabledRef.value) result.refresh() },
+    60_000,
+    { enabled: enabledRef, pending: result.pending, errorRef: result.error },
+  )
 
   return {
     data,

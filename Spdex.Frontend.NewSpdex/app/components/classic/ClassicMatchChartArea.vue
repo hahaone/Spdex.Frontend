@@ -2,6 +2,7 @@
 import { RefreshCw } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { ChartPoint } from '~/types/market'
+import { isRateLimitedError } from '~/utils/apiError'
 import { withMatchListContext } from '~/utils/matchNavigation'
 
 type TradeDirection = 'home' | 'draw' | 'away'
@@ -141,7 +142,7 @@ const trendOnly = computed<TradeDirection | null>(() =>
 // 后端 tradeflow 已用整盘口记录补完整时间网格，单方向不会再因为只看目标 selection 而稀疏。
 const isTradeFlowDetail = computed(() => trendOnly.value !== null)
 const needsSeriesChart = computed(() => view.value === 'chart' && !isTradeFlowDetail.value)
-const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType } = useChartSeries(
+const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType, error: chartError } = useChartSeries(
   eventIdRef,
   chartType,
   chartExtraQuery,
@@ -215,7 +216,9 @@ const seriesOptions = computed(() => {
   return opts
 })
 
+const chartRateLimited = computed(() => isRateLimitedError(chartError.value))
 const statusLabel = computed(() => {
+  if (chartRateLimited.value) return '请求过于频繁，请稍后刷新'
   if (status.value === 'no-access') return '当前会籍未开放此走势'
   if (status.value === 'pending') return '此场赛事暂无该市场数据'
   return null
@@ -233,7 +236,8 @@ const chartTitle = computed(() => {
 })
 
 // ── 重大成交提示(默认视图)──
-const { data: btData, group: bigGroup, pending: btPending } = useBigTrades(eventIdRef, 6)
+const needsBigTrades = computed(() => view.value === 'tips')
+const { data: btData, group: bigGroup, pending: btPending } = useBigTrades(eventIdRef, 6, needsBigTrades)
 const stdTips = computed(() => bigGroup('std-all'))
 const ouTips = computed(() => bigGroup('ou-all'))
 function fmtAmt(n: number) { return Math.round(n).toLocaleString('en-US') }

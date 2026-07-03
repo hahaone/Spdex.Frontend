@@ -5,8 +5,8 @@
  * 仅在父组件单方向成交时 v-if 挂载 → 此时才发起请求。时段(timeRange)客户端过滤桶。
  */
 import TradeFlowChart from '~/components/chart/TradeFlowChart.vue'
-import type { TradeFlowBucket, TradeFlowResult } from '~/composables/useTradeFlow'
-import type { ChartPoint } from '~/types/market'
+import type { TradeFlowResult } from '~/composables/useTradeFlow'
+import { isRateLimitedError } from '~/utils/apiError'
 
 type ZoomWindow = { start: string, end: string }
 
@@ -29,43 +29,23 @@ const emit = defineEmits<{
   reset: []
 }>()
 
-const { data, status, pending, refresh } = useTradeFlow(
+const { data, status, pending, refresh, error } = useTradeFlow(
   computed(() => props.eventId),
   computed(() => props.market),
   computed(() => props.selection),
   computed(() => 'raw'),
 )
-const { points: timelinePoints } = useChartSeries(
-  computed(() => props.eventId),
-  computed(() => `${props.market}.traded`),
-  ref({}),
-  computed(() => true),
-)
+const rateLimited = computed(() => isRateLimitedError(error.value))
 
 watch(() => props.refreshKey, () => { refresh() })
 
 const RANGE_HOURS: Record<string, number> = { '3h': 3, '6h': 6, '12h': 12, '24h': 24 }
 const ATTR_ORDER = ['买', '卖', '冲', '买+', '卖+', '换']
-const BUCKET_MS = 5 * 60_000
 
 function parseTimeMs(raw?: string): number | null {
   if (!raw) return null
   const ms = new Date(raw).getTime()
   return Number.isFinite(ms) ? ms : null
-}
-
-function bucketKey(raw?: string): number | null {
-  const ms = parseTimeMs(raw)
-  return ms == null ? null : Math.floor(ms / BUCKET_MS) * BUCKET_MS
-}
-
-function pointPrice(p: ChartPoint): number | null {
-  const v = props.selection === 'draw'
-    ? p.priceDraw
-    : props.selection === 'away'
-      ? p.priceAway
-      : p.priceHome
-  return v && v > 0 ? v : null
 }
 
 function fixedAttrs(d: TradeFlowResult): string[] {
@@ -113,58 +93,26 @@ function applyZoomWindow(d: TradeFlowResult): TradeFlowResult {
   return buckets.length >= 2 ? { ...d, buckets } : d
 }
 
-const denseTimeline = computed(() => {
-  const all = timelinePoints.value
-  const h = RANGE_HOURS[props.timeRange]
-  if (!h || all.length === 0) return all
-  const lastTs = all.at(-1)?.ts
-  if (!lastTs) return all
-  const cutoff = new Date(lastTs).getTime() - h * 3600_000
-  const filtered = all.filter((p) => {
-    const ms = parseTimeMs(p.ts || p.time)
-    return ms != null && ms >= cutoff
-  })
-  return filtered.length >= 2 ? filtered : all
-})
-
-// 单方向优先使用 tradeflow raw 原始点；只有后端还未返回 raw 密度时，才用 .traded 时间轴兜底补齐。
+// 单方向只使用 tradeflow raw 原始点；避免在经典列表里为同一图额外请求 timeseries traded。
 const filtered = computed<TradeFlowResult | null>(() => {
   const d = data.value
   if (!d) return null
   const base = fallbackFiltered(d)
-  const timeline = denseTimeline.value
-  if (timeline.length < 2 || base.buckets.length >= timeline.length) return applyZoomWindow(base)
-
-  const itemMap = new Map<number, Record<string, number>>()
-  for (const b of base.buckets) {
-    const key = bucketKey(b.time)
-    if (key == null) continue
-    const normalized = normalizeItems(b.items ?? {})
-    const merged = itemMap.get(key) ?? {}
-    for (const [attr, value] of Object.entries(normalized))
-      merged[attr] = (merged[attr] ?? 0) + value
-    itemMap.set(key, merged)
-  }
-
-  let carryPrice: number | null = null
-  const buckets: TradeFlowBucket[] = timeline.map((p) => {
-    const key = bucketKey(p.ts || p.time)
-    const price = pointPrice(p)
-    if (price != null) carryPrice = price
-    return {
-      time: p.ts || p.time,
-      items: key == null ? {} : (itemMap.get(key) ?? {}),
-      price: carryPrice,
-    }
+  return applyZoomWindow({
+    ...base,
+    attrs: fixedAttrs(base),
+    buckets: base.buckets.map(b => ({
+      ...b,
+      items: normalizeItems(b.items ?? {}),
+    })),
   })
-
-  return applyZoomWindow({ ...base, attrs: fixedAttrs(base), buckets })
 })
 </script>
 
 <template>
   <div class="ctf-panel">
     <div v-if="status === 'no-access'" class="chart-state">当前会籍未开放此走势</div>
+    <div v-else-if="rateLimited" class="chart-state">请求过于频繁，请稍后刷新</div>
     <div v-else-if="pending && !data" class="chart-state">加载中…</div>
     <div v-else-if="!filtered || filtered.buckets.length === 0" class="chart-state">暂无成交明细</div>
     <TradeFlowChart
