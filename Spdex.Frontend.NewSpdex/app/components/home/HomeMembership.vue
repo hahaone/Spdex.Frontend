@@ -65,13 +65,13 @@ const showUpgradeCta = computed(() => tier.value === 'Free' || tier.value === 'E
             </tr>
             <tr>
               <td>专家版</td>
-              <td>走势图 / 明细 / FlashQ 20 次</td>
+              <td>走势图 / 明细 / FlashQ 20 锦囊</td>
               <td>部分高级盘口锁定</td>
             </tr>
             <tr>
               <td>黄金版</td>
               <td>回查 / 时光机 / Q 系统</td>
-              <td>FlashQ 10 次</td>
+              <td>FlashQ 10 锦囊</td>
             </tr>
             <tr>
               <td>翡翠/红宝石</td>

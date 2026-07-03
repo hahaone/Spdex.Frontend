@@ -391,7 +391,7 @@ const factorCardDefinitions: Array<{ id: string, title: string, subtitle: string
   { id: 'bf-profit', title: '模拟盈亏', subtitle: '标准盘 主 / 平 / 客', ids: ['f10', 'f11', 'f12'] },
   { id: 'bf-odds', title: '价位', subtitle: '标准盘 主 / 平 / 客', ids: ['f13', 'f14', 'f15'] },
   { id: 'bf-hot', title: '冷热/盈亏', subtitle: '标准盘 主 / 平 / 客', ids: ['f16', 'f17', 'f18'] },
-  { id: 'market-hot', title: '市场冷热', subtitle: '指数 主 / 平 / 客', ids: ['f19', 'f20', 'f21'] },
+  { id: 'market-hot', title: '挂牌指数', subtitle: '指数 主 / 平 / 客', ids: ['f19', 'f20', 'f21'] },
   { id: 'euro-average', title: '欧洲平均', subtitle: '欧赔 主 / 平 / 客', ids: ['f22', 'f23', 'f24'] },
   { id: 'kelly', title: '凯利方差', subtitle: '凯利 主 / 平 / 客', ids: ['f25', 'f26', 'f27'] },
   { id: 'goal-index', title: '进球指数', subtitle: '大 / 小', ids: ['f28', 'f29'] },

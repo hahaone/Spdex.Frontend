@@ -13,7 +13,7 @@ const benefitRows = [
   { feature: '实时赛事', free: '不可用', expert: '开放', gold: '开放', emerald: '开放', ruby: '开放', platinum: '开放' },
   { feature: '经典版', free: '基础列表', expert: '走势图/明细', gold: '时光机/明细', emerald: '增强指数', ruby: '增强指数', platinum: '全量盘口' },
   { feature: '走势图', free: '未开放', expert: '标盘/指数', gold: '标盘/指数', emerald: '完整走势', ruby: '完整走势', platinum: '完整走势' },
-  { feature: 'FlashQ', free: '不可用', expert: '20 次/天', gold: '10 次/天', emerald: '免费', ruby: '免费', platinum: '不限量' },
+  { feature: 'FlashQ', free: '不可用', expert: '20 锦囊/天', gold: '10 锦囊/天', emerald: '免费', ruby: '免费', platinum: '不限量' },
   { feature: 'Q 系统', free: '不可用', expert: '不可用', gold: '5 模型', emerald: '5 模型/进球均衡', ruby: '5 模型/内外盘', platinum: '10 模型/全量' },
   { feature: '比分/角球', free: '不可用', expert: '不可用', gold: '不可用', emerald: '不可用', ruby: '不可用', platinum: '开放' },
 ] as const
