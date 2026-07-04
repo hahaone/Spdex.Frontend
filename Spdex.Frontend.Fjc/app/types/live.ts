@@ -86,6 +86,19 @@ export interface LiveMatchOddsTopTradeSummary {
   bestLayPrice?: number | null
   bestLaySize?: number | null
   sideHint: 'backPressure' | 'layPressure' | 'unknown' | string
+  matchClock?: LiveMatchOddsTradeClock | null
+}
+
+export interface LiveMatchOddsTradeClock {
+  label: string
+  minute?: number | null
+  period: 'pre_match' | 'first_half' | 'halftime' | 'second_half' | 'extra_time' | 'finished' | 'unknown' | string
+  isHalftime?: boolean | null
+  timerRunning?: boolean | null
+  source: 'bsw' | 'elapsed-fallback' | 'match-table' | 'unknown' | string
+  reliable: boolean
+  tradeTimestampUtc: string
+  detectedAtUtc: string
 }
 
 export interface LiveMatchOddsTopTradeCollisionRecord {

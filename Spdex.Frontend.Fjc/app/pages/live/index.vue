@@ -938,6 +938,28 @@ function formatTradeTime(value: string | null | undefined): string {
   return `${hh}:${mm}:${ss}.${ms}`
 }
 
+function formatTradeClock(trade: LiveMatchOddsTopTradeSummary): string {
+  const clock = trade.matchClock
+  if (!clock?.label) return ''
+  return clock.reliable ? clock.label : `~${clock.label}`
+}
+
+function tradeClockClass(trade: LiveMatchOddsTopTradeSummary): Record<string, boolean> {
+  const clock = trade.matchClock
+  return {
+    'match-clock': true,
+    'match-clock-estimated': !!clock && !clock.reliable,
+    'match-clock-halftime': clock?.isHalftime === true,
+  }
+}
+
+function tradeClockTitle(trade: LiveMatchOddsTopTradeSummary): string {
+  const clock = trade.matchClock
+  if (!clock) return ''
+  if (clock.reliable) return clock.source === 'bsw' ? 'BSW 实时计时' : '比赛时间'
+  return '按开赛时间估算'
+}
+
 function toHkdAmount(amount: number | null | undefined): number {
   const raw = Number(amount ?? 0)
   if (!Number.isFinite(raw) || raw <= 0) return 0
@@ -1259,7 +1281,16 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       :class="{ latest: isLatestTopTrade(trade, getLiveItem(item)) }"
                     >
                       <td>{{ trade.rank }}</td>
-                      <td :class="topTradeTimeClass(trade, getLiveItem(item))">{{ formatTradeTime(trade.timestamp) }}</td>
+                      <td :class="topTradeTimeClass(trade, getLiveItem(item))">
+                        <span class="trade-time-main">{{ formatTradeTime(trade.timestamp) }}</span>
+                        <span
+                          v-if="formatTradeClock(trade)"
+                          :class="tradeClockClass(trade)"
+                          :title="tradeClockTitle(trade)"
+                        >
+                          {{ formatTradeClock(trade) }}
+                        </span>
+                      </td>
                       <td>{{ runnerLabel(trade, item) }}</td>
                       <td>{{ sideLabel(trade.sideHint) }}</td>
                       <td>{{ formatPriceMove(trade) }}</td>
@@ -1954,6 +1985,28 @@ th.col-tg {
 .top-table td.time-near-collision-linked {
   color: #d62929;
   font-weight: 400;
+}
+
+.trade-time-main,
+.match-clock {
+  display: block;
+  line-height: 1.25;
+}
+
+.match-clock {
+  margin-top: 2px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.match-clock-estimated {
+  color: #7c8799;
+  font-weight: 600;
+}
+
+.match-clock-halftime {
+  color: #b45309;
 }
 
 .empty-cell {
