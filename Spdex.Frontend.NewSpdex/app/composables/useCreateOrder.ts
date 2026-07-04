@@ -26,10 +26,11 @@ const CS_TTL_MS = 10 * 60_000
 
 export function useCreateOrder() {
   const yftOrderError = ref('')
+  const alipayOrderError = ref('')
 
-  async function createYftOrder(roleId: number, stageId: number): Promise<YftOrderResult | null> {
+  async function createYftOrder(roleId: number, stageId: number, silkAmount = 0): Promise<YftOrderResult | null> {
     yftOrderError.value = ''
-    const body: CreateOrderRequest = { roleId, stageId }
+    const body: CreateOrderRequest = buildCreateOrderBody(roleId, stageId, silkAmount)
     try {
       const res = await $apiFetch<ApiResponse<YftOrderResult>>('/api/newspdex/billing/order/yft', {
         method: 'POST',
@@ -45,16 +46,20 @@ export function useCreateOrder() {
     }
   }
 
-  async function createAlipayOrder(roleId: number, stageId: number): Promise<AlipayOrderResult | null> {
-    const body: CreateOrderRequest = { roleId, stageId }
+  async function createAlipayOrder(roleId: number, stageId: number, silkAmount = 0): Promise<AlipayOrderResult | null> {
+    alipayOrderError.value = ''
+    const body: CreateOrderRequest = buildCreateOrderBody(roleId, stageId, silkAmount)
     try {
       const res = await $apiFetch<ApiResponse<AlipayOrderResult>>('/api/newspdex/billing/order/alipay', {
         method: 'POST',
         body,
       })
-      return res.code === 0 ? (res.data ?? null) : null
+      if (res.code === 0) return res.data ?? null
+      alipayOrderError.value = res.message || '支付宝下单失败'
+      return null
     }
-    catch {
+    catch (err: unknown) {
+      alipayOrderError.value = apiErrorMessage(err, '支付宝下单失败')
       return null
     }
   }
@@ -142,8 +147,16 @@ export function useCreateOrder() {
     return fetchErr?.data?.message || fetchErr?.response?._data?.message || fetchErr?.message || fallback
   }
 
+  function buildCreateOrderBody(roleId: number, stageId: number, silkAmount: number): CreateOrderRequest {
+    const body: CreateOrderRequest = { roleId, stageId }
+    const normalized = Math.max(0, Math.round((Number(silkAmount) || 0) * 100) / 100)
+    if (normalized > 0) body.silkAmount = normalized
+    return body
+  }
+
   return {
     yftOrderError,
+    alipayOrderError,
     createYftOrder,
     createAlipayOrder,
     syncAlipayOrder,

@@ -6,6 +6,7 @@
 
 import type { ApiResponse } from '~/types/auth'
 import type { LiveModel } from '~/composables/useLiveList'
+import type { LiveClockSource, LivePeriod } from '~/types/liveClock'
 
 export type LiveStatus = 'upcoming' | 'running' | 'finished'
 export type LiveDataStatus = 'ok' | 'pending' | 'no-access' | 'not-running'
@@ -156,6 +157,12 @@ interface BackendSnapshot {
   awayTeam: string
   status: LiveStatus
   minute: string
+  minuteNumber: number | null
+  period: LivePeriod
+  isHalftime: boolean | null
+  timerRunning: boolean | null
+  clockSource: LiveClockSource
+  clockReliable: boolean
   score: number[]
   halfScore: string
   corners: number[]
@@ -184,6 +191,12 @@ export interface LiveSnapshot {
   awayTeam: string
   status: LiveStatus
   minute: string
+  minuteNumber: number | null
+  period: LivePeriod
+  isHalftime: boolean | null
+  timerRunning: boolean | null
+  clockSource: LiveClockSource
+  clockReliable: boolean
   score: [number, number]
   halfScore: string
   corners: [number, number]
@@ -227,6 +240,12 @@ function mapSnapshot(data: BackendSnapshot): LiveSnapshot {
     awayTeam: data.awayTeam ?? '',
     status: data.status,
     minute: data.minute,
+    minuteNumber: data.minuteNumber ?? null,
+    period: data.period ?? 'unknown',
+    isHalftime: data.isHalftime ?? null,
+    timerRunning: data.timerRunning ?? null,
+    clockSource: data.clockSource ?? 'match-table',
+    clockReliable: Boolean(data.clockReliable),
     score: pairToTuple(data.score),
     halfScore: data.halfScore || '-',
     corners: pairToTuple(data.corners),

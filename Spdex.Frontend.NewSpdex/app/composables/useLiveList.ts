@@ -4,6 +4,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
+import type { LiveClockSource, LivePeriod } from '~/types/liveClock'
 
 export type LiveTabKey = 'running' | 'upcoming' | 'finished' | 'yesterday' | 'before'
 
@@ -44,6 +45,12 @@ export interface LiveListItem {
   awayTeam: string
   status: 'running' | 'upcoming' | 'finished'
   minute: string
+  minuteNumber?: number | null
+  period?: LivePeriod
+  isHalftime?: boolean | null
+  timerRunning?: boolean | null
+  clockSource?: LiveClockSource
+  clockReliable?: boolean
   kickoffTime: string
   score: [number, number]
   halfScore: string

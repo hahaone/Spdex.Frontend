@@ -23,7 +23,20 @@ const productLabel = computed(() => String(route.query.product || '') === 'flash
 const number = ref(Math.max(1, Math.ceil(required.value > 0 ? Math.max(required.value - initialBalance.value, 1) : 10)))
 
 const currentBalance = computed(() => balance.value?.total ?? initialBalance.value)
+const dailyLimit = computed(() => product.value?.dailyLimit ?? 3)
+const maxAmount = computed(() => product.value?.maxAmount ?? 500)
+const maxNumber = computed(() => {
+  if (product.value?.maxNumber) return product.value.maxNumber
+  const unitPrice = product.value?.unitPrice ?? 1
+  return Math.max(1, Math.floor(maxAmount.value / Math.max(unitPrice, 0.01)))
+})
 const estimatedTotal = computed(() => (product.value?.unitPrice ?? 0) * number.value)
+const rechargeDisabled = computed(() => phase.value === 'paying' || number.value < 1 || number.value > maxNumber.value || estimatedTotal.value > maxAmount.value)
+
+function normalizeNumber() {
+  const next = Math.round(Number(number.value) || 0)
+  number.value = Math.min(maxNumber.value, Math.max(1, next))
+}
 
 onMounted(async () => {
   try {
@@ -33,6 +46,7 @@ onMounted(async () => {
     ])
     product.value = productResult
     balance.value = balanceResult
+    normalizeNumber()
     phase.value = 'idle'
   }
   catch {
@@ -42,6 +56,13 @@ onMounted(async () => {
 })
 
 async function startRecharge(channel: SilkRechargeChannel) {
+  normalizeNumber()
+  if (rechargeDisabled.value) {
+    errorMessage.value = `单次最多充值 ¥${maxAmount.value.toFixed(0)}`
+    phase.value = 'error'
+    return
+  }
+
   phase.value = 'paying'
   errorMessage.value = ''
   order.value = null
@@ -68,9 +89,16 @@ async function startRecharge(channel: SilkRechargeChannel) {
     }
   }
   catch (error: unknown) {
-    const fetchError = error as { data?: { message?: string } }
+    const fetchError = error as {
+      data?: { message?: string }
+      response?: { _data?: { message?: string } }
+      message?: string
+    }
     phase.value = 'error'
-    errorMessage.value = fetchError?.data?.message || '充值下单失败，请稍后重试。'
+    errorMessage.value = fetchError?.data?.message
+      || fetchError?.response?._data?.message
+      || fetchError?.message
+      || '充值下单失败，请稍后重试。'
   }
 }
 
@@ -123,8 +151,9 @@ async function refreshAndReturn() {
           class="num"
           type="number"
           min="1"
-          max="10000"
+          :max="maxNumber"
           step="1"
+          @blur="normalizeNumber"
         >
       </div>
 
@@ -132,9 +161,12 @@ async function refreshAndReturn() {
         <span>单价 {{ product?.unitPrice ? `¥${product.unitPrice}` : '-' }}</span>
         <strong>预计 ¥{{ estimatedTotal.toFixed(2) }}</strong>
       </div>
+      <p class="limit-text">
+        每天最多 {{ dailyLimit }} 次，单次不超过 ¥{{ maxAmount.toFixed(0) }}
+      </p>
 
       <div class="channel-grid">
-        <button class="channel-btn focus-ring" type="button" :disabled="phase === 'paying'" @click="startRecharge('alipay')">
+        <button class="channel-btn focus-ring" type="button" :disabled="rechargeDisabled" @click="startRecharge('alipay')">
           <CreditCard :size="17" />
           <span>支付宝</span>
         </button>
@@ -195,6 +227,7 @@ async function refreshAndReturn() {
 .silk-head span,
 .summary-band span,
 .price-row span,
+.limit-text,
 .hint {
   color: var(--muted);
   font-size: 0.76rem;
@@ -291,6 +324,11 @@ async function refreshAndReturn() {
 
 .price-row strong {
   color: var(--ink);
+}
+
+.limit-text {
+  margin: -4px 0 0;
+  font-weight: 720;
 }
 
 .channel-grid {

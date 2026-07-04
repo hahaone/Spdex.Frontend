@@ -55,6 +55,10 @@ function isExpired(endDate: string | null | undefined, now: Date): boolean {
   return Number.isFinite(time) && time < now.getTime()
 }
 
+function isExpiredPaidRole(roleId: number | null | undefined, endDate: string | null | undefined, now: Date): boolean {
+  return !!roleId && mainlinePaidRoleIds.has(roleId) && isExpired(endDate, now)
+}
+
 function normalizedRawRoleName(rawName: string | null | undefined): string {
   const name = rawName?.trim() ?? ''
   if (!name) return ''
@@ -74,14 +78,26 @@ export function membershipDisplayName(
   return '当前会籍'
 }
 
+export function effectiveMembershipDisplayName(
+  roleId: number | null | undefined,
+  rawName?: string | null,
+  tier?: string | null,
+  endDate?: string | null,
+  now = new Date(),
+): string {
+  if (isExpiredPaidRole(roleId, endDate, now)) return '免费版'
+  return membershipDisplayName(roleId, rawName, tier)
+}
+
 export function membershipDisplayNameForUser(user: AuthUser | null | undefined): string {
-  return membershipDisplayName(user?.roleId, user?.roleName, user?.tier)
+  return effectiveMembershipDisplayName(user?.roleId, user?.roleName, user?.tier, user?.endDate)
 }
 
 export function isFreeMembership(user: AuthUser | null | undefined): boolean {
   if (!user) return false
   return user.roleId === 2
     || user.tier === 'Free'
+    || isExpiredPaidRole(user.roleId, user.endDate, new Date())
     || membershipDisplayNameForUser(user).includes('免费')
 }
 

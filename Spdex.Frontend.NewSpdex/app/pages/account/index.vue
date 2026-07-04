@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ReceiptText, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
 import type { OrderRecord } from '~/types/billing'
-import { membershipDisplayName } from '~/utils/membership'
+import { effectiveMembershipDisplayName } from '~/utils/membership'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +15,7 @@ const customerQQ = ref('2735629769')
 const qqCopied = ref(false)
 const paymentNotice = ref('')
 const syncingPayment = ref(false)
+const showSilkRechargeEntry = false
 
 async function copyQQ() {
   try {
@@ -40,7 +41,8 @@ const tierDisplay = computed(() => {
   const roleId = summary.value?.roleId ?? user.value?.roleId
   const roleName = summary.value?.roleName ?? user.value?.roleName
   const t = summary.value?.tier ?? tier.value
-  return membershipDisplayName(roleId, roleName, t) || tierLabel[t] || t
+  const rawEndDate = summary.value?.endDate ?? user.value?.endDate
+  return effectiveMembershipDisplayName(roleId, roleName, t, rawEndDate) || tierLabel[t] || t
 })
 
 const endDate = computed(() => {
@@ -209,6 +211,11 @@ onMounted(async () => {
         <KeyRound :size="15" />
         <span>修改密码</span>
         <ChevronRight :size="15" class="chev" />
+      </NuxtLink>
+      <NuxtLink v-if="showSilkRechargeEntry" to="/account/silkbag/recharge" class="setting-row focus-ring">
+        <Coins :size="15" />
+        <span>充值锦囊</span>
+        <b class="qq-val num">余额 {{ silkTotal }}</b>
       </NuxtLink>
       <button type="button" class="setting-row focus-ring" @click="startOnboarding">
         <Compass :size="15" />
@@ -425,6 +432,7 @@ onMounted(async () => {
   font-size: 0.86rem;
   font-weight: 740;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 

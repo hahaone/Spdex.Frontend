@@ -55,11 +55,20 @@ export interface SilkNeed {
   stageId: number
   silkRequired: number
   sufficient: boolean
+  price: number
+  unitPrice: number
+  totalSilkBalance: number
+  reservedSilk: number
+  availableSilk: number
+  maxDeductibleSilk: number
 }
 
 export interface SilkProduct {
   productId: number
   unitPrice: number
+  maxAmount: number
+  maxNumber: number
+  dailyLimit: number
 }
 
 export interface SilkRechargeOrderResult {
@@ -117,6 +126,7 @@ export interface CustomerService {
 export interface CreateOrderRequest {
   roleId: number
   stageId: number
+  silkAmount?: number
 }
 
 export type PaymentChannel = 'alipay' | 'yft' | 'silk'

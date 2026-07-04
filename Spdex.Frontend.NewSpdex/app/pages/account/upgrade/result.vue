@@ -28,6 +28,8 @@ const yftResult = ref<YftOrderResult | null>(null)
 const alipayResult = ref<AlipayOrderResult | null>(null)
 const silkResult = ref<SilkOrderResult | null>(null)
 const silkNeed = ref<SilkNeed | null>(null)
+const useSilkDeduction = ref(false)
+const silkDeduction = ref(0)
 const membershipBeforePayment = ref<{ roleId: number, endDate: string | null }>({ roleId: 0, endDate: null })
 const pollingPayment = ref(false)
 const pollInFlight = ref(false)
@@ -36,7 +38,19 @@ const pollMessage = ref('')
 const pollTimeout = ref<number | null>(null)
 const pollTimer = ref<number | null>(null)
 
-const { yftOrderError, createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
+const { yftOrderError, alipayOrderError, createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
+
+const maxDeductibleSilk = computed(() => {
+  const need = silkNeed.value
+  if (!need) return 0
+  const unitPrice = Math.max(need.unitPrice || 1, 0.01)
+  const maxForCashPayment = Math.floor(Math.max(0, need.price - 0.01) / unitPrice)
+  return Math.max(0, Math.min(Math.floor(need.maxDeductibleSilk), maxForCashPayment))
+})
+const selectedSilkDeduction = computed(() => useSilkDeduction.value ? Math.min(maxDeductibleSilk.value, Math.max(0, Math.round(Number(silkDeduction.value) || 0))) : 0)
+const selectedSilkCredit = computed(() => selectedSilkDeduction.value * (silkNeed.value?.unitPrice ?? 1))
+const cashPayAmount = computed(() => Math.max(0, (silkNeed.value?.price ?? 0) - selectedSilkCredit.value))
+const canUseSilkDeduction = computed(() => maxDeductibleSilk.value > 0)
 
 const purchaseBlockMessage = computed(() => {
   if (roleId.value <= 0 || stageId.value <= 0) return '套餐参数无效，请返回重新选择'
@@ -64,13 +78,14 @@ function ensurePurchasable() {
 
 async function startAlipay() {
   if (!ensurePurchasable()) return
+  normalizeSilkDeduction()
   channel.value = 'alipay'
   phase.value = 'creating'
   errorMessage.value = ''
-  const res = await createAlipayOrder(roleId.value, stageId.value)
+  const res = await createAlipayOrder(roleId.value, stageId.value, selectedSilkDeduction.value)
   if (!res) {
     phase.value = 'error'
-    errorMessage.value = '下单失败，请稍后重试或更换支付方式'
+    errorMessage.value = alipayOrderError.value || '下单失败，请稍后重试或更换支付方式'
     return
   }
   alipayResult.value = res
@@ -92,11 +107,12 @@ async function startAlipay() {
 
 async function startYft() {
   if (!ensurePurchasable()) return
+  normalizeSilkDeduction()
   membershipBeforePayment.value = currentMembershipSnapshot()
   channel.value = 'yft'
   phase.value = 'creating'
   errorMessage.value = ''
-  const res = await createYftOrder(roleId.value, stageId.value)
+  const res = await createYftOrder(roleId.value, stageId.value, selectedSilkDeduction.value)
   if (!res) {
     phase.value = 'error'
     errorMessage.value = yftOrderError.value || '扫码支付下单失败，请稍后重试或更换支付方式'
@@ -143,6 +159,19 @@ function currentMembershipSnapshot() {
     roleId: user.value?.roleId ?? 0,
     endDate: user.value?.endDate ?? null,
   }
+}
+
+function toggleSilkDeduction() {
+  if (!canUseSilkDeduction.value) return
+  useSilkDeduction.value = !useSilkDeduction.value
+  if (useSilkDeduction.value && silkDeduction.value <= 0)
+    silkDeduction.value = maxDeductibleSilk.value
+  normalizeSilkDeduction()
+}
+
+function normalizeSilkDeduction() {
+  silkDeduction.value = Math.min(maxDeductibleSilk.value, Math.max(0, Math.round(Number(silkDeduction.value) || 0)))
+  if (silkDeduction.value <= 0) useSilkDeduction.value = false
 }
 
 function endDateMs(raw?: string | null) {
@@ -246,12 +275,12 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
         <button class="channel-btn alipay focus-ring" type="button" @click="startAlipay">
           <CreditCard :size="18" />
           <b>支付宝</b>
-          <span>推荐通道</span>
+          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '推荐通道' }}</span>
         </button>
         <button class="channel-btn yft focus-ring" type="button" @click="startYft">
           <QrCode :size="18" />
           <b>扫码支付</b>
-          <span>聚合扫码通道</span>
+          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '聚合扫码通道' }}</span>
         </button>
         <button class="channel-btn silk focus-ring" type="button" :disabled="!silkNeed?.sufficient" @click="startSilk">
           <Coins :size="18" />
@@ -259,6 +288,34 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
           <span v-if="silkNeed">需要 {{ silkNeed.silkRequired }} 锦囊 · {{ silkNeed.sufficient ? '余额充足' : '余额不足' }}</span>
           <span v-else>查询中…</span>
         </button>
+      </div>
+      <div class="deduct-panel">
+        <button
+          class="deduct-toggle focus-ring"
+          type="button"
+          :disabled="!canUseSilkDeduction"
+          @click="toggleSilkDeduction"
+        >
+          <Coins :size="14" />
+          <span>{{ useSilkDeduction ? '取消锦囊抵扣' : '锦囊抵扣' }}</span>
+          <b v-if="silkNeed" class="num">可用 {{ Math.floor(silkNeed.availableSilk) }}</b>
+        </button>
+        <div v-if="useSilkDeduction" class="deduct-body">
+          <label for="silk-deduction">本次抵扣锦囊</label>
+          <input
+            id="silk-deduction"
+            v-model.number="silkDeduction"
+            class="num"
+            type="number"
+            min="1"
+            :max="maxDeductibleSilk"
+            step="1"
+            @blur="normalizeSilkDeduction"
+          >
+          <p>
+            抵扣 ¥{{ selectedSilkCredit.toFixed(2) }}，现金支付 ¥{{ cashPayAmount.toFixed(2) }}
+          </p>
+        </div>
       </div>
     </section>
 
@@ -413,6 +470,73 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
 .channel-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.deduct-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.deduct-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--divider);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 780;
+  text-align: left;
+}
+
+.deduct-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.deduct-toggle svg,
+.deduct-toggle b {
+  color: #c46613;
+}
+
+.deduct-body {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #f0d69a;
+  border-radius: 5px;
+  background: #fffaf0;
+}
+
+.deduct-body label {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.deduct-body input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 820;
+  padding: 0 10px;
+}
+
+.deduct-body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 740;
 }
 
 /* ─── 下单状态 ─── */
