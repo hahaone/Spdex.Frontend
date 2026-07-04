@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Zap } from '@lucide/vue'
 import type { ApiResponse } from '~/types/auth'
+import { isQuantilearnRedirectTarget } from '~/utils/quantilearnRedirect'
 import { isFreeMembership } from '~/utils/membership'
 
 interface QuantilearnTicket {
@@ -12,18 +13,23 @@ const route = useRoute()
 const { user, refreshToken } = useAuth()
 const error = ref('')
 const blockedByPlan = ref(false)
+const flashTarget = ref(false)
 const freeFlashQMessage = '免费版暂未开放闪Q，请升级会籍后使用'
 
-function appendQuery(url: string, params: Record<string, string>) {
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}${new URLSearchParams(params).toString()}`
+function appendQuery(url: string, params: Record<string, string | undefined>) {
+  const parsed = new URL(url, window.location.origin)
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) parsed.searchParams.set(key, value)
+  })
+  return parsed.href
 }
 
 function normalizeTarget(raw: string) {
   try {
     const parsed = new URL(raw, window.location.origin)
-    if (parsed.origin === window.location.origin || parsed.hostname.endsWith('.spdex.com')) {
-      return `${parsed.origin}${parsed.pathname}${parsed.search}`
+    if (isQuantilearnRedirectTarget(parsed)) {
+      parsed.searchParams.delete('ticket')
+      return `${parsed.origin}${parsed.pathname}${parsed.search}${parsed.hash}`
     }
   }
   catch {
@@ -34,10 +40,12 @@ function normalizeTarget(raw: string) {
 }
 
 onMounted(async () => {
-  const eid = String(route.query.eid || '').trim()
   const target = normalizeTarget(String(route.query.target || 'https://ql.spdex.com/flash').trim())
+  const targetUrl = new URL(target, window.location.origin)
+  flashTarget.value = targetUrl.pathname === '/flash'
+  const eid = String(route.query.eid || targetUrl.searchParams.get('eid') || '').trim()
 
-  if (!eid) {
+  if (flashTarget.value && !eid) {
     error.value = '缺少赛事 ID'
     return
   }
@@ -45,11 +53,11 @@ onMounted(async () => {
   try {
     const authenticated = await refreshToken()
     if (!authenticated || !user.value) {
-      error.value = '请先登录后访问闪Q'
+      error.value = flashTarget.value ? '请先登录后访问闪Q' : '请先登录后访问量化模型'
       return
     }
 
-    if (isFreeMembership(user.value)) {
+    if (flashTarget.value && isFreeMembership(user.value)) {
       blockedByPlan.value = true
       error.value = freeFlashQMessage
       return
@@ -60,7 +68,7 @@ onMounted(async () => {
     })
 
     if (res.code !== 0 || !res.data?.ticket) {
-      error.value = res.message || '闪Q登录票据生成失败'
+      error.value = res.message || (flashTarget.value ? '闪Q登录票据生成失败' : '量化模型登录票据生成失败')
       return
     }
 
@@ -68,7 +76,7 @@ onMounted(async () => {
   }
   catch (err: unknown) {
     const fetchErr = err as { data?: { message?: string } }
-    error.value = fetchErr?.data?.message || '无法打开闪Q，请稍后重试'
+    error.value = fetchErr?.data?.message || (flashTarget.value ? '无法打开闪Q，请稍后重试' : '无法打开量化模型，请稍后重试')
   }
 })
 </script>
@@ -76,7 +84,7 @@ onMounted(async () => {
 <template>
   <section class="flashq-bridge">
     <Zap :size="34" stroke-width="1.8" />
-    <h1>正在打开闪Q</h1>
+    <h1>{{ flashTarget ? '正在打开闪Q' : '正在打开量化模型' }}</h1>
     <p v-if="!error">正在建立安全会话...</p>
     <p v-else class="error">{{ error }}</p>
     <NuxtLink v-if="blockedByPlan" to="/account/upgrade" class="upgrade-link focus-ring">

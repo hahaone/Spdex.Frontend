@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { AlertCircle, ShieldCheck } from '@lucide/vue'
+import { resolvePostAuthTarget } from '~/utils/quantilearnRedirect'
 
 definePageMeta({ layout: false })
 
@@ -21,24 +22,7 @@ const loginTarget = computed(() => ({
 
 function postAuthTarget() {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-  if (!redirect) return '/'
-
-  try {
-    const target = new URL(redirect, window.location.origin)
-    if (target.hostname === 'ql.spdex.com' && target.pathname === '/flash') {
-      const eid = target.searchParams.get('eid') || ''
-      const cleanTarget = `${target.origin}${target.pathname}`
-      return `/flashq/bridge?eid=${encodeURIComponent(eid)}&target=${encodeURIComponent(cleanTarget)}`
-    }
-    if (target.origin === window.location.origin || target.hostname.endsWith('.spdex.com')) {
-      return target.href
-    }
-  }
-  catch {
-    return '/'
-  }
-
-  return '/'
+  return resolvePostAuthTarget(redirect, window.location.origin)
 }
 
 function validate(): boolean {

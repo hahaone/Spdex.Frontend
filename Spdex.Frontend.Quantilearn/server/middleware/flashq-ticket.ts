@@ -28,8 +28,6 @@ const runtimeValue = (...values: unknown[]) => {
 
 export default defineEventHandler(async (event) => {
   const requestUrl = getRequestURL(event)
-  if (requestUrl.pathname !== '/flash') return
-
   const query = getQuery(event)
   const ticket = String(query.ticket || '').trim()
   if (!ticket) return
