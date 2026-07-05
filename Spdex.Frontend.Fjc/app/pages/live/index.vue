@@ -646,6 +646,8 @@ interface TopTradeCollisionStoredMarker {
   trades: Array<{ key: string; count: number }>
 }
 
+type LiveTradePromptClass = 'live-trade-normal' | 'live-trade-alert' | 'live-trade-alert-strong'
+
 interface TopTradeCollisionHistoryMember {
   key: string
   rank: number
@@ -654,6 +656,7 @@ interface TopTradeCollisionHistoryMember {
   side: string
   price: string
   amount: string
+  amountClass?: LiveTradePromptClass
   book: string
 }
 
@@ -776,8 +779,43 @@ function buildTopTradeCollisionHistoryMember(
     side: sideLabel(trade.sideHint),
     price: formatPriceMove(trade),
     amount: formatHkdMoney(tradeTotalDeltaHkd(trade)),
+    amountClass: getLiveTradePromptClass(trade, match),
     book: formatBackLayBook(trade),
   }
+}
+
+function collisionHistoryAmountClass(
+  record: TopTradeCollisionHistoryRecord,
+  member: TopTradeCollisionHistoryMember,
+): string[] {
+  return [
+    'collision-history-amount',
+    member.amountClass ?? getStoredCollisionHistoryAmountClass(record, member),
+  ]
+}
+
+function getStoredCollisionHistoryAmountClass(
+  record: TopTradeCollisionHistoryRecord,
+  member: TopTradeCollisionHistoryMember,
+): LiveTradePromptClass {
+  const amount = parseCollisionHistoryHkdAmount(member.amount)
+  if (amount <= 0) return 'live-trade-normal'
+  if (amount > EFFECTIVE_LIVE_BIG_TRADE_HKD) return 'live-trade-alert-strong'
+
+  const match = findMatchByEventId(record.eventId)
+  const prematchMax = match ? prematchMaxBetHkd(match) : 0
+  if (prematchMax > 0 && amount > prematchMax) {
+    return amount >= LIVE_TRADE_COMPARE_THRESHOLD_HKD
+      ? 'live-trade-alert-strong'
+      : 'live-trade-alert'
+  }
+
+  return 'live-trade-normal'
+}
+
+function parseCollisionHistoryHkdAmount(value: string): number {
+  const amount = Number(value.replace(/[^\d.-]/g, ''))
+  return Number.isFinite(amount) ? amount : 0
 }
 
 function openTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord) {
@@ -938,14 +976,14 @@ function formatTradeTime(value: string | null | undefined): string {
   return `${hh}:${mm}:${ss}.${ms}`
 }
 
-function formatTradeClock(trade: LiveMatchOddsTopTradeSummary): string {
-  const clock = trade.matchClock
+function formatTradeClock(trade: LiveMatchOddsTopTradeSummary | null | undefined): string {
+  const clock = trade?.matchClock
   if (!clock?.label) return ''
   return clock.reliable ? clock.label : `~${clock.label}`
 }
 
-function tradeClockClass(trade: LiveMatchOddsTopTradeSummary): Record<string, boolean> {
-  const clock = trade.matchClock
+function tradeClockClass(trade: LiveMatchOddsTopTradeSummary | null | undefined): Record<string, boolean> {
+  const clock = trade?.matchClock
   return {
     'match-clock': true,
     'match-clock-estimated': !!clock && !clock.reliable,
@@ -953,8 +991,8 @@ function tradeClockClass(trade: LiveMatchOddsTopTradeSummary): Record<string, bo
   }
 }
 
-function tradeClockTitle(trade: LiveMatchOddsTopTradeSummary): string {
-  const clock = trade.matchClock
+function tradeClockTitle(trade: LiveMatchOddsTopTradeSummary | null | undefined): string {
+  const clock = trade?.matchClock
   if (!clock) return ''
   if (clock.reliable) return clock.source === 'bsw' ? 'BSW 实时计时' : '比赛时间'
   return '按开赛时间估算'
@@ -989,11 +1027,9 @@ function prematchMaxBetHkd(item: MatchListItem): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-type LiveTradePromptClass = 'live-trade-normal' | 'live-trade-alert' | 'live-trade-alert-strong'
-
 function getLiveTradePromptClass(
   trade: LiveMatchOddsTopTradeSummary | null | undefined,
-  item: MatchListItem,
+  item?: MatchListItem,
 ): LiveTradePromptClass {
   if (!trade) return 'live-trade-normal'
 
@@ -1004,7 +1040,7 @@ function getLiveTradePromptClass(
     return 'live-trade-alert-strong'
   }
 
-  const prematchMax = prematchMaxBetHkd(item)
+  const prematchMax = item ? prematchMaxBetHkd(item) : 0
   if (prematchMax > 0 && liveAmount > prematchMax) {
     return liveAmount >= LIVE_TRADE_COMPARE_THRESHOLD_HKD
       ? 'live-trade-alert-strong'
@@ -1159,9 +1195,19 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <span>{{ record.homeTeam }} v {{ record.guestTeam }}</span>
           </span>
           <span class="collision-history-detail">
-            触发 #{{ record.trigger.rank }} {{ record.trigger.runner }} {{ record.trigger.side }} {{ record.trigger.amount }} {{ record.trigger.price }}
+            <span>触发 #{{ record.trigger.rank }}</span>
+            <span>{{ record.trigger.runner }}</span>
+            <span>{{ record.trigger.side }}</span>
+            <span :class="collisionHistoryAmountClass(record, record.trigger)">{{ record.trigger.amount }}</span>
+            <span>{{ record.trigger.price }}</span>
             <template v-if="record.linked.length > 0">
-              ｜关联 {{ record.linked.map(item => `#${item.rank} ${item.runner} ${item.amount}`).join('，') }}
+              <span>｜关联</span>
+              <template v-for="(linked, linkedIndex) in record.linked" :key="linked.key">
+                <span v-if="linkedIndex > 0">，</span>
+                <span>#{{ linked.rank }}</span>
+                <span>{{ linked.runner }}</span>
+                <span :class="collisionHistoryAmountClass(record, linked)">{{ linked.amount }}</span>
+              </template>
             </template>
           </span>
         </button>
@@ -1213,6 +1259,13 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                     <span v-if="topTradeCollisionDisplayCount(getLiveItem(item)) > 0" class="live-collision-count">
                       [{{ topTradeCollisionDisplayCount(getLiveItem(item)) }}]
                     </span>
+                    <span
+                      v-if="formatTradeClock(getLiveItem(item)?.maxTopTrade)"
+                      :class="tradeClockClass(getLiveItem(item)?.maxTopTrade)"
+                      :title="tradeClockTitle(getLiveItem(item)?.maxTopTrade)"
+                    >
+                      {{ formatTradeClock(getLiveItem(item)?.maxTopTrade) }}
+                    </span>
                   </span>
                 </div>
               </td>
@@ -1237,6 +1290,13 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                 {{ formatLiveSummary(getLiveItem(item), item) }}
                 <span v-if="topTradeCollisionDisplayCount(getLiveItem(item)) > 0" class="live-collision-count">
                   [{{ topTradeCollisionDisplayCount(getLiveItem(item)) }}]
+                </span>
+                <span
+                  v-if="formatTradeClock(getLiveItem(item)?.maxTopTrade)"
+                  :class="tradeClockClass(getLiveItem(item)?.maxTopTrade)"
+                  :title="tradeClockTitle(getLiveItem(item)?.maxTopTrade)"
+                >
+                  {{ formatTradeClock(getLiveItem(item)?.maxTopTrade) }}
                 </span>
               </td>
               <td class="xg-cell">{{ formatXg(item) }}</td>
@@ -1582,6 +1642,20 @@ select {
   color: #6f7888;
   font-size: 11px;
   line-height: 1.3;
+}
+
+.collision-history-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.collision-history-amount.live-trade-alert {
+  color: #d62929;
+  font-weight: 400;
+}
+
+.collision-history-amount.live-trade-alert-strong {
+  color: #d62929;
+  font-weight: 800;
 }
 
 .table-wrap {
