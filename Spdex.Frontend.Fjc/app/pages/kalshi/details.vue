@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import type { KalshiCandlestick, KalshiMarketTradesAggregate, KalshiOutcomeTradeSeries } from '~/types/kalshi'
+import type { KalshiCandlestick, KalshiMarketTradesAggregate, KalshiOutcomeTradeSeries, KalshiTradeDeltaTick } from '~/types/kalshi'
 import { formatCompactCurrency, formatCompactNumber } from '~/composables/usePolymarketMetrics'
 import { type TrendChartSeries, type TrendDataPoint, compactTimeSeries } from '~/utils/polymarketChart'
 
@@ -16,6 +16,9 @@ const {
   primaryLink,
   kalshiEventTicker,
   trades,
+  familyTrades,
+  familyLoading,
+  familyErrors,
   candlesticks,
   candlesticksLoading,
   orderbook,
@@ -25,6 +28,7 @@ const {
   orderbookError,
   refresh,
   fetchOrderbook,
+  fetchFamilyTrades,
 } = useKalshiData(spdexEventId, { withWindowStats: false })
 
 const cnHome = computed(() => route.query.home ? String(route.query.home) : null)
@@ -32,17 +36,40 @@ const cnAway = computed(() => route.query.away ? String(route.query.away) : null
 const cnLeague = computed(() => route.query.league ? String(route.query.league) : null)
 
 const selectedMarketTicker = ref('')
+const selectedRegTimeMarketTicker = ref('')
+
+type RegTimeFamilyKey = 'total_goals' | 'spread_margin' | 'both_teams_to_score'
+const regTimeFamilies: { key: RegTimeFamilyKey, label: string, subtitle: string }[] = [
+  { key: 'total_goals', label: '总分', subtitle: 'Reg Time 总进球' },
+  { key: 'spread_margin', label: '让分', subtitle: 'Reg Time 净胜球' },
+  { key: 'both_teams_to_score', label: '双方进球', subtitle: 'Reg Time BTTS' },
+]
+const activeRegTimeFamily = ref<RegTimeFamilyKey>('total_goals')
 
 const eventTrades = computed(() => trades.value?.trades ?? null)
 const markets = computed<KalshiMarketTradesAggregate[]>(() => eventTrades.value?.markets ?? [])
 const outcomeSeries = computed<KalshiOutcomeTradeSeries[]>(() => eventTrades.value?.outcomeSeries ?? [])
 
+const activeRegTimeFamilyInfo = computed(() => regTimeFamilies.find(item => item.key === activeRegTimeFamily.value) ?? regTimeFamilies[0]!)
+const activeRegTimeResponse = computed(() => familyTrades.value[activeRegTimeFamily.value] ?? null)
+const activeRegTimeTrades = computed(() => activeRegTimeResponse.value?.trades ?? null)
+const regTimeMarkets = computed<KalshiMarketTradesAggregate[]>(() => activeRegTimeTrades.value?.markets ?? [])
+const regTimeOutcomeSeries = computed<KalshiOutcomeTradeSeries[]>(() => activeRegTimeTrades.value?.outcomeSeries ?? [])
+const regTimeLoading = computed(() => familyLoading.value[activeRegTimeFamily.value] === true)
+const regTimeError = computed(() => familyErrors.value[activeRegTimeFamily.value] ?? null)
+
 const selectedMarket = computed(() => {
   return markets.value.find(m => m.marketTicker === selectedMarketTicker.value) ?? markets.value[0] ?? null
 })
 
+const selectedRegTimeMarket = computed(() => {
+  return regTimeMarkets.value.find(m => m.marketTicker === selectedRegTimeMarketTicker.value) ?? regTimeMarkets.value[0] ?? null
+})
+
 const selectedYesSeries = computed(() => findOutcomeSeries(selectedMarket.value?.marketTicker, 'Yes'))
 const selectedNoSeries = computed(() => findOutcomeSeries(selectedMarket.value?.marketTicker, 'No'))
+const selectedRegTimeYesSeries = computed(() => findRegTimeOutcomeSeries(selectedRegTimeMarket.value?.marketTicker, 'Yes'))
+const selectedRegTimeNoSeries = computed(() => findRegTimeOutcomeSeries(selectedRegTimeMarket.value?.marketTicker, 'No'))
 
 const kickoffUtc = computed(() => {
   const link = primaryLink.value
@@ -67,9 +94,32 @@ const selectedTrades = computed(() => {
     .slice(0, 50)
 })
 
+const selectedRegTimeTrades = computed<KalshiTradeDeltaTick[]>(() => {
+  const all = [
+    ...(selectedRegTimeYesSeries.value?.trades ?? []),
+    ...(selectedRegTimeNoSeries.value?.trades ?? []),
+  ]
+  return all
+    .sort((a, b) => (b.count - a.count) || (new Date(b.createdAtUtc).getTime() - new Date(a.createdAtUtc).getTime()))
+    .slice(0, 50)
+})
+
 watch(markets, (items) => {
   if (!selectedMarketTicker.value || !items.some(m => m.marketTicker === selectedMarketTicker.value)) {
     selectedMarketTicker.value = items[0]?.marketTicker ?? ''
+  }
+}, { immediate: true })
+
+watch([activeRegTimeFamily, kalshiEventTicker], ([family, ticker]) => {
+  selectedRegTimeMarketTicker.value = ''
+  if (ticker) {
+    void fetchFamilyTrades(family)
+  }
+}, { immediate: true })
+
+watch(regTimeMarkets, (items) => {
+  if (!selectedRegTimeMarketTicker.value || !items.some(m => m.marketTicker === selectedRegTimeMarketTicker.value)) {
+    selectedRegTimeMarketTicker.value = items[0]?.marketTicker ?? ''
   }
 }, { immediate: true })
 
@@ -271,6 +321,13 @@ function findOutcomeSeries(marketTicker: string | undefined, side: 'Yes' | 'No')
   ) ?? null
 }
 
+function findRegTimeOutcomeSeries(marketTicker: string | undefined, side: 'Yes' | 'No'): KalshiOutcomeTradeSeries | null {
+  if (!marketTicker) return null
+  return regTimeOutcomeSeries.value.find(s =>
+    s.marketTicker === marketTicker && s.outcomeSide.toLowerCase() === side.toLowerCase(),
+  ) ?? null
+}
+
 function yesPriceFromNoPrice(value: number | null | undefined): number | null {
   if (value == null) return null
   return clampProbability(1 - value)
@@ -370,6 +427,30 @@ function localizeRunner(name: string | null | undefined, slot: RunnerSlot | null
   if (cnAway.value && link.kalshiAwayTeam && raw.toLowerCase() === link.kalshiAwayTeam.toLowerCase()) return cnAway.value
   if (raw.toLowerCase() === 'draw') return '平局'
   return raw
+}
+
+function cleanKalshiLabel(value: string | null | undefined): string {
+  return (value ?? '')
+    .replace(/^reg(?:ulation)?\s*time\s*:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function regTimeOutcomeLabel(side: string | null | undefined): string {
+  const normalized = (side ?? '').trim().toLowerCase()
+  if (activeRegTimeFamily.value === 'total_goals') {
+    if (normalized === 'yes') return 'Over'
+    if (normalized === 'no') return 'Under'
+  }
+  if (activeRegTimeFamily.value === 'spread_margin') {
+    if (normalized === 'yes') return '赢盘'
+    if (normalized === 'no') return '输盘'
+  }
+  if (activeRegTimeFamily.value === 'both_teams_to_score') {
+    if (normalized === 'yes') return '是'
+    if (normalized === 'no') return '否'
+  }
+  return side ?? '-'
 }
 
 function formatDecimalOdds(value: number | null | undefined): string {
@@ -601,10 +682,86 @@ useHead({
             <div v-else class="empty-line">暂无成交明细</div>
           </div>
         </div>
-      </div>
+	      </div>
 
-      <div v-if="!trades" class="status-box">赛事已匹配，但暂无 Kalshi 成交数据</div>
-    </template>
+	      <div v-if="primaryLink" class="market-card">
+	        <div class="market-head">
+	          <div>
+	            <div class="market-title">Reg Time 市场</div>
+	            <div class="market-subtitle">{{ activeRegTimeFamilyInfo.subtitle }} · 成交量 TOP50 · 价差 · P标记</div>
+	          </div>
+	          <span v-if="regTimeLoading" class="loading-pill">加载中...</span>
+	          <span v-else-if="regTimeError" class="error-pill">{{ regTimeError }}</span>
+	        </div>
+
+	        <div class="market-tabs family-tabs">
+	          <button
+	            v-for="family in regTimeFamilies"
+	            :key="family.key"
+	            class="market-tab family-tab"
+	            :class="{ active: activeRegTimeFamily === family.key }"
+	            :style="activeRegTimeFamily === family.key ? { backgroundColor: '#047857' } : undefined"
+	            @click="activeRegTimeFamily = family.key"
+	          >
+	            <span>{{ family.label }}</span>
+	          </button>
+	        </div>
+
+	        <div v-if="regTimeLoading" class="empty-line">正在加载 {{ activeRegTimeFamilyInfo.label }} 数据...</div>
+	        <div v-else-if="regTimeMarkets.length > 0">
+	          <div class="market-tabs">
+	            <button
+	              v-for="market in regTimeMarkets"
+	              :key="market.marketTicker"
+	              class="market-tab"
+	              :class="{ active: selectedRegTimeMarketTicker === market.marketTicker }"
+	              :style="selectedRegTimeMarketTicker === market.marketTicker ? { backgroundColor: '#0f766e' } : undefined"
+	              @click="selectedRegTimeMarketTicker = market.marketTicker"
+	            >
+	              <span>{{ cleanKalshiLabel(market.label) }}</span>
+	              <span>{{ formatCompactNumber(marketVolume(market)) }}</span>
+	            </button>
+	          </div>
+
+	          <div class="trades-panel regtime-trades-panel">
+	            <div class="section-title">
+	              {{ cleanKalshiLabel(selectedRegTimeMarket?.label) || activeRegTimeFamilyInfo.label }} 成交量 Top {{ selectedRegTimeTrades.length }}
+	            </div>
+	            <table v-if="selectedRegTimeTrades.length > 0" class="trades-table">
+	              <thead>
+	                <tr>
+	                  <th>P标记</th>
+	                  <th>方向</th>
+	                  <th>价格</th>
+	                  <th>数量</th>
+	                  <th>金额</th>
+	                  <th>价差</th>
+	                  <th>时间</th>
+	                </tr>
+	              </thead>
+	              <tbody>
+	                <tr v-for="trade in selectedRegTimeTrades" :key="trade.tradeId">
+	                  <td>
+	                    <span v-if="getTimeMark(trade.createdAtUtc)" class="time-mark">{{ getTimeMark(trade.createdAtUtc) }}</span>
+	                    <span v-else>-</span>
+	                  </td>
+	                  <td :class="trade.outcomeSide.toLowerCase() === 'yes' ? 'yes-cell' : 'no-cell'">{{ regTimeOutcomeLabel(trade.outcomeSide) }}</td>
+	                  <td>{{ formatProbability(trade.price) }}</td>
+	                  <td>{{ trade.count.toFixed(0) }}</td>
+	                  <td>{{ formatCompactCurrency(trade.notional) }}</td>
+	                  <td :class="deltaClass(trade.priceDelta)">{{ formatSignedDelta(trade.priceDelta) }}</td>
+	                  <td>{{ formatTime(trade.createdAtUtc) }}</td>
+	                </tr>
+	              </tbody>
+	            </table>
+	            <div v-else class="empty-line">暂无成交明细</div>
+	          </div>
+	        </div>
+	        <div v-else class="empty-line">暂无 {{ activeRegTimeFamilyInfo.label }} 的 Reg Time Kalshi 数据</div>
+	      </div>
+
+	      <div v-if="!trades" class="status-box">赛事已匹配，但暂无 Kalshi 成交数据</div>
+	    </template>
   </div>
 </template>
 

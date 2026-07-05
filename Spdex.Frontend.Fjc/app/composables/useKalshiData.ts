@@ -40,11 +40,14 @@ export function useKalshiData(
   const { withWindowStats = true, withCandlesticks = true } = options
   const matchLinks = ref<KalshiSoccerMatchLink[]>([])
   const trades = ref<KalshiSoccerTradesResponse | null>(null)
+  const familyTrades = ref<Record<string, KalshiSoccerTradesResponse | null>>({})
   const candlesticks = ref<KalshiCandlestickSeries[]>([])
   const candlesticksLoading = ref(false)
   const tradeWindowStats = ref<KalshiTradeWindowStatsResult | null>(null)
   const orderbook = ref<KalshiOrderbook | null>(null)
   const loading = ref(false)
+  const familyLoading = ref<Record<string, boolean>>({})
+  const familyErrors = ref<Record<string, string | null>>({})
   const orderbookLoading = ref(false)
   const error = ref<string | null>(null)
   const orderbookError = ref<string | null>(null)
@@ -71,6 +74,9 @@ export function useKalshiData(
     orderbook.value = null
     orderbookError.value = null
     candlesticks.value = []
+    familyTrades.value = {}
+    familyLoading.value = {}
+    familyErrors.value = {}
 
     try {
       const linkResult = await apiFetch<KalshiBswApiResult<KalshiSoccerMatchLink[]>>(
@@ -178,6 +184,40 @@ export function useKalshiData(
     }
   }
 
+  async function fetchFamilyTrades(marketFamily: string) {
+    const family = marketFamily.trim()
+    if (!family) return null
+    const key = family.toLowerCase()
+    if (familyTrades.value[key] !== undefined) return familyTrades.value[key]
+
+    const ticker = kalshiEventTicker.value
+    if (!ticker) return null
+
+    familyLoading.value = { ...familyLoading.value, [key]: true }
+    familyErrors.value = { ...familyErrors.value, [key]: null }
+    try {
+      const result = await apiFetch<KalshiBswApiResult<KalshiSoccerTradesResponse>>(
+        '/api/kalshi/Get/Soccer/Trades',
+        { eventTicker: ticker, limit: 3000, source: 'db', marketFamily: family, scope: 'full_time' },
+      )
+      const data = isBswOk(result) ? result.data : null
+      familyTrades.value = { ...familyTrades.value, [key]: data }
+      if (!isBswOk(result)) {
+        familyErrors.value = { ...familyErrors.value, [key]: result.info || 'Kalshi 市场数据加载失败' }
+      }
+      return data
+    }
+    catch (e: unknown) {
+      console.error('[useKalshiData] family trades error:', e)
+      familyTrades.value = { ...familyTrades.value, [key]: null }
+      familyErrors.value = { ...familyErrors.value, [key]: 'Kalshi 市场数据暂不可用' }
+      return null
+    }
+    finally {
+      familyLoading.value = { ...familyLoading.value, [key]: false }
+    }
+  }
+
   watch(spdexEventId, () => { fetchData() }, { immediate: true })
 
   return {
@@ -185,15 +225,19 @@ export function useKalshiData(
     primaryLink,
     kalshiEventTicker,
     trades,
+    familyTrades,
     candlesticks,
     candlesticksLoading,
     tradeWindowStats,
     orderbook,
     loading,
+    familyLoading,
+    familyErrors,
     orderbookLoading,
     error,
     orderbookError,
     refresh: fetchData,
     fetchOrderbook,
+    fetchFamilyTrades,
   }
 }
