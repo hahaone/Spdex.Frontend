@@ -9,7 +9,7 @@ interface GlBigHoldParams {
 /**
  * ★ P6: 内置 300ms 防抖，避免快速切换排序/参数时产生无效请求。
  */
-export function useGlBigHold(params: Ref<GlBigHoldParams>) {
+export function useGlBigHold(params: Ref<GlBigHoldParams>, opts: Record<string, unknown> = {}) {
   // 防抖后的参数：延迟 300ms 同步
   const debouncedParams = ref({ ...toValue(params) })
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -24,6 +24,7 @@ export function useGlBigHold(params: Ref<GlBigHoldParams>) {
   const result = useApiFetch<ApiResponse<GlBigHoldPageResult>>('/api/glbighold', {
     params: debouncedParams,
     watch: [debouncedParams],
+    ...opts,
   })
 
   /** 手动刷新数据（重新请求 API），跳过防抖 */

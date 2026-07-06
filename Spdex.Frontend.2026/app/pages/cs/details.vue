@@ -25,7 +25,10 @@ const eventId = computed(() => Number(route.query.id) || 0)
 const orderParam = computed(() => Number(route.query.order) || 0)
 
 const params = computed(() => ({ id: eventId.value, order: orderParam.value }))
-const { data: apiResult, pending } = useGlBigHold(params)
+const { data: apiResult, pending } = useGlBigHold(params, {
+  server: false,
+  lazy: true,
+})
 const pageData = computed(() => apiResult.value?.data as GlBigHoldPageResult | null)
 
 useHead({
@@ -75,7 +78,10 @@ function ratioColorStyle(ratio: number | null, totalBet?: number): string {
 
 // ── 跨表共振：额外请求 OU2.5 数据，提取当前窗口 RefreshTime 集合 ──
 const uoQueryParams = computed(() => ({ id: eventId.value, marketType: 0, order: 0 }))
-const { data: uoData } = useUoBigHold(uoQueryParams)
+const { data: uoData } = useUoBigHold(uoQueryParams, {
+  server: false,
+  lazy: true,
+})
 
 /** OU2.5 当前分时 TOP20 的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
 const uoTimeSet = computed<Set<string>>(() => {

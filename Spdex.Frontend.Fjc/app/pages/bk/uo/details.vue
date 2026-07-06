@@ -15,7 +15,10 @@ const queryParams = computed(() => ({
   order: 0,
   market: 'uo',
 }))
-const { data, pending, error, refreshing, manualRefresh } = useAsianBigHold(queryParams)
+const { data, pending, error, refreshing, manualRefresh } = useAsianBigHold(queryParams, {
+  server: false,
+  lazy: true,
+})
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)

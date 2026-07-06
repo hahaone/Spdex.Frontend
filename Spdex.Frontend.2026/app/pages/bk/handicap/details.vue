@@ -14,7 +14,10 @@ const queryParams = computed(() => ({
   id: eventId.value,
   order: 0,
 }))
-const { data, pending, error, refreshing, manualRefresh } = useAsianBigHold(queryParams)
+const { data, pending, error, refreshing, manualRefresh } = useAsianBigHold(queryParams, {
+  server: false,
+  lazy: true,
+})
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
@@ -25,7 +28,10 @@ const odds0 = computed(() => result.value?.odds0)
 
 // ── 跨表共振：额外请求标盘数据，提取当前窗口 RefreshTime 集合 ──
 const bfQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
-const { data: bfData } = useBigHold(bfQueryParams)
+const { data: bfData } = useBigHold(bfQueryParams, {
+  server: false,
+  lazy: true,
+})
 
 /** 标盘当前分时 TOP20 的 RefreshTime 集合（精确到秒）——只用[当前]窗口 */
 const bfTimeSet = computed<Set<string>>(() => {

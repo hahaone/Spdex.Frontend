@@ -19,7 +19,10 @@ const queryParams = computed(() => ({
   marketType: marketTypeParam.value,
   order: orderParam.value,
 }))
-const { data, pending, error, refreshing, manualRefresh } = useUoBigHold(queryParams)
+const { data, pending, error, refreshing, manualRefresh } = useUoBigHold(queryParams, {
+  server: false,
+  lazy: true,
+})
 
 const result = computed(() => data.value?.data)
 const matchInfo = computed(() => result.value?.match)
@@ -28,7 +31,10 @@ const volumeSummary = computed(() => result.value?.volumeSummary ?? [])
 
 // ── 跨表共振：额外请求 Goal Line 数据，提取 bigList RefreshTime 集合 ──
 const glQueryParams = computed(() => ({ id: eventId.value, order: 0 }))
-const { data: glData } = useGlBigHold(glQueryParams)
+const { data: glData } = useGlBigHold(glQueryParams, {
+  server: false,
+  lazy: true,
+})
 
 /** GL 大注 TOP10 的 RefreshTime 集合（精确到秒）——只用[当前]大注 */
 const glTimeSet = computed<Set<string>>(() => {

@@ -7,10 +7,11 @@ interface UoBigHoldParams {
   order?: number
 }
 
-export function useUoBigHold(params: Ref<UoBigHoldParams>) {
+export function useUoBigHold(params: Ref<UoBigHoldParams>, opts: Record<string, unknown> = {}) {
   const result = useApiFetch<ApiResponse<UoBigHoldPageResult>>('/api/uobighold', {
     params,
     watch: [params],
+    ...opts,
   })
 
   /** 手动刷新数据（重新请求 API） */
