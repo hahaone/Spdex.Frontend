@@ -27,6 +27,7 @@
     <NCard title="快捷入口" size="small" class="mt-4">
       <NSpace>
         <NButton v-if="can(P.userView)" size="small" @click="navigateTo('/users')">用户管理</NButton>
+        <NButton v-if="can(P.membershipCorrectionView)" size="small" @click="navigateTo('/membership-corrections')">会籍纠偏</NButton>
         <NButton v-if="can(P.orderView)" size="small" @click="navigateTo('/orders')">订单管理</NButton>
         <NButton v-if="can(P.orderView)" size="small" @click="navigateTo('/refunds')">退款工单</NButton>
         <NButton v-if="can(P.silkView)" size="small" @click="navigateTo('/silkbag')">锦囊账本</NButton>

@@ -7,6 +7,8 @@ export const P = {
   userMembershipEdit: 'user.membership.edit',
   userStatusEdit: 'user.status.edit',
   userPasswordReset: 'user.password.reset',
+  membershipCorrectionView: 'membership.correction.view',
+  membershipCorrectionReview: 'membership.correction.review',
   orderView: 'order.view',
   orderRefundRequest: 'order.refund.request',
   orderRefundApprove: 'order.refund.approve',
