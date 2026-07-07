@@ -19,6 +19,8 @@ const TOP_TRADE_COLLISION_HISTORY_LIMIT = 200
 const TOP_TRADE_COLLISION_MARKER_STORAGE_PREFIX = 'spdex-2026-live-top-trade-collision-markers'
 const TOP_TRADE_COLLISION_HISTORY_STORAGE_PREFIX = 'spdex-2026-live-top-trade-collisions'
 
+const { isJcOnly } = useAuth()
+
 const {
   pinnedItems,
   pinnedEventIds,
@@ -32,8 +34,13 @@ const {
 const selectedDay = ref<'today' | 'yesterday'>('today')
 const selectedLeague = ref('')
 const liveStatus = ref<'running' | 'finished'>('running')
+const jcOnly = ref(isJcOnly.value)
 const currentPage = ref(1)
 const pageSize = 100
+
+if (isJcOnly.value) {
+  jcOnly.value = true
+}
 
 function dateStringByOffset(offsetDays: number): string {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -57,6 +64,7 @@ const queryParams = computed(() => ({
   date: selectedDate.value,
   league: selectedLeague.value || undefined,
   status: liveStatus.value === 'running' ? 'started' : 'all',
+  jc: (jcOnly.value || isJcOnly.value) ? 1 : undefined,
   page: currentPage.value,
   pageSize,
 }))
@@ -221,7 +229,7 @@ function tgSpark(eventId: number) {
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
   const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
   if (nums.length < 2) return null
-  const W = 960, H = 104, pad = 12
+  const W = 320, H = 64, pad = 8
   const min = Math.min(...nums)
   const max = Math.max(...nums)
   const span = max - min || 1
@@ -301,6 +309,8 @@ const refreshCountdownSeconds = computed(() =>
 )
 
 const expandedEventIds = ref<Set<number>>(new Set())
+const flashEventIds = ref<Set<number>>(new Set())
+const previousSignatures = ref<Map<number, string>>(new Map())
 const topTradeCollisionHistory = ref<TopTradeCollisionHistoryRecord[]>([])
 const topTradeCollisionCountsByEventId = ref<Map<number, Map<string, number>>>(new Map())
 const previousTopTradeKeysByEventId = ref<Map<number, Set<string>>>(new Map())
@@ -336,6 +346,19 @@ watch(
   () => liveTrades.data.value?.timestamp,
   () => {
     syncTopTradeCollisionMarkers()
+
+    const next = new Map(previousSignatures.value)
+    for (const item of liveTrades.data.value?.items ?? []) {
+      const eventId = Number(item.eventId)
+      if (!Number.isFinite(eventId) || !item.topSignature) continue
+
+      const previous = next.get(eventId)
+      if (previous && previous !== item.topSignature) {
+        flashExpandButton(eventId)
+      }
+      next.set(eventId, item.topSignature)
+    }
+    previousSignatures.value = next
   },
 )
 
@@ -422,6 +445,15 @@ function scheduleNextMatchRefresh() {
   }, MATCH_REFRESH_INTERVAL_MS)
 }
 
+function flashExpandButton(eventId: number) {
+  flashEventIds.value = new Set([...flashEventIds.value, eventId])
+  setTimeout(() => {
+    const next = new Set(flashEventIds.value)
+    next.delete(eventId)
+    flashEventIds.value = next
+  }, 1000)
+}
+
 function setDay(day: 'today' | 'yesterday') {
   selectedDay.value = day
   selectedLeague.value = ''
@@ -440,6 +472,13 @@ function onLeagueChange(value: string) {
   currentPage.value = 1
 }
 
+function toggleJcOnly() {
+  if (isJcOnly.value) return
+  jcOnly.value = !jcOnly.value
+  selectedLeague.value = ''
+  currentPage.value = 1
+}
+
 function toggleExpanded(eventId: number) {
   const next = new Set(expandedEventIds.value)
   if (next.has(eventId)) next.delete(eventId)
@@ -449,6 +488,10 @@ function toggleExpanded(eventId: number) {
 
 function isExpanded(eventId: number): boolean {
   return expandedEventIds.value.has(eventId)
+}
+
+function shouldFlash(eventId: number): boolean {
+  return flashEventIds.value.has(eventId)
 }
 
 function getLiveItem(item: MatchListItem): LiveMatchOddsEventItem | undefined {
@@ -601,6 +644,8 @@ interface TopTradeCollisionStoredMarker {
   trades: Array<{ key: string; count: number }>
 }
 
+type LiveTradePromptClass = 'live-trade-normal' | 'live-trade-alert' | 'live-trade-alert-strong'
+
 interface TopTradeCollisionHistoryMember {
   key: string
   rank: number
@@ -609,6 +654,7 @@ interface TopTradeCollisionHistoryMember {
   side: string
   price: string
   amount: string
+  amountClass?: LiveTradePromptClass
   book: string
 }
 
@@ -731,8 +777,43 @@ function buildTopTradeCollisionHistoryMember(
     side: sideLabel(trade.sideHint),
     price: formatPriceMove(trade),
     amount: formatHkdMoney(tradeTotalDeltaHkd(trade)),
+    amountClass: getLiveTradePromptClass(trade, match),
     book: formatBackLayBook(trade),
   }
+}
+
+function collisionHistoryAmountClass(
+  record: TopTradeCollisionHistoryRecord,
+  member: TopTradeCollisionHistoryMember,
+): string[] {
+  return [
+    'collision-history-amount',
+    member.amountClass ?? getStoredCollisionHistoryAmountClass(record, member),
+  ]
+}
+
+function getStoredCollisionHistoryAmountClass(
+  record: TopTradeCollisionHistoryRecord,
+  member: TopTradeCollisionHistoryMember,
+): LiveTradePromptClass {
+  const amount = parseCollisionHistoryHkdAmount(member.amount)
+  if (amount <= 0) return 'live-trade-normal'
+  if (amount > EFFECTIVE_LIVE_BIG_TRADE_HKD) return 'live-trade-alert-strong'
+
+  const match = findMatchByEventId(record.eventId)
+  const prematchMax = match ? prematchMaxBetHkd(match) : 0
+  if (prematchMax > 0 && amount > prematchMax) {
+    return amount >= LIVE_TRADE_COMPARE_THRESHOLD_HKD
+      ? 'live-trade-alert-strong'
+      : 'live-trade-alert'
+  }
+
+  return 'live-trade-normal'
+}
+
+function parseCollisionHistoryHkdAmount(value: string): number {
+  const amount = Number(value.replace(/[^\d.-]/g, ''))
+  return Number.isFinite(amount) ? amount : 0
 }
 
 function openTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord) {
@@ -944,11 +1025,9 @@ function prematchMaxBetHkd(item: MatchListItem): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-type LiveTradePromptClass = 'live-trade-normal' | 'live-trade-alert' | 'live-trade-alert-strong'
-
 function getLiveTradePromptClass(
   trade: LiveMatchOddsTopTradeSummary | null | undefined,
-  item: MatchListItem,
+  item?: MatchListItem,
 ): LiveTradePromptClass {
   if (!trade) return 'live-trade-normal'
 
@@ -959,7 +1038,7 @@ function getLiveTradePromptClass(
     return 'live-trade-alert-strong'
   }
 
-  const prematchMax = prematchMaxBetHkd(item)
+  const prematchMax = item ? prematchMaxBetHkd(item) : 0
   if (prematchMax > 0 && liveAmount > prematchMax) {
     return liveAmount >= LIVE_TRADE_COMPARE_THRESHOLD_HKD
       ? 'live-trade-alert-strong'
@@ -1074,6 +1153,14 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
         </select>
       </div>
 
+      <button
+        v-if="!isJcOnly"
+        :class="['jc-btn', { active: jcOnly }]"
+        @click="toggleJcOnly"
+      >
+        竞彩
+      </button>
+
       <button class="refresh-btn" :disabled="isInitialLoading" @click="refreshAll()">
         <span class="refresh-icon" :class="{ spinning: isInitialLoading }">&#8635;</span>
         刷新
@@ -1116,9 +1203,19 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <span>{{ record.homeTeam }} v {{ record.guestTeam }}</span>
           </span>
           <span class="collision-history-detail">
-            触发 #{{ record.trigger.rank }} {{ record.trigger.runner }} {{ record.trigger.side }} {{ record.trigger.amount }} {{ record.trigger.price }}
+            <span>触发 #{{ record.trigger.rank }}</span>
+            <span>{{ record.trigger.runner }}</span>
+            <span>{{ record.trigger.side }}</span>
+            <span :class="collisionHistoryAmountClass(record, record.trigger)">{{ record.trigger.amount }}</span>
+            <span>{{ record.trigger.price }}</span>
             <template v-if="record.linked.length > 0">
-              ｜关联 {{ record.linked.map(item => `#${item.rank} ${item.runner} ${item.amount}`).join('，') }}
+              <span>｜关联</span>
+              <template v-for="(linked, linkedIndex) in record.linked" :key="linked.key">
+                <span v-if="linkedIndex > 0">，</span>
+                <span>#{{ linked.rank }}</span>
+                <span>{{ linked.runner }}</span>
+                <span :class="collisionHistoryAmountClass(record, linked)">{{ linked.amount }}</span>
+              </template>
             </template>
           </span>
         </button>
@@ -1147,6 +1244,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
             <th class="col-live">现场最大单</th>
             <th class="col-xg">xG</th>
             <th class="col-tg">预期总进球</th>
+            <th class="col-action" />
           </tr>
         </thead>
         <tbody>
@@ -1222,9 +1320,17 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                   <i class="tg-arrow">{{ isXgExpanded(item.match.eventId) ? '⌃' : '⌄' }}</i>
                 </button>
               </td>
+              <td class="action-cell">
+                <button
+                  :class="['expand-btn', { open: isExpanded(item.match.eventId), flash: shouldFlash(item.match.eventId) }]"
+                  @click.stop="toggleExpanded(item.match.eventId)"
+                >
+                  {{ isExpanded(item.match.eventId) ? '⌃' : '⌄' }}
+                </button>
+              </td>
             </tr>
             <tr v-if="isExpanded(item.match.eventId)" class="detail-row">
-              <td colspan="13">
+              <td colspan="14">
                 <table class="top-table">
                   <thead>
                     <tr>
@@ -1280,7 +1386,7 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
               </td>
             </tr>
             <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
-              <td colspan="13">
+              <td colspan="14">
                 <template v-for="(spark, sparkIdx) in [tgSpark(item.match.eventId)]" :key="sparkIdx">
                   <div class="tg-chart">
                     <div class="tg-chart-head">
@@ -1373,6 +1479,7 @@ select {
 }
 
 .status-btn,
+.jc-btn,
 .refresh-btn {
   height: 34px;
   border: 0;
@@ -1387,11 +1494,13 @@ select {
   border-left: 1px solid #cdd4df;
 }
 
-.status-btn.active {
+.status-btn.active,
+.jc-btn.active {
   background: #2f56c5;
   color: #fff;
 }
 
+.jc-btn,
 .refresh-btn {
   border: 1px solid #cdd4df;
   border-radius: 6px;
@@ -1545,6 +1654,20 @@ select {
   line-height: 1.3;
 }
 
+.collision-history-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.collision-history-amount.live-trade-alert {
+  color: #d62929;
+  font-weight: 400;
+}
+
+.collision-history-amount.live-trade-alert-strong {
+  color: #d62929;
+  font-weight: 800;
+}
+
 .table-wrap {
   position: relative;
   overflow-x: auto;
@@ -1582,7 +1705,7 @@ select {
 }
 
 .live-table {
-  min-width: 1330px;
+  min-width: 1380px;
 }
 
 th {
@@ -1673,19 +1796,18 @@ th.col-tg {
 /* xG 预期总进球走势图（独立展开行） */
 .xg-detail-row td {
   background: #f4fbf6;
-  padding: 14px 18px 16px;
+  padding: 12px 16px;
 }
 
 .tg-chart {
-  width: 100%;
-  max-width: none;
+  max-width: 420px;
 }
 
 .tg-chart-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .tg-title {
@@ -1707,7 +1829,7 @@ th.col-tg {
 
 .tg-svg {
   width: 100%;
-  height: 112px;
+  height: 64px;
   color: #2e9c5f;
 }
 
@@ -1794,6 +1916,10 @@ th.col-tg {
   width: 122px;
 }
 
+.col-action {
+  width: 50px;
+}
+
 .col-xg {
   width: 86px;
 }
@@ -1869,6 +1995,29 @@ th.col-tg {
 
 .top-trade-collision-count {
   margin-left: 10px;
+}
+
+.action-cell {
+  text-align: right;
+}
+
+.expand-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #cfd6e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #40506a;
+  cursor: pointer;
+}
+
+.expand-btn.open {
+  background: #eef3ff;
+  color: #2f56c5;
+}
+
+.expand-btn.flash {
+  animation: flash 1s ease-out;
 }
 
 .detail-row > td {
@@ -1965,6 +2114,17 @@ th.col-tg {
   }
 }
 
+@keyframes flash {
+  0% {
+    background: #ffe08a;
+    border-color: #f0b429;
+  }
+  100% {
+    background: #fff;
+    border-color: #cfd6e2;
+  }
+}
+
 .mobile-live-meta {
   display: none;
 }
@@ -1989,7 +2149,7 @@ th.col-tg {
   }
 
   .live-table {
-    min-width: 1240px;
+    min-width: 1290px;
   }
 
   .teams-cell {
