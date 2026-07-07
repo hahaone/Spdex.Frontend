@@ -45,14 +45,33 @@
       </NTabPane>
     </NTabs>
 
-    <NModal v-model:show="reviewModal.show" preset="card" title="审核纠偏候选" style="width:560px">
+    <NModal v-model:show="reviewModal.show" preset="card" title="审核纠偏候选" style="width:860px">
       <NDescriptions v-if="reviewModal.row" :column="2" bordered size="small" label-placement="left" class="mb-4">
         <NDescriptionsItem label="用户">{{ reviewModal.row.userName }} #{{ reviewModal.row.userId }}</NDescriptionsItem>
-        <NDescriptionsItem label="类型">{{ reviewModal.row.candidateTypeText }}</NDescriptionsItem>
+        <NDescriptionsItem label="类型">{{ reviewModal.row.candidateTypeText }} / {{ reviewModal.row.issueConfidence }}可信</NDescriptionsItem>
         <NDescriptionsItem label="订单号" :span="2">{{ reviewModal.row.orderId }}</NDescriptionsItem>
+        <NDescriptionsItem label="购买会籍">{{ reviewModal.row.orderRoleName || '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="购买档位">{{ reviewModal.row.stageName || '—' }} / {{ reviewModal.row.stageDays }}天</NDescriptionsItem>
+        <NDescriptionsItem label="支付金额">¥{{ reviewModal.row.totalFee }}</NDescriptionsItem>
+        <NDescriptionsItem label="支付渠道">{{ reviewModal.row.channel || '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="订单创建">{{ fmt(reviewModal.row.createTime) }}</NDescriptionsItem>
+        <NDescriptionsItem label="支付时间">{{ fmt(reviewModal.row.paidTime) }}</NDescriptionsItem>
+        <NDescriptionsItem label="推断应用">{{ fmt(reviewModal.row.applyAtApprox) }}</NDescriptionsItem>
+        <NDescriptionsItem label="支付回调">{{ reviewModal.row.notifyKind || '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="原会籍">{{ reviewModal.row.preRoleName || '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="原到期">{{ fmt(reviewModal.row.preEndDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="当前会籍">{{ reviewModal.row.currentRoleName || '—' }}</NDescriptionsItem>
         <NDescriptionsItem label="当前到期">{{ fmt(reviewModal.row.currentEndDate) }}</NDescriptionsItem>
         <NDescriptionsItem label="建议到期">{{ fmt(reviewModal.row.targetEndDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="超出天数">{{ reviewModal.row.extraDaysVsFixed }}天</NDescriptionsItem>
+        <NDescriptionsItem label="支付前状态">{{ reviewModal.row.preStateConfidence }}可信</NDescriptionsItem>
+        <NDescriptionsItem label="后台审计">{{ reviewModal.row.hasMembershipAudit ? '有' : '无' }}</NDescriptionsItem>
+        <NDescriptionsItem label="问题类型" :span="2">{{ reviewModal.row.issueType }}</NDescriptionsItem>
         <NDescriptionsItem label="原因" :span="2">{{ reviewModal.row.issueReason }}</NDescriptionsItem>
+        <NDescriptionsItem v-if="reviewModal.row.reviewNote" label="已有备注" :span="2">{{ reviewModal.row.reviewNote }}</NDescriptionsItem>
+        <NDescriptionsItem v-if="reviewModal.row.reviewerName" label="上次审核" :span="2">
+          {{ reviewModal.row.reviewerName }} / {{ fmt(reviewModal.row.reviewedAt) }} / {{ reviewModal.row.reviewStatusText }}
+        </NDescriptionsItem>
       </NDescriptions>
 
       <NForm label-placement="left" label-width="90">
@@ -69,6 +88,26 @@
       <template #footer>
         <NButton type="primary" :loading="reviewSaving" @click="submitReview">保存审核</NButton>
       </template>
+    </NModal>
+
+    <NModal v-model:show="recordDetailModal.show" preset="card" title="纠正记录详情" style="width:840px">
+      <NDescriptions v-if="recordDetailModal.row" :column="2" bordered size="small" label-placement="left" class="mb-4">
+        <NDescriptionsItem label="时间">{{ fmt(recordDetailModal.row.createdAt) }}</NDescriptionsItem>
+        <NDescriptionsItem label="UserId">{{ recordDetailModal.row.userId ?? recordDetailModal.row.targetId ?? '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="订单号" :span="2">{{ recordDetailModal.row.orderId || '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="摘要" :span="2">{{ recordDetailModal.row.summary || '—' }}</NDescriptionsItem>
+      </NDescriptions>
+
+      <div class="detail-grid">
+        <section>
+          <h3>纠正前</h3>
+          <pre>{{ prettyJson(recordDetailModal.row?.beforeJson) }}</pre>
+        </section>
+        <section>
+          <h3>纠正后</h3>
+          <pre>{{ prettyJson(recordDetailModal.row?.afterJson) }}</pre>
+        </section>
+      </div>
     </NModal>
   </div>
 </template>
@@ -264,6 +303,7 @@ function candidateTagType(type: string) {
 const reviewModal = reactive<{ show: boolean, row: CandidateItem | null }>({ show: false, row: null })
 const reviewForm = reactive<{ status: number, targetEndDate: number | null, note: string }>({ status: 1, targetEndDate: null, note: '' })
 const reviewSaving = ref(false)
+const recordDetailModal = reactive<{ show: boolean, row: CorrectionRecord | null }>({ show: false, row: null })
 
 function openReview(row: CandidateItem) {
   reviewModal.row = row
@@ -288,6 +328,21 @@ async function submitReview() {
   }
   else {
     message.error(res.message || '保存失败')
+  }
+}
+
+function openRecordDetails(row: CorrectionRecord) {
+  recordDetailModal.row = row
+  recordDetailModal.show = true
+}
+
+function prettyJson(value?: string | null) {
+  if (!value) return '—'
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  }
+  catch {
+    return value
   }
 }
 
@@ -323,10 +378,24 @@ const candidateColumns = [
 
 const recordColumns = [
   { title: '时间', key: 'createdAt', width: 170, render: (r: CorrectionRecord) => fmt(r.createdAt) },
-  { title: '操作人', key: 'adminName', width: 120 },
   { title: 'UserId', key: 'userId', width: 90, render: (r: CorrectionRecord) => r.userId ?? r.targetId ?? '—' },
   { title: '订单号', key: 'orderId', width: 220, ellipsis: { tooltip: true }, render: (r: CorrectionRecord) => r.orderId || '—' },
-  { title: '摘要', key: 'summary', width: 640, ellipsis: { tooltip: true }, render: (r: CorrectionRecord) => r.summary || '—' },
+  {
+    title: '摘要',
+    key: 'summary',
+    width: 760,
+    ellipsis: { tooltip: true },
+    render: (r: CorrectionRecord) => h(
+      NButton,
+      {
+        text: true,
+        type: 'primary',
+        class: 'summary-link',
+        onClick: () => openRecordDetails(r),
+      },
+      { default: () => r.summary || '查看详情' },
+    ),
+  },
 ]
 
 watch(activeTab, (tab) => {
@@ -335,3 +404,39 @@ watch(activeTab, (tab) => {
 
 onMounted(loadCandidates)
 </script>
+
+<style scoped>
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.detail-grid h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.detail-grid pre {
+  max-height: 360px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1f2937;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+:deep(.summary-link) {
+  max-width: 100%;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+}
+</style>
