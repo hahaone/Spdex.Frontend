@@ -9,8 +9,8 @@
         <NDescriptionsItem label="状态">{{ user.enabled ? '启用' : '禁用' }}</NDescriptionsItem>
         <NDescriptionsItem label="手机">{{ user.mobile || '—' }}</NDescriptionsItem>
         <NDescriptionsItem label="邮箱">{{ user.email || '—' }}</NDescriptionsItem>
-        <NDescriptionsItem label="注册">{{ fmtDate(user.registerDate) }}</NDescriptionsItem>
-        <NDescriptionsItem label="最后活跃">{{ fmtDate(user.lastActivityDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="注册">{{ fmtDateTime(user.registerDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="最后活跃">{{ fmtDateTime(user.lastActivityDate) }}</NDescriptionsItem>
         <NDescriptionsItem label="测试账号">
           <NTag v-if="user.isTestAccount" type="warning" size="small" :bordered="false">是 · 支付 0.01</NTag>
           <span v-else>否</span>
@@ -88,7 +88,6 @@ async function loadSilk() {
 }
 function onTab(name: string) { if (name === 'silk' && !balance.value) loadSilk() }
 
-function fmtDate(d?: string) { return d ? d.substring(0, 10) : '—' }
 function fmtDateTime(d?: string) { return d ? d.replace('T', ' ').substring(0, 16) : '—' }
 function fmt(d?: string) { return d ? d.replace('T', ' ').substring(0, 19) : '—' }
 
