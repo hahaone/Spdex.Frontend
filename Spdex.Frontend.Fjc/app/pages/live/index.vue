@@ -1660,7 +1660,7 @@ select {
 
 .table-wrap {
   position: relative;
-  overflow-x: auto;
+  overflow-x: hidden;
   background: #fff;
   border: 1px solid #e3e6ec;
   border-radius: 8px;
@@ -1691,16 +1691,16 @@ select {
 .top-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1320px;
 }
 
 .live-table {
-  min-width: 1380px;
+  table-layout: fixed;
+  min-width: 0;
 }
 
 th {
   height: 40px;
-  padding: 0 10px;
+  padding: 0 8px;
   background: #f4f6f9;
   color: #344156;
   font-size: 13px;
@@ -1710,11 +1710,18 @@ th {
 }
 
 td {
-  padding: 10px;
+  padding: 9px 8px;
   color: #2f3746;
   font-size: 13px;
   border-top: 1px solid #edf0f5;
   white-space: nowrap;
+}
+
+.live-table > thead th,
+.live-table > tbody > tr.match-row > td {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .match-row {
@@ -1787,6 +1794,8 @@ th.col-tg {
 .xg-detail-row td {
   background: #f4fbf6;
   padding: 12px 16px;
+  overflow: visible;
+  white-space: normal;
 }
 
 .tg-chart {
@@ -1879,35 +1888,59 @@ th.col-tg {
 }
 
 .col-pin {
-  width: 44px;
+  width: 36px;
 }
 
 .col-league {
-  width: 66px;
-}
-
-.col-time {
-  width: 88px;
-}
-
-.col-price {
   width: 58px;
 }
 
-.col-index {
+.col-time {
   width: 76px;
 }
 
+.col-teams {
+  width: 190px;
+}
+
+.col-price {
+  width: 54px;
+}
+
+.col-max {
+  width: 172px;
+}
+
+.col-money {
+  width: 88px;
+}
+
+.col-index {
+  width: 68px;
+}
+
 .col-live-total {
-  width: 112px;
+  width: 96px;
 }
 
 .col-live-ltp {
-  width: 122px;
+  width: 108px;
+}
+
+.col-live {
+  width: 218px;
 }
 
 .col-action {
-  width: 50px;
+  width: 38px;
+}
+
+.col-xg {
+  width: 48px;
+}
+
+.col-tg {
+  width: 90px;
 }
 
 .pin-btn {
@@ -1928,12 +1961,11 @@ th.col-tg {
 }
 
 .teams-cell {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  max-width: 0;
 }
 
 .teams-cell span {
+  margin: 0 4px;
   color: #8a94a7;
 }
 
@@ -2003,6 +2035,8 @@ th.col-tg {
 .detail-row > td {
   padding: 0;
   background: #f8fafc;
+  overflow: visible;
+  white-space: normal;
 }
 
 .top-table {
@@ -2132,7 +2166,12 @@ th.col-tg {
     min-width: 1080px;
   }
 
+  .table-wrap {
+    overflow-x: auto;
+  }
+
   .teams-cell {
+    display: flex;
     min-width: 220px;
     flex-wrap: wrap;
     white-space: normal;
