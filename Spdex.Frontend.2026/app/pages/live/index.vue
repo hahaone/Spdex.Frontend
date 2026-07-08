@@ -149,6 +149,14 @@ function formatXg(item: MatchListItem): string {
   const xg = getXg(item)
   return xg ? `${xg.xgHome.toFixed(2)}-${xg.xgAway.toFixed(2)}` : '-'
 }
+function formatXgHome(item: MatchListItem): string {
+  const xg = getXg(item)
+  return xg ? xg.xgHome.toFixed(2) : '-'
+}
+function formatXgAway(item: MatchListItem): string {
+  const xg = getXg(item)
+  return xg ? xg.xgAway.toFixed(2) : '-'
+}
 function formatProjGoals(item: MatchListItem): string {
   const xg = getXg(item)
   return xg ? xg.projectedTotalGoals.toFixed(2) : '-'
@@ -546,8 +554,15 @@ function topTradeTimeClass(
 function topTradeCollisionGroup(live: LiveMatchOddsEventItem | undefined): LiveMatchOddsTopTradeSummary[] {
   if (!live?.latestTopTradeKey) return []
   const latest = live.topTrades.find(item => item.key === live.latestTopTradeKey)
-  if (!latest) return []
-  const latestTime = Date.parse(latest.timestamp)
+  return topTradeCollisionGroupForTrigger(live, latest)
+}
+
+function topTradeCollisionGroupForTrigger(
+  live: LiveMatchOddsEventItem | undefined,
+  trigger: LiveMatchOddsTopTradeSummary | undefined,
+): LiveMatchOddsTopTradeSummary[] {
+  if (!live || !trigger) return []
+  const latestTime = Date.parse(trigger.timestamp)
   if (Number.isNaN(latestTime)) return []
 
   return live.topTrades
@@ -556,6 +571,21 @@ function topTradeCollisionGroup(live: LiveMatchOddsEventItem | undefined): LiveM
       return !Number.isNaN(tradeTime) && Math.abs(latestTime - tradeTime) < NEAR_TRADE_WINDOW_MS
     })
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+}
+
+function topTradeCollisionGroupForKey(
+  live: LiveMatchOddsEventItem,
+  triggerKey: string,
+): LiveMatchOddsTopTradeSummary[] {
+  const trigger = live.topTrades.find(item => item.key === triggerKey)
+  return topTradeCollisionGroupForTrigger(live, trigger)
+}
+
+function topTradeByKey(
+  live: LiveMatchOddsEventItem,
+  triggerKey: string,
+): LiveMatchOddsTopTradeSummary | undefined {
+  return live.topTrades.find(item => item.key === triggerKey)
 }
 
 function syncTopTradeCollisionMarkers() {
@@ -575,7 +605,11 @@ function syncTopTradeCollisionMarkers() {
 
     if (existing) {
       for (const [key, count] of existing) {
-        if (tradeKeys.has(key)) markers.set(key, count)
+        if (!tradeKeys.has(key)) continue
+        markers.set(key, count)
+        const trigger = topTradeByKey(item, key)
+        const retainedGroup = topTradeCollisionGroupForKey(item, key)
+        recordTopTradeCollisionHistoryForTrigger(item, trigger, retainedGroup, count)
       }
     }
 
@@ -691,11 +725,21 @@ function recordTopTradeCollisionHistory(
   const latestKey = live.latestTopTradeKey
   if (!Number.isFinite(eventId) || !latestKey || collisionCount <= 1) return
   const latest = collisionGroup.find(trade => trade.key === latestKey)
-  if (!latest) return
+  recordTopTradeCollisionHistoryForTrigger(live, latest, collisionGroup, collisionCount)
+}
+
+function recordTopTradeCollisionHistoryForTrigger(
+  live: LiveMatchOddsEventItem,
+  trigger: LiveMatchOddsTopTradeSummary | undefined,
+  collisionGroup: LiveMatchOddsTopTradeSummary[],
+  collisionCount: number,
+) {
+  const eventId = Number(live.eventId)
+  if (!Number.isFinite(eventId) || !trigger || collisionCount <= 1 || collisionGroup.length <= 1) return
 
   const match = findMatchByEventId(eventId)
-  const recordKey = `${eventId}|${latest.key}`
-  const record = buildTopTradeCollisionHistoryRecord(eventId, match, latest, collisionGroup, collisionCount, recordKey)
+  const recordKey = `${eventId}|${trigger.key}`
+  const record = buildTopTradeCollisionHistoryRecord(eventId, match, trigger, collisionGroup, collisionCount, recordKey)
   mergeTopTradeCollisionHistoryRecord(record)
 }
 
@@ -1309,7 +1353,13 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                   {{ formatTradeClock(getLiveItem(item)?.maxTopTrade) }}
                 </span>
               </td>
-              <td class="xg-cell">{{ formatXg(item) }}</td>
+              <td class="xg-cell" :title="formatXg(item)">
+                <span v-if="getXg(item)" class="xg-pair">
+                  <span><b>主</b>{{ formatXgHome(item) }}</span>
+                  <span><b>客</b>{{ formatXgAway(item) }}</span>
+                </span>
+                <span v-else>-</span>
+              </td>
               <td class="tg-cell">
                 <button
                   class="tg-toggle"
@@ -1902,11 +1952,11 @@ th.col-tg {
 }
 
 .col-league {
-  width: 58px;
+  width: 50px;
 }
 
 .col-time {
-  width: 76px;
+  width: 70px;
 }
 
 .col-teams {
@@ -1914,27 +1964,27 @@ th.col-tg {
 }
 
 .col-price {
-  width: 54px;
+  width: 46px;
 }
 
 .col-max {
-  width: 172px;
+  width: 164px;
 }
 
 .col-money {
-  width: 88px;
+  width: 76px;
 }
 
 .col-index {
-  width: 68px;
+  width: 56px;
 }
 
 .col-live-total {
-  width: 96px;
+  width: 90px;
 }
 
 .col-live-ltp {
-  width: 108px;
+  width: 102px;
 }
 
 .col-action {
@@ -1942,11 +1992,11 @@ th.col-tg {
 }
 
 .col-xg {
-  width: 48px;
+  width: 86px;
 }
 
 .col-tg {
-  width: 90px;
+  width: 84px;
 }
 
 .col-live {
@@ -1984,10 +2034,34 @@ th.col-tg {
 .index-cell,
 .live-total-cell,
 .live-ltp-cell,
-.xg-cell,
 .tg-cell {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.xg-cell {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.xg-pair {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  color: #1f7a45;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.xg-pair span {
+  white-space: nowrap;
+}
+
+.xg-pair b {
+  margin-right: 3px;
+  color: #6f9b7d;
+  font-weight: 800;
 }
 
 .max-cell {
@@ -2052,13 +2126,46 @@ th.col-tg {
 }
 
 .top-table {
-  min-width: 960px;
+  table-layout: fixed;
+  min-width: 0;
 }
 
 .top-table th {
   height: 34px;
   background: #eef2f7;
   font-size: 12px;
+}
+
+.top-table th,
+.top-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-table th:nth-child(1),
+.top-table td:nth-child(1) {
+  width: 42px;
+}
+
+.top-table th:nth-child(2),
+.top-table td:nth-child(2) {
+  width: 104px;
+}
+
+.top-table th:nth-child(3),
+.top-table td:nth-child(3),
+.top-table th:nth-child(4),
+.top-table td:nth-child(4) {
+  width: 72px;
+}
+
+.top-table th:nth-child(5),
+.top-table td:nth-child(5),
+.top-table th:nth-child(6),
+.top-table td:nth-child(6),
+.top-table th:nth-child(7),
+.top-table td:nth-child(7) {
+  width: 108px;
 }
 
 .top-table td {
@@ -2175,7 +2282,7 @@ th.col-tg {
   }
 
   .live-table {
-    min-width: 1290px;
+    min-width: 1140px;
   }
 
   .table-wrap {
