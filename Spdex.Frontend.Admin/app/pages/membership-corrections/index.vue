@@ -12,6 +12,7 @@
           <NSelect v-model:value="candidateFilter.reviewStatus" :options="reviewStatusOptions" clearable placeholder="审核状态" style="width:140px" />
           <NDatePicker v-model:value="candidateFilter.range" type="daterange" clearable />
           <NButton type="primary" @click="reloadCandidates">查询</NButton>
+          <NButton :loading="candidateLoading" @click="refreshCandidates">更新候选订单</NButton>
         </NSpace>
 
         <NDataTable
@@ -62,6 +63,7 @@
         <NDescriptionsItem label="原到期">{{ fmt(reviewModal.row.preEndDate) }}</NDescriptionsItem>
         <NDescriptionsItem label="当前会籍">{{ reviewModal.row.currentRoleName || '—' }}</NDescriptionsItem>
         <NDescriptionsItem label="当前到期">{{ fmt(reviewModal.row.currentEndDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="建议会籍">{{ reviewModal.row.targetRoleName || '—' }}</NDescriptionsItem>
         <NDescriptionsItem label="建议到期">{{ fmt(reviewModal.row.targetEndDate) }}</NDescriptionsItem>
         <NDescriptionsItem label="超出天数">{{ reviewModal.row.extraDaysVsFixed }}天</NDescriptionsItem>
         <NDescriptionsItem label="支付前状态">{{ reviewModal.row.preStateConfidence }}可信</NDescriptionsItem>
@@ -86,7 +88,9 @@
         </NFormItem>
       </NForm>
       <template #footer>
-        <NButton type="primary" :loading="reviewSaving" @click="submitReview">保存审核</NButton>
+        <NButton type="primary" :loading="reviewSaving" @click="submitReview">
+          {{ reviewForm.status === 1 ? '保存并执行建议' : '保存审核' }}
+        </NButton>
       </template>
     </NModal>
 
@@ -139,6 +143,8 @@ interface CandidateItem {
   preEndDate?: string | null
   preStateConfidence: string
   targetEndDate: string
+  targetRoleId: number
+  targetRoleName?: string | null
   currentRoleId: number
   currentRoleName: string
   currentEndDate?: string | null
@@ -237,18 +243,27 @@ async function loadCandidates() {
   if (candidateFilter.candidateType) query.candidateType = candidateFilter.candidateType
   if (candidateFilter.reviewStatus !== null) query.reviewStatus = candidateFilter.reviewStatus
   queryRange(candidateFilter.range, query)
-  const res = await api.get<{ items: CandidateItem[], total: number }>('membership-corrections/candidates', query)
-  candidateLoading.value = false
-  if (res.code === 0 && res.data) {
-    candidateRows.value = res.data.items
-    candidatePagination.itemCount = res.data.total
+  try {
+    const res = await api.get<{ items: CandidateItem[], total: number }>('membership-corrections/candidates', query)
+    if (res.code === 0 && res.data) {
+      candidateRows.value = res.data.items
+      candidatePagination.itemCount = res.data.total
+    }
+    else {
+      candidateRows.value = []
+      message.error(res.message || '加载失败')
+    }
   }
-  else {
-    candidateRows.value = []
-    message.error(res.message || '加载失败')
+  finally {
+    candidateLoading.value = false
   }
 }
-function reloadCandidates() { candidatePagination.page = 1; loadCandidates() }
+async function reloadCandidates() { candidatePagination.page = 1; await loadCandidates() }
+async function refreshCandidates() {
+  candidatePagination.page = 1
+  await loadCandidates()
+  message.success(`候选订单已更新，共 ${candidatePagination.itemCount} 条`)
+}
 function onCandidatePage(p: number) { candidatePagination.page = p; loadCandidates() }
 
 async function loadRecords() {
@@ -314,6 +329,10 @@ function openReview(row: CandidateItem) {
 }
 async function submitReview() {
   if (!reviewModal.row) return
+  if (reviewForm.status === 1) {
+    const confirmed = window.confirm('审核通过会立即按建议会籍和目标到期执行纠偏，并写入纠正记录。确认继续？')
+    if (!confirmed) return
+  }
   reviewSaving.value = true
   const res = await api.put(`membership-corrections/candidates/${reviewModal.row.orderId}/review`, {
     status: reviewForm.status,
@@ -322,9 +341,10 @@ async function submitReview() {
   })
   reviewSaving.value = false
   if (res.code === 0) {
-    message.success('审核已保存')
+    message.success(res.message || (reviewForm.status === 1 ? '审核已保存并执行' : '审核已保存'))
     reviewModal.show = false
-    loadCandidates()
+    await loadCandidates()
+    await loadRecords()
   }
   else {
     message.error(res.message || '保存失败')
