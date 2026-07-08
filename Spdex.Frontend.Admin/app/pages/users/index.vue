@@ -30,10 +30,10 @@
         <NFormItem label="开通天数">
           <NInputNumber v-model:value="mForm.days" :min="1" style="width:100%" placeholder="按天数走折算算法" />
         </NFormItem>
-        <NFormItem label="或设到期日">
-          <NDatePicker v-model:value="mForm.endDate" type="date" clearable style="width:100%" />
+        <NFormItem label="或设到期时间">
+          <NDatePicker v-model:value="mForm.endDate" type="datetime" clearable style="width:100%" />
         </NFormItem>
-        <div class="text-xs text-gray-400">填到期日则直接覆盖；否则按天数走与支付链路一致的折算算法。</div>
+        <div class="text-xs text-gray-400">填到期时间则直接覆盖；否则按天数走与支付链路一致的折算算法。</div>
       </NForm>
       <template #footer>
         <NButton type="primary" :loading="saving" @click="submitMembership">确定</NButton>
@@ -158,7 +158,6 @@ async function submitPwd() {
   else { message.error(res.message) }
 }
 
-function fmtDate(d?: string | null) { return d ? d.substring(0, 10) : '—' }
 function fmtDateTime(d?: string | null) { return d ? d.substring(0, 16).replace('T', ' ') : '—' }
 
 const columns = [
@@ -169,7 +168,7 @@ const columns = [
     key: 'tier',
     render: (r: MemberItem) => h(NTag, { type: 'info', size: 'small' }, { default: () => `${r.tier} (${r.roleId})` }),
   },
-  { title: '到期', key: 'endDate', render: (r: MemberItem) => fmtDate(r.endDate) },
+  { title: '到期', key: 'endDate', width: 160, render: (r: MemberItem) => fmtDateTime(r.endDate) },
   { title: '注册时间', key: 'registerDate', width: 150, render: (r: MemberItem) => fmtDateTime(r.registerDate) },
   {
     title: '状态',

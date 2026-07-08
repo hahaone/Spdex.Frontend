@@ -5,7 +5,7 @@
     <NCard v-if="user" :title="`${user.userName}（#${user.userId}）`" size="small" class="mb-4">
       <NDescriptions :column="3" size="small" label-placement="left">
         <NDescriptionsItem label="会籍">{{ user.tier }}（{{ user.roleId }}）</NDescriptionsItem>
-        <NDescriptionsItem label="到期">{{ fmtDate(user.endDate) }}</NDescriptionsItem>
+        <NDescriptionsItem label="到期">{{ fmtDateTime(user.endDate) }}</NDescriptionsItem>
         <NDescriptionsItem label="状态">{{ user.enabled ? '启用' : '禁用' }}</NDescriptionsItem>
         <NDescriptionsItem label="手机">{{ user.mobile || '—' }}</NDescriptionsItem>
         <NDescriptionsItem label="邮箱">{{ user.email || '—' }}</NDescriptionsItem>
@@ -89,6 +89,7 @@ async function loadSilk() {
 function onTab(name: string) { if (name === 'silk' && !balance.value) loadSilk() }
 
 function fmtDate(d?: string) { return d ? d.substring(0, 10) : '—' }
+function fmtDateTime(d?: string) { return d ? d.replace('T', ' ').substring(0, 16) : '—' }
 function fmt(d?: string) { return d ? d.replace('T', ' ').substring(0, 19) : '—' }
 
 const orderCols = [
