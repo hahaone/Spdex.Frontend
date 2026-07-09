@@ -18,6 +18,7 @@ const DRAW_SELECTION_ID = 58805
 const TOP_TRADE_COLLISION_HISTORY_LIMIT = 200
 const TOP_TRADE_COLLISION_MARKER_STORAGE_PREFIX = 'spdex-fjcx-live-top-trade-collision-markers'
 const TOP_TRADE_COLLISION_HISTORY_STORAGE_PREFIX = 'spdex-fjcx-live-top-trade-collisions'
+const TOP_TRADE_COLLISION_CLEARED_STORAGE_PREFIX = 'spdex-fjcx-live-top-trade-collisions-cleared'
 
 const { isJcOnly } = useAuth()
 
@@ -323,6 +324,7 @@ const flashEventIds = ref<Set<number>>(new Set())
 const previousSignatures = ref<Map<number, string>>(new Map())
 const topTradeCollisionHistory = ref<TopTradeCollisionHistoryRecord[]>([])
 const topTradeCollisionCountsByEventId = ref<Map<number, Map<string, number>>>(new Map())
+const clearedTopTradeCollisionKeys = ref<Set<string>>(new Set())
 const previousTopTradeKeysByEventId = ref<Map<number, Set<string>>>(new Map())
 const isTopTradeCollisionHistoryOpen = ref(false)
 let matchRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -342,12 +344,18 @@ const topTradeCollisionHistoryStorageKey = computed(() =>
 const topTradeCollisionMarkerStorageKey = computed(() =>
   `${TOP_TRADE_COLLISION_MARKER_STORAGE_PREFIX}:${selectedDate.value}`,
 )
+const clearedTopTradeCollisionStorageKey = computed(() =>
+  `${TOP_TRADE_COLLISION_CLEARED_STORAGE_PREFIX}:${selectedDate.value}`,
+)
 
 if (import.meta.client) {
-  watch(topTradeCollisionHistoryStorageKey, () => {
+  watch([
+    topTradeCollisionHistoryStorageKey,
+    topTradeCollisionMarkerStorageKey,
+    clearedTopTradeCollisionStorageKey,
+  ], () => {
+    loadClearedTopTradeCollisionKeys()
     loadTopTradeCollisionHistory()
-  }, { immediate: true })
-  watch(topTradeCollisionMarkerStorageKey, () => {
     loadTopTradeCollisionMarkers()
   }, { immediate: true })
 }
@@ -575,21 +583,6 @@ function topTradeCollisionGroupForTrigger(
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
 }
 
-function topTradeCollisionGroupForKey(
-  live: LiveMatchOddsEventItem,
-  triggerKey: string,
-): LiveMatchOddsTopTradeSummary[] {
-  const trigger = live.topTrades.find(item => item.key === triggerKey)
-  return topTradeCollisionGroupForTrigger(live, trigger)
-}
-
-function topTradeByKey(
-  live: LiveMatchOddsEventItem,
-  triggerKey: string,
-): LiveMatchOddsTopTradeSummary | undefined {
-  return live.topTrades.find(item => item.key === triggerKey)
-}
-
 function currentTopTradeCollisionMarkers(live: LiveMatchOddsEventItem): Map<string, number> {
   const entries = live.topTrades
     .map(trade => ({ trade, time: Date.parse(trade.timestamp) }))
@@ -631,14 +624,13 @@ function syncTopTradeCollisionMarkers() {
     if (existing) {
       for (const [key, count] of existing) {
         if (!tradeKeys.has(key)) continue
+        if (isTopTradeCollisionCleared(eventId, key)) continue
         markers.set(key, count)
-        const trigger = topTradeByKey(item, key)
-        const retainedGroup = topTradeCollisionGroupForKey(item, key)
-        recordTopTradeCollisionHistoryForTrigger(item, trigger, retainedGroup, count)
       }
     }
 
     for (const collision of serverCollisionsByEventId.get(eventId) ?? []) {
+      if (isTopTradeCollisionCleared(eventId, collision.trigger?.key)) continue
       if (collision.trigger && tradeKeys.has(collision.trigger.key)) {
         markers.set(collision.trigger.key, Math.max(markers.get(collision.trigger.key) ?? 0, collision.count))
       }
@@ -646,6 +638,7 @@ function syncTopTradeCollisionMarkers() {
     }
 
     for (const [key, count] of currentTopTradeCollisionMarkers(item)) {
+      if (isTopTradeCollisionCleared(eventId, key)) continue
       markers.set(key, Math.max(markers.get(key) ?? 0, count))
     }
 
@@ -654,7 +647,12 @@ function syncTopTradeCollisionMarkers() {
     const latestKey = item.latestTopTradeKey
     const previousKeys = previousKeysByEventId.get(eventId)
     const latestEnteredTop10 = !!latestKey && (previousKeys == null || !previousKeys.has(latestKey))
-    if (collisionCount > 0 && latestEnteredTop10 && tradeKeys.has(latestKey)) {
+    if (
+      collisionCount > 0
+      && latestEnteredTop10
+      && tradeKeys.has(latestKey)
+      && !isTopTradeCollisionCleared(eventId, latestKey)
+    ) {
       markers.set(latestKey, markers.get(latestKey) ?? collisionCount)
       recordTopTradeCollisionHistory(item, collisionGroup, collisionCount)
     }
@@ -765,6 +763,7 @@ function recordTopTradeCollisionHistoryForTrigger(
 ) {
   const eventId = Number(live.eventId)
   if (!Number.isFinite(eventId) || !trigger || collisionCount <= 1 || collisionGroup.length <= 1) return
+  if (isTopTradeCollisionCleared(eventId, trigger.key)) return
 
   const match = findMatchByEventId(eventId)
   const recordKey = `${eventId}|${trigger.key}`
@@ -775,6 +774,7 @@ function recordTopTradeCollisionHistoryForTrigger(
 function recordTopTradeCollisionHistoryFromServer(collision: LiveMatchOddsTopTradeCollisionRecord) {
   const eventId = Number(collision.eventId)
   if (!Number.isFinite(eventId) || !collision.trigger || collision.count <= 1) return
+  if (isTopTradeCollisionCleared(eventId, collision.trigger.key)) return
 
   const match = findMatchByEventId(eventId)
   const record: TopTradeCollisionHistoryRecord = {
@@ -794,6 +794,8 @@ function recordTopTradeCollisionHistoryFromServer(collision: LiveMatchOddsTopTra
 }
 
 function mergeTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryRecord) {
+  if (isTopTradeCollisionCleared(record.eventId, record.trigger.key)) return
+
   const existingIndex = topTradeCollisionHistory.value.findIndex(item => item.key === record.key)
   let next: TopTradeCollisionHistoryRecord[]
 
@@ -896,8 +898,97 @@ function openTopTradeCollisionHistoryRecord(record: TopTradeCollisionHistoryReco
 }
 
 function clearTopTradeCollisionHistory() {
+  const clearedKeys = new Set(clearedTopTradeCollisionKeys.value)
+  for (const key of collectCurrentTopTradeCollisionKeys()) {
+    clearedKeys.add(key)
+  }
+  clearedTopTradeCollisionKeys.value = clearedKeys
+  saveClearedTopTradeCollisionKeys()
+
   topTradeCollisionHistory.value = []
-  if (import.meta.client) localStorage.removeItem(topTradeCollisionHistoryStorageKey.value)
+  topTradeCollisionCountsByEventId.value = new Map()
+
+  if (import.meta.client) {
+    localStorage.removeItem(topTradeCollisionHistoryStorageKey.value)
+    localStorage.removeItem(topTradeCollisionMarkerStorageKey.value)
+  }
+}
+
+function collectCurrentTopTradeCollisionKeys(): Set<string> {
+  const keys = new Set<string>()
+
+  for (const record of topTradeCollisionHistory.value) {
+    keys.add(record.key)
+    keys.add(topTradeCollisionRecordKey(record.eventId, record.trigger.key))
+  }
+
+  for (const [eventId, markers] of topTradeCollisionCountsByEventId.value) {
+    for (const key of markers.keys()) {
+      keys.add(topTradeCollisionRecordKey(eventId, key))
+    }
+  }
+
+  for (const collision of liveTrades.data.value?.topTradeCollisions ?? []) {
+    const key = topTradeCollisionRecordKeyFromServer(collision)
+    if (key) keys.add(key)
+  }
+
+  for (const item of liveTrades.data.value?.items ?? []) {
+    const eventId = Number(item.eventId)
+    if (!Number.isFinite(eventId)) continue
+    for (const key of currentTopTradeCollisionMarkers(item).keys()) {
+      keys.add(topTradeCollisionRecordKey(eventId, key))
+    }
+    const collisionGroup = topTradeCollisionGroup(item)
+    if (item.latestTopTradeKey && collisionGroup.length > 1) {
+      keys.add(topTradeCollisionRecordKey(eventId, item.latestTopTradeKey))
+    }
+  }
+
+  return keys
+}
+
+function topTradeCollisionRecordKey(eventId: number, triggerKey: string): string {
+  return `${eventId}|${triggerKey}`
+}
+
+function topTradeCollisionRecordKeyFromServer(
+  collision: LiveMatchOddsTopTradeCollisionRecord,
+): string | null {
+  const eventId = Number(collision.eventId)
+  const triggerKey = collision.trigger?.key || collision.triggerTradeKey
+  if (!Number.isFinite(eventId) || !triggerKey) return null
+  return topTradeCollisionRecordKey(eventId, triggerKey)
+}
+
+function isTopTradeCollisionCleared(eventId: number, triggerKey: string | undefined | null): boolean {
+  if (!triggerKey) return false
+  return clearedTopTradeCollisionKeys.value.has(topTradeCollisionRecordKey(eventId, triggerKey))
+}
+
+function saveClearedTopTradeCollisionKeys() {
+  if (!import.meta.client) return
+  localStorage.setItem(
+    clearedTopTradeCollisionStorageKey.value,
+    JSON.stringify([...clearedTopTradeCollisionKeys.value]),
+  )
+}
+
+function loadClearedTopTradeCollisionKeys() {
+  if (!import.meta.client) return
+  try {
+    const raw = localStorage.getItem(clearedTopTradeCollisionStorageKey.value)
+    if (!raw) {
+      clearedTopTradeCollisionKeys.value = new Set()
+      return
+    }
+    const parsed: unknown = JSON.parse(raw)
+    clearedTopTradeCollisionKeys.value = new Set(
+      Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [],
+    )
+  } catch {
+    clearedTopTradeCollisionKeys.value = new Set()
+  }
 }
 
 function saveTopTradeCollisionMarkers(markers = topTradeCollisionCountsByEventId.value) {
@@ -927,7 +1018,9 @@ function loadTopTradeCollisionMarkers() {
     for (const item of parsed) {
       if (!isTopTradeCollisionStoredMarker(item)) continue
       const markers = new Map<string, number>()
-      for (const trade of item.trades) markers.set(trade.key, trade.count)
+      for (const trade of item.trades) {
+        if (!isTopTradeCollisionCleared(item.eventId, trade.key)) markers.set(trade.key, trade.count)
+      }
       if (markers.size > 0) next.set(item.eventId, markers)
     }
     topTradeCollisionCountsByEventId.value = next
@@ -968,6 +1061,7 @@ function loadTopTradeCollisionHistory() {
     const parsed: unknown = JSON.parse(raw)
     topTradeCollisionHistory.value = Array.isArray(parsed)
       ? parsed.filter(isTopTradeCollisionHistoryRecord).slice(0, TOP_TRADE_COLLISION_HISTORY_LIMIT)
+        .filter(record => !isTopTradeCollisionCleared(record.eventId, record.trigger.key))
       : []
   } catch {
     topTradeCollisionHistory.value = []
@@ -980,8 +1074,22 @@ function isTopTradeCollisionHistoryRecord(value: unknown): value is TopTradeColl
   return typeof record.key === 'string'
     && typeof record.eventId === 'number'
     && typeof record.count === 'number'
-    && typeof record.trigger === 'object'
+    && isTopTradeCollisionHistoryMember(record.trigger)
     && Array.isArray(record.linked)
+    && record.linked.every(isTopTradeCollisionHistoryMember)
+}
+
+function isTopTradeCollisionHistoryMember(value: unknown): value is TopTradeCollisionHistoryMember {
+  if (!value || typeof value !== 'object') return false
+  const member = value as Partial<TopTradeCollisionHistoryMember>
+  return typeof member.key === 'string'
+    && typeof member.rank === 'number'
+    && typeof member.time === 'string'
+    && typeof member.runner === 'string'
+    && typeof member.side === 'string'
+    && typeof member.price === 'string'
+    && typeof member.amount === 'string'
+    && typeof member.book === 'string'
 }
 
 function liveEmptyText(item: MatchListItem): string {
