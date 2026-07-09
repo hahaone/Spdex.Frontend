@@ -588,6 +588,29 @@ function topTradeByKey(
   return live.topTrades.find(item => item.key === triggerKey)
 }
 
+function currentTopTradeCollisionMarkers(live: LiveMatchOddsEventItem): Map<string, number> {
+  const entries = live.topTrades
+    .map(trade => ({ trade, time: Date.parse(trade.timestamp) }))
+    .filter((entry): entry is { trade: LiveMatchOddsTopTradeSummary; time: number } => !Number.isNaN(entry.time))
+    .sort((a, b) => b.time - a.time)
+  const consumed = new Set<string>()
+  const markers = new Map<string, number>()
+
+  for (const entry of entries) {
+    if (consumed.has(entry.trade.key)) continue
+
+    const group = entries.filter(item => Math.abs(item.time - entry.time) < NEAR_TRADE_WINDOW_MS)
+    if (group.length <= 1) continue
+
+    markers.set(entry.trade.key, group.length)
+    for (const member of group) {
+      consumed.add(member.trade.key)
+    }
+  }
+
+  return markers
+}
+
 function syncTopTradeCollisionMarkers() {
   const next = new Map<number, Map<string, number>>()
   const previousKeysByEventId = previousTopTradeKeysByEventId.value
@@ -620,11 +643,15 @@ function syncTopTradeCollisionMarkers() {
       recordTopTradeCollisionHistoryFromServer(collision)
     }
 
+    for (const [key, count] of currentTopTradeCollisionMarkers(item)) {
+      markers.set(key, Math.max(markers.get(key) ?? 0, count))
+    }
+
     const collisionGroup = topTradeCollisionGroup(item)
     const collisionCount = collisionGroup.length > 1 ? collisionGroup.length : 0
     const latestKey = item.latestTopTradeKey
     const previousKeys = previousKeysByEventId.get(eventId)
-    const latestEnteredTop10 = !!latestKey && previousKeys != null && !previousKeys.has(latestKey)
+    const latestEnteredTop10 = !!latestKey && (previousKeys == null || !previousKeys.has(latestKey))
     if (collisionCount > 0 && latestEnteredTop10 && tradeKeys.has(latestKey)) {
       markers.set(latestKey, markers.get(latestKey) ?? collisionCount)
       recordTopTradeCollisionHistory(item, collisionGroup, collisionCount)

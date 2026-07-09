@@ -1,5 +1,5 @@
 import type { ApiResponse } from '~/types/api'
-import type { LiveMatchOddsEventItem, LiveMatchOddsTopTradesResponse } from '~/types/live'
+import type { LiveMatchOddsEventItem, LiveMatchOddsTopTradeCollisionRecord, LiveMatchOddsTopTradesResponse } from '~/types/live'
 
 const BATCH_SIZE = 20
 const MAX_CONCURRENCY = 3
@@ -49,6 +49,7 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     const itemMap = new Map<number, LiveMatchOddsEventItem>()
     const missingSet = new Set<number>()
     const pendingSet = new Set<number>()
+    const collisionMap = new Map<string, LiveMatchOddsTopTradeCollisionRecord>()
     pruneEventMaps(requested)
 
     for (const item of data.value?.items ?? []) {
@@ -72,6 +73,13 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
       }
     }
 
+    for (const collision of data.value?.topTradeCollisions ?? []) {
+      const eventId = Number(collision.eventId)
+      if (requested.has(eventId)) {
+        collisionMap.set(topTradeCollisionKey(collision), collision)
+      }
+    }
+
     try {
       const batches = chunk(refs, BATCH_SIZE)
       let cursor = 0
@@ -86,7 +94,7 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
           try {
             const result = await fetchBatch(batch)
             markBatchFetched(batchIds)
-            mergeBatch(ids, itemMap, missingSet, pendingSet, batchIds, result)
+            mergeBatch(ids, itemMap, missingSet, pendingSet, collisionMap, batchIds, result)
             successCount += 1
           }
           catch (err) {
@@ -164,9 +172,11 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     itemMap: Map<number, LiveMatchOddsEventItem>,
     missingSet: Set<number>,
     pendingSet: Set<number>,
+    collisionMap: Map<string, LiveMatchOddsTopTradeCollisionRecord>,
     batchIds: number[],
     response: LiveMatchOddsTopTradesResponse,
   ) {
+    const batchIdSet = new Set(batchIds)
     for (const id of batchIds) {
       missingSet.delete(id)
       pendingSet.delete(id)
@@ -196,11 +206,26 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
       }
     }
 
+    for (const [key, collision] of collisionMap) {
+      const eventId = Number(collision.eventId)
+      if (Number.isFinite(eventId) && batchIdSet.has(eventId)) {
+        collisionMap.delete(key)
+      }
+    }
+
+    for (const collision of response.topTradeCollisions ?? []) {
+      const eventId = Number(collision.eventId)
+      if (Number.isFinite(eventId) && batchIdSet.has(eventId)) {
+        collisionMap.set(topTradeCollisionKey(collision), collision)
+      }
+    }
+
     data.value = buildResponseSnapshot(
       requestedIds,
       itemMap,
       missingSet,
       pendingSet,
+      [...collisionMap.values()],
       response.limit,
       response.scope,
       response.timestamp,
@@ -240,6 +265,7 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
     itemMap: Map<number, LiveMatchOddsEventItem>,
     missingSet: Set<number>,
     pendingSet: Set<number>,
+    topTradeCollisions: LiveMatchOddsTopTradeCollisionRecord[],
     limit: number,
     scope: string,
     timestamp: string,
@@ -262,7 +288,12 @@ export function useLiveMatchOddsTopTrades(markets: Ref<LiveMatchOddsMarketRef[]>
       scope,
       timestamp,
       missingEvents,
+      topTradeCollisions,
     }
+  }
+
+  function topTradeCollisionKey(collision: LiveMatchOddsTopTradeCollisionRecord): string {
+    return `${collision.eventId}|${collision.marketId}|${collision.triggerTradeKey}`
   }
 
   function chunk<T>(items: T[], size: number): T[][] {
