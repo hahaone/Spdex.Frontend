@@ -7,6 +7,9 @@ interface Option {
   value: string
 }
 
+type SortMode = 'league' | 'time' | 'amount'
+type LotterySort = 'jc' | 'lottery'
+
 const props = defineProps<{
   matches: MatchSummary[]
   pending: boolean
@@ -46,11 +49,12 @@ const collapsedIds = ref<Set<number>>(new Set())
 const pinnedIds = ref<Set<number>>(new Set())
 const deletedIds = ref<Set<number>>(new Set())
 const retainedIds = ref<Set<number>>(new Set())
-const sortMode = ref('time')
+const sortMode = ref<SortMode>('time')
 // 联赛多选(客户端筛选):空数组 = 全部联赛。由工具栏「赛事选择」面板维护。
 const selectedLeagues = ref<string[]>([])
 
 const selectedCount = computed(() => selectedIds.value.size)
+const activeLotterySort = computed<LotterySort | null>(() => isLotterySort(props.lottery) ? props.lottery : null)
 
 const activeIds = computed(() => new Set(props.matches.map(match => match.eventId)))
 
@@ -89,11 +93,17 @@ const visibleMatches = computed(() => {
     const pinnedDelta = Number(pinnedIds.value.has(b.eventId)) - Number(pinnedIds.value.has(a.eventId))
     if (pinnedDelta !== 0) return pinnedDelta
 
-    if (sortMode.value === 'time') return a.matchTime.localeCompare(b.matchTime)
-    if (sortMode.value === 'amount') return (b.bfAmount ?? 0) - (a.bfAmount ?? 0)
+    const lotterySort = activeLotterySort.value
+    if (sortMode.value === 'time') return compareByTime(a, b)
+    if (sortMode.value === 'amount') {
+      const amountDelta = (b.bfAmount ?? 0) - (a.bfAmount ?? 0)
+      return amountDelta || (lotterySort ? compareByLotteryOrder(a, b, lotterySort) : compareByTime(a, b))
+    }
+
+    if (lotterySort) return compareByLotteryOrder(a, b, lotterySort)
 
     const leagueDelta = (a.leagueCode || a.leagueName).localeCompare(b.leagueCode || b.leagueName)
-    return leagueDelta || a.matchTime.localeCompare(b.matchTime)
+    return leagueDelta || compareByTime(a, b)
   })
 
   return sorted
@@ -107,6 +117,10 @@ const pagedMatches = computed(() => visibleMatches.value.slice((page.value - 1) 
 const pageList = computed(() => Array.from({ length: pageCount.value }, (_, i) => i + 1))
 watch(pageCount, (n) => { if (page.value > n) page.value = n })
 watch(sortMode, () => { page.value = 1 })
+watch(() => props.lottery, (lottery) => {
+  applyLotteryDefaultSort(lottery)
+  page.value = 1
+}, { immediate: true })
 watch(selectedLeagues, () => { page.value = 1 })
 // 数据切换(改日期/刷新)后,剔除已不在结果集中的联赛选择,避免残留筛选导致空列表(与 selectedIds 收敛口径一致)。
 watch(leagueChips, (chips) => {
@@ -122,6 +136,42 @@ function goPage(p: number) {
 
 function intersectSet(source: Set<number>, available: Set<number>): Set<number> {
   return new Set([...source].filter(id => available.has(id)))
+}
+
+function isSortMode(value: unknown): value is SortMode {
+  return value === 'league' || value === 'time' || value === 'amount'
+}
+
+function isLotterySort(value: string): value is LotterySort {
+  return value === 'jc' || value === 'lottery'
+}
+
+function sortableLotteryNumber(value: number | undefined): number {
+  return typeof value === 'number' && value > 0 ? value : Number.MAX_SAFE_INTEGER
+}
+
+function compareByTime(a: MatchSummary, b: MatchSummary): number {
+  return a.matchTime.localeCompare(b.matchTime) || a.eventId - b.eventId
+}
+
+function compareByLotteryOrder(a: MatchSummary, b: MatchSummary, lottery: LotterySort): number {
+  const issueA = sortableLotteryNumber(lottery === 'jc' ? a.jcIssue : a.sfcIssue)
+  const issueB = sortableLotteryNumber(lottery === 'jc' ? b.jcIssue : b.sfcIssue)
+  if (issueA !== issueB) return issueA - issueB
+
+  const orderA = sortableLotteryNumber(lottery === 'jc' ? a.jcOrder : a.sfcOrder)
+  const orderB = sortableLotteryNumber(lottery === 'jc' ? b.jcOrder : b.sfcOrder)
+  if (orderA !== orderB) return orderA - orderB
+
+  return compareByTime(a, b)
+}
+
+function applyLotteryDefaultSort(lottery: string) {
+  if (isLotterySort(lottery) && sortMode.value === 'time') sortMode.value = 'league'
+}
+
+function setSortMode(value: string) {
+  if (isSortMode(value)) sortMode.value = value
 }
 
 function setWithToggle(source: Set<number>, id: number): Set<number> {
@@ -198,7 +248,8 @@ onMounted(() => {
     collapsedIds.value = toIdSet(s.collapsed)
     if (Array.isArray(s.leagues))
       selectedLeagues.value = s.leagues.filter((x): x is string => typeof x === 'string')
-    if (typeof s.sort === 'string') sortMode.value = s.sort
+    if (isSortMode(s.sort)) sortMode.value = s.sort
+    applyLotteryDefaultSort(props.lottery)
   } catch { /* 损坏的存储忽略 */ }
 })
 
@@ -247,7 +298,7 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
       @update:lottery="emit('update:lottery', $event)"
       @update:league="emit('update:league', $event)"
       @update:selected-leagues="selectedLeagues = $event"
-      @update:sort-mode="sortMode = $event"
+      @update:sort-mode="setSortMode"
       @refresh="emit('refresh')"
       @clear-metric="emit('clearMetric')"
       @collapse-all="collapseAll"

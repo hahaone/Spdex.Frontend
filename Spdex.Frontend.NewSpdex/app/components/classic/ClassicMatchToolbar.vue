@@ -61,6 +61,11 @@ const emit = defineEmits<{
 }>()
 
 const hasSelection = computed(() => props.selectedCount > 0)
+const leagueSortLabel = computed(() => {
+  if (props.lottery === 'jc') return '按竞彩排序'
+  if (props.lottery === 'lottery') return '按足彩排序'
+  return '按赛事排序'
+})
 
 function updateDay(value: string) {
   if (props.backcheckLocked) return
@@ -199,7 +204,7 @@ onBeforeUnmount(() => {
         <label class="classic-field sort">
           <span>排序</span>
           <select :value="sortMode" @change="emit('update:sortMode', ($event.target as HTMLSelectElement).value)">
-            <option value="league">按赛事排序</option>
+            <option value="league">{{ leagueSortLabel }}</option>
             <option value="time">按时间排序</option>
             <option value="amount">按成交量排序</option>
           </select>
