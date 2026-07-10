@@ -15,6 +15,7 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   csData: false,
   cornerData: false,
   dataReplay: false,
+  fullHistoryReplay: false,
   standardChart: false,
   indexTrendChart: false,
   tradeDetailTable: false,

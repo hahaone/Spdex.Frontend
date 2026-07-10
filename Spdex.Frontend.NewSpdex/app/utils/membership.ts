@@ -44,6 +44,9 @@ const tierNames: Record<string, string> = {
 }
 
 const mainlinePaidRoleIds = new Set([4, 9, 10, 11, 12, 5])
+const fullHistoryFallbackRoleIds = new Set([5, 13])
+const archiveStartDate = '2012-08-01'
+const limitedHistoryBackcheckMonths = 18
 
 function roleRank(roleId: number): number {
   return roleRanks[roleId] ?? roleRanks[2]!
@@ -105,6 +108,46 @@ export function canUseDataReplay(user: AuthUser | null | undefined, now = new Da
   if (!user || isExpired(user.endDate, now)) return false
   if (user.entitlements?.dataReplay !== undefined) return user.entitlements.dataReplay
   return !isFreeMembership(user)
+}
+
+export function canUseFullHistoryReplay(user: AuthUser | null | undefined, now = new Date()): boolean {
+  if (!user || isExpired(user.endDate, now)) return false
+  if (user.entitlements?.fullHistoryReplay !== undefined) return user.entitlements.fullHistoryReplay
+  if (user.entitlements?.csData && user.entitlements?.cornerData) return true
+  return fullHistoryFallbackRoleIds.has(user.roleId) || user.tier === 'Platinum'
+}
+
+export function limitedHistoryBackcheckMinDate(now = new Date()): string {
+  return toYmd(addMonthsClamped(now, -limitedHistoryBackcheckMonths))
+}
+
+export function backcheckMinDateForUser(user: AuthUser | null | undefined, now = new Date()): string {
+  return canUseFullHistoryReplay(user, now)
+    ? archiveStartDate
+    : maxYmd(archiveStartDate, limitedHistoryBackcheckMinDate(now))
+}
+
+function addMonthsClamped(date: Date, months: number): Date {
+  const totalMonths = date.getFullYear() * 12 + date.getMonth() + months
+  const year = Math.floor(totalMonths / 12)
+  const month = ((totalMonths % 12) + 12) % 12
+  const day = Math.min(date.getDate(), daysInMonth(year, month))
+  return new Date(year, month, day)
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+function toYmd(date: Date): string {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function maxYmd(a: string, b: string): string {
+  return a > b ? a : b
 }
 
 export function isActivePaidMembership(user: AuthUser | null | undefined, now = new Date()): boolean {

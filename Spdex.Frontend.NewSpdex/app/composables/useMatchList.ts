@@ -80,6 +80,8 @@ interface BackendMatchListResult {
   pageSize: number
   prematchSixHourLockApplied: boolean
   jcOnlyEnforced: boolean
+  historicalBackcheckLimitApplied: boolean
+  earliestBackcheckDate?: string | null
 }
 
 export interface MatchListFilters {
@@ -252,12 +254,16 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   const leagues = computed(() => result.data.value?.data?.leagues ?? [])
   const totalCount = computed(() => result.data.value?.data?.totalCount ?? 0)
   const prematchSixHourLockApplied = computed(() => result.data.value?.data?.prematchSixHourLockApplied ?? false)
+  const historicalBackcheckLimitApplied = computed(() => result.data.value?.data?.historicalBackcheckLimitApplied ?? false)
+  const earliestBackcheckDate = computed(() => result.data.value?.data?.earliestBackcheckDate ?? null)
 
   return {
     items,
     leagues,
     totalCount,
     prematchSixHourLockApplied,
+    historicalBackcheckLimitApplied,
+    earliestBackcheckDate,
     pending: result.pending,
     error: result.error,
     refresh: result.refresh,

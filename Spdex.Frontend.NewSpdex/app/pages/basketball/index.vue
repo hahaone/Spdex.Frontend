@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight, Filter, Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
-import { isFreeMembership } from '~/utils/membership'
+import { backcheckMinDateForUser, isFreeMembership } from '~/utils/membership'
 
 const route = useRoute()
 const { user } = useAuth()
 const routeDay = route.query.day === 'tomorrow' ? 'tomorrow' : route.query.day === 'yesterday' ? 'yesterday' : 'today'
 // 默认「全部赛事」;仅保留 全部/未开 两个筛选(已移除「已开」)。?status=started 回落全部。
 const routeStatus = ['upcoming', 'all'].includes(String(route.query.status)) ? String(route.query.status) as 'upcoming' | 'all' : 'all'
-const archiveMinDate = '2012-08-01'
+const archiveStartDate = '2012-08-01'
+const backcheckLocked = computed(() => isFreeMembership(user.value))
+const archiveMinDate = computed(() => backcheckMinDateForUser(user.value))
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const toLocalYmd = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 const isSelectableArchiveDate = (value: unknown): value is string => (
   typeof value === 'string'
   && /^\d{4}-\d{2}-\d{2}$/.test(value)
-  && value >= archiveMinDate
+  && value >= archiveStartDate
 )
 const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
 
@@ -23,7 +25,6 @@ const status = ref<'upcoming' | 'started' | 'all'>(routeStatus)
 const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 const customDate = ref(routeCustomDate)
 const lottery = ref('all')
-const backcheckLocked = computed(() => isFreeMembership(user.value))
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -54,6 +55,11 @@ const dayToDate = (d: string): string | undefined => {
   return undefined
 }
 
+function normalizeBackcheckDate(value: string): string {
+  if (!value || backcheckLocked.value) return ''
+  return value < archiveMinDate.value ? archiveMinDate.value : value
+}
+
 const effectiveDate = computed(() => backcheckLocked.value ? dayToDate('today') : customDate.value || dayToDate(day.value))
 
 const daySeg = computed({
@@ -69,6 +75,20 @@ watch(backcheckLocked, (locked) => {
   if (!locked) return
   customDate.value = ''
   day.value = 'today'
+})
+
+watch(archiveMinDate, () => {
+  const normalized = normalizeBackcheckDate(customDate.value)
+  if (normalized !== customDate.value) customDate.value = normalized
+}, { immediate: true })
+
+watch(customDate, (d) => {
+  const normalized = normalizeBackcheckDate(d)
+  if (normalized !== d) {
+    customDate.value = normalized
+    return
+  }
+  if (d) status.value = 'all'
 })
 
 function normalizeDayForDate(ymd: string): 'today' | 'tomorrow' | 'yesterday' | null {
@@ -95,8 +115,8 @@ function shiftDay(delta: number) {
   const next = activeDateForShift()
   next.setDate(next.getDate() + delta)
   const ymd = toLocalYmd(next)
-  if (ymd < archiveMinDate) {
-    customDate.value = archiveMinDate
+  if (ymd < archiveMinDate.value) {
+    customDate.value = archiveMinDate.value
     return
   }
   const shortcut = normalizeDayForDate(ymd)

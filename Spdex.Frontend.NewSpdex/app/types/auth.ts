@@ -10,6 +10,7 @@ export interface Entitlements {
   csData: boolean
   cornerData: boolean
   dataReplay: boolean
+  fullHistoryReplay: boolean
   standardChart: boolean
   indexTrendChart: boolean
   tradeDetailTable: boolean

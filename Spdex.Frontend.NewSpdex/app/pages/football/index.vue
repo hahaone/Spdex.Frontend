@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { Lock, RefreshCw } from '@lucide/vue'
 import type { MatchListFilters } from '~/composables/useMatchList'
-import { isFreeMembership } from '~/utils/membership'
+import { backcheckMinDateForUser, isFreeMembership } from '~/utils/membership'
 
 const route = useRoute()
 const { user } = useAuth()
 const routeDay = route.query.day === 'yesterday' ? 'yesterday' : 'today'
 const routeLottery = ['all', 'jc', 'lottery'].includes(String(route.query.lottery)) ? String(route.query.lottery) as 'all' | 'jc' | 'lottery' : 'all'
-const archiveMinDate = '2012-08-01'
+const archiveStartDate = '2012-08-01'
+const backcheckLocked = computed(() => isFreeMembership(user.value))
+const archiveMinDate = computed(() => backcheckMinDateForUser(user.value))
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const toLocalYmd = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 const isSelectableArchiveDate = (value: unknown): value is string => (
   typeof value === 'string'
   && /^\d{4}-\d{2}-\d{2}$/.test(value)
-  && value >= archiveMinDate
+  && value >= archiveStartDate
 )
 const routeCustomDate = isSelectableArchiveDate(route.query.date) ? route.query.date : ''
 // 默认「全部赛事」(含未开/已开/完场);仅保留 全部/未开 两个筛选(已移除「已开」)。?status=started 回落全部。
@@ -28,7 +30,6 @@ const lottery = ref<'all' | 'jc' | 'lottery'>(routeLottery)
 const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 // 数据回查：自选日期，非空时覆盖「今日/昨日」
 const customDate = ref(routeCustomDate)
-const backcheckLocked = computed(() => isFreeMembership(user.value))
 
 const dayOptions = [
   { label: '今日', value: 'today' },
@@ -58,6 +59,11 @@ const dayToDate = (d: string): string | undefined => {
   return undefined
 }
 
+function normalizeBackcheckDate(value: string): string {
+  if (!value || backcheckLocked.value) return ''
+  return value < archiveMinDate.value ? archiveMinDate.value : value
+}
+
 /** 当前生效日期：自选日期优先，否则按快捷「今日/昨日」。 */
 const effectiveDate = computed(() => backcheckLocked.value ? dayToDate('today') : customDate.value || dayToDate(day.value))
 
@@ -77,8 +83,18 @@ watch(backcheckLocked, (locked) => {
   day.value = 'today'
 })
 
+watch(archiveMinDate, () => {
+  const normalized = normalizeBackcheckDate(customDate.value)
+  if (normalized !== customDate.value) customDate.value = normalized
+}, { immediate: true })
+
 // 回查:点选自选(过去)日期时,状态默认跳「全部赛事」(过去日期无「未开」会空)。
 watch(customDate, (d) => {
+  const normalized = normalizeBackcheckDate(d)
+  if (normalized !== d) {
+    customDate.value = normalized
+    return
+  }
   if (d) status.value = 'all'
 })
 
