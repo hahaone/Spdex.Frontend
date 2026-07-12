@@ -96,7 +96,41 @@ export function useLiveList(
       result.refresh()
   }, 30_000, { errorRef: result.error })
 
-  const matches = computed<LiveListItem[]>(() => result.data.value?.data?.matches ?? [])
+  const cachedPayload = shallowRef<BackendLiveListResult | null>(null)
+  const cachedTab = ref('')
+  const transientEmptyCount = ref(0)
+
+  watch(tabRef, () => {
+    cachedPayload.value = null
+    cachedTab.value = ''
+    transientEmptyCount.value = 0
+  })
+
+  watch(
+    () => result.data.value?.data,
+    (data) => {
+      if (!data)
+        return
+
+      const currentTab = tabRef.value
+      const hasStableMatches = cachedTab.value === currentTab && Boolean(cachedPayload.value?.matches.length)
+      if (data.matches.length === 0 && hasStableMatches) {
+        transientEmptyCount.value += 1
+        if (transientEmptyCount.value < 2)
+          return
+      }
+      else {
+        transientEmptyCount.value = 0
+      }
+
+      cachedPayload.value = data
+      cachedTab.value = currentTab
+    },
+    { immediate: true },
+  )
+
+  const stablePayload = computed(() => cachedTab.value === tabRef.value ? cachedPayload.value : null)
+  const matches = computed<LiveListItem[]>(() => stablePayload.value?.matches ?? [])
   const count = computed(() => matches.value.length)
 
   /** 按联赛分组（保持后端返回顺序）。 */
