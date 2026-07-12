@@ -256,6 +256,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   const prematchSixHourLockApplied = computed(() => result.data.value?.data?.prematchSixHourLockApplied ?? false)
   const historicalBackcheckLimitApplied = computed(() => result.data.value?.data?.historicalBackcheckLimitApplied ?? false)
   const earliestBackcheckDate = computed(() => result.data.value?.data?.earliestBackcheckDate ?? null)
+  const initialLoading = computed(() =>
+    !result.data.value?.data && (result.pending.value || result.status.value === 'idle'))
 
   return {
     items,
@@ -264,6 +266,7 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     prematchSixHourLockApplied,
     historicalBackcheckLimitApplied,
     earliestBackcheckDate,
+    initialLoading,
     pending: result.pending,
     error: result.error,
     refresh: result.refresh,

@@ -4,7 +4,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
-import type { MarketMetricRow, MarketRowExtreme } from '~/types/market'
+import type { JcSection, MarketMetricRow, MarketRowExtreme } from '~/types/market'
 import type { MatchStatus, MatchSummary } from '~/types/match'
 
 interface BackendMarketRow {
@@ -42,6 +42,7 @@ interface BackendDetailAccess {
   euroOdds: boolean
   cs: boolean
   corner: boolean
+  jc: boolean
 }
 
 export interface EuroMarketRow {
@@ -103,6 +104,7 @@ interface BackendMatchDetail {
   handicap: BackendMarketSection | null
   cs: BackendMarketSection | null
   corner: BackendMarketSection | null
+  jc: JcSection | null
   euroOdds: EuroOddsSection | null
   access: BackendDetailAccess
 }
@@ -169,6 +171,7 @@ export interface DetailAccess {
   euroOdds: boolean
   cs: boolean
   corner: boolean
+  jc: boolean
 }
 
 export function useMatchDetail(eventId: MaybeRef<number>) {
@@ -197,6 +200,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
       handicap: mapSection(data.handicap),
       cs: mapSection(data.cs),
       corner: mapSection(data.corner),
+      jc: data.jc ?? null,
     }
   })
 
@@ -209,6 +213,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
     euroOdds: false,
     cs: false,
     corner: false,
+    jc: false,
   })
 
   /** 各 section note。 */
@@ -219,6 +224,7 @@ export function useMatchDetail(eventId: MaybeRef<number>) {
     handicap: result.data.value?.data?.handicap?.note ?? null,
     cs: result.data.value?.data?.cs?.note ?? null,
     corner: result.data.value?.data?.corner?.note ?? null,
+    jc: result.data.value?.data?.jc?.note ?? null,
     euroOdds: null,
   }))
 

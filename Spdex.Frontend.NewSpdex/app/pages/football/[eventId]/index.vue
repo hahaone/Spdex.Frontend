@@ -59,6 +59,7 @@ async function selectTimePoint(hours: number) {
 const effectiveStandard = computed(() => snapshot.value?.standard ?? detail.value?.standard ?? [])
 const effectiveGoals = computed(() => snapshot.value?.goals ?? detail.value?.goals ?? [])
 const effectiveHandicap = computed(() => snapshot.value?.handicap ?? detail.value?.handicap ?? [])
+const effectiveJc = computed(() => snapshot.value?.jc ?? detail.value?.jc ?? null)
 const isSnapshotMode = computed(() => snapshot.value !== null)
 
 // B1：进球/让分去掉独立"盘口"行，盘口线挪到卡片标题并格式化为 2 位小数（>2.50 / -1.50）
@@ -98,11 +99,13 @@ const baseOptions = [
   { label: '让分', value: 'handicap' },
   { label: '比分', value: 'cs' },
   { label: '角球', value: 'corner' },
+  { label: '竞彩', value: 'jc' },
 ]
 const options = computed(() => baseOptions.filter((option) => {
   if (option.value === 'poly') return (detail.value?.poly.length ?? 0) > 0
   // 时光机:让分(El* 必发欧式让球胜平负)只有当前快照、无历史时间窗 → 回看历史时刻时不提供"让分"分段
   if (option.value === 'handicap') return !isSnapshotMode.value
+  if (option.value === 'jc') return access.value.jc && !!effectiveJc.value
   return true
 }))
 
@@ -114,16 +117,29 @@ watchEffect(() => {
   if (tab.value === 'handicap' && isSnapshotMode.value) {
     tab.value = 'all'
   }
+  if (tab.value === 'jc' && (!access.value.jc || !effectiveJc.value)) {
+    tab.value = 'all'
+  }
 })
 
-type SectionKey = 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
+type SectionKey = 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner' | 'jc'
+type MetricSectionKey = Exclude<SectionKey, 'jc'>
 
 const sectionMode = computed<SectionKey | null>(() =>
   tab.value === 'all' ? null : (tab.value as SectionKey))
+const metricSectionMode = computed<MetricSectionKey | null>(() =>
+  sectionMode.value && sectionMode.value !== 'jc' ? sectionMode.value : null)
 
 const sectionRows = computed(() => {
   if (!sectionMode.value || !detail.value) return []
-  const rows = detail.value[sectionMode.value]
+  if (sectionMode.value === 'jc') return []
+  const rows = sectionMode.value === 'standard'
+    ? effectiveStandard.value
+    : sectionMode.value === 'goals'
+      ? effectiveGoals.value
+      : sectionMode.value === 'handicap'
+        ? effectiveHandicap.value
+        : detail.value[sectionMode.value]
   // 进球/让分去掉"盘口"行（与全部页一致）
   return (sectionMode.value === 'goals' || sectionMode.value === 'handicap') ? dropLineRow(rows) : rows
 })
@@ -136,6 +152,7 @@ const sectionTitle = computed(() => {
     case 'handicap': return handicapLine.value ? `让分核心 ${handicapLine.value}` : '让分核心'
     case 'cs': return '比分 CS Top 6'
     case 'corner': return '角球 区间分布'
+    case 'jc': return effectiveJc.value?.isSnapshot ? '竞彩 历史赔率' : '竞彩'
     default: return ''
   }
 })
@@ -147,6 +164,7 @@ const sectionLockMessage = computed(() => {
     case 'handicap': return access.value.handicap ? '' : '让分数据未对当前会籍开放'
     case 'cs': return access.value.cs ? '' : '比分 · 白金会员专属'
     case 'corner': return access.value.corner ? '' : '角球 · 白金会员专属'
+    case 'jc': return access.value.jc ? '' : '竞彩 · 付费会员专享'
     default: return ''
   }
 })
@@ -159,6 +177,7 @@ const lockedFeatures = computed(() => {
   if (!access.value.handicap) f.push('让分')
   if (!access.value.cs) f.push('比分')
   if (!access.value.corner) f.push('角球')
+  if (!access.value.jc) f.push('竞彩 · 付费会员专享')
   if (!access.value.euroOdds) f.push('欧赔')
   if (!access.value.tradeDetails) f.push('盘口明细')
   return f
@@ -175,6 +194,7 @@ const hasUnlockedData = computed(() => {
     || access.value.handicap
     || (access.value.cs && d?.cs.length)
     || (access.value.corner && d?.corner.length)
+    || (access.value.jc && effectiveJc.value)
     || access.value.euroOdds
     || access.value.tradeDetails
     || chartPoints.value.length
@@ -182,7 +202,7 @@ const hasUnlockedData = computed(() => {
 })
 
 const sectionLabelMap: Record<SectionKey, string> = {
-  standard: '标盘', poly: 'Poly', goals: '进球', handicap: '让分', cs: '比分', corner: '角球',
+  standard: '标盘', poly: 'Poly', goals: '进球', handicap: '让分', cs: '比分', corner: '角球', jc: '竞彩',
 }
 const sectionLockLabel = computed(() => (sectionMode.value ? sectionLabelMap[sectionMode.value] : ''))
 
@@ -314,7 +334,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
         </div>
       </section>
 
-      <div v-if="hasUnlockedData" :class="['detail-grid', { 'all-mode': tab === 'all' }]">
+      <div v-if="hasUnlockedData" :class="['detail-grid', { 'all-mode': tab === 'all', 'jc-mode': tab === 'jc' }]">
         <template v-if="tab === 'all'">
           <MarketSummaryCard
             v-if="access.standard"
@@ -324,6 +344,14 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
             :rows="effectiveStandard"
             index-label="必指"
             @open="jumpTo('standard')"
+          />
+
+          <JcSummaryCard
+            v-if="access.jc && effectiveJc"
+            class="market-panel market-jc"
+            :jc="effectiveJc"
+            :title="isSnapshotMode ? '竞彩' : '竞彩'"
+            @open="jumpTo('jc')"
           />
 
           <MarketSummaryCard
@@ -388,10 +416,16 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
             :features="sectionLockLabel ? [sectionLockLabel] : []"
             :subline="sectionLockMessage"
           />
-          <MarketMetricTable v-else class="panel-section" :title="sectionTitle" :rows="sectionRows" :mode="sectionMode" />
+          <JcMarketTable
+            v-else-if="sectionMode === 'jc' && effectiveJc"
+            class="panel-section jc-panel-section"
+            :title="sectionTitle"
+            :jc="effectiveJc"
+          />
+          <MarketMetricTable v-else-if="metricSectionMode" class="panel-section" :title="sectionTitle" :rows="sectionRows" :mode="metricSectionMode" />
         </template>
 
-        <section class="chart-preview panel-chart">
+        <section v-if="tab !== 'jc'" class="chart-preview panel-chart">
           <div class="chart-title-row">
             <h2>走势图</h2>
             <div class="chart-actions">
@@ -410,7 +444,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
           </div>
         </section>
 
-        <section class="quick-stats panel-shortcuts">
+        <section v-if="tab !== 'jc'" class="quick-stats panel-shortcuts">
           <h3>关键入口</h3>
           <div class="shortcut-grid">
             <button v-if="access.tradeDetails" class="shortcut-link focus-ring" type="button" @click="openLadderMarket('standard')">必发明细</button>
@@ -431,15 +465,15 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
           </div>
         </section>
 
-        <BigTradesSummary v-if="access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
+        <BigTradesSummary v-if="tab !== 'jc' && access.tradeDetails" class="panel-big-trades" :event-id="match.eventId" />
 
-        <EuroOddsTable v-if="access.euroOdds && euroOdds" class="panel-euro" :euro="euroOdds" />
+        <EuroOddsTable v-if="tab !== 'jc' && access.euroOdds && euroOdds" class="panel-euro" :euro="euroOdds" />
 
-        <div v-if="access.tradeDetails" ref="ladderAnchor" class="panel-ladder">
+        <div v-if="tab !== 'jc' && access.tradeDetails" ref="ladderAnchor" class="panel-ladder">
           <LadderPanel :event-id="match.eventId" :initial-market="ladderMarket" />
         </div>
 
-        <InnerOuterPanel v-if="access.tradeDetails" class="panel-inner-outer" :event-id="match.eventId" :collapsible="false" />
+        <InnerOuterPanel v-if="tab !== 'jc' && access.tradeDetails" class="panel-inner-outer" :event-id="match.eventId" :collapsible="false" />
 
         <UpgradeUnlockCard
           v-if="tab === 'all' && lockedFeatures.length"
@@ -872,6 +906,10 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
     grid-column: span 2;
   }
 
+  .jc-panel-section {
+    grid-column: 1 / -1;
+  }
+
   .panel-chart,
   .panel-shortcuts,
   .panel-big-trades {
@@ -915,6 +953,10 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
   .panel-euro,
   .panel-ladder {
     grid-column: span 2;
+  }
+
+  .jc-panel-section {
+    grid-column: 1 / -1;
   }
 
   .panel-big-trades {

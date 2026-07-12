@@ -13,6 +13,7 @@ type LotterySort = 'jc' | 'lottery'
 const props = defineProps<{
   matches: MatchSummary[]
   pending: boolean
+  initialLoading?: boolean
   archiveMinDate: string
   daySeg: string
   customDate: string
@@ -55,6 +56,8 @@ const selectedLeagues = ref<string[]>([])
 
 const selectedCount = computed(() => selectedIds.value.size)
 const activeLotterySort = computed<LotterySort | null>(() => isLotterySort(props.lottery) ? props.lottery : null)
+const isListLoading = computed(() => Boolean(props.initialLoading || (props.pending && !props.matches.length)))
+const toolbarPending = computed(() => Boolean(props.pending || props.initialLoading))
 
 const activeIds = computed(() => new Set(props.matches.map(match => match.eventId)))
 
@@ -273,7 +276,7 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
   <div class="classic-workbench">
     <ClassicMatchToolbar
       :count="visibleMatches.length"
-      :pending="pending"
+      :pending="toolbarPending"
       :selected-count="selectedCount"
       :archive-min-date="archiveMinDate"
       :day-seg="daySeg"
@@ -314,8 +317,14 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
       免费会员已隐去赛前 6 小时内及 24 小时以外的未开赛赛事
     </div>
 
-    <div v-if="pending && !matches.length" class="classic-skeleton">
-      <div v-for="i in 3" :key="i" />
+    <div v-if="isListLoading" class="classic-loading" role="status" aria-live="polite">
+      <div class="classic-loading-inner">
+        <strong>加载赛事中</strong>
+        <span>正在读取赛事列表，请稍候</span>
+      </div>
+      <div class="classic-loading-lines" aria-hidden="true">
+        <span v-for="i in 5" :key="i" />
+      </div>
     </div>
 
     <div v-else-if="!visibleMatches.length" class="classic-empty">
@@ -393,22 +402,60 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
   font-weight: 780;
 }
 
-.classic-skeleton {
+.classic-loading {
+  min-height: 360px;
   display: grid;
-  gap: 12px;
-}
-
-.classic-skeleton div {
-  height: 246px;
+  place-items: center;
+  gap: 14px;
+  padding: 42px 16px;
   border: 1px solid var(--classic-border);
-  background: linear-gradient(90deg, var(--classic-panel) 0%, var(--classic-grid) 50%, var(--classic-panel) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.2s ease-in-out infinite;
+  background: var(--classic-panel);
+  color: var(--classic-title-muted);
 }
 
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+.classic-loading-inner {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.classic-loading-inner strong {
+  color: var(--classic-text);
+  font-size: 0.9rem;
+  font-weight: 860;
+}
+
+.classic-loading-inner span {
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.classic-loading-lines {
+  display: grid;
+  width: min(560px, 82%);
+  gap: 8px;
+}
+
+.classic-loading-lines span {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--classic-grid);
+}
+
+.classic-loading-lines span:nth-child(2) {
+  width: 86%;
+}
+
+.classic-loading-lines span:nth-child(3) {
+  width: 74%;
+}
+
+.classic-loading-lines span:nth-child(4) {
+  width: 92%;
+}
+
+.classic-loading-lines span:nth-child(5) {
+  width: 66%;
 }
 
 .classic-pager {

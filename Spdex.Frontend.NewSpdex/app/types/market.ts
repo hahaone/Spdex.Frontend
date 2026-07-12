@@ -1,6 +1,6 @@
 import type { MatchSummary } from './match'
 
-export type MarketTab = 'all' | 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner'
+export type MarketTab = 'all' | 'standard' | 'poly' | 'goals' | 'handicap' | 'cs' | 'corner' | 'jc'
 
 /** 单行某指标的「高/低」预格式化值（后端已按各指标显示口径格式化为字符串；无源为缺省/null）。 */
 export interface MarketRowExtreme {
@@ -44,6 +44,174 @@ export interface MarketDetail {
   handicap: MarketMetricRow[]
   cs: MarketMetricRow[]
   corner: MarketMetricRow[]
+  jc: JcSection | null
+}
+
+export interface JcRow {
+  key: string
+  selection: string
+  officialOdds: number | null
+  restoredOdds: number | null
+  restoredProbability: number | null
+  distribution: number | null
+  differenceRate: number | null
+}
+
+export interface JcMarket {
+  key: string
+  title: string
+  mode: string
+  note: string | null
+  betId: string | null
+  isSingle: string | null
+  source: string | null
+  sourceUpdatedAt: string | null
+  capturedAt: string | null
+  overround: number | null
+  rows: JcRow[]
+}
+
+export interface JcTrendValue {
+  key: string
+  selection: string
+  odds: number | null
+}
+
+export interface JcTrendPoint {
+  time: string
+  minutesToKickoff: number | null
+  oddsText: string
+  values: JcTrendValue[]
+}
+
+export interface JcTrendMarket {
+  key: string
+  title: string
+  mode: string
+  note: string | null
+  points: JcTrendPoint[]
+}
+
+export interface JcEuroRow {
+  company: string
+  firstHome: number | null
+  firstDraw: number | null
+  firstAway: number | null
+  home: number | null
+  draw: number | null
+  away: number | null
+  returnRate: number | null
+  probabilityHome: number | null
+  probabilityDraw: number | null
+  probabilityAway: number | null
+  homeChange: number | null
+  drawChange: number | null
+  awayChange: number | null
+  updatedAt: string | null
+}
+
+export interface JcOfficialEuroChange {
+  updatedAt: string | null
+  minutesToKickoff: number | null
+  home: number | null
+  draw: number | null
+  away: number | null
+  homeChange: number | null
+  drawChange: number | null
+  awayChange: number | null
+}
+
+export interface JcSampleDistribution {
+  title: string
+  type: string
+  total: number | null
+  homeCount: number | null
+  drawCount: number | null
+  awayCount: number | null
+  homePercent: number | null
+  drawPercent: number | null
+  awayPercent: number | null
+}
+
+export interface JcIndexTrend {
+  companyEuroSnapshot: JcEuroRow[]
+  officialEuroChanges: JcOfficialEuroChange[]
+  euroList: JcEuroRow[]
+  sampleDistributions: JcSampleDistribution[]
+}
+
+export interface JcInjuryItem {
+  name: string
+  position: string
+  role: string | null
+  reason: string | null
+  stats: string | null
+}
+
+export interface JcInjuryGroup {
+  label: string
+  injuries: JcInjuryItem[]
+}
+
+export interface JcNewsItem {
+  id: string
+  tag: string
+  time: string | null
+  title: string
+  content: string | null
+}
+
+export interface JcAnalyzeItem {
+  title: string
+  text: string
+}
+
+export interface JcRecommendationMatch {
+  serialNo: string | null
+  leagueName: string | null
+  hostNameS: string | null
+  guestNameS: string | null
+  lotteryType: string | null
+  betTimeUtc: string | null
+}
+
+export interface JcRecommendation {
+  contentId: string
+  title: string | null
+  summary: string | null
+  content: string | null
+  recommenderName: string | null
+  recommenderId: string | null
+  miniTypeText: string | null
+  lotteryStyleText: string | null
+  price: string | null
+  saleTimeUtc: string | null
+  matches: JcRecommendationMatch[]
+}
+
+export interface JcIntelligence {
+  injuryAnalysis: string | null
+  injuryGroups: JcInjuryGroup[]
+  news: JcNewsItem[]
+  analyzeItems: JcAnalyzeItem[]
+  recommendations: JcRecommendation[]
+}
+
+export interface JcSection {
+  title: string
+  isSnapshot: boolean
+  popularityIsHistorical: boolean
+  snapshotStatus: string | null
+  snapshotAt: string | null
+  matchedAt: string | null
+  totalHeat: number | null
+  currentRank: number | null
+  historicalHighest: number | null
+  note: string | null
+  markets: JcMarket[]
+  trendMarkets: JcTrendMarket[]
+  indexTrend: JcIndexTrend | null
+  intelligence: JcIntelligence | null
 }
 
 export interface ChartPoint {

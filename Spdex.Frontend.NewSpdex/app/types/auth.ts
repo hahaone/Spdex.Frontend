@@ -27,6 +27,7 @@ export interface Entitlements {
   prematchSixHourLock: boolean
   jcOnly: boolean
   timeMachine: boolean
+  liveAccess: boolean
 }
 
 export type MembershipTier =

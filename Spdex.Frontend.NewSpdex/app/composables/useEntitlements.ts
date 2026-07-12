@@ -32,6 +32,7 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   prematchSixHourLock: true,
   jcOnly: false,
   timeMachine: false,
+  liveAccess: false,
 }
 
 export function useEntitlements(): Readonly<Entitlements> {

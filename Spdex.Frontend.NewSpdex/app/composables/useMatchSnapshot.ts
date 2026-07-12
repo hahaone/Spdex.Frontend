@@ -4,7 +4,7 @@
  */
 
 import type { ApiResponse } from '~/types/auth'
-import type { MarketMetricRow } from '~/types/market'
+import type { JcSection, MarketMetricRow } from '~/types/market'
 
 interface BackendMarketRow {
   key: string
@@ -35,6 +35,7 @@ export interface MatchSnapshot {
   standard: MarketMetricRow[]
   goals: MarketMetricRow[]
   handicap: MarketMetricRow[]
+  jc: JcSection | null
   accessLocked: boolean
   lockMessage: string | null
 }
@@ -49,6 +50,7 @@ interface BackendSnapshot {
   standard: BackendMarketSection | null
   goals: BackendMarketSection | null
   handicap: BackendMarketSection | null
+  jc: JcSection | null
   accessLocked: boolean
   lockMessage: string | null
 }
@@ -90,6 +92,7 @@ export function useMatchSnapshot() {
         standard: mapSection(d.standard),
         goals: mapSection(d.goals),
         handicap: mapSection(d.handicap),
+        jc: d.jc ?? null,
         accessLocked: d.accessLocked,
         lockMessage: d.lockMessage,
       }

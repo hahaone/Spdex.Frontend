@@ -61,6 +61,8 @@ const emit = defineEmits<{
 }>()
 
 const hasSelection = computed(() => props.selectedCount > 0)
+const isInitialCounting = computed(() => props.pending && props.count === 0)
+const countText = computed(() => isInitialCounting.value ? '加载中' : `${props.count} 场`)
 const leagueSortLabel = computed(() => {
   if (props.lottery === 'jc') return '按竞彩排序'
   if (props.lottery === 'lottery') return '按足彩排序'
@@ -148,7 +150,7 @@ onBeforeUnmount(() => {
       <div v-if="isMetricFiltered" class="metric-actions">
         <button type="button" class="classic-btn" @click="emit('clearMetric')">清除筛选</button>
       </div>
-      <span v-else class="toolbar-count num">{{ count }} 场</span>
+      <span v-else class="toolbar-count" :class="{ num: !isInitialCounting }">{{ countText }}</span>
     </div>
 
     <div class="toolbar-row controls">

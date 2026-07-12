@@ -10,7 +10,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:5010',
+      apiBase: process.env.NUXT_PUBLIC_API_BASE ?? '',
       mockMode: process.env.NUXT_PUBLIC_MOCK_MODE !== 'false',
       buildSha: process.env.BUILD_SHA || 'dev',
       buildTime: process.env.BUILD_TIME || '',

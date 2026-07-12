@@ -131,7 +131,7 @@ const filters = computed<MatchListFilters>(() => {
   }
 })
 
-const { items: matches, leagues, prematchSixHourLockApplied, pending, refresh } = useMatchList(filters)
+const { items: matches, leagues, prematchSixHourLockApplied, pending, initialLoading, refresh } = useMatchList(filters)
 const { isClassicDesktop } = useDesktopViewMode()
 
 /** 异动筛选生效时只显示命中的比赛；统一按开赛时间升序（最早在前） */
@@ -187,6 +187,7 @@ function detailRoute(eventId: number) {
     v-model:league="league"
     :matches="displayMatches"
     :pending="pending"
+    :initial-loading="initialLoading"
     :archive-min-date="archiveMinDate"
     :day-options="dayOptions"
     :status-options="statusOptions"
@@ -259,11 +260,11 @@ function detailRoute(eventId: number) {
       </div>
 
       <section class="match-list">
-        <div v-if="pending && !displayMatches.length" class="match-skeleton">
+        <div v-if="(initialLoading || pending) && !displayMatches.length" class="match-skeleton">
           <div v-for="i in 4" :key="i" class="skeleton-card" />
         </div>
         <MatchCard v-for="match in displayMatches" v-else :key="match.eventId" :match="match" :to="detailRoute(match.eventId)" />
-        <div v-if="!pending && !displayMatches.length" class="empty" role="status">
+        <div v-if="!initialLoading && !pending && !displayMatches.length" class="empty" role="status">
           {{ isMetricFiltered ? '该指标暂无命中赛事（可能已开赛或不在当前窗口）' : '暂无赛事' }}
         </div>
       </section>

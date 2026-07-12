@@ -1,6 +1,6 @@
 /**
  * NewSpdex 前端统一 fetch 封装。
- * 1. baseURL 自动取 runtime config 的 apiBase（默认 http://localhost:5010）
+ * 1. baseURL 自动取 runtime config 的 apiBase（默认同源 /api 代理）
  * 2. 使用 HttpOnly cookie 会话，自动携带 credentials
  * 3. 401 自动清除本地登录提示 + 跳 /login
  * 4. 单点登录被踢出（"已在其他设备登录"）提示后再跳
