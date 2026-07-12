@@ -477,8 +477,8 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
               <tbody>
                 <tr v-for="row in coreMarket.rows" :key="row.key">
                   <td>{{ row.selection }}</td>
-                  <td class="num">{{ fmtOddsLoose(row.officialOdds) }}</td>
-                  <td class="num">{{ fmtOddsLoose(row.restoredOdds) }}</td>
+                  <td class="num">{{ fmtOdds(row.officialOdds) }}</td>
+                  <td class="num">{{ fmtOdds(row.restoredOdds) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.distribution) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.restoredProbability) }}</td>
                   <td class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
@@ -524,8 +524,8 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
               <tbody>
                 <tr v-for="row in market.rows" :key="row.key">
                   <td>{{ row.selection }}</td>
-                  <td class="num">{{ fmtOddsLoose(row.officialOdds) }}</td>
-                  <td class="num">{{ fmtOddsLoose(row.restoredOdds) }}</td>
+                  <td class="num">{{ fmtOdds(row.officialOdds) }}</td>
+                  <td class="num">{{ fmtOdds(row.restoredOdds) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.distribution) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.restoredProbability) }}</td>
                   <td class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
@@ -550,7 +550,7 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
               <div class="score-list">
                 <div v-for="row in group.rows" :key="row.key" class="score-row">
                   <b>{{ row.selection }}</b>
-                  <span class="num">{{ fmtOddsLoose(row.officialOdds) }}</span>
+                  <span class="num">{{ fmtOdds(row.officialOdds) }}</span>
                   <span class="num muted">{{ fmtRatioPercentBlank(row.distribution) }}</span>
                   <span class="num" :class="changeClass(row.differenceRate)">{{ fmtDifferenceBlank(row.differenceRate) }}</span>
                 </div>
@@ -587,8 +587,8 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
               <tbody>
                 <tr v-for="row in market.rows" :key="row.key">
                   <td>{{ row.selection }}</td>
-                  <td class="num">{{ fmtOddsLoose(row.officialOdds) }}</td>
-                  <td class="num">{{ fmtOddsLoose(row.restoredOdds) }}</td>
+                  <td class="num">{{ fmtOdds(row.officialOdds) }}</td>
+                  <td class="num">{{ fmtOdds(row.restoredOdds) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.distribution) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.restoredProbability) }}</td>
                   <td class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
