@@ -234,6 +234,7 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     if (f.sport && f.sport !== 'soccer') q.sport = f.sport
     return q
   })
+  const querySignature = computed(() => JSON.stringify(query.value))
 
   const result = useApiFetch<ApiResponse<BackendMatchListResult>>('/api/newspdex/matches', {
     // key 带上 sport：足球/篮球独立缓存，切换频道时自动拉取对应数据（不再需要手动刷新）
@@ -246,18 +247,51 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   // 20s 自动刷新（赛事开赛/比分/赔率成交变化时反映；后端会动数据缓存 30s，前端略快于它以尽快反映）
   usePolling(() => result.refresh(), 20_000, { pending: result.pending, errorRef: result.error })
 
+  const cachedData = shallowRef<BackendMatchListResult | null>(null)
+  const cachedSignature = ref('')
+  const transientEmptyCount = ref(0)
+
+  watch(querySignature, () => {
+    cachedData.value = null
+    cachedSignature.value = ''
+    transientEmptyCount.value = 0
+  })
+
+  watch(() => result.data.value?.data, (data) => {
+    if (!data) return
+
+    const signature = querySignature.value
+    const hasCachedItems = cachedSignature.value === signature && Boolean(cachedData.value?.items.length)
+
+    // 自动刷新偶尔会遇到超时/限流后的空响应，不能立刻把已有赛事清成「暂无赛事」。
+    // 同一筛选下连续两次确认空才接受；首次加载或切换筛选后的真实空结果仍会正常显示。
+    if (data.items.length === 0 && hasCachedItems) {
+      transientEmptyCount.value += 1
+      if (transientEmptyCount.value < 2) return
+    }
+    else {
+      transientEmptyCount.value = 0
+    }
+
+    cachedData.value = data
+    cachedSignature.value = signature
+  }, { immediate: true })
+
+  const stableData = computed(() =>
+    cachedSignature.value === querySignature.value ? cachedData.value : null)
+
   const items = computed<MatchSummary[]>(() => {
-    const list = result.data.value?.data?.items ?? []
+    const list = stableData.value?.items ?? []
     return list.map(mapToMatchSummary)
   })
 
-  const leagues = computed(() => result.data.value?.data?.leagues ?? [])
-  const totalCount = computed(() => result.data.value?.data?.totalCount ?? 0)
-  const prematchSixHourLockApplied = computed(() => result.data.value?.data?.prematchSixHourLockApplied ?? false)
-  const historicalBackcheckLimitApplied = computed(() => result.data.value?.data?.historicalBackcheckLimitApplied ?? false)
-  const earliestBackcheckDate = computed(() => result.data.value?.data?.earliestBackcheckDate ?? null)
+  const leagues = computed(() => stableData.value?.leagues ?? [])
+  const totalCount = computed(() => stableData.value?.totalCount ?? 0)
+  const prematchSixHourLockApplied = computed(() => stableData.value?.prematchSixHourLockApplied ?? false)
+  const historicalBackcheckLimitApplied = computed(() => stableData.value?.historicalBackcheckLimitApplied ?? false)
+  const earliestBackcheckDate = computed(() => stableData.value?.earliestBackcheckDate ?? null)
   const initialLoading = computed(() =>
-    !result.data.value?.data && (result.pending.value || result.status.value === 'idle'))
+    !stableData.value && (result.pending.value || result.status.value === 'idle'))
 
   return {
     items,
