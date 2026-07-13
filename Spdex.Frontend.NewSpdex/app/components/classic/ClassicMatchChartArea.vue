@@ -259,6 +259,7 @@ const allMetricButtons: MetricBtn[] = [
   { label: '进球比例', market: 'goals', metric: 'ratio' },
   { label: '进球指数', market: 'goals', metric: 'bfindex' },
   { label: '进球挂牌', market: 'goals', metric: 'exchange' },
+  { label: '进球盈亏', market: 'goals', metric: 'payout' },
   { label: '让分成交', market: 'handicap', metric: 'tradeflow' },
   { label: '让分指数', market: 'handicap', metric: 'bfindex' },
   { label: '让分比例', market: 'handicap', metric: 'ratio' },

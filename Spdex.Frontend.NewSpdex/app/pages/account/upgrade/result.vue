@@ -2,6 +2,7 @@
 import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, QrCode, RefreshCw } from '@lucide/vue'
 import type {
   AlipayOrderResult,
+  PaymentAccess,
   PaymentChannel,
   SilkNeed,
   SilkOrderResult,
@@ -28,6 +29,8 @@ const yftResult = ref<YftOrderResult | null>(null)
 const alipayResult = ref<AlipayOrderResult | null>(null)
 const silkResult = ref<SilkOrderResult | null>(null)
 const silkNeed = ref<SilkNeed | null>(null)
+const paymentAccess = ref<PaymentAccess | null>(null)
+const paymentAccessPending = ref(true)
 const useSilkDeduction = ref(false)
 const silkDeduction = ref(0)
 const membershipBeforePayment = ref<{ roleId: number, endDate: string | null }>({ roleId: 0, endDate: null })
@@ -38,7 +41,7 @@ const pollMessage = ref('')
 const pollTimeout = ref<number | null>(null)
 const pollTimer = ref<number | null>(null)
 
-const { yftOrderError, alipayOrderError, createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed } = useCreateOrder()
+const { yftOrderError, alipayOrderError, createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed, getPaymentAccess } = useCreateOrder()
 
 const maxDeductibleSilk = computed(() => {
   const need = silkNeed.value
@@ -51,6 +54,8 @@ const selectedSilkDeduction = computed(() => useSilkDeduction.value ? Math.min(m
 const selectedSilkCredit = computed(() => selectedSilkDeduction.value * (silkNeed.value?.unitPrice ?? 1))
 const cashPayAmount = computed(() => Math.max(0, (silkNeed.value?.price ?? 0) - selectedSilkCredit.value))
 const canUseSilkDeduction = computed(() => maxDeductibleSilk.value > 0)
+const directAlipayMessage = computed(() => paymentAccess.value?.message
+  || (!paymentAccessPending.value ? '独立支付宝资格查询失败，请使用支付宝扫码' : ''))
 
 const purchaseBlockMessage = computed(() => {
   if (roleId.value <= 0 || stageId.value <= 0) return '套餐参数无效，请返回重新选择'
@@ -60,8 +65,18 @@ const purchaseBlockMessage = computed(() => {
 
 // 进入页面后立即拉取锦囊所需点数（即使没选锦囊也展示）
 onMounted(async () => {
-  if (!purchaseBlockMessage.value && roleId.value > 0 && stageId.value > 0) {
-    silkNeed.value = await getSilkNeed(roleId.value, stageId.value)
+  try {
+    if (!purchaseBlockMessage.value && roleId.value > 0 && stageId.value > 0) {
+      const [needResult, accessResult] = await Promise.allSettled([
+        getSilkNeed(roleId.value, stageId.value),
+        getPaymentAccess(),
+      ])
+      if (needResult.status === 'fulfilled') silkNeed.value = needResult.value
+      if (accessResult.status === 'fulfilled') paymentAccess.value = accessResult.value
+    }
+  }
+  finally {
+    paymentAccessPending.value = false
   }
 })
 
@@ -78,6 +93,11 @@ function ensurePurchasable() {
 
 async function startAlipay() {
   if (!ensurePurchasable()) return
+  if (!paymentAccess.value?.directAlipayAvailable) {
+    phase.value = 'error'
+    errorMessage.value = directAlipayMessage.value || '当前账号暂不可使用独立支付宝'
+    return
+  }
   normalizeSilkDeduction()
   channel.value = 'alipay'
   phase.value = 'creating'
@@ -115,7 +135,7 @@ async function startYft() {
   const res = await createYftOrder(roleId.value, stageId.value, selectedSilkDeduction.value)
   if (!res) {
     phase.value = 'error'
-    errorMessage.value = yftOrderError.value || '扫码支付下单失败，请稍后重试或更换支付方式'
+    errorMessage.value = yftOrderError.value || '支付宝扫码下单失败，请稍后重试或更换支付方式'
     return
   }
   yftResult.value = res
@@ -272,15 +292,20 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
     <section v-else-if="channel === 'choose'" class="channel-band">
       <h2>选择支付方式</h2>
       <div class="channel-grid">
-        <button class="channel-btn alipay focus-ring" type="button" @click="startAlipay">
-          <CreditCard :size="18" />
-          <b>支付宝</b>
-          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '推荐通道' }}</span>
-        </button>
         <button class="channel-btn yft focus-ring" type="button" @click="startYft">
           <QrCode :size="18" />
-          <b>扫码支付</b>
-          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '聚合扫码通道' }}</span>
+          <b>支付宝扫码</b>
+          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)} · 目前仅支持支付宝扫码` : '目前仅支持支付宝扫码' }}</span>
+        </button>
+        <button
+          v-if="paymentAccess?.directAlipayAvailable"
+          class="channel-btn alipay focus-ring"
+          type="button"
+          @click="startAlipay"
+        >
+          <CreditCard :size="18" />
+          <b>独立支付宝</b>
+          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '注册超过180天账号可用' }}</span>
         </button>
         <button class="channel-btn silk focus-ring" type="button" :disabled="!silkNeed?.sufficient" @click="startSilk">
           <Coins :size="18" />
@@ -289,6 +314,9 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
           <span v-else>查询中…</span>
         </button>
       </div>
+      <p v-if="!paymentAccessPending && !paymentAccess?.directAlipayAvailable" class="channel-note">
+        {{ directAlipayMessage }}
+      </p>
       <div class="deduct-panel">
         <button
           class="deduct-toggle focus-ring"
@@ -336,9 +364,9 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
 
     <!-- 扫码支付二维码 -->
     <section v-else-if="channel === 'yft' && phase === 'showing'" class="scanpay-band">
-      <h2>请扫码支付</h2>
+      <h2>请使用支付宝扫码支付</h2>
       <div v-if="yftResult?.qrCodeBase64" class="qr-box">
-        <img :src="`data:image/png;base64,${yftResult.qrCodeBase64}`" alt="扫码支付二维码">
+        <img :src="`data:image/png;base64,${yftResult.qrCodeBase64}`" alt="支付宝扫码支付二维码">
       </div>
       <div v-else-if="yftResult?.payUrl" class="qr-fallback">
         <span>请打开以下支付链接完成支付</span>
@@ -430,6 +458,18 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
 .channel-grid {
   display: grid;
   gap: 8px;
+}
+
+.channel-note {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 720;
+  line-height: 1.5;
 }
 
 .channel-btn {

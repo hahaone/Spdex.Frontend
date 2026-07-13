@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, RefreshCw } from '@lucide/vue'
-import type { SilkBalance, SilkProduct, SilkRechargeChannel, SilkRechargeOrderResult } from '~/types/billing'
+import type { PaymentAccess, SilkBalance, SilkProduct, SilkRechargeChannel, SilkRechargeOrderResult } from '~/types/billing'
 
 const route = useRoute()
 
 const {
   createSilkRechargeOrder,
+  getPaymentAccess,
   getSilkBalance,
   getSilkProduct,
 } = useCreateOrder()
@@ -13,6 +14,7 @@ const {
 const product = ref<SilkProduct | null>(null)
 const balance = ref<SilkBalance | null>(null)
 const order = ref<SilkRechargeOrderResult | null>(null)
+const paymentAccess = ref<PaymentAccess | null>(null)
 const phase = ref<'idle' | 'loading' | 'paying' | 'error'>('loading')
 const errorMessage = ref('')
 
@@ -31,7 +33,7 @@ const maxNumber = computed(() => {
   return Math.max(1, Math.floor(maxAmount.value / Math.max(unitPrice, 0.01)))
 })
 const estimatedTotal = computed(() => (product.value?.unitPrice ?? 0) * number.value)
-const rechargeDisabled = computed(() => phase.value === 'paying' || number.value < 1 || number.value > maxNumber.value || estimatedTotal.value > maxAmount.value)
+const rechargeDisabled = computed(() => !paymentAccess.value?.directAlipayAvailable || phase.value === 'paying' || number.value < 1 || number.value > maxNumber.value || estimatedTotal.value > maxAmount.value)
 
 function normalizeNumber() {
   const next = Math.round(Number(number.value) || 0)
@@ -40,23 +42,31 @@ function normalizeNumber() {
 
 onMounted(async () => {
   try {
-    const [productResult, balanceResult] = await Promise.all([
+    const [productResult, balanceResult, accessResult] = await Promise.all([
       getSilkProduct(),
       getSilkBalance(),
+      getPaymentAccess(),
     ])
     product.value = productResult
     balance.value = balanceResult
+    paymentAccess.value = accessResult
+    if (!accessResult) throw new Error('支付资格查询失败')
     normalizeNumber()
     phase.value = 'idle'
   }
   catch {
     phase.value = 'error'
-    errorMessage.value = '锦囊商品加载失败，请稍后重试。'
+    errorMessage.value = '锦囊商品或支付资格加载失败，请稍后重试。'
   }
 })
 
 async function startRecharge(channel: SilkRechargeChannel) {
   normalizeNumber()
+  if (!paymentAccess.value?.directAlipayAvailable) {
+    errorMessage.value = paymentAccess.value?.message || '当前账号暂不可使用独立支付宝'
+    phase.value = 'error'
+    return
+  }
   if (rechargeDisabled.value) {
     errorMessage.value = `单次最多充值 ¥${maxAmount.value.toFixed(0)}`
     phase.value = 'error'
@@ -165,12 +175,15 @@ async function refreshAndReturn() {
         每天最多 {{ dailyLimit }} 次，单次不超过 ¥{{ maxAmount.toFixed(0) }}
       </p>
 
-      <div class="channel-grid">
+      <div v-if="paymentAccess?.directAlipayAvailable" class="channel-grid">
         <button class="channel-btn focus-ring" type="button" :disabled="rechargeDisabled" @click="startRecharge('alipay')">
           <CreditCard :size="17" />
-          <span>支付宝</span>
+          <span>独立支付宝</span>
         </button>
       </div>
+      <p v-else-if="paymentAccess" class="access-note">
+        {{ paymentAccess.message || '独立支付宝仅向注册超过180天的用户开放' }}
+      </p>
     </section>
 
     <section v-if="phase === 'paying'" class="state-band">
@@ -329,6 +342,18 @@ async function refreshAndReturn() {
 .limit-text {
   margin: -4px 0 0;
   font-weight: 720;
+}
+
+.access-note {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 720;
+  line-height: 1.5;
 }
 
 .channel-grid {

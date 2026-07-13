@@ -96,7 +96,7 @@ async function reconcileAlipayReturn() {
 function channelLabel(channel: string) {
   const key = channel.toLowerCase()
   if (key === 'alipay') return '支付宝'
-  if (key === 'yft') return '扫码支付'
+  if (key === 'yft') return '支付宝扫码'
   if (key === 'wxcode' || key === 'wechat') return '微信（已停用）'
   if (key === 'silk') return '锦囊'
   return channel || '—'

@@ -35,6 +35,13 @@ export interface AlipayOrderResult {
   expireAt: string | null
 }
 
+export interface PaymentAccess {
+  directAlipayAvailable: boolean
+  directAlipayAvailableAt: string | null
+  directAlipayMinimumRegistrationDays: number
+  message: string | null
+}
+
 export interface SilkOrderResult {
   success: boolean
   orderId: string | null

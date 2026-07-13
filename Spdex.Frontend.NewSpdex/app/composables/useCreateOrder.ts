@@ -1,6 +1,6 @@
 /**
  * 下单 composable：会员支付通道。
- *   - YFT 扫码支付：返回 base64 二维码或支付链接
+ *   - YFT 支付宝扫码：返回 base64 二维码或支付链接
  *   - 支付宝：返回 formHtml（前端自动 submit）
  *   - 锦囊扣点：即时生效，返回扣点结果
  */
@@ -10,6 +10,7 @@ import type {
   AlipayOrderResult,
   CreateOrderRequest,
   CustomerService,
+  PaymentAccess,
   PaymentSyncResult,
   SilkBalance,
   SilkNeed,
@@ -37,11 +38,11 @@ export function useCreateOrder() {
         body,
       })
       if (res.code === 0) return res.data ?? null
-      yftOrderError.value = res.message || '扫码支付下单失败'
+      yftOrderError.value = res.message || '支付宝扫码下单失败'
       return null
     }
     catch (err: unknown) {
-      yftOrderError.value = apiErrorMessage(err, '扫码支付下单失败')
+      yftOrderError.value = apiErrorMessage(err, '支付宝扫码下单失败')
       return null
     }
   }
@@ -62,6 +63,11 @@ export function useCreateOrder() {
       alipayOrderError.value = apiErrorMessage(err, '支付宝下单失败')
       return null
     }
+  }
+
+  async function getPaymentAccess(): Promise<PaymentAccess | null> {
+    const res = await $apiFetch<ApiResponse<PaymentAccess>>('/api/newspdex/billing/payment-access')
+    return res.code === 0 ? (res.data ?? null) : null
   }
 
   async function syncAlipayOrder(orderId: string): Promise<PaymentSyncResult | null> {
@@ -160,6 +166,7 @@ export function useCreateOrder() {
     createYftOrder,
     createAlipayOrder,
     syncAlipayOrder,
+    getPaymentAccess,
     createSilkOrder,
     createSilkRechargeOrder,
     getSilkBalance,
