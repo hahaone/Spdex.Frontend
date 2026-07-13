@@ -40,19 +40,25 @@ const combinedGroup = computed(() => {
 
 const selectionDefinitions = computed(() => activeMarket.value === 'goals'
   ? [
-      { sel: '大', label: '大球', color: '#d6324c', lightColor: '#ec8999' },
-      { sel: '小', label: '小球', color: '#5b6fe8', lightColor: '#a8b2f2' },
+      { sel: '大', label: '大球', groupKey: 'ou-over', color: '#d6324c', lightColor: '#ec8999' },
+      { sel: '小', label: '小球', groupKey: 'ou-under', color: '#5b6fe8', lightColor: '#a8b2f2' },
     ]
   : [
-      { sel: '主', label: '主胜', color: '#d6324c', lightColor: '#ec8999' },
-      { sel: '平', label: '平局', color: '#2e9c5f', lightColor: '#8bc8a5' },
-      { sel: '客', label: '客胜', color: '#5b6fe8', lightColor: '#a8b2f2' },
+      { sel: '主', label: '主胜', groupKey: 'std-home', color: '#d6324c', lightColor: '#ec8999' },
+      { sel: '平', label: '平局', groupKey: 'std-draw', color: '#2e9c5f', lightColor: '#8bc8a5' },
+      { sel: '客', label: '客胜', groupKey: 'std-away', color: '#5b6fe8', lightColor: '#a8b2f2' },
     ])
 
 const distribution = computed<DistributionItem[]>(() => selectionDefinitions.value.map((definition) => {
-  const trades = (combinedGroup.value?.trades ?? []).filter(trade => trade.sel === definition.sel)
+  const dedicatedGroup = props.groups.find(group => group.key === definition.groupKey)
+  const trades = dedicatedGroup?.trades.length
+    ? dedicatedGroup.trades
+    : (combinedGroup.value?.trades ?? []).filter(trade => trade.sel === definition.sel)
   return {
-    ...definition,
+    sel: definition.sel,
+    label: definition.label,
+    color: definition.color,
+    lightColor: definition.lightColor,
     amount: trades.reduce((sum, trade) => sum + trade.amount, 0),
     buy: trades.filter(trade => trade.side.includes('买')).reduce((sum, trade) => sum + trade.amount, 0),
     sell: trades.filter(trade => trade.side.includes('卖')).reduce((sum, trade) => sum + trade.amount, 0),
@@ -109,7 +115,7 @@ function compactMoney(value: number): string {
 </script>
 
 <template>
-  <section v-if="combinedGroup?.trades.length" class="distribution-card">
+  <section v-if="totalAmount > 0" class="distribution-card">
     <header class="distribution-head">
       <h2>大额成交分布</h2>
       <SegmentedControl
