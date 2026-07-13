@@ -8,6 +8,7 @@ interface DistributionItem {
   buy: number
   sell: number
   color: string
+  lightColor: string
 }
 
 const props = defineProps<{
@@ -39,13 +40,13 @@ const combinedGroup = computed(() => {
 
 const selectionDefinitions = computed(() => activeMarket.value === 'goals'
   ? [
-      { sel: '大', label: '大球', color: '#d6324c' },
-      { sel: '小', label: '小球', color: '#5b6fe8' },
+      { sel: '大', label: '大球', color: '#d6324c', lightColor: '#ec8999' },
+      { sel: '小', label: '小球', color: '#5b6fe8', lightColor: '#a8b2f2' },
     ]
   : [
-      { sel: '主', label: '主胜', color: '#d6324c' },
-      { sel: '平', label: '平局', color: '#2e9c5f' },
-      { sel: '客', label: '客胜', color: '#5b6fe8' },
+      { sel: '主', label: '主胜', color: '#d6324c', lightColor: '#ec8999' },
+      { sel: '平', label: '平局', color: '#2e9c5f', lightColor: '#8bc8a5' },
+      { sel: '客', label: '客胜', color: '#5b6fe8', lightColor: '#a8b2f2' },
     ])
 
 const distribution = computed<DistributionItem[]>(() => selectionDefinitions.value.map((definition) => {
@@ -146,8 +147,8 @@ function compactMoney(value: number): string {
         <div class="side-head">
           <h3>买卖分布</h3>
           <div class="side-legend">
-            <span><i class="buy" />买入</span>
-            <span><i class="sell" />卖出</span>
+            <span><i class="buy" />买入（深色）</span>
+            <span><i class="sell" />卖出（浅色）</span>
           </div>
         </div>
 
@@ -162,8 +163,8 @@ function compactMoney(value: number): string {
             <div class="bar-groups" :style="{ gridTemplateColumns: `repeat(${distribution.length}, minmax(0, 1fr))` }">
               <div v-for="item in distribution" :key="item.sel" class="bar-group">
                 <div class="bar-columns">
-                  <i class="bar buy" :style="{ height: barHeight(item.buy) }" :title="`${item.label}买入 ${money(item.buy)}`" />
-                  <i class="bar sell" :style="{ height: barHeight(item.sell) }" :title="`${item.label}卖出 ${money(item.sell)}`" />
+                  <i class="bar buy" :style="{ height: barHeight(item.buy), backgroundColor: item.color }" :title="`${item.label}买入 ${money(item.buy)}`" />
+                  <i class="bar sell" :style="{ height: barHeight(item.sell), backgroundColor: item.lightColor }" :title="`${item.label}卖出 ${money(item.sell)}`" />
                 </div>
                 <span>{{ item.label }}</span>
               </div>
@@ -332,13 +333,16 @@ function compactMoney(value: number): string {
 }
 
 .side-legend i.buy,
-.bar.buy {
-  background: var(--buy);
+.side-legend i.sell {
+  width: 14px;
 }
 
-.side-legend i.sell,
-.bar.sell {
-  background: var(--sell);
+.side-legend i.buy {
+  background: linear-gradient(90deg, #d6324c 0 33%, #2e9c5f 33% 66%, #5b6fe8 66%);
+}
+
+.side-legend i.sell {
+  background: linear-gradient(90deg, #ec8999 0 33%, #8bc8a5 33% 66%, #a8b2f2 66%);
 }
 
 .bar-chart {
