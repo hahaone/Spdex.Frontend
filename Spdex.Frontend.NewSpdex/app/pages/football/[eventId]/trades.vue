@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
+import BigTradeDistribution from '~/components/market/BigTradeDistribution.vue'
 import { useBigTrades } from '~/composables/useBigTrades'
 import { withMatchListContext } from '~/utils/matchNavigation'
 
@@ -51,7 +52,9 @@ function sideClass(side: string): string {
       {{ pending ? '加载中…' : '暂无重大成交数据' }}
     </div>
 
-    <div v-else class="bt-grid">
+    <BigTradeDistribution v-else :groups="groups" />
+
+    <div v-if="!locked && groups.length" class="bt-grid">
       <section v-for="g in groups" :key="g.key" class="bt-group">
         <div class="bt-group-head">
           <h3>{{ g.label }}</h3>
