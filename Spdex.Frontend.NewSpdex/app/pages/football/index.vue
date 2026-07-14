@@ -6,7 +6,13 @@ import { backcheckMinDateForUser, isFreeMembership } from '~/utils/membership'
 const route = useRoute()
 const { user } = useAuth()
 const routeDay = route.query.day === 'yesterday' ? 'yesterday' : 'today'
-const routeLottery = ['all', 'jc', 'lottery'].includes(String(route.query.lottery)) ? String(route.query.lottery) as 'all' | 'jc' | 'lottery' : 'all'
+const normalizeLotteryFilter = (value: unknown): string => {
+  const text = String(value ?? '')
+  return text === 'all' || text === 'jc' || text === 'lottery' || /^(jc|lottery):\d+$/.test(text)
+    ? text
+    : 'all'
+}
+const routeLottery = normalizeLotteryFilter(route.query.lottery)
 const archiveStartDate = '2012-08-01'
 const backcheckLocked = computed(() => isFreeMembership(user.value))
 const archiveMinDate = computed(() => backcheckMinDateForUser(user.value))
@@ -26,7 +32,7 @@ const routeStatus = ['upcoming', 'all'].includes(String(route.query.status))
 const day = ref(routeDay)
 // 状态筛选与「竞彩/足彩」拆成两组独立控件（G2/G3）
 const status = ref<'upcoming' | 'started' | 'all'>(routeStatus)
-const lottery = ref<'all' | 'jc' | 'lottery'>(routeLottery)
+const lottery = ref(routeLottery)
 const league = ref(typeof route.query.league === 'string' ? route.query.league : 'all')
 // 数据回查：自选日期，非空时覆盖「今日/昨日」
 const customDate = ref(routeCustomDate)
@@ -39,12 +45,6 @@ const dayOptions = [
 const statusOptions = [
   { label: '全部', value: 'all' },
   { label: '未开', value: 'upcoming' },
-]
-
-const lotteryOptions = [
-  { label: '不限', value: 'all' },
-  { label: '竞彩', value: 'jc' },
-  { label: '足彩', value: 'lottery' },
 ]
 
 const dayToDate = (d: string): string | undefined => {
@@ -120,19 +120,73 @@ const filters = computed<MatchListFilters>(() => {
   if (isMetricFiltered.value) {
     return { date: undefined, league: 'all', status: 'all', page: 1, pageSize: 200 }
   }
+  const [lotteryKind, issueText] = lottery.value.split(':')
+  const issue = Number(issueText) || 0
   return {
     date: effectiveDate.value,
     league: league.value,
     status: status.value,
-    jc: lottery.value === 'jc',
-    lottery: lottery.value === 'lottery',
+    jc: lotteryKind === 'jc' && issue === 0,
+    lottery: lotteryKind === 'lottery' && issue === 0,
+    jcIssue: lotteryKind === 'jc' ? issue : 0,
+    sfcIssue: lotteryKind === 'lottery' ? issue : 0,
     page: 1,
     pageSize: 50,
   }
 })
 
-const { items: matches, leagues, prematchSixHourLockApplied, pending, initialLoading, refresh } = useMatchList(filters)
+const {
+  items: matches,
+  leagues,
+  jcIssues,
+  sfcIssues,
+  prematchSixHourLockApplied,
+  pending,
+  initialLoading,
+  refresh,
+} = useMatchList(filters)
 const { isClassicDesktop } = useDesktopViewMode()
+
+// 查询条件变化时 useMatchList 会短暂清空当前响应。期号单独保留到日期真正变化，
+// 避免用户切换期号时下拉项先收缩、再重新展开。
+const knownJcIssues = ref<number[]>([])
+const knownSfcIssues = ref<number[]>([])
+
+watch(effectiveDate, () => {
+  knownJcIssues.value = []
+  knownSfcIssues.value = []
+  if (lottery.value.includes(':')) lottery.value = 'all'
+})
+
+watch([jcIssues, sfcIssues], ([nextJcIssues, nextSfcIssues]) => {
+  if (nextJcIssues.length) knownJcIssues.value = [...nextJcIssues]
+  if (nextSfcIssues.length) knownSfcIssues.value = [...nextSfcIssues]
+
+  // 兼容旧的 ?lottery=jc / lottery 链接，并让顶部快捷标签落到当前最新一期。
+  if (lottery.value === 'jc' && nextJcIssues.length)
+    lottery.value = `jc:${nextJcIssues[0]}`
+  else if (lottery.value === 'lottery' && nextSfcIssues.length)
+    lottery.value = `lottery:${nextSfcIssues[0]}`
+}, { immediate: true })
+
+function issuesWithSelected(kind: 'jc' | 'lottery', issues: number[]): number[] {
+  const [selectedKind, selectedIssueText] = lottery.value.split(':')
+  const selectedIssue = selectedKind === kind ? Number(selectedIssueText) : 0
+  return [...new Set([...(selectedIssue > 0 ? [selectedIssue] : []), ...issues])]
+    .sort((a, b) => b - a)
+}
+
+const selectableJcIssues = computed(() => issuesWithSelected('jc', knownJcIssues.value))
+const selectableSfcIssues = computed(() => issuesWithSelected('lottery', knownSfcIssues.value))
+const lotteryOptions = computed(() => [
+  { label: '不限', value: 'all' },
+  ...(selectableJcIssues.value.length
+    ? selectableJcIssues.value.map(issue => ({ label: `竞彩第${issue}期`, value: `jc:${issue}` }))
+    : [{ label: '竞彩', value: 'jc' }]),
+  ...(selectableSfcIssues.value.length
+    ? selectableSfcIssues.value.map(issue => ({ label: `足彩第${issue}期`, value: `lottery:${issue}` }))
+    : [{ label: '足彩', value: 'lottery' }]),
+])
 
 /** 异动筛选生效时只显示命中的比赛；统一按开赛时间升序（最早在前） */
 const displayMatches = computed(() => {
@@ -229,7 +283,11 @@ function detailRoute(eventId: number) {
       <!-- 状态 + 竞彩/足彩 + 刷新 合并一行，按钮铺满横向 -->
       <div class="filters-row">
         <SegmentedControl v-model="status" :options="statusOptions" dense />
-        <SegmentedControl v-model="lottery" :options="lotteryOptions" dense />
+        <select v-model="lottery" class="lottery-select focus-ring" aria-label="选择竞彩或足彩期号">
+          <option v-for="option in lotteryOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
         <button class="square-btn focus-ring" aria-label="刷新" :disabled="pending" @click="refresh()">
           <RefreshCw :size="15" :class="{ spinning: pending }" />
         </button>
@@ -320,6 +378,19 @@ function detailRoute(eventId: number) {
   flex: 1 1 0;
   min-width: 0;
   padding-inline: 4px;
+}
+
+.lottery-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
 }
 
 .select-row {

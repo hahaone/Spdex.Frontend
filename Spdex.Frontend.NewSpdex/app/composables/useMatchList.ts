@@ -75,6 +75,8 @@ interface BackendMatchSummary {
 interface BackendMatchListResult {
   items: BackendMatchSummary[]
   leagues: string[]
+  jcIssues?: number[]
+  sfcIssues?: number[]
   totalCount: number
   page: number
   pageSize: number
@@ -90,6 +92,10 @@ export interface MatchListFilters {
   jc?: boolean
   /** 仅足彩赛事（LotteryId>0） */
   lottery?: boolean
+  /** 精确竞彩期号（JcIssueNo） */
+  jcIssue?: number
+  /** 精确足彩期号（LotteryId） */
+  sfcIssue?: number
   status?: 'upcoming' | 'started' | 'finished' | 'all' | 'jc'
   page?: number
   pageSize?: number
@@ -223,6 +229,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     if (f.league && f.league !== 'all') q.league = f.league
     if (f.jc) q.jc = 1
     if (f.lottery) q.lottery = 1
+    if (f.jcIssue && f.jcIssue > 0) q.jcIssue = f.jcIssue
+    if (f.sfcIssue && f.sfcIssue > 0) q.sfcIssue = f.sfcIssue
     if (f.status === 'jc') {
       q.jc = 1
     }
@@ -286,6 +294,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   })
 
   const leagues = computed(() => stableData.value?.leagues ?? [])
+  const jcIssues = computed(() => stableData.value?.jcIssues ?? [])
+  const sfcIssues = computed(() => stableData.value?.sfcIssues ?? [])
   const totalCount = computed(() => stableData.value?.totalCount ?? 0)
   const prematchSixHourLockApplied = computed(() => stableData.value?.prematchSixHourLockApplied ?? false)
   const historicalBackcheckLimitApplied = computed(() => stableData.value?.historicalBackcheckLimitApplied ?? false)
@@ -296,6 +306,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   return {
     items,
     leagues,
+    jcIssues,
+    sfcIssues,
     totalCount,
     prematchSixHourLockApplied,
     historicalBackcheckLimitApplied,

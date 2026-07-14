@@ -63,9 +63,10 @@ const emit = defineEmits<{
 const hasSelection = computed(() => props.selectedCount > 0)
 const isInitialCounting = computed(() => props.pending && props.count === 0)
 const countText = computed(() => isInitialCounting.value ? '加载中' : `${props.count} 场`)
+const lotteryKind = computed(() => props.lottery.split(':')[0])
 const leagueSortLabel = computed(() => {
-  if (props.lottery === 'jc') return '按竞彩排序'
-  if (props.lottery === 'lottery') return '按足彩排序'
+  if (lotteryKind.value === 'jc') return '按竞彩排序'
+  if (lotteryKind.value === 'lottery') return '按足彩排序'
   return '按赛事排序'
 })
 
@@ -116,6 +117,9 @@ function onMenuScroll(e: Event) {
   closeMenu()
 }
 function onMenuKey(e: KeyboardEvent) { if (e.key === 'Escape') closeMenu() }
+function issueFilterFor(kind: 'jc' | 'lottery'): string {
+  return props.lotteryOptions.find(option => option.value.startsWith(`${kind}:`))?.value ?? kind
+}
 watch(menuOpen, (open) => {
   if (!import.meta.client) return
   if (open) {
@@ -143,8 +147,8 @@ onBeforeUnmount(() => {
         </button>
         <button type="button" class="tab-btn" :class="{ active: status === 'all' && lottery === 'all' }" @click="emit('update:status', 'all'); emit('update:lottery', 'all')">全部赛事</button>
         <button type="button" class="tab-btn" :class="{ active: status === 'upcoming' }" @click="emit('update:status', 'upcoming')">未开赛</button>
-        <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'lottery' }" @click="emit('update:lottery', 'lottery')">胜负彩赛事</button>
-        <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lottery === 'jc' }" @click="emit('update:lottery', 'jc')">竞彩赛事</button>
+        <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lotteryKind === 'lottery' }" @click="emit('update:lottery', issueFilterFor('lottery'))">胜负彩赛事</button>
+        <button v-if="showLotteryFilters" type="button" class="tab-btn" :class="{ active: lotteryKind === 'jc' }" @click="emit('update:lottery', issueFilterFor('jc'))">竞彩赛事</button>
       </div>
 
       <div v-if="isMetricFiltered" class="metric-actions">

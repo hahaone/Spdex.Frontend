@@ -55,7 +55,7 @@ const sortMode = ref<SortMode>('time')
 const selectedLeagues = ref<string[]>([])
 
 const selectedCount = computed(() => selectedIds.value.size)
-const activeLotterySort = computed<LotterySort | null>(() => isLotterySort(props.lottery) ? props.lottery : null)
+const activeLotterySort = computed<LotterySort | null>(() => lotterySortOf(props.lottery))
 const isListLoading = computed(() => Boolean(props.initialLoading || (props.pending && !props.matches.length)))
 const toolbarPending = computed(() => Boolean(props.pending || props.initialLoading))
 
@@ -145,8 +145,9 @@ function isSortMode(value: unknown): value is SortMode {
   return value === 'league' || value === 'time' || value === 'amount'
 }
 
-function isLotterySort(value: string): value is LotterySort {
-  return value === 'jc' || value === 'lottery'
+function lotterySortOf(value: string): LotterySort | null {
+  const kind = value.split(':')[0]
+  return kind === 'jc' || kind === 'lottery' ? kind : null
 }
 
 function sortableLotteryNumber(value: number | undefined): number {
@@ -170,7 +171,7 @@ function compareByLotteryOrder(a: MatchSummary, b: MatchSummary, lottery: Lotter
 }
 
 function applyLotteryDefaultSort(lottery: string) {
-  if (isLotterySort(lottery) && sortMode.value === 'time') sortMode.value = 'league'
+  if (lotterySortOf(lottery) && sortMode.value === 'time') sortMode.value = 'league'
 }
 
 function setSortMode(value: string) {
