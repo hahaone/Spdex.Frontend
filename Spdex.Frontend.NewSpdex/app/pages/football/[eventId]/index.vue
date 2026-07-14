@@ -90,7 +90,16 @@ const handicapTitle = computed(() => {
   return handicapLine.value ? `${base} ${handicapLine.value}` : base
 })
 
-const tab = ref<MarketTab>('all')
+const marketTabs: readonly MarketTab[] = ['all', 'standard', 'poly', 'goals', 'handicap', 'cs', 'corner', 'jc']
+function routeMarketTab(value: unknown): MarketTab {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' && marketTabs.includes(raw as MarketTab) ? raw as MarketTab : 'all'
+}
+
+const tab = ref<MarketTab>(routeMarketTab(route.query.tab))
+watch(() => route.query.tab, (value) => {
+  tab.value = routeMarketTab(value)
+})
 const baseOptions = [
   { label: '全部', value: 'all' },
   { label: '标盘', value: 'standard' },
@@ -117,7 +126,8 @@ watchEffect(() => {
   if (tab.value === 'handicap' && isSnapshotMode.value) {
     tab.value = 'all'
   }
-  if (tab.value === 'jc' && (!access.value.jc || !effectiveJc.value)) {
+  // 通过经典版新页面入口访问 ?tab=jc 时，等待详情接口返回后再判断权限和数据。
+  if (detail.value && tab.value === 'jc' && (!access.value.jc || !effectiveJc.value)) {
     tab.value = 'all'
   }
 })

@@ -22,17 +22,19 @@ const props = withDefaults(defineProps<{
   detailTo: RouteLocationRaw
   sport?: 'football' | 'basketball'
   defaultTradeSelection?: TradeDirection
+  showJc?: boolean
 }>(), {
   sport: 'football',
   defaultTradeSelection: 'home',
+  showJc: false,
 })
 
 const eventIdRef = computed(() => props.eventId)
 const route = useRoute()
 const isBasket = computed(() => props.sport === 'basketball')
 const basePath = computed(() => `/${props.sport}`)
-// 篮球走势矩阵按钮更少 → 右侧标签组更矮;走势图相应压低,与右侧高度看齐。足球保持 240。
-const chartHeight = computed(() => (isBasket.value ? 180 : 240))
+// 篮球走势矩阵按钮更少 → 右侧标签组更矮;竞彩足球多一行明细入口,走势图同步补足 30px 按钮 + 6px 间距。
+const chartHeight = computed(() => (isBasket.value ? 180 : props.showJc ? 276 : 240))
 const { entitlements } = useAuth()
 const canViewScoreMarkets = computed(() =>
   entitlements.value?.csData === true && entitlements.value?.correctScoreIndex === true)
@@ -311,9 +313,14 @@ function refreshChart() {
 }
 
 // 经典版「明细图表」入口(还原旧站),按运动分流:
-// 足球:明细 / 进球明细 / 比分明细 / 欧洲指数 / 标盘 / 进球 / 正确比分;
+// 足球:明细 / 进球明细 / 比分明细 / 欧洲指数 / 竞彩 / 标盘 / 进球 / 正确比分;
 // 篮球:明细 / 大球明细 / 小球明细 / 标盘 / 进球(2-way、总分大小;无欧赔/比分/正确比分)。
-interface DetailBtn { label: string, to: RouteLocationRaw, tone: 'grey' | 'green' | 'blue' }
+interface DetailBtn {
+  label: string
+  to: RouteLocationRaw
+  tone: 'grey' | 'green' | 'purple' | 'blue'
+  newPage?: boolean
+}
 const detailButtons = computed<DetailBtn[]>(() => {
   const base = `${basePath.value}/${props.eventId}`
   const to = (suffix: string, extra: Record<string, string> = {}) =>
@@ -331,9 +338,14 @@ const detailButtons = computed<DetailBtn[]>(() => {
     { label: '明细', to: to('/detail'), tone: 'grey' },
     { label: '进球明细', to: to('/detail', { market: 'goals' }), tone: 'grey' },
     { label: '欧洲指数', to: to('/euro-odds'), tone: 'green' },
+  ]
+  if (props.showJc) {
+    buttons.push({ label: '竞彩', to: to('', { tab: 'jc' }), tone: 'purple', newPage: true })
+  }
+  buttons.push(
     { label: '标盘', to: to('/ladder', { market: 'standard' }), tone: 'blue' },
     { label: '进球', to: to('/ladder', { market: 'goals' }), tone: 'blue' },
-  ]
+  )
   if (canViewScoreMarkets.value) {
     buttons.splice(2, 0, { label: '比分明细', to: to('/correct-score'), tone: 'grey' })
     buttons.push({ label: '正确比分', to: to('/ladder', { market: 'cs' }), tone: 'blue' })
@@ -462,7 +474,16 @@ const detailButtons = computed<DetailBtn[]>(() => {
       <div class="panel">
         <h4>明细图表</h4>
         <div class="detail-grid">
-          <NuxtLink v-for="b in detailButtons" :key="b.label" :to="b.to" :class="['detail-btn', b.tone]">{{ b.label }}</NuxtLink>
+          <NuxtLink
+            v-for="b in detailButtons"
+            :key="b.label"
+            :to="b.to"
+            :class="['detail-btn', b.tone]"
+            :target="b.newPage ? '_blank' : undefined"
+            :rel="b.newPage ? 'noopener' : undefined"
+          >
+            {{ b.label }}
+          </NuxtLink>
         </div>
       </div>
     </section>
@@ -715,6 +736,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
 
 .detail-btn.grey { background: #e7ebf0; color: #46586c; }
 .detail-btn.green { background: var(--classic-green-soft); color: #2d7e64; }
+.detail-btn.purple { background: var(--classic-purple-soft); color: var(--accent-deep); }
 .detail-btn.blue { background: var(--classic-blue-soft); color: #2e6b93; }
 
 .spinning {
