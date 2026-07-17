@@ -24,6 +24,7 @@ export interface Entitlements {
   flashQDailyQuota: number
   appCoreTrades: boolean
   appInOutBoard: boolean
+  jcData: boolean
   prematchSixHourLock: boolean
   jcOnly: boolean
   timeMachine: boolean

@@ -44,6 +44,7 @@ const tierNames: Record<string, string> = {
 }
 
 const mainlinePaidRoleIds = new Set([4, 9, 10, 11, 12, 5])
+const jcDataRoleIds = new Set([10, 11, 12, 5])
 const fullHistoryFallbackRoleIds = new Set([5, 13])
 const archiveStartDate = '2012-08-01'
 const limitedHistoryBackcheckMonths = 18
@@ -115,6 +116,11 @@ export function canUseFullHistoryReplay(user: AuthUser | null | undefined, now =
   if (user.entitlements?.fullHistoryReplay !== undefined) return user.entitlements.fullHistoryReplay
   if (user.entitlements?.csData && user.entitlements?.cornerData) return true
   return fullHistoryFallbackRoleIds.has(user.roleId) || user.tier === 'Platinum'
+}
+
+export function canUseJcData(user: AuthUser | null | undefined, now = new Date()): boolean {
+  if (!user || isExpired(user.endDate, now) || user.entitlements?.jcData === false) return false
+  return jcDataRoleIds.has(user.roleId)
 }
 
 export function limitedHistoryBackcheckMinDate(now = new Date()): string {

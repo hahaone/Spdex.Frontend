@@ -3,6 +3,7 @@ import { RefreshCw } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { ChartPoint } from '~/types/market'
 import { isRateLimitedError } from '~/utils/apiError'
+import { canUseJcData } from '~/utils/membership'
 import { withMatchListContext } from '~/utils/matchNavigation'
 
 type TradeDirection = 'home' | 'draw' | 'away'
@@ -33,9 +34,10 @@ const eventIdRef = computed(() => props.eventId)
 const route = useRoute()
 const isBasket = computed(() => props.sport === 'basketball')
 const basePath = computed(() => `/${props.sport}`)
+const { entitlements, user } = useAuth()
+const canViewJc = computed(() => canUseJcData(user.value))
 // 篮球走势矩阵按钮更少 → 右侧标签组更矮;竞彩足球多一行明细入口,走势图同步补足 30px 按钮 + 6px 间距。
-const chartHeight = computed(() => (isBasket.value ? 180 : props.showJc ? 276 : 240))
-const { entitlements } = useAuth()
+const chartHeight = computed(() => (isBasket.value ? 180 : props.showJc && canViewJc.value ? 276 : 240))
 const canViewScoreMarkets = computed(() =>
   entitlements.value?.csData === true && entitlements.value?.correctScoreIndex === true)
 
@@ -320,6 +322,7 @@ interface DetailBtn {
   to: RouteLocationRaw
   tone: 'grey' | 'green' | 'purple' | 'blue'
   newPage?: boolean
+  isNew?: boolean
 }
 const detailButtons = computed<DetailBtn[]>(() => {
   const base = `${basePath.value}/${props.eventId}`
@@ -339,8 +342,8 @@ const detailButtons = computed<DetailBtn[]>(() => {
     { label: '进球明细', to: to('/detail', { market: 'goals' }), tone: 'grey' },
     { label: '欧洲指数', to: to('/euro-odds'), tone: 'green' },
   ]
-  if (props.showJc) {
-    buttons.push({ label: '竞彩', to: to('', { tab: 'jc' }), tone: 'purple', newPage: true })
+  if (props.showJc && canViewJc.value) {
+    buttons.push({ label: '竞彩', to: to('', { tab: 'jc' }), tone: 'purple', newPage: true, isNew: true })
   }
   buttons.push(
     { label: '标盘', to: to('/ladder', { market: 'standard' }), tone: 'blue' },
@@ -482,7 +485,8 @@ const detailButtons = computed<DetailBtn[]>(() => {
             :target="b.newPage ? '_blank' : undefined"
             :rel="b.newPage ? 'noopener' : undefined"
           >
-            {{ b.label }}
+            <span>{{ b.label }}</span>
+            <strong v-if="b.isNew" class="detail-new">New!</strong>
           </NuxtLink>
         </div>
       </div>
@@ -730,6 +734,14 @@ const detailButtons = computed<DetailBtn[]>(() => {
   font-size: 0.75rem;
   font-weight: 520;
   transition: filter 0.12s ease, border-color 0.12s ease;
+  gap: 5px;
+}
+
+.detail-new {
+  color: #dc2f45;
+  font-size: 0.64rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .detail-btn:hover { filter: brightness(0.96); }

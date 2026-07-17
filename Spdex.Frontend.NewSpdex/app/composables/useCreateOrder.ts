@@ -10,6 +10,7 @@ import type {
   AlipayOrderResult,
   CreateOrderRequest,
   CustomerService,
+  MembershipPurchasePreview,
   PaymentAccess,
   PaymentSyncResult,
   SilkBalance,
@@ -136,6 +137,13 @@ export function useCreateOrder() {
     return res.code === 0 ? (res.data ?? null) : null
   }
 
+  async function getPurchasePreview(roleId: number, stageId: number): Promise<MembershipPurchasePreview | null> {
+    const res = await $apiFetch<ApiResponse<MembershipPurchasePreview>>('/api/newspdex/billing/purchase-preview', {
+      query: { roleId, stageId },
+    })
+    return res.code === 0 ? (res.data ?? null) : null
+  }
+
   async function getCustomerService(): Promise<CustomerService | null> {
     if (csCache && Date.now() - csCache.ts < CS_TTL_MS) return csCache.value
     const res = await $apiFetch<ApiResponse<CustomerService>>('/api/newspdex/billing/customer-service')
@@ -171,6 +179,7 @@ export function useCreateOrder() {
     createSilkRechargeOrder,
     getSilkBalance,
     getSilkNeed,
+    getPurchasePreview,
     getSilkProduct,
     getCustomerService,
   }

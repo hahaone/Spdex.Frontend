@@ -29,6 +29,7 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   flashQDailyQuota: 0,
   appCoreTrades: false,
   appInOutBoard: false,
+  jcData: false,
   prematchSixHourLock: true,
   jcOnly: false,
   timeMachine: false,

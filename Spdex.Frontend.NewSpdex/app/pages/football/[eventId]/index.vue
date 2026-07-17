@@ -3,12 +3,14 @@ import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Zap } from '@lucide/vue'
 import type { MarketMetricRow, MarketTab } from '~/types/market'
 import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
 import { formatHandicapLine } from '~/utils/handicap'
+import { canUseJcData } from '~/utils/membership'
 import { withMatchListContext } from '~/utils/matchNavigation'
 
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
-const { entitlements } = useAuth()
+const { entitlements, user } = useAuth()
+const hasJcMembership = computed(() => canUseJcData(user.value))
 const { detail, access, euroOdds, pending, refresh } = useMatchDetail(eventId)
 const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
 const { fetchSnapshot } = useMatchSnapshot()
@@ -108,13 +110,13 @@ const baseOptions = [
   { label: '让分', value: 'handicap' },
   { label: '比分', value: 'cs' },
   { label: '角球', value: 'corner' },
-  { label: '竞彩', value: 'jc' },
+  { label: '竞彩', value: 'jc', isNew: true },
 ]
 const options = computed(() => baseOptions.filter((option) => {
   if (option.value === 'poly') return (detail.value?.poly.length ?? 0) > 0
   // 时光机:让分(El* 必发欧式让球胜平负)只有当前快照、无历史时间窗 → 回看历史时刻时不提供"让分"分段
   if (option.value === 'handicap') return !isSnapshotMode.value
-  if (option.value === 'jc') return access.value.jc && !!effectiveJc.value
+  if (option.value === 'jc') return hasJcMembership.value && access.value.jc && !!effectiveJc.value
   return true
 }))
 
@@ -127,7 +129,7 @@ watchEffect(() => {
     tab.value = 'all'
   }
   // 通过经典版新页面入口访问 ?tab=jc 时，等待详情接口返回后再判断权限和数据。
-  if (detail.value && tab.value === 'jc' && (!access.value.jc || !effectiveJc.value)) {
+  if (tab.value === 'jc' && (!hasJcMembership.value || (detail.value && (!access.value.jc || !effectiveJc.value)))) {
     tab.value = 'all'
   }
 })
@@ -174,7 +176,7 @@ const sectionLockMessage = computed(() => {
     case 'handicap': return access.value.handicap ? '' : '让分数据未对当前会籍开放'
     case 'cs': return access.value.cs ? '' : '比分 · 白金会员专属'
     case 'corner': return access.value.corner ? '' : '角球 · 白金会员专属'
-    case 'jc': return access.value.jc ? '' : '竞彩 · 付费会员专享'
+    case 'jc': return access.value.jc ? '' : '竞彩 · 黄金及以上会籍专享'
     default: return ''
   }
 })
@@ -187,7 +189,6 @@ const lockedFeatures = computed(() => {
   if (!access.value.handicap) f.push('让分')
   if (!access.value.cs) f.push('比分')
   if (!access.value.corner) f.push('角球')
-  if (!access.value.jc) f.push('竞彩 · 付费会员专享')
   if (!access.value.euroOdds) f.push('欧赔')
   if (!access.value.tradeDetails) f.push('盘口明细')
   return f

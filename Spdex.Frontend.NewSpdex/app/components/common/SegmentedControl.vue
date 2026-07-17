@@ -3,6 +3,7 @@ interface Option {
   label: string
   value: string
   count?: number
+  isNew?: boolean
 }
 
 defineProps<{
@@ -27,6 +28,7 @@ const emit = defineEmits<{
       @click="emit('update:modelValue', option.value)"
     >
       <span>{{ option.label }}</span>
+      <strong v-if="option.isNew" class="new-label">New!</strong>
       <span v-if="option.count !== undefined" class="count num">{{ option.count }}</span>
     </button>
   </div>
@@ -84,6 +86,13 @@ const emit = defineEmits<{
   min-height: 28px;
   padding: 0 9px;
   font-size: 0.76rem;
+}
+
+.new-label {
+  color: #dc2f45;
+  font-size: 0.64rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .count {

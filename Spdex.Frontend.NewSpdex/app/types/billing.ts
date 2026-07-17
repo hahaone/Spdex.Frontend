@@ -70,6 +70,29 @@ export interface SilkNeed {
   maxDeductibleSilk: number
 }
 
+export interface MembershipPurchasePreview {
+  currentRoleId: number
+  currentRoleName: string
+  currentEndDate: string | null
+  hasActivePaidMembership: boolean
+  targetRoleId: number
+  targetRoleName: string
+  stageId: number
+  stageName: string
+  stagePrice: number
+  purchaseDays: number
+  mode: 'new' | 'renewal' | 'upgrade' | string
+  modeText: string
+  remainingDays: number
+  convertedDays: number
+  totalGrantedDays: number
+  currentDailyPrice: number
+  targetDailyPrice: number
+  remainingValue: number
+  newEndDate: string
+  formulaText: string
+}
+
 export interface SilkProduct {
   productId: number
   unitPrice: number

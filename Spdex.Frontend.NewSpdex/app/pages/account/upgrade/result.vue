@@ -2,6 +2,7 @@
 import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, QrCode, RefreshCw } from '@lucide/vue'
 import type {
   AlipayOrderResult,
+  MembershipPurchasePreview,
   PaymentAccess,
   PaymentChannel,
   SilkNeed,
@@ -29,6 +30,7 @@ const yftResult = ref<YftOrderResult | null>(null)
 const alipayResult = ref<AlipayOrderResult | null>(null)
 const silkResult = ref<SilkOrderResult | null>(null)
 const silkNeed = ref<SilkNeed | null>(null)
+const purchasePreview = ref<MembershipPurchasePreview | null>(null)
 const paymentAccess = ref<PaymentAccess | null>(null)
 const paymentAccessPending = ref(true)
 const useSilkDeduction = ref(false)
@@ -41,7 +43,7 @@ const pollMessage = ref('')
 const pollTimeout = ref<number | null>(null)
 const pollTimer = ref<number | null>(null)
 
-const { yftOrderError, alipayOrderError, createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed, getPaymentAccess } = useCreateOrder()
+const { yftOrderError, alipayOrderError, createYftOrder, createAlipayOrder, createSilkOrder, getSilkNeed, getPurchasePreview, getPaymentAccess } = useCreateOrder()
 
 const maxDeductibleSilk = computed(() => {
   const need = silkNeed.value
@@ -63,15 +65,35 @@ const purchaseBlockMessage = computed(() => {
   return `当前有效会籍为${membershipDisplayName(user.value?.roleId ?? 0)}，不能购买低于当前会籍的套餐`
 })
 
+function formatDateTime(raw?: string | null) {
+  if (!raw) return '-'
+  const text = raw.replace('T', ' ')
+  return text.length >= 16 ? text.slice(0, 16) : text
+}
+
+function formatNumber(value?: number | null, digits = 2) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return n.toFixed(digits).replace(/\.?0+$/, '')
+}
+
+function formatMoney(value?: number | null, digits = 2) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return n.toFixed(digits)
+}
+
 // 进入页面后立即拉取锦囊所需点数（即使没选锦囊也展示）
 onMounted(async () => {
   try {
     if (!purchaseBlockMessage.value && roleId.value > 0 && stageId.value > 0) {
-      const [needResult, accessResult] = await Promise.allSettled([
+      const [needResult, previewResult, accessResult] = await Promise.allSettled([
         getSilkNeed(roleId.value, stageId.value),
+        getPurchasePreview(roleId.value, stageId.value),
         getPaymentAccess(),
       ])
       if (needResult.status === 'fulfilled') silkNeed.value = needResult.value
+      if (previewResult.status === 'fulfilled') purchasePreview.value = previewResult.value
       if (accessResult.status === 'fulfilled') paymentAccess.value = accessResult.value
     }
   }
@@ -291,6 +313,42 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
 
     <section v-else-if="channel === 'choose'" class="channel-band">
       <h2>选择支付方式</h2>
+      <div v-if="purchasePreview" class="preview-panel">
+        <div class="preview-head">
+          <b>{{ purchasePreview.targetRoleName }} · {{ purchasePreview.stageName }}</b>
+          <span>{{ purchasePreview.modeText }}</span>
+        </div>
+        <div class="preview-grid">
+          <div>
+            <span>当前会籍</span>
+            <b>{{ purchasePreview.currentRoleName }}</b>
+          </div>
+          <div>
+            <span>当前到期</span>
+            <b class="num">{{ formatDateTime(purchasePreview.currentEndDate) }}</b>
+          </div>
+          <div>
+            <span>本次购买</span>
+            <b class="num">{{ purchasePreview.purchaseDays }} 天</b>
+          </div>
+          <div>
+            <span>折算增加</span>
+            <b class="num">{{ formatNumber(purchasePreview.convertedDays) }} 天</b>
+          </div>
+          <div>
+            <span>剩余价值</span>
+            <b class="num">¥{{ formatMoney(purchasePreview.remainingValue) }}</b>
+          </div>
+          <div>
+            <span>预计到期</span>
+            <b class="num">{{ formatDateTime(purchasePreview.newEndDate) }}</b>
+          </div>
+        </div>
+        <p class="preview-formula">{{ purchasePreview.formulaText }}</p>
+        <p v-if="purchasePreview.mode === 'upgrade'" class="preview-note">
+          支付完成时会按服务器实际确认时间重新核算，旧会籍剩余价值不会被清零。
+        </p>
+      </div>
       <div class="channel-grid">
         <button class="channel-btn yft focus-ring" type="button" @click="startYft">
           <QrCode :size="18" />
@@ -378,6 +436,16 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
         <Loader2 v-if="pollingPayment || pollInFlight" :size="13" class="spinning" />
         <span>{{ pollMessage || '等待支付回调' }}</span>
       </p>
+      <div v-if="purchasePreview" class="preview-panel payment-preview">
+        <div class="preview-head">
+          <b>{{ purchasePreview.targetRoleName }} · {{ purchasePreview.stageName }}</b>
+          <span>{{ purchasePreview.modeText }}</span>
+        </div>
+        <p class="preview-formula">{{ purchasePreview.formulaText }}</p>
+        <p class="preview-note">
+          预计到期：<b class="num">{{ formatDateTime(purchasePreview.newEndDate) }}</b>
+        </p>
+      </div>
       <button class="action-btn focus-ring" type="button" @click="checkRefresh">
         <RefreshCw :size="14" />
         <span>已支付，刷新会籍</span>
@@ -390,6 +458,16 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
       <p>正在跳转到支付宝完成支付…</p>
       <div id="alipay-form-container" />
       <p class="hint">订单号：<span class="num">{{ alipayResult?.orderId }}</span></p>
+      <div v-if="purchasePreview" class="preview-panel payment-preview">
+        <div class="preview-head">
+          <b>{{ purchasePreview.targetRoleName }} · {{ purchasePreview.stageName }}</b>
+          <span>{{ purchasePreview.modeText }}</span>
+        </div>
+        <p class="preview-formula">{{ purchasePreview.formulaText }}</p>
+        <p class="preview-note">
+          预计到期：<b class="num">{{ formatDateTime(purchasePreview.newEndDate) }}</b>
+        </p>
+      </div>
       <button class="action-btn focus-ring" type="button" @click="checkRefresh">
         <RefreshCw :size="14" />
         <span>已支付，刷新会籍</span>
@@ -453,6 +531,81 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
   margin: 0 0 8px;
   font-size: 0.92rem;
   font-weight: 820;
+}
+
+.preview-panel {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 9px;
+  padding: 11px;
+  border: 1px solid #cfe0ff;
+  border-radius: 5px;
+  background: #f5f9ff;
+}
+
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.preview-head b {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 820;
+}
+
+.preview-head span {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e9f1ff;
+  color: #2766d8;
+  font-size: 0.7rem;
+  font-weight: 820;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.preview-grid div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.preview-grid span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 720;
+}
+
+.preview-grid b {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 820;
+  overflow-wrap: anywhere;
+}
+
+.preview-formula,
+.preview-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 730;
+  line-height: 1.45;
+}
+
+.preview-note {
+  color: #2766d8;
+}
+
+.payment-preview {
+  margin: 2px 0 6px;
 }
 
 .channel-grid {
