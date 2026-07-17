@@ -59,6 +59,17 @@ const canUseSilkDeduction = computed(() => maxDeductibleSilk.value > 0)
 const directAlipayMessage = computed(() => paymentAccess.value?.message
   || (!paymentAccessPending.value ? '独立支付宝资格查询失败，请使用支付宝扫码' : ''))
 
+const purchasePreviewFormulaLines = computed(() => {
+  const preview = purchasePreview.value
+  if (!preview) return []
+  if (preview.mode !== 'upgrade') return [preview.formulaText]
+
+  return [
+    `当前会籍剩余${formatNumber(preview.remainingDays)}天x当前日价¥${formatNumber(preview.currentDailyPrice, 4)}÷目标日价¥${formatNumber(preview.targetDailyPrice, 4)}=折算${formatNumber(preview.convertedDays)}天`,
+    `本次购买${formatNumber(preview.purchaseDays, 0)}天，共计${formatNumber(preview.totalGrantedDays)}天`,
+  ]
+})
+
 const purchaseBlockMessage = computed(() => {
   if (roleId.value <= 0 || stageId.value <= 0) return '套餐参数无效，请返回重新选择'
   if (canPurchaseTarget(user.value, roleId.value)) return ''
@@ -344,7 +355,9 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
             <b class="num">{{ formatDateTime(purchasePreview.newEndDate) }}</b>
           </div>
         </div>
-        <p class="preview-formula">{{ purchasePreview.formulaText }}</p>
+        <p class="preview-formula">
+          <span v-for="line in purchasePreviewFormulaLines" :key="line">{{ line }}</span>
+        </p>
         <p v-if="purchasePreview.mode === 'upgrade'" class="preview-note">
           支付完成时会按服务器实际确认时间重新核算，旧会籍剩余价值不会被清零。
         </p>
@@ -441,7 +454,9 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
           <b>{{ purchasePreview.targetRoleName }} · {{ purchasePreview.stageName }}</b>
           <span>{{ purchasePreview.modeText }}</span>
         </div>
-        <p class="preview-formula">{{ purchasePreview.formulaText }}</p>
+        <p class="preview-formula">
+          <span v-for="line in purchasePreviewFormulaLines" :key="line">{{ line }}</span>
+        </p>
         <p class="preview-note">
           预计到期：<b class="num">{{ formatDateTime(purchasePreview.newEndDate) }}</b>
         </p>
@@ -463,7 +478,9 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
           <b>{{ purchasePreview.targetRoleName }} · {{ purchasePreview.stageName }}</b>
           <span>{{ purchasePreview.modeText }}</span>
         </div>
-        <p class="preview-formula">{{ purchasePreview.formulaText }}</p>
+        <p class="preview-formula">
+          <span v-for="line in purchasePreviewFormulaLines" :key="line">{{ line }}</span>
+        </p>
         <p class="preview-note">
           预计到期：<b class="num">{{ formatDateTime(purchasePreview.newEndDate) }}</b>
         </p>
@@ -602,6 +619,10 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
 
 .preview-note {
   color: #2766d8;
+}
+
+.preview-formula span {
+  display: block;
 }
 
 .payment-preview {
