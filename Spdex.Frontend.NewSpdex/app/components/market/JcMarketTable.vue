@@ -30,6 +30,7 @@ const activeSubTab = ref<JcSubTabKey>('odds')
 
 const officialMarkets = computed(() => props.jc.markets)
 const coreMarket = computed(() => officialMarkets.value.find(m => m.key === 'SportteryNWDL') ?? null)
+const halfFullMarket = computed(() => officialMarkets.value.find(m => m.key === 'SportteryHalfFull') ?? null)
 const extensionMarkets = computed(() =>
   ['SportteryWDL', 'SportteryTotalGoals', 'SportteryHalfFull']
     .map(key => officialMarkets.value.find(m => m.key === key))
@@ -138,6 +139,33 @@ const scoreGroups = computed(() => {
     .filter(group => group.rows.length > 0)
 })
 
+type RestoredResult = 'win' | 'draw' | 'loss'
+type RestoredSummary = Record<RestoredResult, number | null>
+
+const halfFullRestoredSummary = computed<RestoredSummary | null>(() => {
+  const groups: Record<RestoredResult, JcMarket['rows']> = {
+    win: [],
+    draw: [],
+    loss: [],
+  }
+
+  for (const row of halfFullMarket.value?.rows ?? []) {
+    const result = halfFullResult(row.selection)
+    if (result) groups[result].push(row)
+  }
+
+  return restoredSummary(groups)
+})
+
+const scoreRestoredSummary = computed<RestoredSummary | null>(() => {
+  const groupMap = new Map(scoreGroups.value.map(group => [group.key, group.rows]))
+  return restoredSummary({
+    win: groupMap.get('home') ?? [],
+    draw: groupMap.get('draw') ?? [],
+    loss: groupMap.get('away') ?? [],
+  })
+})
+
 const popularityCards = computed(() =>
   officialMarkets.value
     .map(market => {
@@ -175,6 +203,32 @@ const subTabs = computed(() => [
   { key: 'index' as const, label: '指数走势', count: indexDataCount.value },
   { key: 'intelligence' as const, label: '情报推荐', count: intelligenceCount.value },
 ])
+
+function halfFullResult(selection: string): RestoredResult | null {
+  const result = selection.trim().slice(-1)
+  if (result === '胜') return 'win'
+  if (result === '平') return 'draw'
+  if (result === '负') return 'loss'
+  return null
+}
+
+function restoredSummary(groups: Record<RestoredResult, JcMarket['rows']>): RestoredSummary | null {
+  const summary: RestoredSummary = {
+    win: restoredProbabilitySum(groups.win),
+    draw: restoredProbabilitySum(groups.draw),
+    loss: restoredProbabilitySum(groups.loss),
+  }
+  return Object.values(summary).some(value => value !== null) ? summary : null
+}
+
+function restoredProbabilitySum(rows: JcMarket['rows']): number | null {
+  const probabilities = rows
+    .map(row => row.restoredProbability)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+  return probabilities.length > 0
+    ? probabilities.reduce((sum, value) => sum + value, 0)
+    : null
+}
 
 watchEffect(() => {
   if (!trendMarkets.value.length) {
@@ -498,6 +552,16 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
               <h4>竞彩扩展-{{ market.title }}</h4>
               <p>{{ marketMeta(market) }}</p>
             </div>
+            <div
+              v-if="market.key === 'SportteryHalfFull' && halfFullRestoredSummary"
+              class="restored-summary"
+              aria-label="半全场还原概率汇总"
+            >
+              <span>还原汇总：</span>
+              <b class="num">胜 {{ fmtRatioPercent(halfFullRestoredSummary.win) }}</b>
+              <b class="num">平 {{ fmtRatioPercent(halfFullRestoredSummary.draw) }}</b>
+              <b class="num">负 {{ fmtRatioPercent(halfFullRestoredSummary.loss) }}</b>
+            </div>
             <span v-if="singleLabel(market)" class="single-tag">{{ singleLabel(market) }}</span>
           </div>
 
@@ -540,6 +604,16 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
             <div>
               <h4>竞彩扩展-比分(方案、差异率)</h4>
               <p>{{ marketMeta(scoreMarket) }}</p>
+            </div>
+            <div
+              v-if="scoreRestoredSummary"
+              class="restored-summary"
+              aria-label="比分还原概率汇总"
+            >
+              <span>还原汇总：</span>
+              <b class="num">胜 {{ fmtRatioPercent(scoreRestoredSummary.win) }}</b>
+              <b class="num">平 {{ fmtRatioPercent(scoreRestoredSummary.draw) }}</b>
+              <b class="num">负 {{ fmtRatioPercent(scoreRestoredSummary.loss) }}</b>
             </div>
             <span v-if="singleLabel(scoreMarket)" class="single-tag">{{ singleLabel(scoreMarket) }}</span>
           </div>
@@ -1099,6 +1173,24 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
 
 .design-title h4 {
   font-size: 0.84rem;
+}
+
+.restored-summary {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px 8px;
+  min-width: 0;
+  color: var(--down);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.restored-summary b {
+  color: inherit;
+  font-weight: 860;
 }
 
 .single-tag {
@@ -1848,6 +1940,16 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
   .sample-row > div:first-child {
     display: grid;
     justify-content: stretch;
+  }
+
+  .design-title {
+    flex-wrap: wrap;
+  }
+
+  .restored-summary {
+    order: 3;
+    flex: 1 0 100%;
+    justify-content: flex-start;
   }
 
   .jc-subtabs {
