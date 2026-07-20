@@ -1,12 +1,29 @@
 <script setup lang="ts">
 import { ArrowLeft, Crown } from '@lucide/vue'
+import type { ApiResponse } from '~/types/auth'
+import type { PaymentPlan } from '~/types/billing'
 
 // 面向游客的公开「会籍权益说明」页：无需登录即可查看（见 middleware/auth.global PUBLIC_PATHS）。
-// 纯静态展示，不调用任何鉴权接口；登录后可在「会员中心 → 升级会籍」选购套餐。
+// 套餐价格来自匿名只读接口；登录后可在「会员中心 → 升级会籍」选购套餐。
 definePageMeta({ layout: false })
 
 // 列顺序按价格由低到高：免费 < 专家 < 黄金 < 翡翠 < 红宝石 < 白金。
-const tiers = ['免费', '专家', '黄金', '翡翠', '红宝石', '白金']
+const tiers = [
+  { label: '免费', roleId: 2 },
+  { label: '专家', roleId: 4 },
+  { label: '黄金', roleId: 10 },
+  { label: '翡翠', roleId: 11 },
+  { label: '红宝石', roleId: 12 },
+  { label: '白金', roleId: 5 },
+] as const
+const fallbackMonthlyPrices: Record<number, number> = {
+  2: 0,
+  4: 288,
+  10: 856,
+  11: 988,
+  12: 1888,
+  5: 4888,
+}
 const benefitRows = [
   { feature: '基础赛事', free: '主流赛事', expert: '全部开放', gold: '全部开放', emerald: '全部开放', ruby: '全部开放', platinum: '全部开放' },
   { feature: '数据回查', free: '不可用', expert: '可用', gold: '可用', emerald: '可用', ruby: '可用', platinum: '可用' },
@@ -20,6 +37,36 @@ const benefitRows = [
 
 type BenefitRow = typeof benefitRows[number]
 const cols: Array<keyof Omit<BenefitRow, 'feature'>> = ['free', 'expert', 'gold', 'emerald', 'ruby', 'platinum']
+
+interface BackendPlans {
+  plans: PaymentPlan[]
+}
+
+const config = useRuntimeConfig()
+const { data: planResponse } = useFetch<ApiResponse<BackendPlans>>('/api/newspdex/billing/plans', {
+  key: 'public-newspdex-billing-plans',
+  baseURL: config.public.apiBase as string,
+  credentials: 'include',
+  headers: { 'X-Spdex-Frontend': 'newspdex' },
+  server: false,
+  lazy: true,
+  timeout: 10_000,
+})
+
+const monthlyPrices = computed(() => {
+  const prices = new Map<number, number>(Object.entries(fallbackMonthlyPrices).map(([roleId, price]) => [Number(roleId), price]))
+  for (const plan of planResponse.value?.data?.plans ?? []) {
+    const monthly = plan.prices.find(stage => Math.abs(stage.month - 1) < 0.001)
+    if (monthly) prices.set(plan.roleId, monthly.price)
+  }
+  return prices
+})
+
+function formatMonthlyPrice(roleId: number): string {
+  const price = monthlyPrices.value.get(roleId)
+  if (price == null) return '—'
+  return price === 0 ? '永久免费' : `¥${price.toLocaleString('zh-CN')}/月`
+}
 </script>
 
 <template>
@@ -45,10 +92,14 @@ const cols: Array<keyof Omit<BenefitRow, 'feature'>> = ['free', 'expert', 'gold'
           <thead>
             <tr>
               <th>能力</th>
-              <th v-for="t in tiers" :key="t">{{ t }}</th>
+              <th v-for="tier in tiers" :key="tier.roleId">{{ tier.label }}</th>
             </tr>
           </thead>
           <tbody>
+            <tr class="price-row">
+              <th>月费价格</th>
+              <td v-for="tier in tiers" :key="tier.roleId">{{ formatMonthlyPrice(tier.roleId) }}</td>
+            </tr>
             <tr v-for="row in benefitRows" :key="row.feature">
               <th>{{ row.feature }}</th>
               <td v-for="c in cols" :key="c">{{ row[c] }}</td>
@@ -151,6 +202,12 @@ const cols: Array<keyof Omit<BenefitRow, 'feature'>> = ['free', 'expert', 'gold'
 .benefits-scroll th:first-child,
 .benefits-scroll td:first-child { text-align: left; }
 .benefits-scroll tbody th { color: var(--ink); font-weight: 820; }
+.benefits-scroll .price-row th,
+.benefits-scroll .price-row td {
+  color: var(--brand-deep);
+  background: color-mix(in srgb, var(--brand) 7%, var(--panel));
+  font-weight: 840;
+}
 
 .note {
   margin: 0;
