@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { CalendarDays } from '@lucide/vue'
+
 withDefaults(defineProps<{
   modelValue: string
   min?: string
@@ -19,10 +21,15 @@ const emit = defineEmits<{
 function updateValue(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement).value)
 }
+
+function displayDate(value: string) {
+  const [year, month, day] = value.split('-')
+  return year && month && day ? `${day}/${month}/${year}` : value
+}
 </script>
 
 <template>
-  <span class="portable-date-input" :class="{ empty: !modelValue, disabled }">
+  <span class="portable-date-input" :class="{ disabled }">
     <input
       type="date"
       :value="modelValue"
@@ -31,8 +38,11 @@ function updateValue(event: Event) {
       :aria-label="ariaLabel"
       @input="updateValue"
     >
-    <span v-if="!modelValue" class="portable-date-placeholder" aria-hidden="true">
-      {{ placeholder }}
+    <span class="portable-date-display" aria-hidden="true">
+      <span :class="['portable-date-text', { placeholder: !modelValue }]">
+        {{ modelValue ? displayDate(modelValue) : placeholder }}
+      </span>
+      <CalendarDays :size="14" :stroke-width="2" />
     </span>
   </span>
 </template>
@@ -47,51 +57,58 @@ function updateValue(event: Event) {
   height: var(--portable-date-height, 30px);
   min-height: var(--portable-date-height, 30px);
   max-height: var(--portable-date-height, 30px);
+  overflow: hidden;
   box-sizing: border-box;
 }
 
 .portable-date-input > input {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
   width: 100%;
   min-width: 0;
   height: 100%;
   min-height: 0;
   max-height: 100%;
-  padding: 0 var(--portable-date-padding-inline, 8px);
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
   border: 0;
   outline: 0;
   background: transparent;
-  color: inherit;
+  color: transparent;
   font: inherit;
   font-variant-numeric: tabular-nums;
-}
-
-.portable-date-input.empty > input,
-.portable-date-input.empty > input::-webkit-datetime-edit {
-  color: transparent;
-}
-
-.portable-date-input > input::-webkit-calendar-picker-indicator {
-  position: relative;
-  z-index: 2;
   cursor: pointer;
+  opacity: 0;
 }
 
-.portable-date-placeholder {
+.portable-date-display {
   position: absolute;
   z-index: 1;
-  top: 50%;
-  left: var(--portable-date-padding-inline, 8px);
-  max-width: calc(100% - 30px);
-  overflow: hidden;
-  color: var(--muted);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 var(--portable-date-padding-inline, 8px);
+  color: var(--ink);
   font: inherit;
   font-weight: 720;
+  pointer-events: none;
+}
+
+.portable-date-text {
+  min-width: 0;
+  overflow: hidden;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
-  pointer-events: none;
-  transform: translateY(-50%);
+}
+
+.portable-date-text.placeholder {
+  color: var(--muted);
 }
 
 .portable-date-input:focus-within {
@@ -99,7 +116,7 @@ function updateValue(event: Event) {
   outline-offset: 1px;
 }
 
-.portable-date-input.disabled > input::-webkit-calendar-picker-indicator {
+.portable-date-input.disabled > input {
   cursor: not-allowed;
 }
 </style>
