@@ -43,13 +43,21 @@ function updateValue(event: Event) {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+  width: 100%;
+  height: var(--portable-date-height, 30px);
+  min-height: var(--portable-date-height, 30px);
+  max-height: var(--portable-date-height, 30px);
+  box-sizing: border-box;
 }
 
 .portable-date-input > input {
   width: 100%;
   min-width: 0;
   height: 100%;
+  min-height: 0;
+  max-height: 100%;
   padding: 0 var(--portable-date-padding-inline, 8px);
+  box-sizing: border-box;
   border: 0;
   outline: 0;
   background: transparent;

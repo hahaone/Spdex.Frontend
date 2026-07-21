@@ -332,6 +332,7 @@ onBeforeUnmount(() => {
 .classic-field select,
 .classic-date-input {
   --portable-date-padding-inline: 7px;
+  --portable-date-height: 28px;
   min-width: 78px;
   height: 28px;
   padding: 0;
