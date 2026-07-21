@@ -270,14 +270,12 @@ function detailRoute(eventId: number) {
         :title="backcheckLocked ? '当前会籍未开放回查' : undefined"
       >
         <SegmentedControl v-model="daySeg" :options="dayOptions" dense />
-        <input
+        <PortableDateInput
           v-model="customDate"
-          type="date"
           class="date-input focus-ring"
-          aria-label="选择日期"
           :min="archiveMinDate"
           :disabled="backcheckLocked"
-        >
+        />
       </div>
 
       <!-- 状态 + 竞彩/足彩 + 刷新 合并一行，按钮铺满横向 -->
@@ -404,7 +402,7 @@ function detailRoute(eventId: number) {
   width: 100%;
   min-width: 0;
   min-height: 30px;
-  padding: 0 8px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--panel);

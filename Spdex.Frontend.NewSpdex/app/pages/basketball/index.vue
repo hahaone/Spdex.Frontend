@@ -211,14 +211,12 @@ function detailRoute(eventId: number) {
         <button class="square-btn focus-ring" aria-label="下一日" :disabled="backcheckLocked" @click="shiftDay(1)">
           <ChevronRight :size="16" />
         </button>
-        <input
+        <PortableDateInput
           v-model="customDate"
-          type="date"
           class="date-input focus-ring"
-          aria-label="选择日期"
           :min="archiveMinDate"
           :disabled="backcheckLocked"
-        >
+        />
       </div>
 
       <div class="status-row">
@@ -303,7 +301,7 @@ function detailRoute(eventId: number) {
   width: 100%;
   min-width: 0;
   min-height: 30px;
-  padding: 0 8px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--panel);

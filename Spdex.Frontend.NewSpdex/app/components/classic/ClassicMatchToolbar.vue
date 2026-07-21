@@ -169,13 +169,13 @@ onBeforeUnmount(() => {
 
         <label class="classic-field">
           <span>回查</span>
-          <input
-            type="date"
-            :value="customDate"
+          <PortableDateInput
+            class="classic-date-input"
+            :model-value="customDate"
             :min="archiveMinDate"
             :disabled="backcheckLocked"
-            @input="emit('update:customDate', ($event.target as HTMLInputElement).value)"
-          >
+            @update:model-value="emit('update:customDate', $event)"
+          />
         </label>
 
         <label v-if="showLotteryFilters" class="classic-field">
@@ -330,10 +330,11 @@ onBeforeUnmount(() => {
 }
 
 .classic-field select,
-.classic-field input {
+.classic-date-input {
+  --portable-date-padding-inline: 7px;
   min-width: 78px;
   height: 28px;
-  padding: 0 7px;
+  padding: 0;
   border: 1px solid var(--classic-border);
   border-radius: 2px;
   background: var(--classic-panel);
@@ -343,7 +344,7 @@ onBeforeUnmount(() => {
 }
 
 .classic-field select:disabled,
-.classic-field input:disabled {
+.classic-date-input.disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
