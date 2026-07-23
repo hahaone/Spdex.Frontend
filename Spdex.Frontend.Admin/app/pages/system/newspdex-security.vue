@@ -3,7 +3,7 @@
     <NSpace class="mb-4" justify="space-between" align="center">
       <div>
         <h2 class="text-xl font-semibold">NewSpdex 防刷</h2>
-        <p class="mt-1 text-xs text-gray-400">查看防刷命中状态，调整热更新参数，添加或解除用户/IP 运行时封禁。</p>
+        <p class="mt-1 text-xs text-gray-400">查看防刷命中状态，调整热更新参数，配置白名单，添加或解除用户/IP 运行时封禁。</p>
       </div>
       <NSpace>
         <NButton :loading="loading" @click="load">刷新</NButton>
@@ -11,7 +11,7 @@
       </NSpace>
     </NSpace>
 
-    <NGrid :cols="4" :x-gap="12" responsive="screen" class="mb-4">
+    <NGrid :cols="5" :x-gap="12" responsive="screen" class="mb-4">
       <NGi>
         <NCard size="small">
           <NStatistic label="最近触发用户/IP" :value="recentActors.length" />
@@ -30,6 +30,11 @@
       <NGi>
         <NCard size="small">
           <NStatistic label="冷却中" :value="cooldownCount" />
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard size="small">
+          <NStatistic label="白名单" :value="whitelistCount" />
         </NCard>
       </NGi>
     </NGrid>
@@ -102,6 +107,24 @@
         <NFormItem label="重接口路径前缀">
           <NDynamicTags v-model:value="configForm.heavyPathPrefixes" />
         </NFormItem>
+
+        <NGrid :cols="3" :x-gap="12" responsive="screen">
+          <NGi>
+            <NFormItem label="用户名白名单">
+              <NDynamicTags v-model:value="configForm.whitelistedUsers" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="用户 ID 白名单">
+              <NDynamicTags v-model:value="configForm.whitelistedUserIds" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="IP 白名单">
+              <NDynamicTags v-model:value="configForm.whitelistedIps" />
+            </NFormItem>
+          </NGi>
+        </NGrid>
       </NForm>
     </NCard>
 
@@ -218,6 +241,9 @@ interface SecurityBlocksResult {
 interface RuntimeConfig {
   enabled: boolean
   heavyPathPrefixes: string[]
+  whitelistedUsers: string[]
+  whitelistedUserIds: string[]
+  whitelistedIps: string[]
   windowSeconds: number
   maxHeavyRequestsPerWindow: number
   maxDistinctEventsPerWindow: number
@@ -259,6 +285,9 @@ const defaultConfig = (): RuntimeConfig => ({
     '/api/newspdex/correct-score',
     '/api/newspdex/inner-outer',
   ],
+  whitelistedUsers: [],
+  whitelistedUserIds: [],
+  whitelistedIps: [],
   windowSeconds: 60,
   maxHeavyRequestsPerWindow: 80,
   maxDistinctEventsPerWindow: 20,
@@ -271,6 +300,11 @@ const configForm = reactive<RuntimeConfig>(defaultConfig())
 
 const cooldownCount = computed(() => recentActors.value.filter(a => isFuture(a.cooldownUntil)).length)
 const hasRuntimeConfig = computed(() => !!configSnapshot.value?.runtimeOverride)
+const whitelistCount = computed(() =>
+  (configForm.whitelistedUsers?.length ?? 0)
+  + (configForm.whitelistedUserIds?.length ?? 0)
+  + (configForm.whitelistedIps?.length ?? 0),
+)
 
 const targetOptions = [
   { label: '用户名', value: 'user' },
@@ -327,6 +361,9 @@ function applyConfig(config: RuntimeConfig) {
   Object.assign(configForm, {
     enabled: config.enabled,
     heavyPathPrefixes: [...(config.heavyPathPrefixes ?? [])],
+    whitelistedUsers: [...(config.whitelistedUsers ?? [])],
+    whitelistedUserIds: [...(config.whitelistedUserIds ?? [])],
+    whitelistedIps: [...(config.whitelistedIps ?? [])],
     windowSeconds: config.windowSeconds,
     maxHeavyRequestsPerWindow: config.maxHeavyRequestsPerWindow,
     maxDistinctEventsPerWindow: config.maxDistinctEventsPerWindow,
@@ -343,6 +380,9 @@ function normalizeConfigForm(): RuntimeConfig {
       .map(x => x.trim())
       .filter(Boolean)
       .map(x => x.startsWith('/') ? x : `/${x}`))],
+    whitelistedUsers: normalizeStringTags(configForm.whitelistedUsers),
+    whitelistedUserIds: normalizeStringTags(configForm.whitelistedUserIds),
+    whitelistedIps: normalizeStringTags(configForm.whitelistedIps),
     windowSeconds: Number(configForm.windowSeconds) || 60,
     maxHeavyRequestsPerWindow: Number(configForm.maxHeavyRequestsPerWindow) || 80,
     maxDistinctEventsPerWindow: Number(configForm.maxDistinctEventsPerWindow) || 20,
@@ -350,6 +390,10 @@ function normalizeConfigForm(): RuntimeConfig {
     cooldownMinutes: Number(configForm.cooldownMinutes) || 10,
     stateTtlMinutes: Number(configForm.stateTtlMinutes) || 30,
   }
+}
+
+function normalizeStringTags(values?: string[]) {
+  return [...new Set((values ?? []).map(x => x.trim()).filter(Boolean))]
 }
 
 async function saveConfig() {
