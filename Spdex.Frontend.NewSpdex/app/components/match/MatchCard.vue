@@ -67,6 +67,37 @@ const kickOff = computed(() => {
   return t.slice(0, 10) === todayG8 ? hm : `${t.slice(5, 10)} ${hm}`
 })
 const handicapLabel = computed(() => formatHandicapLine(props.match.handicap))
+const lotteryBadges = computed(() => {
+  const badges: Array<{ key: string, text: string, title: string, tone: 'sfc' | 'jc' }> = []
+
+  if (props.match.sfcIssue && props.match.sfcOrder) {
+    badges.push({
+      key: 'sfc',
+      text: `足${props.match.sfcIssue}-${props.match.sfcOrder}`,
+      title: `足彩 ${props.match.sfcIssue} 期 第 ${props.match.sfcOrder} 场`,
+      tone: 'sfc',
+    })
+  }
+
+  if (props.match.jcIssue && props.match.jcOrder) {
+    const order = String(props.match.jcOrder).padStart(3, '0')
+    badges.push({
+      key: 'jc',
+      text: `竞${props.match.jcIssue}-${order}`,
+      title: `竞彩 ${props.match.jcIssue} 期 第 ${order} 场`,
+      tone: 'jc',
+    })
+  } else if (props.match.isJc) {
+    badges.push({
+      key: 'jc',
+      text: '竞彩',
+      title: '竞彩',
+      tone: 'jc',
+    })
+  }
+
+  return badges
+})
 const statusLabel = computed(() => {
   if (props.match.status === 'finished') return '完场'
   if (props.match.status === 'started') return '进行中'
@@ -145,7 +176,14 @@ const goalsTurnoverText = computed(() => {
         </span>
         <span class="num kick-off">{{ kickOff }}</span>
         <span v-if="twoWay && handicapLabel" class="tag tag-quant num">{{ handicapLabel }}</span>
-        <span v-if="match.isJc" class="tag tag-brand">竞彩</span>
+        <span
+          v-for="badge in lotteryBadges"
+          :key="badge.key"
+          :class="['tag', 'lottery-tag', `lottery-${badge.tone}`]"
+          :title="badge.title"
+        >
+          {{ badge.text }}
+        </span>
       </NuxtLink>
     </div>
 
@@ -283,9 +321,32 @@ const goalsTurnoverText = computed(() => {
 .head-right {
   display: inline-flex;
   flex: 0 0 auto;
+  min-width: 0;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 5px;
+  row-gap: 3px;
   color: inherit;
+}
+
+.lottery-tag {
+  height: 18px;
+  padding-inline: 5px;
+  font-size: 0.65rem;
+  font-weight: 820;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.lottery-jc {
+  background: #e8f7ef;
+  color: #238c51;
+}
+
+.lottery-sfc {
+  background: var(--away-bg);
+  color: #9a6a08;
 }
 
 .flashq-mini {
@@ -585,8 +646,14 @@ const goalsTurnoverText = computed(() => {
 
 @media (max-width: 370px) {
   .card-head {
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 5px;
     padding-inline: 7px;
+  }
+
+  .head-right {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 
   .flashq-mini {
