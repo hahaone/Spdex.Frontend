@@ -106,6 +106,7 @@ export interface SilkRechargeOrderResult {
   orderId: string | null
   formHtml: string | null
   qrImageBase64: string | null
+  payUrl: string | null
   totalFee: number
   number: number
 }
@@ -160,4 +161,4 @@ export interface CreateOrderRequest {
 }
 
 export type PaymentChannel = 'alipay' | 'yft' | 'silk'
-export type SilkRechargeChannel = 'alipay'
+export type SilkRechargeChannel = 'yft' | 'alipay'

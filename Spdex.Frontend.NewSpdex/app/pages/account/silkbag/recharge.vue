@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, RefreshCw } from '@lucide/vue'
+import { AlertCircle, ArrowLeft, CheckCircle, Coins, CreditCard, Loader2, QrCode, RefreshCw } from '@lucide/vue'
 import type { PaymentAccess, SilkBalance, SilkProduct, SilkRechargeChannel, SilkRechargeOrderResult } from '~/types/billing'
 
 const route = useRoute()
@@ -33,7 +33,7 @@ const maxNumber = computed(() => {
   return Math.max(1, Math.floor(maxAmount.value / Math.max(unitPrice, 0.01)))
 })
 const estimatedTotal = computed(() => (product.value?.unitPrice ?? 0) * number.value)
-const rechargeDisabled = computed(() => !paymentAccess.value?.directAlipayAvailable || phase.value === 'paying' || number.value < 1 || number.value > maxNumber.value || estimatedTotal.value > maxAmount.value)
+const rechargeDisabled = computed(() => phase.value === 'paying' || number.value < 1 || number.value > maxNumber.value || estimatedTotal.value > maxAmount.value)
 
 function normalizeNumber() {
   const next = Math.round(Number(number.value) || 0)
@@ -42,15 +42,15 @@ function normalizeNumber() {
 
 onMounted(async () => {
   try {
-    const [productResult, balanceResult, accessResult] = await Promise.all([
+    const [productResult, balanceResult, accessResult] = await Promise.allSettled([
       getSilkProduct(),
       getSilkBalance(),
       getPaymentAccess(),
     ])
-    product.value = productResult
-    balance.value = balanceResult
-    paymentAccess.value = accessResult
-    if (!accessResult) throw new Error('支付资格查询失败')
+    if (productResult.status === 'fulfilled') product.value = productResult.value
+    if (balanceResult.status === 'fulfilled') balance.value = balanceResult.value
+    if (accessResult.status === 'fulfilled') paymentAccess.value = accessResult.value
+    if (!product.value) throw new Error('锦囊商品加载失败')
     normalizeNumber()
     phase.value = 'idle'
   }
@@ -62,7 +62,7 @@ onMounted(async () => {
 
 async function startRecharge(channel: SilkRechargeChannel) {
   normalizeNumber()
-  if (!paymentAccess.value?.directAlipayAvailable) {
+  if (channel === 'alipay' && !paymentAccess.value?.directAlipayAvailable) {
     errorMessage.value = paymentAccess.value?.message || '当前账号暂不可使用独立支付宝'
     phase.value = 'error'
     return
@@ -175,14 +175,18 @@ async function refreshAndReturn() {
         每天最多 {{ dailyLimit }} 次，单次不超过 ¥{{ maxAmount.toFixed(0) }}
       </p>
 
-      <div v-if="paymentAccess?.directAlipayAvailable" class="channel-grid">
-        <button class="channel-btn focus-ring" type="button" :disabled="rechargeDisabled" @click="startRecharge('alipay')">
+      <div class="channel-grid">
+        <button class="channel-btn focus-ring" type="button" :disabled="rechargeDisabled" @click="startRecharge('yft')">
+          <QrCode :size="17" />
+          <span>支付宝扫码</span>
+        </button>
+        <button v-if="paymentAccess?.directAlipayAvailable" class="channel-btn secondary focus-ring" type="button" :disabled="rechargeDisabled" @click="startRecharge('alipay')">
           <CreditCard :size="17" />
           <span>独立支付宝</span>
         </button>
       </div>
-      <p v-else-if="paymentAccess" class="access-note">
-        {{ paymentAccess.message || '独立支付宝仅向注册超过180天的用户开放' }}
+      <p v-if="paymentAccess && !paymentAccess.directAlipayAvailable" class="access-note">
+        独立支付宝仅向注册超过 {{ paymentAccess.directAlipayMinimumRegistrationDays || 180 }} 天的用户开放，可使用支付宝扫码。
       </p>
     </section>
 
@@ -202,6 +206,12 @@ async function refreshAndReturn() {
         <span>订单已创建</span>
       </div>
       <p v-if="order.orderId" class="hint num">订单号：{{ order.orderId }}</p>
+      <div v-if="order.qrImageBase64" class="qr-box">
+        <img :src="`data:image/png;base64,${order.qrImageBase64}`" alt="支付宝扫码支付二维码">
+      </div>
+      <a v-else-if="order.payUrl" class="pay-link" :href="order.payUrl" target="_blank" rel="noopener">
+        打开支付链接
+      </a>
       <div id="silk-alipay-form" />
       <p class="hint">支付成功后约 30 秒内到账。</p>
       <div class="order-actions">
@@ -372,6 +382,34 @@ async function refreshAndReturn() {
 .channel-btn:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.channel-btn.secondary {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+
+.qr-box {
+  display: grid;
+  place-items: center;
+  padding: 8px 0;
+}
+
+.qr-box img {
+  width: 188px;
+  height: 188px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px;
+}
+
+.pay-link {
+  overflow-wrap: anywhere;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .ghost-btn {
