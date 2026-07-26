@@ -1109,11 +1109,23 @@ function liveMainFallbackText(item: MatchListItem): string {
 
 function runnerLabel(trade: LiveMatchOddsTopTradeSummary | null | undefined, item: MatchListItem): string {
   if (!trade) return '-'
-  const selectionId = Number(trade.selectionId)
+  const selectionId = tradeSelectionId(trade)
   if (selectionId === item.match.homeTeamId) return '主'
   if (selectionId === DRAW_SELECTION_ID) return '平'
   if (selectionId === item.match.guestTeamId) return '客'
   return trade.runnerName || trade.selectionId || '-'
+}
+
+function tradeSelectionId(trade: LiveMatchOddsTopTradeSummary): number | null {
+  return parseSelectionId(trade.selectionId) ?? parseSelectionId(trade.runnerName)
+}
+
+function parseSelectionId(value: string | null | undefined): number | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const normalized = raw.split('|')[0]?.trim() ?? ''
+  const n = Number(normalized)
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 function sideLabel(sideHint: string | null | undefined): string {
@@ -1270,8 +1282,7 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
 }
 
 function formatRunnerLtp(live: LiveMatchOddsEventItem, selectionId: number): string {
-  const target = String(selectionId)
-  const row = live.runnerLtps?.find(item => item.selectionId === target)
+  const row = live.runnerLtps?.find(item => parseSelectionId(item.selectionId) === selectionId)
   const value = Number(row?.lastPriceTraded ?? 0)
   return Number.isFinite(value) && value > 0 ? value.toFixed(2) : '-'
 }
