@@ -29,6 +29,8 @@ type JcSubTabKey = 'odds' | 'popularity' | 'index' | 'intelligence'
 const activeSubTab = ref<JcSubTabKey>('odds')
 
 const officialMarkets = computed(() => props.jc.markets)
+const showPopularityFields = computed(() =>
+  !props.jc.isSnapshot || props.jc.popularityIsHistorical)
 const coreMarket = computed(() => officialMarkets.value.find(m => m.key === 'SportteryNWDL') ?? null)
 const halfFullMarket = computed(() => officialMarkets.value.find(m => m.key === 'SportteryHalfFull') ?? null)
 const extensionMarkets = computed(() =>
@@ -178,7 +180,8 @@ const popularityCards = computed(() =>
     .filter(card => card.rows.length > 0))
 
 const hasPopularity = computed(() =>
-  Boolean(props.jc.totalHeat || props.jc.currentRank || props.jc.historicalHighest || popularityCards.value.length))
+  showPopularityFields.value
+  && Boolean(props.jc.totalHeat || props.jc.currentRank || props.jc.historicalHighest || popularityCards.value.length))
 const hasIndexData = computed(() =>
   trendMarkets.value.length > 0
   || companyEuroSnapshot.value.length > 0
@@ -197,12 +200,17 @@ const intelligenceCount = computed(() =>
   + analyzeItems.value.length
   + recommendations.value.length
   + (intelligence.value.injuryAnalysis ? 1 : 0))
-const subTabs = computed(() => [
-  { key: 'odds' as const, label: '赔率分析', count: officialMarkets.value.length },
-  { key: 'popularity' as const, label: '选号分布', count: popularityCards.value.length },
-  { key: 'index' as const, label: '指数走势', count: indexDataCount.value },
-  { key: 'intelligence' as const, label: '情报推荐', count: intelligenceCount.value },
-])
+const subTabs = computed(() => {
+  const tabs = [
+    { key: 'odds' as const, label: '赔率分析', count: officialMarkets.value.length },
+    { key: 'popularity' as const, label: '选号分布', count: popularityCards.value.length },
+    { key: 'index' as const, label: '指数走势', count: indexDataCount.value },
+    { key: 'intelligence' as const, label: '情报推荐', count: intelligenceCount.value },
+  ]
+  return showPopularityFields.value
+    ? tabs
+    : tabs.filter(tab => tab.key !== 'popularity')
+})
 
 function halfFullResult(selection: string): RestoredResult | null {
   const result = selection.trim().slice(-1)
@@ -243,6 +251,10 @@ watch(() => selectedTrend.value?.key, () => {
   selectedTrendValueKeys.value = defaultTrendValueKeys(trendValueOptions.value, selectedTrend.value)
   historyListExpanded.value = false
 }, { immediate: true })
+
+watch(showPopularityFields, (visible) => {
+  if (!visible && activeSubTab.value === 'popularity') activeSubTab.value = 'odds'
+})
 
 watchEffect(() => {
   const available = new Set(trendValueOptions.value.map(value => value.key))
@@ -471,9 +483,9 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
     <div class="jc-meta-strip">
       <span>玩法 <b class="num">{{ officialMarkets.length }}</b></span>
       <span>走势 <b class="num">{{ trendMarkets.reduce((sum, market) => sum + market.points.length, 0) }}</b></span>
-      <span v-if="jc.totalHeat">总热度 <b class="num">{{ fmtAmount(jc.totalHeat) }}</b></span>
-      <span v-if="jc.currentRank">排名 <b class="num">{{ jc.currentRank }}</b></span>
-      <span v-if="jc.historicalHighest">历史最高 <b class="num">{{ fmtAmount(jc.historicalHighest) }}</b></span>
+      <span v-if="showPopularityFields && jc.totalHeat">总热度 <b class="num">{{ fmtAmount(jc.totalHeat) }}</b></span>
+      <span v-if="showPopularityFields && jc.currentRank">排名 <b class="num">{{ jc.currentRank }}</b></span>
+      <span v-if="showPopularityFields && jc.historicalHighest">历史最高 <b class="num">{{ fmtAmount(jc.historicalHighest) }}</b></span>
       <span v-if="jc.matchedAt">更新 <b class="num">{{ fmtShortTime(jc.matchedAt) }}</b></span>
     </div>
 
@@ -509,23 +521,23 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
           </div>
 
           <div class="table-scroll market-table-scroll">
-            <table class="jc-odds-table">
+            <table :class="['jc-odds-table', { 'no-popularity': !showPopularityFields }]">
               <colgroup>
                 <col class="selection-col">
                 <col class="odds-col">
                 <col class="odds-col">
+                <col v-if="showPopularityFields" class="ratio-col">
                 <col class="ratio-col">
-                <col class="ratio-col">
-                <col class="ratio-col">
+                <col v-if="showPopularityFields" class="ratio-col">
               </colgroup>
               <thead>
                 <tr>
                   <th>选项</th>
                   <th>官方</th>
                   <th>还原</th>
-                  <th>方案分布</th>
+                  <th v-if="showPopularityFields">方案分布</th>
                   <th>还原概率</th>
-                  <th>差异率</th>
+                  <th v-if="showPopularityFields">差异率</th>
                 </tr>
               </thead>
               <tbody>
@@ -533,9 +545,9 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
                   <td>{{ row.selection }}</td>
                   <td class="num">{{ fmtOdds(row.officialOdds) }}</td>
                   <td class="num">{{ fmtOdds(row.restoredOdds) }}</td>
-                  <td class="num">{{ fmtRatioPercent(row.distribution) }}</td>
+                  <td v-if="showPopularityFields" class="num">{{ fmtRatioPercent(row.distribution) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.restoredProbability) }}</td>
-                  <td class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
+                  <td v-if="showPopularityFields" class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -566,23 +578,23 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
           </div>
 
           <div class="table-scroll market-table-scroll">
-            <table class="jc-odds-table">
+            <table :class="['jc-odds-table', { 'no-popularity': !showPopularityFields }]">
               <colgroup>
                 <col class="selection-col">
                 <col class="odds-col">
                 <col class="odds-col">
+                <col v-if="showPopularityFields" class="ratio-col">
                 <col class="ratio-col">
-                <col class="ratio-col">
-                <col class="ratio-col">
+                <col v-if="showPopularityFields" class="ratio-col">
               </colgroup>
               <thead>
                 <tr>
                   <th>选项</th>
                   <th>官方</th>
                   <th>还原</th>
-                  <th>方案分布</th>
+                  <th v-if="showPopularityFields">方案分布</th>
                   <th>还原概率</th>
-                  <th>差异率</th>
+                  <th v-if="showPopularityFields">差异率</th>
                 </tr>
               </thead>
               <tbody>
@@ -590,9 +602,9 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
                   <td>{{ row.selection }}</td>
                   <td class="num">{{ fmtOdds(row.officialOdds) }}</td>
                   <td class="num">{{ fmtOdds(row.restoredOdds) }}</td>
-                  <td class="num">{{ fmtRatioPercent(row.distribution) }}</td>
+                  <td v-if="showPopularityFields" class="num">{{ fmtRatioPercent(row.distribution) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.restoredProbability) }}</td>
-                  <td class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
+                  <td v-if="showPopularityFields" class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -602,7 +614,7 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
         <article v-if="scoreMarket" class="official-market design-market score-design">
           <div class="market-head design-title">
             <div>
-              <h4>竞彩扩展-比分(方案、差异率)</h4>
+              <h4>{{ showPopularityFields ? '竞彩扩展-比分(方案、差异率)' : '竞彩扩展-比分' }}</h4>
               <p>{{ marketMeta(scoreMarket) }}</p>
             </div>
             <div
@@ -622,11 +634,15 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
             <div v-for="group in scoreGroups" :key="group.key" class="score-group">
               <div class="score-group-title">{{ group.title }}</div>
               <div class="score-list">
-                <div v-for="row in group.rows" :key="row.key" class="score-row">
+                <div
+                  v-for="row in group.rows"
+                  :key="row.key"
+                  :class="['score-row', { 'no-popularity': !showPopularityFields }]"
+                >
                   <b>{{ row.selection }}</b>
                   <span class="num">{{ fmtOdds(row.officialOdds) }}</span>
-                  <span class="num muted">{{ fmtRatioPercentBlank(row.distribution) }}</span>
-                  <span class="num" :class="changeClass(row.differenceRate)">{{ fmtDifferenceBlank(row.differenceRate) }}</span>
+                  <span v-if="showPopularityFields" class="num muted">{{ fmtRatioPercentBlank(row.distribution) }}</span>
+                  <span v-if="showPopularityFields" class="num" :class="changeClass(row.differenceRate)">{{ fmtDifferenceBlank(row.differenceRate) }}</span>
                 </div>
               </div>
             </div>
@@ -647,15 +663,15 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
           </div>
 
           <div class="table-scroll market-table-scroll">
-            <table class="jc-odds-table">
+            <table :class="['jc-odds-table', { 'no-popularity': !showPopularityFields }]">
               <thead>
                 <tr>
                   <th>选项</th>
                   <th>官方</th>
                   <th>还原</th>
-                  <th>方案分布</th>
+                  <th v-if="showPopularityFields">方案分布</th>
                   <th>还原概率</th>
-                  <th>差异率</th>
+                  <th v-if="showPopularityFields">差异率</th>
                 </tr>
               </thead>
               <tbody>
@@ -663,9 +679,9 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
                   <td>{{ row.selection }}</td>
                   <td class="num">{{ fmtOdds(row.officialOdds) }}</td>
                   <td class="num">{{ fmtOdds(row.restoredOdds) }}</td>
-                  <td class="num">{{ fmtRatioPercent(row.distribution) }}</td>
+                  <td v-if="showPopularityFields" class="num">{{ fmtRatioPercent(row.distribution) }}</td>
                   <td class="num">{{ fmtRatioPercent(row.restoredProbability) }}</td>
-                  <td class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
+                  <td v-if="showPopularityFields" class="num" :class="changeClass(row.differenceRate)">{{ fmtDifference(row.differenceRate) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1041,7 +1057,7 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
 
 .jc-subtabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
   padding: 6px;
@@ -1312,6 +1328,10 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
   padding: 3px 2px;
   color: var(--ink);
   font-size: 0.72rem;
+}
+
+.score-row.no-popularity {
+  grid-template-columns: minmax(34px, 1fr) minmax(44px, 1fr);
 }
 
 .score-row b,
@@ -1992,6 +2012,10 @@ function changeClass(value: number | null | undefined): Record<string, boolean> 
 
   .jc-odds-table {
     min-width: 560px;
+  }
+
+  .jc-odds-table.no-popularity {
+    min-width: 360px;
   }
 
   .jc-odds-table.score {

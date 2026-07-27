@@ -1075,7 +1075,7 @@ onUnmounted(() => {
 .col-asian { width: 6%; text-align: right; white-space: nowrap; }
 .col-detail {
   width: 13%;
-  min-width: 120px;
+  min-width: 132px;
   white-space: normal;
 }
 
@@ -1227,16 +1227,16 @@ onUnmounted(() => {
 .detail-links {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 3px;
   min-width: 0;
 }
 
 .detail-link-row {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, 30px);
+  justify-content: flex-start;
   gap: 3px;
-  flex-wrap: nowrap;
   min-width: 0;
 }
 
@@ -1244,9 +1244,10 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
+  width: 30px;
+  min-width: 30px;
   height: 18px;
-  padding: 0 3px;
+  padding: 0;
   border-radius: 3px;
   color: #fff;
   font-size: 0.68rem;

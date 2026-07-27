@@ -275,6 +275,12 @@ const detailLinks = [
   { path: 'poly', label: 'Poly', title: 'Polymarket', color: '#6d28d9' },
 ]
 
+const detailLinkRows = computed(() => {
+  const rowCount = 2
+  const rowSize = Math.ceil(detailLinks.length / rowCount)
+  return Array.from({ length: rowCount }, (_, index) => detailLinks.slice(index * rowSize, (index + 1) * rowSize))
+})
+
 onMounted(() => {
   autoRefreshTimer = setInterval(() => {
     if (document.visibilityState !== 'visible') return
@@ -462,20 +468,26 @@ onUnmounted(() => {
               <span v-if="item.match.half" class="half">({{ item.match.half }})</span>
             </td>
             <td class="col-detail">
-              <div class="detail-links">
-                <NuxtLink
-                  v-for="link in detailLinks"
-                  :key="link.path"
-                  :to="link.path === 'poly'
-                    ? `/poly/details?id=${item.match.eventId}&home=${encodeURIComponent(item.match.homeTeam)}&away=${encodeURIComponent(item.match.guestTeam)}&league=${encodeURIComponent(item.match.sortName || item.match.fullName)}`
-                    : `/${link.path}/details?id=${item.match.eventId}`"
-                  :title="link.title"
-                  class="detail-btn"
-                  :style="{ backgroundColor: link.color }"
-                  target="_blank"
+              <div class="detail-links" aria-label="明细入口">
+                <div
+                  v-for="(row, rowIndex) in detailLinkRows"
+                  :key="rowIndex"
+                  class="detail-link-row"
                 >
-                  {{ link.label }}
-                </NuxtLink>
+                  <NuxtLink
+                    v-for="link in row"
+                    :key="link.path"
+                    :to="link.path === 'poly'
+                      ? `/poly/details?id=${item.match.eventId}&home=${encodeURIComponent(item.match.homeTeam)}&away=${encodeURIComponent(item.match.guestTeam)}&league=${encodeURIComponent(item.match.sortName || item.match.fullName)}`
+                      : `/${link.path}/details?id=${item.match.eventId}`"
+                    :title="link.title"
+                    class="detail-btn"
+                    :style="{ backgroundColor: link.color }"
+                    target="_blank"
+                  >
+                    {{ link.label }}
+                  </NuxtLink>
+                </div>
               </div>
             </td>
           </tr>
@@ -985,7 +997,10 @@ onUnmounted(() => {
 .col-score { width: 90px; white-space: nowrap; }
 .col-bf { width: 65px; text-align: right; white-space: nowrap; }
 .col-asian { width: 65px; text-align: right; white-space: nowrap; }
-.col-detail { width: 160px; white-space: nowrap; }
+.col-detail {
+  width: 160px;
+  white-space: normal;
+}
 
 .league-tag {
   display: inline-block;
@@ -1122,30 +1137,42 @@ onUnmounted(() => {
 /* --- 明细链接 --- */
 .detail-links {
   display: flex;
-  gap: 4px;
-  flex-wrap: nowrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.detail-link-row {
+  display: grid;
+  grid-template-columns: repeat(4, 30px);
+  justify-content: flex-start;
+  gap: 3px;
+  min-width: 0;
 }
 
 .detail-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 20px;
-  padding: 0 4px;
+  width: 30px;
+  min-width: 30px;
+  height: 18px;
+  padding: 0;
   border-radius: 3px;
   color: #fff;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-decoration: none;
   opacity: 0.8;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity 0.15s, box-shadow 0.15s;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .detail-btn:hover {
   opacity: 1;
-  transform: scale(1.15);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
 }
 
 /* --- 分页 --- */
