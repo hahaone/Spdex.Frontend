@@ -11,6 +11,7 @@ const FX_RATE_REFRESH_INTERVAL_MS = 15 * 60_000
 const FALLBACK_BETFAIR_GBP_TO_HKD_RATE = 9.8
 const EFFECTIVE_LIVE_BIG_TRADE_HKD = 156_000
 const LIVE_TRADE_COMPARE_THRESHOLD_HKD = 40_000
+const LIVE_TRADE_VALUE_GAP_THRESHOLD = 0.1
 const LIVE_RUNNING_WINDOW_MS = 4 * 60 * 60 * 1000
 const BUSINESS_TIME_ZONE = 'Asia/Shanghai'
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -646,7 +647,7 @@ function syncTopTradeCollisionMarkers() {
     const collisionCount = collisionGroup.length > 1 ? collisionGroup.length : 0
     const latestKey = item.latestTopTradeKey
     const previousKeys = previousKeysByEventId.get(eventId)
-    const latestEnteredTop10 = !!latestKey && (previousKeys == null || !previousKeys.has(latestKey))
+    const latestEnteredTop10 = !!latestKey && previousKeys != null && !previousKeys.has(latestKey)
     if (
       collisionCount > 0
       && latestEnteredTop10
@@ -1300,6 +1301,27 @@ function formatBookLevel(size: number | null | undefined, price: number | null |
 function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
   return `${formatBookLevel(trade.bestBackSize, trade.bestBackPrice)} / ${formatBookLevel(trade.bestLaySize, trade.bestLayPrice)}`
 }
+
+function topTradeValueGapRatio(trade: LiveMatchOddsTopTradeSummary): number | null {
+  const tradedPrice = Number(trade.tradedPrice ?? 0)
+  const layPrice = Number(trade.bestBackPrice ?? 0)
+  if (!Number.isFinite(tradedPrice) || !Number.isFinite(layPrice) || tradedPrice <= 0 || layPrice <= 0) return null
+
+  const low = Math.min(tradedPrice, layPrice)
+  const high = Math.max(tradedPrice, layPrice)
+  return (high - low) / low
+}
+
+function shouldMarkTopTradeValueGap(trade: LiveMatchOddsTopTradeSummary): boolean {
+  const ratio = topTradeValueGapRatio(trade)
+  return ratio != null && ratio > LIVE_TRADE_VALUE_GAP_THRESHOLD
+}
+
+function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
+  const ratio = topTradeValueGapRatio(trade)
+  if (ratio == null) return '成交价与挂卖价差值超过 10%'
+  return `成交价与挂卖价差值 ${(ratio * 100).toFixed(1)}%`
+}
 </script>
 
 <template>
@@ -1556,6 +1578,13 @@ function formatBackLayBook(trade: LiveMatchOddsTopTradeSummary): string {
                       <td>{{ trade.tradedPrice ? trade.tradedPrice.toFixed(2) : '-' }}</td>
                       <td>
                         {{ formatBackLayBook(trade) }}
+                        <span
+                          v-if="shouldMarkTopTradeValueGap(trade)"
+                          class="live-value-gap-marker"
+                          :title="topTradeValueGapTitle(trade)"
+                        >
+                          [V]
+                        </span>
                         <span
                           v-if="topTradeCollisionMarkerCount(trade, getLiveItem(item)) > 0"
                           class="live-collision-count top-trade-collision-count"
@@ -2229,6 +2258,13 @@ th.col-tg {
 
 .top-trade-collision-count {
   margin-left: 10px;
+}
+
+.live-value-gap-marker {
+  margin-left: 10px;
+  color: #2563eb;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .action-cell {

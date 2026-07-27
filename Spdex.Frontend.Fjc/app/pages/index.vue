@@ -277,8 +277,15 @@ const pageRange = computed(() => {
   return pages
 })
 
+interface DetailLink {
+  path: string
+  label: string
+  title: string
+  color: string
+}
+
 // 明细链接配置
-const detailLinks = [
+const detailLinks: DetailLink[] = [
   { path: 'cs', label: 'GL', title: 'Goal Line', color: '#2563eb' },
   { path: 'cs2', label: '胆', title: '波胆', color: '#5f9ea0' },
   { path: 'cs3', label: '标', title: '胜平负', color: '#a0522d' },
@@ -289,7 +296,13 @@ const detailLinks = [
   { path: 'kalshi', label: 'Ks', title: 'Kalshi', color: '#047857' },
 ]
 
-function detailLinkTo(link: typeof detailLinks[number], item: MatchListItem): string {
+const detailLinkRows = computed<DetailLink[][]>(() => {
+  const rowCount = 2
+  const rowSize = Math.ceil(detailLinks.length / rowCount)
+  return Array.from({ length: rowCount }, (_, index) => detailLinks.slice(index * rowSize, (index + 1) * rowSize))
+})
+
+function detailLinkTo(link: DetailLink, item: MatchListItem): string {
   const home = encodeURIComponent(item.match.homeTeam)
   const away = encodeURIComponent(item.match.guestTeam)
   const league = encodeURIComponent(item.match.sortName || item.match.fullName)
@@ -507,18 +520,24 @@ onUnmounted(() => {
               <span v-if="item.match.half" class="half">({{ item.match.half }})</span>
             </td>
             <td class="col-detail">
-              <div class="detail-links">
-                <NuxtLink
-                  v-for="link in detailLinks"
-                  :key="link.path"
-                  :to="detailLinkTo(link, item)"
-                  :title="link.title"
-                  class="detail-btn"
-                  :style="{ backgroundColor: link.color }"
-                  target="_blank"
+              <div class="detail-links" aria-label="明细入口">
+                <div
+                  v-for="(row, rowIndex) in detailLinkRows"
+                  :key="rowIndex"
+                  class="detail-link-row"
                 >
-                  {{ link.label }}
-                </NuxtLink>
+                  <NuxtLink
+                    v-for="link in row"
+                    :key="link.path"
+                    :to="detailLinkTo(link, item)"
+                    :title="link.title"
+                    class="detail-btn"
+                    :style="{ backgroundColor: link.color }"
+                    target="_blank"
+                  >
+                    {{ link.label }}
+                  </NuxtLink>
+                </div>
               </div>
             </td>
           </tr>
@@ -1054,7 +1073,11 @@ onUnmounted(() => {
 }
 .col-bf { width: 6%; text-align: right; white-space: nowrap; }
 .col-asian { width: 6%; text-align: right; white-space: nowrap; }
-.col-detail { width: 13%; white-space: nowrap; }
+.col-detail {
+  width: 13%;
+  min-width: 120px;
+  white-space: normal;
+}
 
 .league-tag {
   display: inline-block;
@@ -1203,31 +1226,41 @@ onUnmounted(() => {
 /* --- 明细链接 --- */
 .detail-links {
   display: flex;
-  justify-content: flex-end;
-  gap: 1px;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.detail-link-row {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
   flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .detail-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
+  min-width: 22px;
   height: 18px;
-  padding: 0 2px;
+  padding: 0 3px;
   border-radius: 3px;
   color: #fff;
   font-size: 0.68rem;
   font-weight: 600;
   text-decoration: none;
   opacity: 0.8;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity 0.15s, box-shadow 0.15s;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .detail-btn:hover {
   opacity: 1;
-  transform: scale(1.08);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
 }
 
 @media (max-width: 1120px) {

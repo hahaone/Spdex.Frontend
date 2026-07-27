@@ -71,7 +71,12 @@ export const CHART_MARKETS: ChartMarketDef[] = [
   {
     label: '标盘',
     value: 'standard',
-    metrics: [...PRICECALC_METRICS, { label: '模拟盈亏', value: 'payout' }, { label: '冷热', value: 'hotcold' }],
+    metrics: [
+      ...PRICECALC_METRICS,
+      { label: '模拟盈亏', value: 'payout' },
+      { label: '冷热', value: 'hotcold' },
+      { label: '凯利方差', value: 'kellyvar' },
+    ],
   },
   { label: '进球', value: 'goals', metrics: [...PRICECALC_METRICS] },
   {
