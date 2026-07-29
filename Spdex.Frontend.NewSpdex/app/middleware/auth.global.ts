@@ -13,6 +13,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // 避免 useAuth().tier 兜底为 'Free' 时把白金/黄金等误判为免费版。
   if (!user.value) {
     const ok = await fetchUser()
-    if (!ok) return navigateTo('/login')
+    if (!ok) {
+      return navigateTo({
+        path: '/login',
+        query: { redirect: to.fullPath },
+      })
+    }
   }
 })

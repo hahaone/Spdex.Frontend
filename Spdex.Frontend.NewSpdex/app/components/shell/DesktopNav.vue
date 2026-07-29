@@ -24,6 +24,7 @@ const navItems = [
   { label: '今日足球', to: '/football' },
   { label: '今日篮球', to: '/basketball' },
   { label: '实时赛事', to: '/live' },
+  { label: '智能问答', to: '/ai' },
   { label: '会员中心', to: '/account' },
 ]
 
