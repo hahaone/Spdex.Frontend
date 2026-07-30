@@ -16,10 +16,12 @@
 Spdex.Frontend/                 # 仓库根目录
 ├── .gitignore                  # Git 忽略规则
 ├── docs/                       # 项目文档
-│   ├── requirements.md         # 需求文档
-│   ├── design.md               # 设计文档
-│   ├── implementation.md       # 实施方案
-│   └── dev-log.md              # 开发记录
+│   ├── README.md               # 文档总入口
+│   ├── project/                # 跨前端项目文档
+│   ├── products/               # 产品专项文档
+│   ├── admin/                  # Admin2026 文档
+│   ├── operations/             # 发布与节点运维
+│   └── assets/                 # 品牌与文档素材
 └── Spdex.Frontend.Fjc/         # Nuxt 3 主应用
     ├── app/                    # 应用层
     │   ├── app.vue             # 根组件

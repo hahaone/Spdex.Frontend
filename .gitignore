@@ -82,7 +82,7 @@ coverage/
 # =========================
 .claude/
 **/.claude/
-docs/新版SPdex/
+docs/products/newspdex/local-source/
 deploy/web/ansible/inventory/*.ini
 deploy/web/ansible/group_vars/*.yml
 deploy/web/ansible/group_vars/*.json

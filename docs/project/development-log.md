@@ -6,6 +6,19 @@
 
 ---
 
+## 2026-07-30
+
+### 文档信息架构整理
+
+- 新增 `docs/README.md`，按五个前端子项目提供统一导航，并链接后端文档正源。
+- 通用项目文档迁入 `docs/project/`，Admin2026 方案迁入 `docs/admin/`，
+  Web 节点手册迁入 `docs/operations/`。
+- NewSpdex 的旧站分析、设计参考和本地设计源稿统一迁入
+  `docs/products/newspdex/`；本地源稿继续由 `.gitignore` 排除。
+- 品牌图片迁入 `docs/assets/brand/`，不修改各前端运行时 public 资源。
+- 本次只整理文档和文档素材，不修改前端业务代码、构建配置、CI/CD 触发语义
+  或线上发布状态。
+
 ## 2026-06-03
 
 ### Quantilearn 我的模型范围修正
@@ -150,11 +163,11 @@
 ### 添加项目文档和 .gitignore
 
 - 在仓库根目录添加 `.gitignore`，覆盖 Node.js、Nuxt、IDE、OS 等忽略规则
-- 创建 `docs/` 文档目录：
-  - `requirements.md` - 需求文档
-  - `design.md` - 设计文档
-  - `implementation.md` - 实施方案
-  - `dev-log.md` - 开发记录（本文件）
+- 创建 `docs/` 文档目录。当前正源已整理到：
+  - `docs/project/requirements.md` - 需求文档
+  - `docs/project/architecture.md` - 架构设计
+  - `docs/project/development-guide.md` - 开发与部署指南
+  - `docs/project/development-log.md` - 开发记录（本文件）
 
 ---
 
