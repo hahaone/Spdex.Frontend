@@ -563,3 +563,59 @@ AdminJwt__SecretKey / Issuer / Audience / ExpirationMinutes
 AdminAuth__MaxLoginFailures / LockoutMinutes
 SilkBag__SmallAdjustThreshold
 ```
+
+---
+
+# 附录 F · SPdex AI / MCP 内部管理（阶段 G4）
+
+## F.1 产品边界与调用链
+
+- 内部企业 AI/MCP 管理进入现有 `Spdex.Frontend.Admin`，不创建新的后台前端。
+- NewSpdex `/account/mcp` 继续只服务个人长期连接和 OAuth grant。
+- 外部企业客户自助不使用 Admin2026；后续如需要，再建设独立企业门户。
+- 浏览器只持 AdminJwt。调用固定经过：
+
+```text
+Admin2026 -> Nuxt Admin BFF -> WebApi /api/admin/ai/* -> AI API /api/ai/*
+```
+
+AI ops key 只由 WebApi 从服务器配置读取并写入内部请求头，不进入浏览器、
+前端 runtime config、URL、日志或 Admin 审计内容。
+
+## F.2 页面
+
+| 页面 | 路由 | 能力 |
+|---|---|---|
+| 运行总览 | `/ai` | AI/WebApi/Redis/ledger、在线归档、卷外备份、告警与到期提醒 |
+| 企业与合同 | `/ai/organizations` | 企业主体、联系人、有效期、日额度、RPM、并发、SLA、暂停/恢复 |
+| 接入凭据 | `/ai/credentials` | scope、TTL、IP allowlist、签发、一次性展示、轮换、撤销 |
+| 用量与审计 | `/ai/usage` | UTC 日用量、失败调用、recent audit、trace、财务 CSV 对账预演 |
+
+`billingMode=test_metering_only` 或 `billable=false` 时，界面必须明确显示
+“测试计量，不产生账单”。正式账单需要 G5 商业价格和上线门禁。
+
+## F.3 权限
+
+```text
+ai.organization.view / ai.organization.manage
+ai.credential.view   / ai.credential.manage
+ai.usage.view
+ai.audit.view
+ai.billing.reconcile
+ai.ops.view          / ai.ops.manage
+```
+
+- `super`：全部。
+- `ops`：企业、凭据和归档维护，不做财务对账。
+- `support`：企业/凭据/usage/audit 只读。
+- `finance`：企业、usage、audit 只读，允许对账导出。
+- `auditor`：企业/凭据/usage/audit/ops 只读。
+
+前端权限只控制可见性，WebApi policy 是最终授权边界。签发或轮换返回的完整
+token 只保存在当前弹窗状态中，关闭后立即清空。
+
+## F.4 响应式布局
+
+桌面继续使用 220px 固定侧栏；宽度小于 760px 时切换为顶部菜单按钮和左侧
+抽屉，主内容使用完整视口宽度。数据表保留表内横向滚动，不允许把整个页面
+撑出视口。
