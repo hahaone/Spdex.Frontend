@@ -70,6 +70,38 @@
         />
       </NTabPane>
 
+      <NTabPane v-if="can(P.aiAuditView)" name="quality" tab="质量监控">
+        <NAlert class="mb-4" type="info" title="最近调用样本">
+          质量指标从当前加载的最近 {{ audit?.items.length ?? 0 }} 条 append-only 审计记录计算，不作为正式 SLA 账单依据。
+        </NAlert>
+        <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="样本调用" :value="qualityTotals.calls" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="失败调用" :value="qualityTotals.failed" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="总体成功率" :value="`${qualityTotals.successRate}%`" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="最慢工具 P95" :value="slowestQuality ? `${slowestQuality.p95Ms} ms` : '—'" /></NCard></NGi>
+        </NGrid>
+        <NSpace class="mb-3">
+          <NButton type="primary" :loading="auditLoading" @click="loadQuality">刷新质量样本</NButton>
+        </NSpace>
+        <NDataTable
+          class="mb-5"
+          :columns="qualityColumns"
+          :data="qualityRows"
+          :loading="auditLoading"
+          :row-key="(row: ToolQualityRow) => row.toolName"
+          :scroll-x="900"
+        />
+        <h3 class="mb-3 text-sm font-semibold">错误 Top</h3>
+        <NDataTable
+          :columns="errorColumns"
+          :data="errorRows"
+          :loading="auditLoading"
+          :pagination="{ pageSize: 10 }"
+          :row-key="(row: ErrorSummaryRow) => `${row.toolName}:${row.errorCode}`"
+          :scroll-x="700"
+        />
+      </NTabPane>
+
       <NTabPane v-if="can(P.aiAuditView)" name="trace" tab="Trace 查询">
         <NSpace class="mb-3" align="center">
           <NInput v-model:value="traceId" clearable placeholder="完整 trace ID" style="width:min(520px, 70vw)" @keyup.enter="loadTrace" />
@@ -118,6 +150,22 @@ import { P } from '~/utils/permissions'
 const api = useAdminApi()
 const { can } = usePermission()
 const message = useMessage()
+interface ToolQualityRow {
+  toolName: string
+  calls: number
+  successful: number
+  failed: number
+  successRate: number
+  averageMs: number
+  p95Ms: number
+  maxMs: number
+}
+interface ErrorSummaryRow {
+  toolName: string
+  errorCode: string
+  calls: number
+  lastSeenUtc: string
+}
 const activeTab = ref(can(P.aiUsageView) ? 'usage' : 'audit')
 const range = ref<[number, number]>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
@@ -136,7 +184,7 @@ const usageFilters = reactive({
 const auditFilters = reactive<{ tool: string, success: '' | 'true' | 'false', limit: number }>({
   tool: '',
   success: '',
-  limit: 100,
+  limit: 500,
 })
 
 const toolFilterOptions = [{ label: '全部工具', value: '' }, ...aiToolOptions]
@@ -166,6 +214,58 @@ const usageTotals = computed(() => (usage.value?.items ?? []).reduce(
 const billingSubjects = computed(() => new Set(
   (usage.value?.items ?? []).map(row => `${row.subjectType}:${row.subjectId}`),
 ).size)
+
+const qualityRows = computed<ToolQualityRow[]>(() => {
+  const grouped = new Map<string, AiAuditRow[]>()
+  for (const row of audit.value?.items ?? []) {
+    const rows = grouped.get(row.toolName) ?? []
+    rows.push(row)
+    grouped.set(row.toolName, rows)
+  }
+  return [...grouped.entries()]
+    .map(([toolName, rows]) => {
+      const successful = rows.filter(row => row.success).length
+      const elapsed = rows.map(row => row.elapsedMs).sort((a, b) => a - b)
+      return {
+        toolName,
+        calls: rows.length,
+        successful,
+        failed: rows.length - successful,
+        successRate: rows.length ? Math.round((successful / rows.length) * 1000) / 10 : 0,
+        averageMs: rows.length ? Math.round(elapsed.reduce((sum, value) => sum + value, 0) / rows.length) : 0,
+        p95Ms: percentile(elapsed, 0.95),
+        maxMs: elapsed.at(-1) ?? 0,
+      }
+    })
+    .sort((a, b) => b.p95Ms - a.p95Ms)
+})
+const errorRows = computed<ErrorSummaryRow[]>(() => {
+  const grouped = new Map<string, ErrorSummaryRow>()
+  for (const row of (audit.value?.items ?? []).filter(item => !item.success)) {
+    const errorCode = row.errorCode || 'unknown_error'
+    const key = `${row.toolName}:${errorCode}`
+    const current = grouped.get(key)
+    grouped.set(key, {
+      toolName: row.toolName,
+      errorCode,
+      calls: (current?.calls ?? 0) + 1,
+      lastSeenUtc: !current || row.createdAtUtc > current.lastSeenUtc
+        ? row.createdAtUtc
+        : current.lastSeenUtc,
+    })
+  }
+  return [...grouped.values()].sort((a, b) => b.calls - a.calls)
+})
+const qualityTotals = computed(() => {
+  const calls = qualityRows.value.reduce((sum, row) => sum + row.calls, 0)
+  const failed = qualityRows.value.reduce((sum, row) => sum + row.failed, 0)
+  return {
+    calls,
+    failed,
+    successRate: calls ? Math.round(((calls - failed) / calls) * 1000) / 10 : 0,
+  }
+})
+const slowestQuality = computed(() => qualityRows.value.at(0) ?? null)
 
 const usageColumns = [
   { title: 'UTC 日期', key: 'dateUtc', width: 120 },
@@ -232,6 +332,31 @@ const auditColumns = [
     ),
   },
 ]
+const qualityColumns = [
+  { title: '工具', key: 'toolName', width: 220 },
+  { title: '调用', key: 'calls', width: 80 },
+  { title: '成功', key: 'successful', width: 80 },
+  { title: '失败', key: 'failed', width: 80 },
+  {
+    title: '成功率',
+    key: 'successRate',
+    width: 100,
+    render: (row: ToolQualityRow) => h(
+      NTag,
+      { type: row.successRate >= 99 ? 'success' : row.successRate >= 95 ? 'warning' : 'error', size: 'small' },
+      { default: () => `${row.successRate}%` },
+    ),
+  },
+  { title: '平均耗时', key: 'averageMs', width: 120, render: (row: ToolQualityRow) => `${row.averageMs} ms` },
+  { title: 'P95', key: 'p95Ms', width: 110, render: (row: ToolQualityRow) => `${row.p95Ms} ms` },
+  { title: '最大耗时', key: 'maxMs', width: 120, render: (row: ToolQualityRow) => `${row.maxMs} ms` },
+]
+const errorColumns = [
+  { title: '错误码', key: 'errorCode', width: 220 },
+  { title: '工具', key: 'toolName', width: 220 },
+  { title: '次数', key: 'calls', width: 90 },
+  { title: '最后发生', key: 'lastSeenUtc', width: 180, render: (row: ErrorSummaryRow) => fmt(row.lastSeenUtc) },
+]
 
 async function loadUsage() {
   usageLoading.value = true
@@ -258,6 +383,13 @@ async function loadAudit() {
   auditLoading.value = false
   if (result.code === 0) audit.value = result.data
   else message.error(result.message || '审计查询失败')
+}
+
+async function loadQuality() {
+  auditFilters.tool = ''
+  auditFilters.success = ''
+  auditFilters.limit = 500
+  await loadAudit()
 }
 
 async function loadTrace() {
@@ -312,6 +444,10 @@ function toYmd(value: number) {
 }
 function fmt(value?: string | null) {
   return value ? value.substring(0, 19).replace('T', ' ') : '—'
+}
+function percentile(sorted: number[], value: number) {
+  if (!sorted.length) return 0
+  return sorted[Math.max(0, Math.ceil(sorted.length * value) - 1)] ?? 0
 }
 
 onMounted(() => {

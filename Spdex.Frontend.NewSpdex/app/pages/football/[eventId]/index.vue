@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, BarChart3, Clock, Lock, RefreshCw, Zap } from '@lucide/vue'
+import { ArrowLeft, BarChart3, Bot, Clock, Lock, RefreshCw, Zap } from '@lucide/vue'
 import type { MarketMetricRow, MarketTab } from '~/types/market'
 import type { MatchSnapshot } from '~/composables/useMatchSnapshot'
 import { formatHandicapLine } from '~/utils/handicap'
@@ -17,6 +17,18 @@ const { fetchSnapshot } = useMatchSnapshot()
 const { buildFlashQLink } = useFlashQLink()
 const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 const flashQUrl = computed(() => buildFlashQLink(eventId.value))
+const goodSampleRoute = computed(() => ({
+  path: '/ai',
+  query: {
+    preset: 'snapshot',
+    matchId: String(eventId.value),
+    home: detail.value?.match.homeTeam,
+    away: detail.value?.match.awayTeam,
+    league: detail.value?.match.leagueName || detail.value?.match.leagueCode,
+    matchTime: detail.value?.match.matchTime,
+    date: detail.value?.match.matchTime?.slice(0, 10),
+  },
+}))
 const footballBackRoute = computed(() => {
   const query: Record<string, string> = {}
   for (const key of ['date', 'day', 'status', 'lottery', 'league', 'metric', 'events', 'view']) {
@@ -308,6 +320,10 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
               <span class="dot">·</span>
               <span>状态 {{ match.status === 'upcoming' ? '未开赛' : match.status === 'started' ? '进行中' : '已完场' }}</span>
               <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
+              <NuxtLink :to="goodSampleRoute" class="ai-analysis-link focus-ring">
+                <Bot :size="12" />
+                <span>Good Sample</span>
+              </NuxtLink>
             </div>
           </div>
         </div>
@@ -666,6 +682,21 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 720;
+}
+
+.ai-analysis-link {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid var(--brand);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--brand);
+  font-size: 0.68rem;
+  font-weight: 780;
+  text-decoration: none;
 }
 
 .dot {
