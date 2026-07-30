@@ -20,6 +20,8 @@ export default defineNuxtConfig({
       captchaPrefix: process.env.NUXT_PUBLIC_CAPTCHA_PREFIX || '',
       captchaRegion: process.env.NUXT_PUBLIC_CAPTCHA_REGION || 'cn',
       authCookieDomain: process.env.NUXT_PUBLIC_AUTH_COOKIE_DOMAIN || '',
+      // 用户侧 AI/MCP 正式环境默认隐藏；本地调试可显式设为 true。
+      aiFeaturesVisible: process.env.NUXT_PUBLIC_AI_FEATURES_VISIBLE === 'true',
       quantilearnFlashUrl: process.env.NUXT_PUBLIC_QUANTILEARN_FLASH_URL
         || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:3004/flash' : 'https://ql.spdex.com/flash'),
     },

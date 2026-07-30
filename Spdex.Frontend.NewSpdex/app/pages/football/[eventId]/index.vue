@@ -10,6 +10,7 @@ const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
 const { entitlements, user } = useAuth()
+const aiFeaturesVisible = useAiFeatureVisibility()
 const hasJcMembership = computed(() => canUseJcData(user.value))
 const { detail, access, euroOdds, pending, refresh } = useMatchDetail(eventId)
 const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
@@ -320,7 +321,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
               <span class="dot">·</span>
               <span>状态 {{ match.status === 'upcoming' ? '未开赛' : match.status === 'started' ? '进行中' : '已完场' }}</span>
               <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
-              <NuxtLink :to="goodSampleRoute" class="ai-analysis-link focus-ring">
+              <NuxtLink v-if="aiFeaturesVisible" :to="goodSampleRoute" class="ai-analysis-link focus-ring">
                 <Bot :size="12" />
                 <span>Good Sample</span>
               </NuxtLink>

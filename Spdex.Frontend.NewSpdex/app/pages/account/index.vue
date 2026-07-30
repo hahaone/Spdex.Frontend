@@ -9,6 +9,7 @@ const { user, userName, tier, logout, refreshToken } = useAuth()
 const { summary, orders, ordersServiceAvailable, refresh } = useAccount()
 const { start: startOnboarding } = useOnboarding()
 const { getCustomerService, syncAlipayOrder } = useCreateOrder()
+const aiFeaturesVisible = useAiFeatureVisibility()
 
 // 客服 QQ（优先取后端配置，回退默认）
 const customerQQ = ref('2735629769')
@@ -207,7 +208,7 @@ onMounted(async () => {
     </div>
 
     <section class="settings-band">
-      <NuxtLink to="/account/mcp" class="setting-row focus-ring">
+      <NuxtLink v-if="aiFeaturesVisible" to="/account/mcp" class="setting-row focus-ring">
         <Bot :size="15" />
         <span>AI 与 MCP 连接</span>
         <ChevronRight :size="15" class="chev" />

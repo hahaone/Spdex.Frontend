@@ -6,6 +6,7 @@ definePageMeta({ layout: false })
 
 const { login } = useAuth()
 const { enabled: captchaEnabled, setup: setupCaptcha } = useCaptcha()
+const aiFeaturesVisible = useAiFeatureVisibility()
 const route = useRoute()
 
 const form = reactive({
@@ -143,7 +144,7 @@ onBeforeUnmount(() => {
         <NuxtLink to="/membership">会员权益</NuxtLink>
       </div>
 
-      <NuxtLink class="ai-entry focus-ring" to="/">
+      <NuxtLink v-if="aiFeaturesVisible" class="ai-entry focus-ring" to="/ai">
         <span class="ai-icon">
           <Bot :size="16" />
         </span>
