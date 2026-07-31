@@ -632,3 +632,20 @@ token 只保存在当前弹窗状态中，关闭后立即清空。
 该页面是测试期质量观察，不是正式 SLA 统计或商业账单。样本窗口和
 `billingMode=test_metering_only`、`billable=false` 必须在页面保持可见；
 正式时间窗口 SLA、价格和计费切换留给 G5B 商业化门禁。
+
+## F.6 H7 workflow trace 观察
+
+`/ai/usage` 增加“Workflow 观察”标签，用于内部验证 H7A-H7D Agent workflow
+的真实调用状态：
+
+- 数据源沿用最近最多 500 条 append-only audit 样本，不新增浏览器直连 AI API。
+- 仅聚合 workflow 入口工具：`plan_agent_analysis`、`run_match_analysis_workflow`、
+  `run_watchlist_workflow`、`prepare_monitoring_workflow`。
+- 按 workflow 展示调用数、成功/失败、成功率、用量、平均耗时、P95、最大耗时、
+  最近结果和最近调用时间。
+- 最近 trace 可一键切换到既有 Trace 查询页，继续查看完整 tool-level 调用记录。
+
+当前 audit ledger 持久化的是工具级调用摘要；workflow 响应里的 child call audit
+仍主要存在于当次 MCP 响应中，尚未作为结构化子调用链写入 ledger。后续如要支持
+跨 trace 的 workflow 子步骤复盘，应在 WebApi/AI audit 侧扩展 parent/child trace
+字段，再由 Admin2026 展示 workflow DAG、子步骤耗时和失败定位。

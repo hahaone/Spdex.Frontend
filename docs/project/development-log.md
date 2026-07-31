@@ -6,6 +6,18 @@
 
 ---
 
+## 2026-07-31
+
+### Admin2026 AI workflow 观察
+
+- `/ai/usage` 增加“Workflow 观察”标签，基于最近 audit 样本聚合 H7A-H7D workflow
+  调用状态。
+- 展示 workflow 调用数、成功/失败、成功率、用量、平均耗时、P95、最大耗时和最近结果。
+- 最近 trace 可直接切换到既有 Trace 查询，便于从 workflow 聚合回到单次调用记录。
+- AI 工具筛选列表同步到当前 MCP H1-H7D 工具集，避免 Admin 审计口径停留在早期 6 个工具。
+- 已通过 `npm run typecheck` 和本次改动文件定向 ESLint；全量 Admin lint 仍受既有
+  analytics/orders/auth 文件规则问题影响。
+
 ## 2026-07-30
 
 ### 文档信息架构整理

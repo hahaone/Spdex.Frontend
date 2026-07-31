@@ -102,6 +102,28 @@
         />
       </NTabPane>
 
+      <NTabPane v-if="can(P.aiAuditView)" name="workflow" tab="Workflow 观察">
+        <NAlert class="mb-4" type="info" title="H7 workflow trace">
+          当前样本中包含 {{ workflowAuditRows.length }} 条 workflow 调用，可从最近 trace 进入完整调用记录。
+        </NAlert>
+        <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="Workflow 调用" :value="workflowTotals.calls" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="失败" :value="workflowTotals.failed" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="成功率" :value="`${workflowTotals.successRate}%`" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="最慢 P95" :value="slowestWorkflow ? `${slowestWorkflow.p95Ms} ms` : '—'" /></NCard></NGi>
+        </NGrid>
+        <NSpace class="mb-3">
+          <NButton type="primary" :loading="auditLoading" @click="loadWorkflowSample">刷新 workflow 样本</NButton>
+        </NSpace>
+        <NDataTable
+          :columns="workflowColumns"
+          :data="workflowRows"
+          :loading="auditLoading"
+          :row-key="(row: WorkflowQualityRow) => row.toolName"
+          :scroll-x="1250"
+        />
+      </NTabPane>
+
       <NTabPane v-if="can(P.aiAuditView)" name="trace" tab="Trace 查询">
         <NSpace class="mb-3" align="center">
           <NInput v-model:value="traceId" clearable placeholder="完整 trace ID" style="width:min(520px, 70vw)" @keyup.enter="loadTrace" />
@@ -166,6 +188,22 @@ interface ErrorSummaryRow {
   calls: number
   lastSeenUtc: string
 }
+interface WorkflowQualityRow {
+  toolName: string
+  label: string
+  calls: number
+  successful: number
+  failed: number
+  successRate: number
+  averageMs: number
+  p95Ms: number
+  maxMs: number
+  usageUnits: number
+  lastSeenUtc: string
+  lastTraceId: string
+  latestSuccess: boolean
+  latestErrorCode: string
+}
 const activeTab = ref(can(P.aiUsageView) ? 'usage' : 'audit')
 const range = ref<[number, number]>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
@@ -200,6 +238,19 @@ const successOptions = [
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
 ]
+const workflowToolOrder = [
+  'plan_agent_analysis',
+  'run_match_analysis_workflow',
+  'run_watchlist_workflow',
+  'prepare_monitoring_workflow',
+]
+const workflowTools = new Set<string>(workflowToolOrder)
+const workflowLabels: Record<string, string> = {
+  plan_agent_analysis: 'H7A 分析路径规划',
+  run_match_analysis_workflow: 'H7B 单场分析 workflow',
+  run_watchlist_workflow: 'H7C 观察列表 workflow',
+  prepare_monitoring_workflow: 'H7D 观察条件准备',
+}
 
 const usageTotals = computed(() => (usage.value?.items ?? []).reduce(
   (total, row) => ({
@@ -266,6 +317,54 @@ const qualityTotals = computed(() => {
   }
 })
 const slowestQuality = computed(() => qualityRows.value.at(0) ?? null)
+const workflowAuditRows = computed(() => (audit.value?.items ?? []).filter(row => workflowTools.has(row.toolName)))
+const workflowRows = computed<WorkflowQualityRow[]>(() => {
+  const grouped = new Map<string, AiAuditRow[]>()
+  for (const row of workflowAuditRows.value) {
+    const rows = grouped.get(row.toolName) ?? []
+    rows.push(row)
+    grouped.set(row.toolName, rows)
+  }
+  return [...grouped.entries()]
+    .flatMap(([toolName, rows]) => {
+      const first = rows[0]
+      if (!first) {
+        return []
+      }
+      const successful = rows.filter(row => row.success).length
+      const elapsed = rows.map(row => row.elapsedMs).sort((a, b) => a - b)
+      const latest = rows.reduce((current, row) =>
+        row.createdAtUtc > current.createdAtUtc ? row : current, first)
+      return [{
+        toolName,
+        label: workflowLabels[toolName] ?? toolName,
+        calls: rows.length,
+        successful,
+        failed: rows.length - successful,
+        successRate: rows.length ? Math.round((successful / rows.length) * 1000) / 10 : 0,
+        averageMs: rows.length ? Math.round(elapsed.reduce((sum, value) => sum + value, 0) / rows.length) : 0,
+        p95Ms: percentile(elapsed, 0.95),
+        maxMs: elapsed.at(-1) ?? 0,
+        usageUnits: rows.reduce((sum, row) => sum + row.usageUnits, 0),
+        lastSeenUtc: latest.createdAtUtc,
+        lastTraceId: latest.traceId,
+        latestSuccess: latest.success,
+        latestErrorCode: latest.errorCode || '—',
+      }]
+    })
+    .sort((a, b) => workflowToolOrder.indexOf(a.toolName) - workflowToolOrder.indexOf(b.toolName))
+})
+const workflowTotals = computed(() => {
+  const calls = workflowRows.value.reduce((sum, row) => sum + row.calls, 0)
+  const failed = workflowRows.value.reduce((sum, row) => sum + row.failed, 0)
+  return {
+    calls,
+    failed,
+    successRate: calls ? Math.round(((calls - failed) / calls) * 1000) / 10 : 0,
+  }
+})
+const slowestWorkflow = computed(() =>
+  [...workflowRows.value].sort((a, b) => b.p95Ms - a.p95Ms).at(0) ?? null)
 
 const usageColumns = [
   { title: 'UTC 日期', key: 'dateUtc', width: 120 },
@@ -323,9 +422,7 @@ const auditColumns = [
         text: true,
         type: 'primary',
         onClick: () => {
-          traceId.value = row.traceId
-          activeTab.value = 'trace'
-          loadTrace()
+          openTrace(row.traceId)
         },
       },
       { default: () => row.traceId },
@@ -356,6 +453,59 @@ const errorColumns = [
   { title: '工具', key: 'toolName', width: 220 },
   { title: '次数', key: 'calls', width: 90 },
   { title: '最后发生', key: 'lastSeenUtc', width: 180, render: (row: ErrorSummaryRow) => fmt(row.lastSeenUtc) },
+]
+const workflowColumns = [
+  {
+    title: 'Workflow',
+    key: 'label',
+    width: 260,
+    render: (row: WorkflowQualityRow) => h('div', [
+      h('div', row.label),
+      h('div', { class: 'text-xs text-gray-400' }, row.toolName),
+    ]),
+  },
+  { title: '调用', key: 'calls', width: 80 },
+  { title: '成功', key: 'successful', width: 80 },
+  { title: '失败', key: 'failed', width: 80 },
+  {
+    title: '成功率',
+    key: 'successRate',
+    width: 100,
+    render: (row: WorkflowQualityRow) => h(
+      NTag,
+      { type: row.successRate >= 99 ? 'success' : row.successRate >= 95 ? 'warning' : 'error', size: 'small' },
+      { default: () => `${row.successRate}%` },
+    ),
+  },
+  { title: '用量', key: 'usageUnits', width: 80 },
+  { title: '平均耗时', key: 'averageMs', width: 120, render: (row: WorkflowQualityRow) => `${row.averageMs} ms` },
+  { title: 'P95', key: 'p95Ms', width: 110, render: (row: WorkflowQualityRow) => `${row.p95Ms} ms` },
+  { title: '最大耗时', key: 'maxMs', width: 120, render: (row: WorkflowQualityRow) => `${row.maxMs} ms` },
+  {
+    title: '最近结果',
+    key: 'latestSuccess',
+    width: 100,
+    render: (row: WorkflowQualityRow) => h(
+      NTag,
+      { type: row.latestSuccess ? 'success' : 'error', size: 'small' },
+      { default: () => row.latestSuccess ? '成功' : row.latestErrorCode },
+    ),
+  },
+  { title: '最近调用', key: 'lastSeenUtc', width: 170, render: (row: WorkflowQualityRow) => fmt(row.lastSeenUtc) },
+  {
+    title: '最近 Trace',
+    key: 'lastTraceId',
+    width: 280,
+    render: (row: WorkflowQualityRow) => h(
+      NButton,
+      {
+        text: true,
+        type: 'primary',
+        onClick: () => openTrace(row.lastTraceId),
+      },
+      { default: () => row.lastTraceId },
+    ),
+  },
 ]
 
 async function loadUsage() {
@@ -390,6 +540,19 @@ async function loadQuality() {
   auditFilters.success = ''
   auditFilters.limit = 500
   await loadAudit()
+}
+
+async function loadWorkflowSample() {
+  auditFilters.tool = ''
+  auditFilters.success = ''
+  auditFilters.limit = 500
+  await loadAudit()
+}
+
+function openTrace(value: string) {
+  traceId.value = value
+  activeTab.value = 'trace'
+  loadTrace()
 }
 
 async function loadTrace() {
