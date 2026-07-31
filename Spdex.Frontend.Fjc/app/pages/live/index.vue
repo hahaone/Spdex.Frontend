@@ -232,6 +232,11 @@ function formatTgSparkValue(value: number): string {
   return value.toFixed(2)
 }
 
+function formatSignedTgSparkValue(value: number): string {
+  const formatted = formatTgSparkValue(value)
+  return value > 0 ? `+${formatted}` : formatted
+}
+
 // 预期总进球走势 sparkline（projectedTotalGoals + 时间轴 guide + 断点跳过）
 function tgSpark(eventId: number) {
   const series = xgReplayByEventId.value.get(eventId)?.series ?? []
@@ -302,7 +307,12 @@ function tgSpark(eventId: number) {
     maxChange: summary.maxChange == null
       ? null
       : {
-          delta: formatTgSparkValue(summary.maxChange.delta),
+          delta: formatSignedTgSparkValue(summary.maxChange.delta),
+          direction: summary.maxChange.delta > 0
+            ? 'positive'
+            : summary.maxChange.delta < 0
+              ? 'negative'
+              : 'neutral',
           fromValue: formatTgSparkValue(summary.maxChange.fromValue),
           toValue: formatTgSparkValue(summary.maxChange.toValue),
           clockLabel: summary.maxChange.clockLabel,
@@ -1624,9 +1634,10 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                       <span v-else-if="spark" class="tg-summary num">
                         <span>初值 <strong>{{ spark.initialValue }}</strong></span>
                         <span v-if="spark.maxChange" class="tg-max-change">
-                          最大变化 <strong>{{ spark.maxChange.delta }}</strong>：
-                          {{ spark.maxChange.fromValue }} → {{ spark.maxChange.toValue }}
-                          [{{ spark.maxChange.clockLabel }}]
+                          最大变化
+                          <strong :class="`is-${spark.maxChange.direction}`">{{ spark.maxChange.delta }}</strong>：
+                          {{ spark.maxChange.fromValue }} --> {{ spark.maxChange.toValue }}
+                          ({{ spark.maxChange.clockLabel }})
                         </span>
                       </span>
                     </div>
@@ -2075,9 +2086,16 @@ th.col-tg {
   color: #35443c;
 }
 
-.tg-max-change,
-.tg-max-change strong {
+.tg-max-change strong.is-positive {
   color: #e34a4a;
+}
+
+.tg-max-change strong.is-negative {
+  color: #2878d0;
+}
+
+.tg-max-change strong.is-neutral {
+  color: #6b7a72;
 }
 
 .tg-refreshing {
