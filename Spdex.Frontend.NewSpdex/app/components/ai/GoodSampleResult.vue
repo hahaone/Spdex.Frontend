@@ -19,6 +19,7 @@ const emit = defineEmits<{
 type JsonRecord = Record<string, unknown>
 
 const data = computed(() => record(props.response.data))
+const presentation = computed(() => record(data.value.presentation))
 const matches = computed(() => array(data.value.matches).map(record))
 const snapshot = computed(() => record(data.value.snapshot))
 const snapshotMatch = computed(() => record(snapshot.value.match))
@@ -30,6 +31,26 @@ const marketSections = computed(() => Object.entries(record(snapshot.value.marke
     rows: array(record(value).rows).map(record),
   })))
 const points = computed(() => array(data.value.points).slice(-12).map(record))
+const seriesColumns = computed(() => {
+  const columns = array(presentation.value.series_columns)
+    .map(record)
+    .map(column => ({
+      key: text(column.key, ''),
+      label: text(column.label, ''),
+      unit: text(column.unit, ''),
+    }))
+    .filter(column => column.key && column.label)
+  return columns.length ? columns : [
+    { key: 'home', label: '主', unit: '' },
+    { key: 'draw', label: '平', unit: '' },
+    { key: 'away', label: '客', unit: '' },
+    { key: 'volume', label: '成交', unit: '' },
+  ]
+})
+const seriesGridStyle = computed(() => ({
+  gridTemplateColumns: `minmax(145px, 1.5fr) ${seriesColumns.value.map(() => 'minmax(72px, 1fr)').join(' ')}`,
+  minWidth: `${145 + seriesColumns.value.length * 86}px`,
+}))
 const anomalies = computed(() => array(data.value.anomalies).map(record))
 const missingFields = computed(() => array(data.value.missing_fields).map(value => String(value)))
 const lockedPermissions = computed(() => Object.entries(record(data.value.permissions))
@@ -90,6 +111,15 @@ function label(key: string): string {
     asian_handicap: '亚洲让球',
     over_under: '大小球',
     trade_volume: '成交量',
+    rank_score: '关注分',
+    anomaly_score: '异常观察分',
+    score_label: '分数口径',
+    score_meaning: '分数含义',
+    status_label: '比赛状态',
+    market_label: '市场',
+    display_flags: '信号标签',
+    rank_reason_labels: '入选原因',
+    reason_labels: '观察原因',
     home: '主',
     draw: '平',
     away: '客',
@@ -102,13 +132,18 @@ function label(key: string): string {
     price_draw: '平局价',
     price_away: '客胜价',
     time: '时间',
+    bf_amount: '必发成交量',
+    poly_amount: 'POLY 成交量',
+    bf_index: '必发指数',
+    poly_index: 'POLY 指数',
+    p_mark: 'P 指标',
   }
   return labels[key] || key.replaceAll('_', ' ')
 }
 
 function fieldValue(key: string, value: unknown): string {
   if (key === 'status') return statusLabel(value)
-  if ((key.includes('amount') || key === 'volume') && typeof value === 'number') {
+  if (typeof value === 'number') {
     return value.toLocaleString('en-US')
   }
   return text(value)
@@ -136,6 +171,54 @@ function severityLabel(value: unknown): string {
   return labels[severity] || severity || '观察'
 }
 
+function uniqueTexts(values: unknown[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    const item = text(value, '').trim()
+    if (!item || seen.has(item)) continue
+    seen.add(item)
+    result.push(item)
+  }
+  return result
+}
+
+function matchTags(item: JsonRecord): string[] {
+  return uniqueTexts([
+    ...array(item.rank_reason_labels),
+    ...array(item.display_flags),
+    ...array(item.rank_reasons).map(reason => reasonLabel(text(reason, ''))),
+    ...array(item.flags),
+  ]).slice(0, 5)
+}
+
+function anomalyReasons(item: JsonRecord): string {
+  return uniqueTexts([
+    ...array(item.reason_labels),
+    ...array(item.reasons).map(reason => reasonLabel(text(reason, ''))),
+    item.reason,
+  ]).join(' · ')
+}
+
+function reasonLabel(reason: string): string {
+  if (reason.startsWith('flag:')) return reason.slice(5)
+  if (reason.startsWith('p_mark:')) return `P 指标：${reason.slice(7)}`
+  const labels: Record<string, string> = {
+    live_match: '进行中比赛',
+    upcoming_match: '即将开赛',
+    bf_amount_available: '必发成交可用',
+    poly_amount_available: 'POLY 成交可用',
+    bf_index_60_plus: '必发指数偏斜较高',
+    poly_index_60_plus: 'POLY 指数偏斜较高',
+    bf_index_high: '必发指数偏斜较高',
+    poly_index_high: 'POLY 指数偏斜较高',
+    bf_trade_amount_high: '必发成交量较高',
+    poly_trade_amount_high: 'POLY 成交量较高',
+    rule_threshold_hit: '规则阈值命中',
+  }
+  return labels[reason] || reason.replaceAll('_', ' ')
+}
+
 function matchChoice(item: JsonRecord): GoodSampleMatchChoice {
   return {
     matchId: number(item.match_id ?? item.event_id),
@@ -156,6 +239,12 @@ function rowEntries(row: JsonRecord) {
     value !== null
     && value !== undefined
     && typeof value !== 'object')
+}
+
+function seriesValue(point: JsonRecord, key: string): unknown {
+  if (point[key] !== undefined) return point[key]
+  const camel = key.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase())
+  return point[camel]
 }
 
 function formatTime(value: unknown): string {
@@ -183,6 +272,7 @@ function formatTime(value: unknown): string {
         <article v-for="item in matches" :key="number(item.match_id ?? item.event_id)" class="match-result">
           <div class="match-rank">
             <b v-if="item.rank">#{{ item.rank }}</b>
+            <small v-if="item.rank_score">{{ text(item.rank_score_label, '关注分') }} {{ text(item.rank_score) }}</small>
             <span>{{ text(item.league_name ?? item.league_code, '赛事') }}</span>
           </div>
           <div class="match-teams">
@@ -192,11 +282,11 @@ function formatTime(value: unknown): string {
           </div>
           <div class="match-meta">
             <span><CalendarClock :size="13" />{{ formatTime(item.match_time) }}</span>
-            <span>{{ statusLabel(item.status) }}</span>
+            <span>{{ text(item.status_label, statusLabel(item.status)) }}</span>
           </div>
-          <div v-if="array(item.rank_reasons).length || array(item.flags).length" class="tag-line">
-            <span v-for="reason in [...array(item.rank_reasons), ...array(item.flags)].slice(0, 4)" :key="String(reason)">
-              {{ text(reason) }}
+          <div v-if="matchTags(item).length" class="tag-line">
+            <span v-for="reason in matchTags(item)" :key="reason">
+              {{ reason }}
             </span>
           </div>
           <button type="button" class="select-match focus-ring" @click="selectMatch(item)">分析这场</button>
@@ -220,7 +310,7 @@ function formatTime(value: unknown): string {
       <section v-for="market in marketSections" :key="market.key" class="market-section">
         <header>
           <Table2 :size="15" />
-          <b>{{ text(market.section.title, label(market.key)) }}</b>
+          <b>{{ text(record(market.section.presentation).display_title, text(market.section.title, label(market.key))) }}</b>
           <span>{{ number(market.section.row_count) }} 条</span>
         </header>
         <div v-if="market.rows.length" class="metric-rows">
@@ -237,20 +327,21 @@ function formatTime(value: unknown): string {
 
     <template v-else-if="isSeries">
       <section class="series-summary">
-        <span><Database :size="15" />{{ text(data.metric_label ?? data.requested_market, '市场走势') }}</span>
+        <span><Database :size="15" />{{ text(presentation.title, text(data.metric_label ?? data.requested_market, '市场走势')) }}</span>
         <b>{{ number(data.point_count) }} 个数据点</b>
-        <span>{{ text(data.granularity, '—') }} · {{ text(data.unit, '原始值') }}</span>
+        <span>{{ text(data.granularity, '—') }} · {{ text(presentation.unit_label, text(data.unit, '原始值')) }}</span>
+        <small v-if="presentation.interpretation">{{ text(presentation.interpretation) }}</small>
       </section>
       <div v-if="points.length" class="series-table">
-        <div class="series-row series-head">
-          <span>时间</span><span>主</span><span>平</span><span>客</span><span>成交</span>
+        <div class="series-row series-head" :style="seriesGridStyle">
+          <span>时间</span>
+          <span v-for="column in seriesColumns" :key="column.key">{{ column.label }}</span>
         </div>
-        <div v-for="(point, index) in points" :key="`${point.time}-${index}`" class="series-row">
+        <div v-for="(point, index) in points" :key="`${point.time}-${index}`" class="series-row" :style="seriesGridStyle">
           <span>{{ formatTime(point.time) }}</span>
-          <span>{{ text(point.home ?? point.price_home) }}</span>
-          <span>{{ text(point.draw ?? point.price_draw) }}</span>
-          <span>{{ text(point.away ?? point.price_away) }}</span>
-          <span>{{ text(point.volume) }}</span>
+          <span v-for="column in seriesColumns" :key="column.key">
+            {{ fieldValue(column.key, seriesValue(point, column.key)) }}
+          </span>
         </div>
       </div>
       <div v-else class="empty-result">当前时间窗口没有可用走势数据。</div>
@@ -264,12 +355,13 @@ function formatTime(value: unknown): string {
       <div v-if="anomalies.length" class="anomaly-list">
         <article v-for="(item, index) in anomalies" :key="`${item.market}-${index}`" class="anomaly-row">
           <div class="severity">
-            <b>{{ severityLabel(item.severity) }}</b>
+            <b>{{ text(item.score_label, '异常观察分') }}</b>
             <span>{{ text(item.score, '0') }}</span>
+            <small>{{ text(item.severity_label, severityLabel(item.severity)) }}</small>
           </div>
           <div>
-            <b>{{ label(text(item.market, 'market')) }}</b>
-            <p>{{ array(item.reasons).map(reason => text(reason)).join(' · ') || text(item.reason) }}</p>
+            <b>{{ text(item.market_label, label(text(item.market, 'market'))) }}</b>
+            <p>{{ anomalyReasons(item) || text(item.reason) }}</p>
             <small v-if="record(item.match).home_team">
               {{ text(record(item.match).home_team) }} vs {{ text(record(item.match).away_team) }}
             </small>
@@ -343,6 +435,7 @@ function formatTime(value: unknown): string {
 .match-result { display: grid; grid-template-columns: 90px minmax(190px, 1fr) minmax(150px, auto) auto; gap: 10px; align-items: center; padding: 10px; background: var(--panel); }
 .match-rank, .match-teams { display: grid; gap: 2px; }
 .match-rank b { color: var(--brand); font-size: .74rem; }
+.match-rank small { color: var(--ink); font-size: .62rem; font-weight: 750; }
 .match-rank span, .match-meta { color: var(--muted); font-size: .68rem; }
 .match-teams { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; font-size: .78rem; }
 .match-teams span { color: var(--muted); font-size: .62rem; }
@@ -370,6 +463,7 @@ function formatTime(value: unknown): string {
 .series-summary { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px; background: var(--canvas); font-size: .72rem; }
 .series-summary span:first-child { display: inline-flex; align-items: center; gap: 5px; font-weight: 720; }
 .series-summary span:last-child { color: var(--muted); }
+.series-summary small { grid-column: 1 / -1; color: var(--muted); font-size: .64rem; line-height: 1.5; }
 .series-table { border: 1px solid var(--divider); overflow-x: auto; }
 .series-row { display: grid; grid-template-columns: minmax(145px, 1.5fr) repeat(4, minmax(70px, 1fr)); min-width: 520px; border-top: 1px solid var(--divider); }
 .series-row:first-child { border-top: 0; }
@@ -384,6 +478,7 @@ function formatTime(value: unknown): string {
 .severity { display: grid; align-content: start; gap: 2px; color: #b42318; }
 .severity b { font-size: .66rem; text-transform: uppercase; }
 .severity span { font-size: 1rem; font-weight: 800; }
+.severity small { color: var(--muted); font-size: .62rem; }
 .anomaly-row > div:last-child { display: grid; gap: 4px; }
 .anomaly-row p { margin: 0; color: var(--muted); font-size: .7rem; overflow-wrap: anywhere; }
 .anomaly-row small { font-size: .64rem; }
