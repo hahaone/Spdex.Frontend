@@ -1,12 +1,26 @@
 <script setup lang="ts">
-import { Bell, BellOff, Check, CheckCheck, ChevronRight, Flame, Inbox, RefreshCw, Smartphone } from '@lucide/vue'
+import { Bell, BellOff, Check, CheckCheck, ChevronRight, Flame, Inbox, RefreshCw, Save, Settings2, Smartphone } from '@lucide/vue'
 import type {
   AiInAppNotificationListResult,
   AiInAppNotificationMarkAllReadResult,
   AiInAppNotificationReadResult,
   AiInAppNotificationRow,
+  AiNotificationPreferenceResult,
 } from '~/types/ai-notification'
 import type { ApiResponse } from '~/types/auth'
+
+interface AiPreferenceForm {
+  inApp: boolean
+  email: boolean
+  webhook: boolean
+  minimumSeverity: string
+  deliveryMode: string
+  quietHoursEnabled: boolean
+  quietHoursStart: string
+  quietHoursEnd: string
+  quietHoursTimeZone: string
+  emailAddress: string
+}
 
 const { signals, pending, refresh } = useSignals(50)
 
@@ -22,10 +36,20 @@ const aiNotificationError = ref('')
 const aiUnreadOnly = ref(false)
 const markingNotificationId = ref('')
 const markingAllNotifications = ref(false)
+const aiPreferences = ref<AiNotificationPreferenceResult | null>(null)
+const aiPreferenceForm = ref<AiPreferenceForm>(defaultAiPreferenceForm())
+const aiPreferencesLoading = ref(false)
+const aiPreferencesSaving = ref(false)
+const aiPreferenceError = ref('')
 
 onMounted(async () => {
   await refreshState()
-  if (aiNotificationsVisible.value) await loadAiNotifications()
+  if (aiNotificationsVisible.value) {
+    await Promise.all([
+      loadAiNotifications(),
+      loadAiNotificationPreferences(),
+    ])
+  }
 })
 
 async function enablePush() {
@@ -90,6 +114,26 @@ const bannerLabel = computed(() => {
 
 const aiNotificationItems = computed(() => aiNotifications.value?.items ?? [])
 const aiUnreadCount = computed(() => aiNotifications.value?.unreadCount ?? 0)
+const aiPreferenceStatus = computed(() => {
+  if (aiPreferencesLoading.value) return '加载中'
+  if (!aiPreferences.value) return '未加载'
+  return aiPreferences.value.preferences.stored ? '已保存' : '默认值'
+})
+
+function defaultAiPreferenceForm(): AiPreferenceForm {
+  return {
+    inApp: true,
+    email: false,
+    webhook: false,
+    minimumSeverity: 'info',
+    deliveryMode: 'realtime',
+    quietHoursEnabled: false,
+    quietHoursStart: '',
+    quietHoursEnd: '',
+    quietHoursTimeZone: 'UTC',
+    emailAddress: '',
+  }
+}
 
 async function loadAiNotifications() {
   aiNotificationsLoading.value = true
@@ -111,6 +155,80 @@ async function loadAiNotifications() {
   }
   finally {
     aiNotificationsLoading.value = false
+  }
+}
+
+async function loadAiNotificationPreferences() {
+  aiPreferencesLoading.value = true
+  aiPreferenceError.value = ''
+  try {
+    const result = await $apiFetch<AiNotificationPreferenceResult>(
+      '/api/newspdex/ai/notifications/preferences',
+    )
+    applyAiNotificationPreferences(result)
+  }
+  catch (error: unknown) {
+    const fetchError = error as { data?: { message?: string, error_description?: string } }
+    aiPreferenceError.value = fetchError.data?.message || fetchError.data?.error_description || 'AI 通知偏好暂不可用'
+  }
+  finally {
+    aiPreferencesLoading.value = false
+  }
+}
+
+async function saveAiNotificationPreferences() {
+  if (aiPreferencesSaving.value) return
+  aiPreferencesSaving.value = true
+  aiPreferenceError.value = ''
+  try {
+    const form = aiPreferenceForm.value
+    const result = await $apiFetch<AiNotificationPreferenceResult>(
+      '/api/newspdex/ai/notifications/preferences',
+      {
+        method: 'PUT',
+        body: {
+          channels: {
+            inApp: form.inApp,
+            email: form.email,
+            webhook: form.webhook,
+          },
+          minimumSeverity: form.minimumSeverity,
+          deliveryMode: form.deliveryMode,
+          quietHours: {
+            enabled: form.quietHoursEnabled,
+            start: form.quietHoursEnabled ? form.quietHoursStart || null : null,
+            end: form.quietHoursEnabled ? form.quietHoursEnd || null : null,
+            timeZone: form.quietHoursTimeZone || 'UTC',
+          },
+          emailAddress: form.emailAddress.trim(),
+        },
+      },
+    )
+    applyAiNotificationPreferences(result)
+  }
+  catch (error: unknown) {
+    const fetchError = error as { data?: { message?: string, error_description?: string } }
+    aiPreferenceError.value = fetchError.data?.message || fetchError.data?.error_description || '保存 AI 通知偏好失败'
+  }
+  finally {
+    aiPreferencesSaving.value = false
+  }
+}
+
+function applyAiNotificationPreferences(result: AiNotificationPreferenceResult) {
+  aiPreferences.value = result
+  const preferences = result.preferences
+  aiPreferenceForm.value = {
+    inApp: preferences.channels.inApp,
+    email: preferences.channels.email,
+    webhook: preferences.channels.webhook,
+    minimumSeverity: preferences.minimumSeverity || 'info',
+    deliveryMode: preferences.deliveryMode || 'realtime',
+    quietHoursEnabled: preferences.quietHours.enabled,
+    quietHoursStart: preferences.quietHours.start || '',
+    quietHoursEnd: preferences.quietHours.end || '',
+    quietHoursTimeZone: preferences.quietHours.timeZone || 'UTC',
+    emailAddress: preferences.emailAddress || '',
   }
 }
 
@@ -294,6 +412,76 @@ function formatNotificationTime(value?: string | null): string {
           </button>
         </div>
       </header>
+
+      <section class="pref-panel" aria-label="AI 通知偏好">
+        <header class="pref-head">
+          <div class="pref-title">
+            <Settings2 :size="15" />
+            <span>通知偏好</span>
+            <b>{{ aiPreferenceStatus }}</b>
+          </div>
+          <button
+            class="pref-save focus-ring"
+            type="button"
+            :disabled="aiPreferencesLoading || aiPreferencesSaving"
+            @click="saveAiNotificationPreferences"
+          >
+            <Save :size="14" />
+            <span>{{ aiPreferencesSaving ? '保存中' : '保存' }}</span>
+          </button>
+        </header>
+
+        <div class="pref-grid">
+          <label class="check-row">
+            <input v-model="aiPreferenceForm.inApp" type="checkbox">
+            <span>站内</span>
+          </label>
+          <label class="check-row">
+            <input v-model="aiPreferenceForm.email" type="checkbox">
+            <span>邮件</span>
+          </label>
+          <label class="check-row">
+            <input v-model="aiPreferenceForm.webhook" type="checkbox">
+            <span>Webhook</span>
+          </label>
+          <label class="pref-field">
+            <span>最低等级</span>
+            <select v-model="aiPreferenceForm.minimumSeverity">
+              <option value="info">观察</option>
+              <option value="warning">关注</option>
+              <option value="critical">重要</option>
+            </select>
+          </label>
+          <label class="pref-field">
+            <span>模式</span>
+            <select v-model="aiPreferenceForm.deliveryMode">
+              <option value="realtime">实时</option>
+              <option value="digest">摘要</option>
+            </select>
+          </label>
+          <label class="check-row">
+            <input v-model="aiPreferenceForm.quietHoursEnabled" type="checkbox">
+            <span>免打扰</span>
+          </label>
+          <label class="pref-field">
+            <span>开始</span>
+            <input v-model="aiPreferenceForm.quietHoursStart" type="time" :disabled="!aiPreferenceForm.quietHoursEnabled">
+          </label>
+          <label class="pref-field">
+            <span>结束</span>
+            <input v-model="aiPreferenceForm.quietHoursEnd" type="time" :disabled="!aiPreferenceForm.quietHoursEnabled">
+          </label>
+          <label class="pref-field wide">
+            <span>时区</span>
+            <input v-model.trim="aiPreferenceForm.quietHoursTimeZone" type="text" placeholder="UTC">
+          </label>
+          <label class="pref-field wide">
+            <span>邮箱</span>
+            <input v-model.trim="aiPreferenceForm.emailAddress" type="email" placeholder="alerts@example.com">
+          </label>
+        </div>
+        <div v-if="aiPreferenceError" class="pref-error">{{ aiPreferenceError }}</div>
+      </section>
 
       <div v-if="aiNotificationError" class="inbox-error">{{ aiNotificationError }}</div>
       <div v-else-if="aiNotificationsLoading && !aiNotificationItems.length" class="inbox-empty">加载中…</div>
@@ -572,6 +760,130 @@ function formatNotificationTime(value?: string | null): string {
 
 .icon-mini:disabled {
   opacity: 0.5;
+}
+
+.pref-panel {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.pref-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pref-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 820;
+}
+
+.pref-title b {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--chip-mute-bg);
+  color: var(--chip-mute-fg);
+  font-size: 0.68rem;
+  font-weight: 820;
+}
+
+.pref-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--brand);
+  border-radius: 4px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 820;
+}
+
+.pref-save:disabled {
+  opacity: 0.6;
+}
+
+.pref-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.check-row,
+.pref-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.check-row input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.pref-field {
+  justify-content: space-between;
+}
+
+.pref-field.wide {
+  grid-column: span 3;
+}
+
+.pref-field span {
+  flex: 0 0 auto;
+}
+
+.pref-field input,
+.pref-field select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 760;
+}
+
+.pref-field input {
+  padding: 0 7px;
+}
+
+.pref-field select {
+  padding: 0 5px;
+}
+
+.pref-field input:disabled {
+  opacity: 0.55;
+}
+
+.pref-error {
+  padding: 7px 8px;
+  border-radius: 4px;
+  background: #fde0e7;
+  color: #b1253c;
+  font-size: 0.74rem;
+  font-weight: 760;
 }
 
 .inbox-error,

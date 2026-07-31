@@ -49,3 +49,42 @@ export interface AiInAppNotificationMarkAllReadResult {
   updatedCount: number
   readAt: string
 }
+
+export interface AiNotificationPreferences {
+  owner: {
+    subjectType: string
+    subjectId: string
+  }
+  channels: {
+    inApp: boolean
+    email: boolean
+    webhook: boolean
+  }
+  minimumSeverity: string
+  deliveryMode: string
+  quietHours: {
+    enabled: boolean
+    start: string | null
+    end: string | null
+    timeZone: string
+  }
+  emailAddress: string | null
+  emailAddressConfigured: boolean
+  stored: boolean
+  updatedAt: string | null
+}
+
+export interface AiNotificationPreferenceResult {
+  generatedAtUtc: string
+  preferences: AiNotificationPreferences
+  safety: {
+    debugOnly: boolean
+    externalDeliveryRequiresExplicitPreference: boolean
+    defaultChannels: {
+      inApp: boolean
+      email: boolean
+      webhook: boolean
+    }
+    rawPayloadOmitted: boolean
+  }
+}
