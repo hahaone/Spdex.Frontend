@@ -22,6 +22,8 @@ export default defineNuxtConfig({
       authCookieDomain: process.env.NUXT_PUBLIC_AUTH_COOKIE_DOMAIN || '',
       // 用户侧 AI/MCP 正式环境默认隐藏；本地调试可显式设为 true。
       aiFeaturesVisible: process.env.NUXT_PUBLIC_AI_FEATURES_VISIBLE === 'true',
+      // AI watch condition 站内收件箱仍是测试调试入口，默认不对正式用户显示。
+      aiNotificationsVisible: process.env.NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE === 'true',
       quantilearnFlashUrl: process.env.NUXT_PUBLIC_QUANTILEARN_FLASH_URL
         || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:3004/flash' : 'https://ql.spdex.com/flash'),
     },

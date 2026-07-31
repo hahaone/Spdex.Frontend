@@ -26,6 +26,16 @@
   raw payload 继续由后端省略。
 - 本轮入口定位为内部观察，不替代 NewSpdex 用户侧收件箱和 read/mark-read 生命周期。
 
+### NewSpdex AI 收件箱调试入口
+
+- `/push` 增加 AI 收件箱调试面板，读取当前用户自己的 AI watch condition in-app
+  通知。
+- 支持只看未读、刷新、单条标为已读和全部标为已读；列表展示标题、正文、级别、
+  观察对象和命中类型。
+- 新增 `NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE`，默认 false；后端还要求
+  `NewSpdex:AiAccess:DebugFeaturesEnabled=true` 和测试账号 allowlist，避免正式用户发布。
+- 本轮不做全局红点、正式消息中心、通知偏好或生产投递演练。
+
 ## 2026-07-30
 
 ### 文档信息架构整理
