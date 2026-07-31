@@ -18,6 +18,14 @@
 - 已通过 `npm run typecheck` 和本次改动文件定向 ESLint；全量 Admin lint 仍受既有
   analytics/orders/auth 文件规则问题影响。
 
+### Admin2026 AI 站内通知观察
+
+- `/ai/usage` 增加“站内通知”标签，读取 AI in-app adapter 写入的通知记录。
+- 页面支持 owner、source、unread 和 limit 过滤，并展示通知数、未读数、主体数和最近写入。
+- 表格展示通知标题、正文、级别、owner、condition/trigger 和 compact payload ref；
+  raw payload 继续由后端省略。
+- 本轮入口定位为内部观察，不替代 NewSpdex 用户侧收件箱和 read/mark-read 生命周期。
+
 ## 2026-07-30
 
 ### 文档信息架构整理

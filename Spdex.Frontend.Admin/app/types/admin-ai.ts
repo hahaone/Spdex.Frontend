@@ -151,6 +151,40 @@ export interface AiAuditResult {
   items: AiAuditRow[]
 }
 
+export interface AiInAppNotificationRow {
+  inAppNotificationId: string
+  notificationId: string
+  conditionId: string
+  triggerId: string
+  owner: {
+    subjectType: string
+    subjectId: string
+  }
+  source: string
+  title: string
+  body: string
+  severity: string
+  createdAt: string
+  readAt: string | null
+  payloadRef: {
+    type: string | null
+    channel: string | null
+    conditionId: string | null
+    triggerId: string | null
+    conditionKind: string | null
+    subject: Record<string, unknown> | null
+    matchedAt: string | null
+    rawPayloadOmitted: boolean
+  } | null
+}
+
+export interface AiInAppNotificationResult {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiInAppNotificationRow[]
+}
+
 export const aiToolOptions = [
   'search_matches',
   'get_match_snapshot',

@@ -649,3 +649,19 @@ token 只保存在当前弹窗状态中，关闭后立即清空。
 仍主要存在于当次 MCP 响应中，尚未作为结构化子调用链写入 ledger。后续如要支持
 跨 trace 的 workflow 子步骤复盘，应在 WebApi/AI audit 侧扩展 parent/child trace
 字段，再由 Admin2026 展示 workflow DAG、子步骤耗时和失败定位。
+
+## F.7 AI 站内通知观察
+
+`/ai/usage` 增加“站内通知”标签，用于内部观察 AI watch condition 的 in-app
+provider 写入记录：
+
+- 数据源为 Admin BFF `/api/admin/ai/notifications/in-app`，由 WebApi 通过服务端
+  ops key 代理到 AI API `/api/ai/ops/notifications/in-app`。
+- 支持按 owner subject type、owner subject id、source、unread only 和 limit
+  过滤；浏览器不直接访问 AI API，也不持有 AI ops key。
+- 表格展示 title、body、severity、owner、source、condition、trigger、created/read
+  时间和 compact `payloadRef`。
+- raw payload 不进入 Admin 页面响应；当前仅用于观察投递写入，不承担用户消息中心。
+
+NewSpdex 用户侧收件箱、mark-read 生命周期、通知偏好和端到端投递演练仍是后续产品化
+入口，不在本阶段混入 Admin 观察页。

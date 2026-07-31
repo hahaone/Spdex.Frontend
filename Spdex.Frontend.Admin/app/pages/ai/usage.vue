@@ -124,6 +124,34 @@
         />
       </NTabPane>
 
+      <NTabPane v-if="can(P.aiAuditView)" name="notifications" tab="站内通知">
+        <NAlert class="mb-4" type="info" title="In-app provider delivery">
+          当前读取 AI in-app adapter 已写入的站内投递记录，payload 仅展示 compact ref。
+        </NAlert>
+        <NSpace class="mb-3" align="center">
+          <NSelect v-model:value="notificationFilters.ownerSubjectType" :options="subjectTypeOptions" style="width:150px" />
+          <NInput v-model:value="notificationFilters.ownerSubjectId" clearable placeholder="主体 ID" style="width:180px" />
+          <NInput v-model:value="notificationFilters.source" clearable placeholder="source" style="width:230px" />
+          <NSelect v-model:value="notificationFilters.unreadOnly" :options="unreadOptions" style="width:130px" />
+          <NInputNumber v-model:value="notificationFilters.limit" :min="1" :max="200" style="width:120px" />
+          <NButton type="primary" :loading="notificationsLoading" @click="loadInAppNotifications">查询</NButton>
+        </NSpace>
+        <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="通知数" :value="notifications?.count ?? 0" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="未读" :value="notificationUnreadCount" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="主体数" :value="notificationSubjectCount" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="最近写入" :value="latestNotification ? fmt(latestNotification.createdAt) : '—'" /></NCard></NGi>
+        </NGrid>
+        <NDataTable
+          :columns="notificationColumns"
+          :data="notifications?.items ?? []"
+          :loading="notificationsLoading"
+          :pagination="{ pageSize: 20 }"
+          :row-key="(row: AiInAppNotificationRow) => row.inAppNotificationId"
+          :scroll-x="1450"
+        />
+      </NTabPane>
+
       <NTabPane v-if="can(P.aiAuditView)" name="trace" tab="Trace 查询">
         <NSpace class="mb-3" align="center">
           <NInput v-model:value="traceId" clearable placeholder="完整 trace ID" style="width:min(520px, 70vw)" @keyup.enter="loadTrace" />
@@ -165,7 +193,14 @@
 <script setup lang="ts">
 import { h } from 'vue'
 import { NButton, NTag, useMessage } from 'naive-ui'
-import type { AiAuditResult, AiAuditRow, AiUsageResult, AiUsageRow } from '~/types/admin-ai'
+import type {
+  AiAuditResult,
+  AiAuditRow,
+  AiInAppNotificationResult,
+  AiInAppNotificationRow,
+  AiUsageResult,
+  AiUsageRow,
+} from '~/types/admin-ai'
 import { aiToolOptions } from '~/types/admin-ai'
 import { P } from '~/utils/permissions'
 
@@ -209,9 +244,11 @@ const range = ref<[number, number]>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
 const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
+const notifications = ref<AiInAppNotificationResult | null>(null)
 const usageLoading = ref(false)
 const auditLoading = ref(false)
 const traceLoading = ref(false)
+const notificationsLoading = ref(false)
 const traceId = ref('')
 
 const usageFilters = reactive({
@@ -223,6 +260,19 @@ const auditFilters = reactive<{ tool: string, success: '' | 'true' | 'false', li
   tool: '',
   success: '',
   limit: 500,
+})
+const notificationFilters = reactive<{
+  ownerSubjectType: string
+  ownerSubjectId: string
+  source: string
+  unreadOnly: '' | 'true'
+  limit: number
+}>({
+  ownerSubjectType: '',
+  ownerSubjectId: '',
+  source: '',
+  unreadOnly: '',
+  limit: 50,
 })
 
 const toolFilterOptions = [{ label: '全部工具', value: '' }, ...aiToolOptions]
@@ -237,6 +287,10 @@ const successOptions = [
   { label: '全部结果', value: '' },
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
+]
+const unreadOptions = [
+  { label: '全部状态', value: '' },
+  { label: '未读', value: 'true' },
 ]
 const workflowToolOrder = [
   'plan_agent_analysis',
@@ -365,6 +419,12 @@ const workflowTotals = computed(() => {
 })
 const slowestWorkflow = computed(() =>
   [...workflowRows.value].sort((a, b) => b.p95Ms - a.p95Ms).at(0) ?? null)
+const notificationUnreadCount = computed(() =>
+  (notifications.value?.items ?? []).filter(row => !row.readAt).length)
+const notificationSubjectCount = computed(() => new Set(
+  (notifications.value?.items ?? []).map(row => `${row.owner.subjectType}:${row.owner.subjectId}`),
+).size)
+const latestNotification = computed(() => notifications.value?.items.at(0) ?? null)
 
 const usageColumns = [
   { title: 'UTC 日期', key: 'dateUtc', width: 120 },
@@ -507,6 +567,55 @@ const workflowColumns = [
     ),
   },
 ]
+const notificationColumns = [
+  {
+    title: '状态',
+    key: 'readAt',
+    width: 90,
+    render: (row: AiInAppNotificationRow) => h(
+      NTag,
+      { type: row.readAt ? 'default' : 'success', size: 'small' },
+      { default: () => row.readAt ? '已读' : '未读' },
+    ),
+  },
+  {
+    title: '消息',
+    key: 'title',
+    width: 320,
+    render: (row: AiInAppNotificationRow) => h('div', [
+      h('div', row.title || '—'),
+      h('div', { class: 'text-xs text-gray-400' }, row.body || '—'),
+    ]),
+  },
+  {
+    title: '主体',
+    key: 'owner',
+    width: 190,
+    render: (row: AiInAppNotificationRow) => `${row.owner.subjectType}:${row.owner.subjectId}`,
+  },
+  { title: '来源', key: 'source', width: 190 },
+  { title: '条件', key: 'conditionId', width: 230 },
+  { title: '触发', key: 'triggerId', width: 250 },
+  {
+    title: '类型',
+    key: 'payloadRef',
+    width: 150,
+    render: (row: AiInAppNotificationRow) => row.payloadRef?.conditionKind || row.payloadRef?.type || '—',
+  },
+  {
+    title: '对象',
+    key: 'subject',
+    width: 160,
+    render: (row: AiInAppNotificationRow) => formatNotificationSubject(row),
+  },
+  {
+    title: '命中时间',
+    key: 'matchedAt',
+    width: 170,
+    render: (row: AiInAppNotificationRow) => fmt(row.payloadRef?.matchedAt),
+  },
+  { title: '写入时间', key: 'createdAt', width: 170, render: (row: AiInAppNotificationRow) => fmt(row.createdAt) },
+]
 
 async function loadUsage() {
   usageLoading.value = true
@@ -547,6 +656,20 @@ async function loadWorkflowSample() {
   auditFilters.success = ''
   auditFilters.limit = 500
   await loadAudit()
+}
+
+async function loadInAppNotifications() {
+  notificationsLoading.value = true
+  const result = await api.get<AiInAppNotificationResult>('ai/notifications/in-app', {
+    ownerSubjectType: notificationFilters.ownerSubjectType || undefined,
+    ownerSubjectId: notificationFilters.ownerSubjectId.trim() || undefined,
+    source: notificationFilters.source.trim() || undefined,
+    unreadOnly: notificationFilters.unreadOnly || undefined,
+    limit: notificationFilters.limit,
+  })
+  notificationsLoading.value = false
+  if (result.code === 0) notifications.value = result.data
+  else message.error(result.message || '站内通知查询失败')
 }
 
 function openTrace(value: string) {
@@ -612,9 +735,21 @@ function percentile(sorted: number[], value: number) {
   if (!sorted.length) return 0
   return sorted[Math.max(0, Math.ceil(sorted.length * value) - 1)] ?? 0
 }
+function formatNotificationSubject(row: AiInAppNotificationRow) {
+  const subject = row.payloadRef?.subject
+  if (!subject) return '—'
+  const matchId = subject.match_id ?? subject.matchId
+  if (typeof matchId === 'number' || typeof matchId === 'string') return `match:${matchId}`
+  const date = subject.date
+  if (typeof date === 'string' && date) return `date:${date}`
+  return '—'
+}
 
 onMounted(() => {
   if (can(P.aiUsageView)) loadUsage()
-  if (can(P.aiAuditView)) loadAudit()
+  if (can(P.aiAuditView)) {
+    loadAudit()
+    loadInAppNotifications()
+  }
 })
 </script>
