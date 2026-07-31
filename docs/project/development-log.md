@@ -36,6 +36,15 @@
   `NewSpdex:AiAccess:DebugFeaturesEnabled=true` 和测试账号 allowlist，避免正式用户发布。
 - 本轮不做全局红点、正式消息中心、通知偏好或生产投递演练。
 
+### NewSpdex AI 通知后续计划记录
+
+- 当前 `/push` AI 收件箱只作为 H8 前置调试入口，不进入正式用户发布范围。
+- 下一阶段先设计正式通知中心 IA、未读红点/count、用户通知偏好和 condition 级订阅口径。
+- provider 生产门禁和端到端投递演练完成前，email/webhook 不向正式用户开放；in-app
+  仍需 debug gate、测试 allowlist 和 `NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE=true`。
+- Good Sample 或个人 MCP 入口未来 public 后，也不能自动带出 AI 收件箱，二者 release
+  switch 独立。
+
 ## 2026-07-30
 
 ### 文档信息架构整理
