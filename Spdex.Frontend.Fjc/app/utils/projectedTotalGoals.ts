@@ -70,8 +70,8 @@ export function summarizeProjectedTotalGoals(
     if (fromValue == null || toValue == null) continue
     if (!isContinuousCapture(previousPoint, currentPoint, maxAdjacentGapMs)) continue
 
-    const delta = Math.abs(toValue - fromValue)
-    if (maxChange != null && delta <= maxChange.delta) continue
+    const delta = toValue - fromValue
+    if (maxChange != null && Math.abs(delta) <= Math.abs(maxChange.delta)) continue
 
     const minute = Math.max(0, Math.round(Number(currentPoint.minute) || 0))
     maxChange = {
