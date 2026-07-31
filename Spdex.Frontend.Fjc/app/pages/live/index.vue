@@ -4,6 +4,7 @@ import type { MatchListItem, MatchListResult } from '~/types/match'
 import type { LiveExchangeRateResponse, LiveMatchOddsEventItem, LiveMatchOddsTopTradeCollisionRecord, LiveMatchOddsTopTradeSummary, LiveXgItem, LiveXgReplay } from '~/types/live'
 import type { LiveXgRef } from '~/composables/useLiveXg'
 import { formatBfAmount, formatDateCN, formatMatchTimeSlash, formatMoney } from '~/utils/formatters'
+import { summarizeProjectedTotalGoals } from '~/utils/projectedTotalGoals'
 
 const MATCH_REFRESH_INTERVAL_MS = 30_000
 const LIVE_TRADE_REFRESH_INTERVAL_MS = 5_000
@@ -227,8 +228,6 @@ async function toggleXgExpand(eventId: number) {
   await loadXgReplay(eventId)
 }
 
-const TG_SPARK_MARK_DIFF_THRESHOLD = 1.09
-
 function formatTgSparkValue(value: number): string {
   return value.toFixed(2)
 }
@@ -238,7 +237,8 @@ function tgSpark(eventId: number) {
   const series = xgReplayByEventId.value.get(eventId)?.series ?? []
   const vals = series.map(p => (p.projectedTotalGoals == null ? null : Number(p.projectedTotalGoals)))
   const nums = vals.filter((v): v is number => v != null && Number.isFinite(v))
-  if (nums.length < 2) return null
+  const summary = summarizeProjectedTotalGoals(series)
+  if (nums.length === 0 || summary == null) return null
   const W = 320, H = 64, pad = 8
   const min = Math.min(...nums)
   const max = Math.max(...nums)
@@ -250,8 +250,11 @@ function tgSpark(eventId: number) {
   let pen = false
   let lastX = pad
   let lastY = H - pad
-  const marked = new Set<number>()
-  let previousValidIndex: number | null = null
+  const marked = new Set<number>(
+    summary.maxChange == null
+      ? []
+      : [summary.maxChange.fromIndex, summary.maxChange.toIndex],
+  )
   vals.forEach((v, i) => {
     if (v == null) { pen = false; return }
     const x = xOf(series[i]?.minute ?? i)
@@ -260,13 +263,6 @@ function tgSpark(eventId: number) {
     pen = true
     lastX = x
     lastY = y
-    // 与上一个有效节点差异 >1.09 → 两个节点都标记并显示数值。
-    const prev = previousValidIndex == null ? null : vals[previousValidIndex]
-    if (previousValidIndex != null && prev != null && Math.abs(v - prev) > TG_SPARK_MARK_DIFF_THRESHOLD) {
-      marked.add(previousValidIndex)
-      marked.add(i)
-    }
-    previousValidIndex = i
   })
   const labels = [...marked].sort((a, b) => a - b).map((i) => {
     const v = vals[i]!
@@ -293,7 +289,25 @@ function tgSpark(eventId: number) {
   const yGuides = [1, 2]
     .filter(value => value >= min && value <= max)
     .map(value => ({ value, y: yOf(value) }))
-  return { path, w: W, h: H, min: formatTgSparkValue(min), max: formatTgSparkValue(max), guides, yGuides, labels, lastX, lastY }
+  return {
+    path,
+    w: W,
+    h: H,
+    guides,
+    yGuides,
+    labels,
+    lastX,
+    lastY,
+    initialValue: formatTgSparkValue(summary.initialValue),
+    maxChange: summary.maxChange == null
+      ? null
+      : {
+          delta: formatTgSparkValue(summary.maxChange.delta),
+          fromValue: formatTgSparkValue(summary.maxChange.fromValue),
+          toValue: formatTgSparkValue(summary.maxChange.toValue),
+          clockLabel: summary.maxChange.clockLabel,
+        },
+  }
 }
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
@@ -1607,7 +1621,14 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                     <div class="tg-chart-head">
                       <span class="tg-title">预期总进球走势</span>
                       <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
-                      <span v-else-if="spark" class="tg-range num">{{ spark.min }} ~ {{ spark.max }}</span>
+                      <span v-else-if="spark" class="tg-summary num">
+                        <span>初值 <strong>{{ spark.initialValue }}</strong></span>
+                        <span v-if="spark.maxChange" class="tg-max-change">
+                          最大变化 <strong>{{ spark.maxChange.delta }}</strong>：
+                          {{ spark.maxChange.fromValue }} → {{ spark.maxChange.toValue }}
+                          [{{ spark.maxChange.clockLabel }}]
+                        </span>
+                      </span>
                     </div>
                     <svg
                       v-if="spark"
@@ -2040,9 +2061,23 @@ th.col-tg {
   color: #1f7a45;
 }
 
-.tg-range {
+.tg-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
   font-size: 12px;
   color: #6b7a72;
+}
+
+.tg-summary strong {
+  color: #35443c;
+}
+
+.tg-max-change,
+.tg-max-change strong {
+  color: #e34a4a;
 }
 
 .tg-refreshing {
