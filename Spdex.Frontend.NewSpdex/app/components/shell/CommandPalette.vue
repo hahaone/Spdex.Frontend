@@ -8,6 +8,7 @@ import { ArrowRight, Search } from '@lucide/vue'
 const { open, hide } = useCommandPalette()
 const { isDark, toggle: toggleTheme } = useTheme()
 const router = useRouter()
+const aiFeaturesVisible = useAiFeatureVisibility()
 
 const q = ref('')
 const active = ref(0)
@@ -22,6 +23,7 @@ const commands = computed<Cmd[]>(() => [
   { label: '实时赛事', to: '/live' },
   { label: '信号雷达', to: '/signals' },
   { label: '消息推送', to: '/push' },
+  ...(aiFeaturesVisible.value ? [{ label: 'AI 观察助手', to: '/ai' }] : []),
   { label: '会员中心', to: '/account' },
   { label: '升级会员', to: '/account/upgrade' },
   { label: isDark.value ? '切换到日间模式' : '切换到夜间模式', hint: '主题', action: () => toggleTheme() },

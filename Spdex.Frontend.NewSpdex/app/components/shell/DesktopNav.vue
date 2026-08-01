@@ -6,6 +6,7 @@ const route = useRoute()
 const { isLoggedIn, user, userName, tier, logout } = useAuth()
 const { isDark, toggle } = useTheme()
 const { show: showCommand } = useCommandPalette()
+const aiFeaturesVisible = useAiFeatureVisibility()
 
 const tierClass: Record<string, string> = {
   Free: 'tier-free',
@@ -19,13 +20,14 @@ const tierClass: Record<string, string> = {
 const tierDisplay = computed(() => membershipDisplayNameForUser(user.value))
 const tierToneClass = computed(() => tierClass[tier.value] ?? 'tier-free')
 
-const navItems = [
+const navItems = computed(() => [
   { label: '首页', to: '/' },
   { label: '今日足球', to: '/football' },
   { label: '今日篮球', to: '/basketball' },
   { label: '实时赛事', to: '/live' },
+  ...(aiFeaturesVisible.value ? [{ label: 'AI 观察助手', to: '/ai' }] : []),
   { label: '会员中心', to: '/account' },
-]
+])
 
 function isActive(to: string): boolean {
   if (to === '/') return route.path === '/'

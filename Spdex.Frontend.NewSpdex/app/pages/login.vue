@@ -6,6 +6,7 @@ definePageMeta({ layout: false })
 
 const { login } = useAuth()
 const { enabled: captchaEnabled, setup: setupCaptcha } = useCaptcha()
+const aiFeaturesVisible = useAiFeatureVisibility()
 const route = useRoute()
 
 const form = reactive({
@@ -143,13 +144,13 @@ onBeforeUnmount(() => {
         <NuxtLink to="/membership">会员权益</NuxtLink>
       </div>
 
-      <NuxtLink class="ai-entry focus-ring" to="/">
+      <NuxtLink v-if="aiFeaturesVisible" class="ai-entry focus-ring" to="/ai">
         <span class="ai-icon">
           <Bot :size="16" />
         </span>
         <div class="ai-text">
-          <b>超级指数智能问答</b>
-          <span>体验 SPdex AI</span>
+          <b>SPdex AI 观察助手</b>
+          <span>结构化足球数据观察</span>
         </div>
       </NuxtLink>
     </section>

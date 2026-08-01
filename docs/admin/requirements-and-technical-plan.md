@@ -563,3 +563,105 @@ AdminJwt__SecretKey / Issuer / Audience / ExpirationMinutes
 AdminAuth__MaxLoginFailures / LockoutMinutes
 SilkBag__SmallAdjustThreshold
 ```
+
+---
+
+# 附录 F · SPdex AI / MCP 内部管理（阶段 G4）
+
+## F.1 产品边界与调用链
+
+- 内部企业 AI/MCP 管理进入现有 `Spdex.Frontend.Admin`，不创建新的后台前端。
+- NewSpdex `/account/mcp` 继续只服务个人长期连接和 OAuth grant。
+- 外部企业客户自助不使用 Admin2026；后续如需要，再建设独立企业门户。
+- 浏览器只持 AdminJwt。调用固定经过：
+
+```text
+Admin2026 -> Nuxt Admin BFF -> WebApi /api/admin/ai/* -> AI API /api/ai/*
+```
+
+AI ops key 只由 WebApi 从服务器配置读取并写入内部请求头，不进入浏览器、
+前端 runtime config、URL、日志或 Admin 审计内容。
+
+## F.2 页面
+
+| 页面 | 路由 | 能力 |
+|---|---|---|
+| 运行总览 | `/ai` | AI/WebApi/Redis/ledger、在线归档、卷外备份、告警与到期提醒 |
+| 企业与合同 | `/ai/organizations` | 企业主体、联系人、有效期、日额度、RPM、并发、SLA、暂停/恢复 |
+| 接入凭据 | `/ai/credentials` | scope、TTL、IP allowlist、签发、一次性展示、轮换、撤销 |
+| 用量与审计 | `/ai/usage` | UTC 日用量、失败调用、recent audit、trace、财务 CSV 对账预演 |
+
+`billingMode=test_metering_only` 或 `billable=false` 时，界面必须明确显示
+“测试计量，不产生账单”。正式账单需要 G5 商业价格和上线门禁。
+
+## F.3 权限
+
+```text
+ai.organization.view / ai.organization.manage
+ai.credential.view   / ai.credential.manage
+ai.usage.view
+ai.audit.view
+ai.billing.reconcile
+ai.ops.view          / ai.ops.manage
+```
+
+- `super`：全部。
+- `ops`：企业、凭据和归档维护，不做财务对账。
+- `support`：企业/凭据/usage/audit 只读。
+- `finance`：企业、usage、audit 只读，允许对账导出。
+- `auditor`：企业/凭据/usage/audit/ops 只读。
+
+前端权限只控制可见性，WebApi policy 是最终授权边界。签发或轮换返回的完整
+token 只保存在当前弹窗状态中，关闭后立即清空。
+
+## F.4 响应式布局
+
+桌面继续使用 220px 固定侧栏；宽度小于 760px 时切换为顶部菜单按钮和左侧
+抽屉，主内容使用完整视口宽度。数据表保留表内横向滚动，不允许把整个页面
+撑出视口。
+
+## F.5 G5A 质量监控补充
+
+`/ai/usage` 在既有用量、审计、trace 和对账预演之外增加“质量监控”：
+
+- 数据源为最近最多 500 条 append-only audit 样本。
+- 展示样本调用数、失败数、整体成功率和最慢工具 P95。
+- 按工具展示调用数、成功/失败、成功率、平均耗时、P95 和最大耗时。
+- 展示错误码 Top，便于从 trace 继续定位失败。
+
+该页面是测试期质量观察，不是正式 SLA 统计或商业账单。样本窗口和
+`billingMode=test_metering_only`、`billable=false` 必须在页面保持可见；
+正式时间窗口 SLA、价格和计费切换留给 G5B 商业化门禁。
+
+## F.6 H7 workflow trace 观察
+
+`/ai/usage` 增加“Workflow 观察”标签，用于内部验证 H7A-H7D Agent workflow
+的真实调用状态：
+
+- 数据源沿用最近最多 500 条 append-only audit 样本，不新增浏览器直连 AI API。
+- 仅聚合 workflow 入口工具：`plan_agent_analysis`、`run_match_analysis_workflow`、
+  `run_watchlist_workflow`、`prepare_monitoring_workflow`。
+- 按 workflow 展示调用数、成功/失败、成功率、用量、平均耗时、P95、最大耗时、
+  最近结果和最近调用时间。
+- 最近 trace 可一键切换到既有 Trace 查询页，继续查看完整 tool-level 调用记录。
+
+当前 audit ledger 持久化的是工具级调用摘要；workflow 响应里的 child call audit
+仍主要存在于当次 MCP 响应中，尚未作为结构化子调用链写入 ledger。后续如要支持
+跨 trace 的 workflow 子步骤复盘，应在 WebApi/AI audit 侧扩展 parent/child trace
+字段，再由 Admin2026 展示 workflow DAG、子步骤耗时和失败定位。
+
+## F.7 AI 站内通知观察
+
+`/ai/usage` 增加“站内通知”标签，用于内部观察 AI watch condition 的 in-app
+provider 写入记录：
+
+- 数据源为 Admin BFF `/api/admin/ai/notifications/in-app`，由 WebApi 通过服务端
+  ops key 代理到 AI API `/api/ai/ops/notifications/in-app`。
+- 支持按 owner subject type、owner subject id、source、unread only 和 limit
+  过滤；浏览器不直接访问 AI API，也不持有 AI ops key。
+- 表格展示 title、body、severity、owner、source、condition、trigger、created/read
+  时间和 compact `payloadRef`。
+- raw payload 不进入 Admin 页面响应；当前仅用于观察投递写入，不承担用户消息中心。
+
+NewSpdex 用户侧收件箱、mark-read 生命周期、通知偏好和端到端投递演练仍是后续产品化
+入口，不在本阶段混入 Admin 观察页。

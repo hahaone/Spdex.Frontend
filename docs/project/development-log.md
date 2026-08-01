@@ -6,6 +6,79 @@
 
 ---
 
+## 2026-08-01
+
+### SPdex Help Center AI 帮助中心雏形
+
+- 新增独立 Nuxt 应用 `Spdex.Frontend.Help`，作为未来 `help.spdex.com` / `docs.spdex.com` 公开帮助中心的前端雏形。
+- 当前先实现 AI 部分：
+  - 首页帮助搜索、AI 文档入口、未来板块占位和客服反馈提示。
+  - `/ai` AI 帮助专区。
+  - `/ai/:slug` 文章页，覆盖 AI 观察助手、SPdex AI MCP、数据口径、watch condition 和安全 FAQ。
+- 使用 SPdex 现有 Logo/Favicon 作为视觉资产，并提供 Dockerfile；默认容器端口为 `3006`。
+- 暂未接入生产 Ansible/Nginx/GitHub Actions 发布链路，避免在正式 Web 节点上提前引入第六个前端服务导致增量部署风险。
+- NewSpdex 用户侧 AI 命名统一为“AI 观察助手”：
+  - `/ai` 页面标题、说明和分享标题。
+  - 顶部导航、桌面导航、命令面板、登录页 AI 入口。
+  - 赛事详情页 AI 快捷入口。
+
+### SPdex AI 命名口径
+
+- 用户侧主名称改为“SPdex AI 观察助手”或“AI 观察助手”。
+- 内部 `good_sample` API、类型、storage key 和已有测试链路暂不重命名，避免破坏 AI gateway、golden sample、审计和兼容性测试。
+
+## 2026-07-31
+
+### Admin2026 AI workflow 观察
+
+- `/ai/usage` 增加“Workflow 观察”标签，基于最近 audit 样本聚合 H7A-H7D workflow
+  调用状态。
+- 展示 workflow 调用数、成功/失败、成功率、用量、平均耗时、P95、最大耗时和最近结果。
+- 最近 trace 可直接切换到既有 Trace 查询，便于从 workflow 聚合回到单次调用记录。
+- AI 工具筛选列表同步到当前 MCP H1-H7D 工具集，避免 Admin 审计口径停留在早期 6 个工具。
+- 已通过 `npm run typecheck` 和本次改动文件定向 ESLint；全量 Admin lint 仍受既有
+  analytics/orders/auth 文件规则问题影响。
+
+### Admin2026 AI 站内通知观察
+
+- `/ai/usage` 增加“站内通知”标签，读取 AI in-app adapter 写入的通知记录。
+- 页面支持 owner、source、unread 和 limit 过滤，并展示通知数、未读数、主体数和最近写入。
+- 表格展示通知标题、正文、级别、owner、condition/trigger 和 compact payload ref；
+  raw payload 继续由后端省略。
+- 本轮入口定位为内部观察，不替代 NewSpdex 用户侧收件箱和 read/mark-read 生命周期。
+
+### NewSpdex AI 收件箱调试入口
+
+- `/push` 增加 AI 收件箱调试面板，读取当前用户自己的 AI watch condition in-app
+  通知。
+- 支持只看未读、刷新、单条标为已读和全部标为已读；列表展示标题、正文、级别、
+  观察对象和命中类型。
+- 新增 `NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE`，默认 false；后端还要求
+  `NewSpdex:AiAccess:DebugFeaturesEnabled=true` 和测试账号 allowlist，避免正式用户发布。
+- 本轮不做全局红点、正式消息中心、通知偏好或生产投递演练。
+
+### NewSpdex AI 通知后续计划记录
+
+- 当前 `/push` AI 收件箱只作为 H8 前置调试入口，不进入正式用户发布范围。
+- 下一阶段先设计正式通知中心 IA、未读红点/count、用户通知偏好和 condition 级订阅口径。
+- provider 生产门禁和端到端投递演练完成前，email/webhook 不向正式用户开放；in-app
+  仍需 debug gate、测试 allowlist 和 `NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE=true`。
+- AI 观察助手或个人 MCP 入口未来 public 后，也不能自动带出 AI 收件箱，二者 release
+  switch 独立。
+
+## 2026-07-30
+
+### 文档信息架构整理
+
+- 新增 `docs/README.md`，按多个前端子项目提供统一导航，并链接后端文档正源。
+- 通用项目文档迁入 `docs/project/`，Admin2026 方案迁入 `docs/admin/`，
+  Web 节点手册迁入 `docs/operations/`。
+- NewSpdex 的旧站分析、设计参考和本地设计源稿统一迁入
+  `docs/products/newspdex/`；本地源稿继续由 `.gitignore` 排除。
+- 品牌图片迁入 `docs/assets/brand/`，不修改各前端运行时 public 资源。
+- 本次只整理文档和文档素材，不修改前端业务代码、构建配置、CI/CD 触发语义
+  或线上发布状态。
+
 ## 2026-06-03
 
 ### Quantilearn 我的模型范围修正
@@ -150,11 +223,11 @@
 ### 添加项目文档和 .gitignore
 
 - 在仓库根目录添加 `.gitignore`，覆盖 Node.js、Nuxt、IDE、OS 等忽略规则
-- 创建 `docs/` 文档目录：
-  - `requirements.md` - 需求文档
-  - `design.md` - 设计文档
-  - `implementation.md` - 实施方案
-  - `dev-log.md` - 开发记录（本文件）
+- 创建 `docs/` 文档目录。当前正源已整理到：
+  - `docs/project/requirements.md` - 需求文档
+  - `docs/project/architecture.md` - 架构设计
+  - `docs/project/development-guide.md` - 开发与部署指南
+  - `docs/project/development-log.md` - 开发记录（本文件）
 
 ---
 

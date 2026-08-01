@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowUpRight, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ReceiptText, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
+import { ArrowUpRight, Bot, ChevronRight, Clock, Coins, Compass, CreditCard, Headphones, KeyRound, LogOut, Mail, ReceiptText, ShieldCheck, Smartphone, UserCircle } from '@lucide/vue'
 import type { OrderRecord } from '~/types/billing'
 import { effectiveMembershipDisplayName } from '~/utils/membership'
 
@@ -9,6 +9,7 @@ const { user, userName, tier, logout, refreshToken } = useAuth()
 const { summary, orders, ordersServiceAvailable, refresh } = useAccount()
 const { start: startOnboarding } = useOnboarding()
 const { getCustomerService, syncAlipayOrder } = useCreateOrder()
+const aiFeaturesVisible = useAiFeatureVisibility()
 
 // 客服 QQ（优先取后端配置，回退默认）
 const customerQQ = ref('2735629769')
@@ -207,6 +208,11 @@ onMounted(async () => {
     </div>
 
     <section class="settings-band">
+      <NuxtLink v-if="aiFeaturesVisible" to="/account/mcp" class="setting-row focus-ring">
+        <Bot :size="15" />
+        <span>AI 与 MCP 连接</span>
+        <ChevronRight :size="15" class="chev" />
+      </NuxtLink>
       <NuxtLink to="/account/change-password" class="setting-row focus-ring">
         <KeyRound :size="15" />
         <span>修改密码</span>

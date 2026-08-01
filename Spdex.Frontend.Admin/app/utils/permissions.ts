@@ -25,4 +25,13 @@ export const P = {
   analyticsUserTracking: 'analytics.user.tracking',
   tokenView: 'token.view',
   tokenManage: 'token.manage',
+  aiOrganizationView: 'ai.organization.view',
+  aiOrganizationManage: 'ai.organization.manage',
+  aiCredentialView: 'ai.credential.view',
+  aiCredentialManage: 'ai.credential.manage',
+  aiUsageView: 'ai.usage.view',
+  aiAuditView: 'ai.audit.view',
+  aiBillingReconcile: 'ai.billing.reconcile',
+  aiOpsView: 'ai.ops.view',
+  aiOpsManage: 'ai.ops.manage',
 } as const

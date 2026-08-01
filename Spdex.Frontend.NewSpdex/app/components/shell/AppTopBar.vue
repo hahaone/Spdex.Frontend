@@ -15,6 +15,7 @@ const title = computed(() => {
   if (route.path.startsWith('/basketball')) return '今日篮球'
   if (route.path.startsWith('/volume')) return '量化模型'
   if (route.path.startsWith('/signals')) return '推荐信号'
+  if (route.path.startsWith('/ai')) return 'AI 观察助手'
   if (route.path.startsWith('/account')) return '会员中心'
   return '首页'
 })
