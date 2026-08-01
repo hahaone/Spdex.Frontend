@@ -6,6 +6,27 @@
 
 ---
 
+## 2026-08-01
+
+### SPdex Help Center AI 帮助中心雏形
+
+- 新增独立 Nuxt 应用 `Spdex.Frontend.Help`，作为未来 `help.spdex.com` / `docs.spdex.com` 公开帮助中心的前端雏形。
+- 当前先实现 AI 部分：
+  - 首页帮助搜索、AI 文档入口、未来板块占位和客服反馈提示。
+  - `/ai` AI 帮助专区。
+  - `/ai/:slug` 文章页，覆盖 AI 观察助手、SPdex AI MCP、数据口径、watch condition 和安全 FAQ。
+- 使用 SPdex 现有 Logo/Favicon 作为视觉资产，并提供 Dockerfile；默认容器端口为 `3006`。
+- 暂未接入生产 Ansible/Nginx/GitHub Actions 发布链路，避免在正式 Web 节点上提前引入第六个前端服务导致增量部署风险。
+- NewSpdex 用户侧 AI 命名统一为“AI 观察助手”：
+  - `/ai` 页面标题、说明和分享标题。
+  - 顶部导航、桌面导航、命令面板、登录页 AI 入口。
+  - 赛事详情页 AI 快捷入口。
+
+### SPdex AI 命名口径
+
+- 用户侧主名称改为“SPdex AI 观察助手”或“AI 观察助手”。
+- 内部 `good_sample` API、类型、storage key 和已有测试链路暂不重命名，避免破坏 AI gateway、golden sample、审计和兼容性测试。
+
 ## 2026-07-31
 
 ### Admin2026 AI workflow 观察
@@ -42,14 +63,14 @@
 - 下一阶段先设计正式通知中心 IA、未读红点/count、用户通知偏好和 condition 级订阅口径。
 - provider 生产门禁和端到端投递演练完成前，email/webhook 不向正式用户开放；in-app
   仍需 debug gate、测试 allowlist 和 `NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE=true`。
-- Good Sample 或个人 MCP 入口未来 public 后，也不能自动带出 AI 收件箱，二者 release
+- AI 观察助手或个人 MCP 入口未来 public 后，也不能自动带出 AI 收件箱，二者 release
   switch 独立。
 
 ## 2026-07-30
 
 ### 文档信息架构整理
 
-- 新增 `docs/README.md`，按五个前端子项目提供统一导航，并链接后端文档正源。
+- 新增 `docs/README.md`，按多个前端子项目提供统一导航，并链接后端文档正源。
 - 通用项目文档迁入 `docs/project/`，Admin2026 方案迁入 `docs/admin/`，
   Web 节点手册迁入 `docs/operations/`。
 - NewSpdex 的旧站分析、设计参考和本地设计源稿统一迁入

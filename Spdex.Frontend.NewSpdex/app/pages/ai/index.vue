@@ -248,7 +248,7 @@ async function shareLatest() {
   if (!latest) return
   const heading = selectedMatch.value
     ? `${selectedMatch.value.homeTeam} vs ${selectedMatch.value.awayTeam}`
-    : 'SPdex Good Sample'
+    : 'SPdex AI 观察助手'
   const raw = JSON.stringify(
     latest.response.success ? latest.response.data : latest.response.error,
     null,
@@ -340,8 +340,8 @@ onMounted(() => {
     <header class="ai-head">
       <div class="bot-mark"><Bot :size="23" /></div>
       <div>
-        <h1>Good Sample</h1>
-        <p>SPdex 结构化数据问答</p>
+        <h1>AI 观察助手</h1>
+        <p>SPdex 结构化足球数据观察</p>
       </div>
       <button v-if="turns.length" type="button" class="icon-button focus-ring" aria-label="清空本次分析" @click="clearTurns">
         <X :size="17" />

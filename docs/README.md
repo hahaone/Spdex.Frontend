@@ -10,6 +10,7 @@
 | [`Spdex.Frontend.2026`](../Spdex.Frontend.2026/) | 2026 版主站 | [项目级文档](project/requirements.md) |
 | [`Spdex.Frontend.Admin`](../Spdex.Frontend.Admin/) | Admin2026 管理后台 | [需求与技术方案](admin/requirements-and-technical-plan.md) |
 | [`Spdex.Frontend.Fjc`](../Spdex.Frontend.Fjc/) | FJC 前端 | [项目级文档](project/README.md) |
+| [`Spdex.Frontend.Help`](../Spdex.Frontend.Help/) | SPdex 独立帮助中心 | [Help Center 产品说明](products/help-center/README.md) |
 | [`Spdex.Frontend.NewSpdex`](../Spdex.Frontend.NewSpdex/) | NewSpdex 新版前端 | [NewSpdex 文档](products/newspdex/README.md) |
 | [`Spdex.Frontend.Quantilearn`](../Spdex.Frontend.Quantilearn/) | Quantilearn 工作台 | [后端仓库中的产品文档](../../Spdex.Core/docs/products/quantilearn/) |
 
@@ -26,6 +27,7 @@
 ### 产品专项
 
 - [Admin2026 需求与技术方案](admin/requirements-and-technical-plan.md)
+- [Help Center 产品说明](products/help-center/README.md)
 - [NewSpdex 文档](products/newspdex/README.md)
 
 ### 运维与资产

@@ -323,7 +323,7 @@ function openLadderMarket(target: 'standard' | 'goals' | 'cs') {
               <span v-for="flag in match.flags" :key="flag" class="tag tag-signal">{{ flag }}</span>
               <NuxtLink v-if="aiFeaturesVisible" :to="goodSampleRoute" class="ai-analysis-link focus-ring">
                 <Bot :size="12" />
-                <span>Good Sample</span>
+                <span>AI 观察助手</span>
               </NuxtLink>
             </div>
           </div>
