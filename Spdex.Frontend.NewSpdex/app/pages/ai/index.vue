@@ -17,11 +17,13 @@ import {
 import type {
   AiAnswerFeedbackResponse,
   AiAnswerFeedbackType,
+  AiAgentTurnResponse,
   GoodSampleMatchChoice,
   GoodSampleResponse,
   SavedGoodSample,
 } from '~/types/good-sample'
 import type { MatchSummary } from '~/types/match'
+import type { BigTradesData } from '~/composables/useBigTrades'
 
 type Preset = 'today_hot' | 'search' | 'snapshot' | 'trend' | 'anomaly' | 'metric'
 type FeedbackSendState = 'idle' | 'sending' | 'sent' | 'failed'
@@ -41,8 +43,16 @@ interface AnalysisTurn {
   question: string
   preset: Preset
   match: GoodSampleMatchChoice | null
-  response: GoodSampleResponse
+  response?: GoodSampleResponse
+  agentResponse?: AiAgentTurnResponse
   feedback: TurnFeedbackState
+}
+
+interface ApiEnvelope<T> {
+  data?: T
+  success?: boolean
+  message?: string
+  error?: string
 }
 
 const storageKey = 'spdex.good-sample.saved.v1'
@@ -104,7 +114,7 @@ const form = reactive({
 })
 
 const needsMatch = computed(() => ['snapshot', 'trend', 'anomaly'].includes(selected.value))
-const latestTurn = computed(() => turns.value.at(-1) ?? null)
+const latestTurn = computed(() => turns.value[0] ?? null)
 const selectedLabel = computed(() => presets.find(item => item.value === selected.value)?.label || '数据分析')
 const matchFilters = computed(() => ({
   date: form.date,
@@ -124,17 +134,22 @@ const filteredMatches = computed(() => {
     : availableMatches.value
   return matches.slice(0, 12)
 })
-const suggestions = computed(() => selectedMatch.value
-  ? [
+const suggestions = computed(() => {
+  const agentFollowups = latestTurn.value?.agentResponse?.answer?.followups ?? []
+  if (agentFollowups.length) return agentFollowups.slice(0, 4)
+  return selectedMatch.value
+    ? [
       '这场比赛的数据概览',
       '最近的成交量走势如何？',
+      '这场比赛有没有明显的大额交易？',
       '这场比赛有什么异常信号？',
       '胜平负赔率是什么意思？',
     ]
-  : [
+    : [
       '今天有哪些重点比赛？',
       '成交量是什么意思？',
-    ])
+    ]
+})
 
 watch(availableMatches, (matches) => {
   if (!selectedMatch.value && form.matchId) {
@@ -180,18 +195,7 @@ async function execute(preset: Preset | 'follow_up', question?: string) {
         metricKey: form.metricKey,
       },
     })
-    turns.value.push({
-      id: cryptoId(),
-      answerId: `ans_${cryptoId().replaceAll('-', '')}`,
-      question: questionText,
-      preset: requestPreset,
-      match: requestMatch,
-      response,
-      feedback: createFeedbackState(),
-    })
-    if (turns.value.length > 8) turns.value = turns.value.slice(-8)
-    await nextTick()
-    resultAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    await appendToolTurn(response, questionText, requestPreset, requestMatch)
   }
   catch (error: unknown) {
     const fetchError = error as {
@@ -211,7 +215,136 @@ async function submitFollowUp(question?: string) {
   const value = (question || followUp.value).trim()
   if (!value) return
   followUp.value = ''
+
+  const requestMatch = selectedMatch.value ? { ...selectedMatch.value } : null
+  const agentOk = await executeAgentTurn(value, selected.value, requestMatch)
+  if (agentOk) return
+
+  if (import.meta.dev && selectedMatch.value && isBigTradeQuestion(value)) {
+    await executeLocalBigTrades(value)
+    return
+  }
   await execute('follow_up', value)
+}
+
+async function executeAgentTurn(
+  questionText: string,
+  requestPreset: Preset,
+  requestMatch: GoodSampleMatchChoice | null,
+) {
+  loading.value = true
+  errorMessage.value = ''
+  saveState.value = ''
+  shareState.value = ''
+  try {
+    const response = await $apiFetch<AiAgentTurnResponse>('/api/newspdex/ai/agent/turn', {
+      method: 'POST',
+      body: {
+        question: questionText,
+        matchId: requestMatch?.matchId ?? null,
+        preset: requestPreset,
+        date: form.date,
+        market: form.market,
+        interval: form.interval,
+        clientTraceId: latestTurn.value?.answerId ?? null,
+        history: turns.value.slice(0, 4).map(turn => ({
+          role: 'user',
+          content: turn.question,
+        })),
+      },
+    })
+    if (!response.success || !response.answer) {
+      throw new Error(response.message || response.error || 'AI Agent 未返回有效回答')
+    }
+
+    await appendAgentTurn(response, questionText, requestPreset, requestMatch)
+    return true
+  }
+  catch {
+    return false
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+async function appendToolTurn(
+  response: GoodSampleResponse,
+  questionText: string,
+  requestPreset: Preset,
+  requestMatch: GoodSampleMatchChoice | null,
+) {
+  const nextTurn: AnalysisTurn = {
+    id: cryptoId(),
+    answerId: `ans_${cryptoId().replaceAll('-', '')}`,
+    question: questionText,
+    preset: requestPreset,
+    match: requestMatch,
+    response,
+    feedback: createFeedbackState(),
+  }
+  turns.value = [nextTurn, ...turns.value].slice(0, 8)
+  await nextTick()
+  resultAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function appendAgentTurn(
+  response: AiAgentTurnResponse,
+  questionText: string,
+  requestPreset: Preset,
+  requestMatch: GoodSampleMatchChoice | null,
+) {
+  const nextTurn: AnalysisTurn = {
+    id: cryptoId(),
+    answerId: `ans_${cryptoId().replaceAll('-', '')}`,
+    question: questionText,
+    preset: requestPreset,
+    match: requestMatch,
+    agentResponse: response,
+    feedback: createFeedbackState(),
+  }
+  turns.value = [nextTurn, ...turns.value].slice(0, 8)
+  await nextTick()
+  resultAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function executeLocalBigTrades(questionText: string) {
+  const requestMatch = selectedMatch.value ? { ...selectedMatch.value } : null
+  if (!requestMatch) return
+
+  loading.value = true
+  errorMessage.value = ''
+  saveState.value = ''
+  shareState.value = ''
+  try {
+    const result = await $apiFetch<ApiEnvelope<BigTradesData>>(
+      `/api/newspdex/big-trades/${requestMatch.matchId}?perGroup=6`,
+    )
+    if (!result.data) {
+      throw new Error(result.message || result.error || '重大成交数据暂不可用')
+    }
+
+    await appendToolTurn(
+      buildLocalBigTradesResponse(result.data),
+      questionText,
+      'anomaly',
+      requestMatch,
+    )
+  }
+  catch (error: unknown) {
+    const fetchError = error as {
+      data?: { message?: string, error?: string, error_description?: string }
+      message?: string
+    }
+    errorMessage.value = fetchError.data?.message
+      || fetchError.data?.error_description
+      || fetchError.data?.error
+      || fetchError.message
+      || '重大成交数据读取失败'
+  }
+  finally {
+    loading.value = false
+  }
 }
 
 function selectLocalMatch(match: MatchSummary, switchPreset = true) {
@@ -243,6 +376,13 @@ function selectMatch(match: GoodSampleMatchChoice, switchPreset = true) {
   })
 }
 
+async function analyzeMatch(match: GoodSampleMatchChoice) {
+  if (loading.value) return
+  selectMatch(match)
+  await nextTick()
+  await execute('snapshot', `${match.homeTeam} vs ${match.awayTeam} 数据快照`)
+}
+
 function clearMatch() {
   selectedMatch.value = null
   form.matchId = ''
@@ -268,6 +408,7 @@ function saveLatest() {
     preset: selected.value,
     match: selectedMatch.value ? { ...selectedMatch.value } : null,
     response: latest.response,
+    agentResponse: latest.agentResponse,
   }
   saved.value = [item, ...saved.value].slice(0, 12)
   try {
@@ -285,12 +426,7 @@ async function shareLatest() {
   const heading = selectedMatch.value
     ? `${selectedMatch.value.homeTeam} vs ${selectedMatch.value.awayTeam}`
     : 'SPdex AI 观察助手'
-  const raw = JSON.stringify(
-    latest.response.success ? latest.response.data : latest.response.error,
-    null,
-    2,
-  )
-  const text = `${heading}\n${latest.question}\n\n${raw.slice(0, 4500)}\n\ntrace: ${latest.response.traceId}`
+  const text = buildShareText(heading, latest)
   try {
     if (navigator.share) {
       await navigator.share({ title: heading, text })
@@ -306,7 +442,7 @@ async function shareLatest() {
 }
 
 function restoreSaved(item: SavedGoodSample) {
-  selected.value = item.preset ?? presetForTool(item.response.tool)
+  selected.value = item.preset ?? (item.response ? presetForTool(item.response.tool) : 'anomaly')
   selectedMatch.value = item.match ? { ...item.match } : null
   form.matchId = item.match ? String(item.match.matchId) : ''
   router.replace({
@@ -324,9 +460,10 @@ function restoreSaved(item: SavedGoodSample) {
     id: cryptoId(),
     answerId: `ans_${cryptoId().replaceAll('-', '')}`,
     question: item.question || item.title,
-    preset: item.preset ?? presetForTool(item.response.tool),
+    preset: item.preset ?? (item.response ? presetForTool(item.response.tool) : 'anomaly'),
     match: item.match ? { ...item.match } : null,
     response: item.response,
+    agentResponse: item.agentResponse,
     feedback: createFeedbackState(),
   })
 }
@@ -343,6 +480,108 @@ function clearTurns() {
 
 function cryptoId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function isBigTradeQuestion(value: string) {
+  return /大额交易|大额成交|大额资金|大额买卖|大单|大注|重大成交|big trade|large trade/i.test(value)
+}
+
+function buildLocalBigTradesResponse(payload: BigTradesData): GoodSampleResponse {
+  const groups = (payload.groups ?? []).map((group) => {
+    const trades = (group.trades ?? []).map(trade => ({
+      selection: trade.sel,
+      side: trade.side,
+      side_label: trade.side || '成交',
+      amount: trade.amount,
+      price: trade.price,
+      time: trade.time,
+      share: trade.per,
+      share_percent: trade.per * 100,
+      highlight: trade.highlight,
+      highlight_label: highlightLabel(trade.highlight),
+    }))
+    return {
+      key: group.key,
+      label: group.label,
+      market: group.market,
+      market_label: bigTradeMarketLabel(group.market),
+      total: group.total,
+      trade_count: trades.length,
+      trades,
+    }
+  })
+
+  const flatTrades = groups.flatMap(group => group.trades.map(trade => ({
+    ...trade,
+    group_key: group.key,
+    group_label: group.label,
+    market: group.market,
+  })))
+  const largestTrade = [...flatTrades].sort((a, b) => b.amount - a.amount)[0] ?? null
+  const dominantGroup = groups
+    .map(group => ({
+      key: group.key,
+      label: group.label,
+      market: group.market,
+      trade_count: group.trades.length,
+      amount: group.trades.reduce((sum, trade) => sum + trade.amount, 0),
+    }))
+    .sort((a, b) => b.amount - a.amount)[0] ?? null
+  const generatedAt = new Date().toISOString()
+
+  return {
+    ruleVersion: 'client-big-trades-v1',
+    tool: 'get_big_trades',
+    success: true,
+    data: {
+      source: 'NewSpdex',
+      match_id: payload.eventId,
+      event_id: payload.eventId,
+      match_ref: {
+        event_id: payload.eventId,
+        home_team: payload.homeTeam,
+        away_team: payload.awayTeam,
+      },
+      access_locked: payload.accessLocked,
+      lock_message: payload.lockMessage,
+      summary: {
+        group_count: groups.length,
+        trade_count: flatTrades.length,
+        total_trade_amount: flatTrades.reduce((sum, trade) => sum + trade.amount, 0),
+        max_share: flatTrades.length ? Math.max(...flatTrades.map(trade => trade.share)) : 0,
+        largest_trade: largestTrade,
+        dominant_group: dominantGroup,
+      },
+      evidence: {
+        source_label: '重大成交记录',
+        source_inputs: ['groups', 'trades', 'largest_trade', 'dominant_group'],
+      },
+      missing_fields: payload.accessLocked ? ['big_trades:permission_locked'] : [],
+      data_cutoff_at: generatedAt,
+      groups,
+    },
+    usage: {
+      usageUnits: 0,
+      billable: false,
+      billingMode: 'client_direct_test',
+    },
+    generatedAt,
+    traceId: `client_big_trades_${cryptoId().replaceAll('-', '')}`,
+  }
+}
+
+function bigTradeMarketLabel(market: string) {
+  const labels: Record<string, string> = {
+    standard: '标盘',
+    goals: '进球数',
+  }
+  return labels[market] || '成交市场'
+}
+
+function highlightLabel(value: number) {
+  if (value >= 2) return '高占比'
+  if (value >= 1) return '较高占比'
+  return '普通'
 }
 
 function createFeedbackState(): TurnFeedbackState {
@@ -389,17 +628,17 @@ async function submitFeedback(turn: AnalysisTurn, feedbackType: AiAnswerFeedback
       method: 'POST',
       body: {
         answerId: turn.answerId,
-        traceId: turn.response.traceId,
+        traceId: turnTraceId(turn),
         feedbackType,
         issueTags: tags,
         commentText: comment,
-        toolName: turn.response.tool,
+        toolName: turnToolName(turn),
         preset: turn.preset,
         matchId: turn.match?.matchId ?? null,
         questionText: turn.question,
         clientType: 'newspdex_ai',
         pageUrl: route.fullPath,
-        renderMode: presetForTool(turn.response.tool),
+        renderMode: turnRenderMode(turn),
       },
     })
     turn.feedback.sendState = 'sent'
@@ -425,11 +664,74 @@ function presetForTool(tool: string): Preset {
     search_matches: 'search',
     get_match_snapshot: 'snapshot',
     get_market_series: 'trend',
+    get_market_metric_series: 'trend',
+    get_big_trades: 'anomaly',
     get_top_matches: 'today_hot',
     detect_market_anomalies: 'anomaly',
     explain_metric: 'metric',
   }
   return values[tool] || 'today_hot'
+}
+
+function toolDisplayName(tool: string): string {
+  const values: Record<string, string> = {
+    search_matches: '赛事搜索',
+    get_match_snapshot: '单场数据快照',
+    get_market_series: '盘口走势',
+    get_market_metric_series: '盘口走势',
+    get_big_trades: '大额交易证据',
+    get_top_matches: '今日重点赛事',
+    detect_market_anomalies: '异常证据',
+    explain_metric: '指标解释',
+  }
+  return values[tool] || '数据分析'
+}
+
+function turnDisplayName(turn: AnalysisTurn): string {
+  if (turn.agentResponse) return 'AI Agent 综合回答'
+  return turn.response ? toolDisplayName(turn.response.tool) : '数据分析'
+}
+
+function turnTraceId(turn: AnalysisTurn): string {
+  return turn.agentResponse?.traceId || turn.response?.traceId || ''
+}
+
+function turnToolName(turn: AnalysisTurn): string {
+  if (turn.agentResponse) {
+    const tools = turn.agentResponse.toolCalls?.map(call => call.tool).filter(Boolean) ?? []
+    return tools.length ? tools.join(',') : 'ai_agent'
+  }
+  return turn.response?.tool || 'unknown'
+}
+
+function turnRenderMode(turn: AnalysisTurn): string {
+  return turn.agentResponse ? 'agent' : presetForTool(turn.response?.tool || '')
+}
+
+function buildShareText(heading: string, turn: AnalysisTurn): string {
+  if (turn.agentResponse?.answer) {
+    const answer = turn.agentResponse.answer
+    const lines = [
+      heading,
+      turn.question,
+      '',
+      answer.directAnswer,
+      '',
+      ...answer.summary.map(item => `- ${item}`),
+      '',
+      ...answer.keyEvidence.slice(0, 5).map(item => `${item.label}: ${item.value}（${item.explanation}）`),
+      '',
+      `trace: ${turn.agentResponse.traceId}`,
+    ]
+    return lines.filter((line, index, array) => line || array[index - 1]).join('\n').slice(0, 4500)
+  }
+
+  const raw = JSON.stringify(
+    turn.response?.success ? turn.response.data : turn.response?.error,
+    null,
+    2,
+  )
+  return `${heading}\n${turn.question}\n\n${raw.slice(0, 4500)}\n\ntrace: ${turn.response?.traceId || ''}`
 }
 
 function formatTime(value: string) {
@@ -495,17 +797,6 @@ onMounted(() => {
       </aside>
 
       <main class="query-panel">
-        <section v-if="selectedMatch" class="selected-match">
-          <div>
-            <span>{{ selectedMatch.leagueName || '当前比赛' }}</span>
-            <b>{{ selectedMatch.homeTeam }} <i>vs</i> {{ selectedMatch.awayTeam }}</b>
-            <small>{{ selectedMatch.matchTime ? formatTime(selectedMatch.matchTime) : `match ${selectedMatch.matchId}` }}</small>
-          </div>
-          <button type="button" class="icon-button focus-ring" aria-label="取消选择比赛" @click="clearMatch">
-            <X :size="15" />
-          </button>
-        </section>
-
         <section class="question-section">
           <div class="question-head">
             <Activity :size="17" />
@@ -518,6 +809,20 @@ onMounted(() => {
             >
               {{ selectedMatch ? '更换比赛' : '选择比赛' }}
             </button>
+          </div>
+
+          <div v-if="selectedMatch && needsMatch" class="selected-match-card">
+            <div>
+              <span>当前分析比赛</span>
+              <b>{{ selectedMatch.homeTeam }} <i>vs</i> {{ selectedMatch.awayTeam }}</b>
+              <small>{{ selectedMatch.leagueName || '赛事' }} · {{ selectedMatch.matchTime ? formatTime(selectedMatch.matchTime) : `比赛 ${selectedMatch.matchId}` }}</small>
+            </div>
+            <div class="selected-match-actions">
+              <button type="button" class="match-toggle focus-ring" @click="selectorOpen = true">更换</button>
+              <button type="button" class="icon-button compact focus-ring" aria-label="取消选择比赛" @click="clearMatch">
+                <X :size="14" />
+              </button>
+            </div>
           </div>
 
           <div v-if="selectorOpen" class="match-selector">
@@ -589,13 +894,56 @@ onMounted(() => {
 
         <div v-if="errorMessage" class="error-band">{{ errorMessage }}</div>
 
+        <section v-if="latestTurn" class="follow-up-section">
+          <div class="follow-up-head">
+            <b>继续追问</b>
+            <span>新回答会显示在最上方，方便连续阅读。</span>
+          </div>
+          <div class="suggestions">
+            <button
+              v-for="question in suggestions"
+              :key="question"
+              type="button"
+              class="suggestion focus-ring"
+              :disabled="loading"
+              @click="submitFollowUp(question)"
+            >
+              {{ question }}
+            </button>
+          </div>
+          <form class="follow-up-form" @submit.prevent="submitFollowUp()">
+            <input
+              v-model="followUp"
+              maxlength="160"
+              placeholder="围绕当前比赛继续提问"
+              :disabled="loading"
+            >
+            <button type="submit" class="icon-button primary focus-ring" aria-label="发送追问" :disabled="loading || !followUp.trim()">
+              <Send :size="16" />
+            </button>
+          </form>
+          <div class="result-actions">
+            <button type="button" class="secondary-action focus-ring" @click="saveLatest">
+              <Check v-if="saveState" :size="15" />
+              <Bookmark v-else :size="15" />
+              <span>{{ saveState || '保存最新结果' }}</span>
+            </button>
+            <button type="button" class="secondary-action focus-ring" @click="shareLatest">
+              <Check v-if="shareState" :size="15" />
+              <Share2 v-else :size="15" />
+              <span>{{ shareState || '分享最新结果' }}</span>
+            </button>
+          </div>
+        </section>
+
         <section v-if="turns.length" ref="resultAnchor" class="conversation">
           <article v-for="turn in turns" :key="turn.id" class="answer-turn">
             <header class="answer-head">
               <span><Bot :size="16" /><b>{{ turn.question }}</b></span>
-              <span>{{ turn.response.tool }}</span>
+              <span class="answer-kind">{{ turn.id === latestTurn?.id ? '最新结果 · ' : '' }}{{ turnDisplayName(turn) }}</span>
             </header>
-            <GoodSampleResult :response="turn.response" @select-match="selectMatch" />
+            <AgentResult v-if="turn.agentResponse" :response="turn.agentResponse" />
+            <GoodSampleResult v-else-if="turn.response" :response="turn.response" @select-match="analyzeMatch" />
             <section class="answer-feedback" aria-label="回答反馈">
               <div class="feedback-actions">
                 <button
@@ -664,115 +1012,83 @@ onMounted(() => {
             </section>
           </article>
         </section>
-
-        <section v-if="latestTurn" class="follow-up-section">
-          <div class="suggestions">
-            <button
-              v-for="question in suggestions"
-              :key="question"
-              type="button"
-              class="suggestion focus-ring"
-              :disabled="loading"
-              @click="submitFollowUp(question)"
-            >
-              {{ question }}
-            </button>
-          </div>
-          <form class="follow-up-form" @submit.prevent="submitFollowUp()">
-            <input
-              v-model="followUp"
-              maxlength="160"
-              placeholder="围绕当前比赛继续提问"
-              :disabled="loading"
-            >
-            <button type="submit" class="icon-button primary focus-ring" aria-label="发送追问" :disabled="loading || !followUp.trim()">
-              <Send :size="16" />
-            </button>
-          </form>
-          <div class="result-actions">
-            <button type="button" class="secondary-action focus-ring" @click="saveLatest">
-              <Check v-if="saveState" :size="15" />
-              <Bookmark v-else :size="15" />
-              <span>{{ saveState || '保存' }}</span>
-            </button>
-            <button type="button" class="secondary-action focus-ring" @click="shareLatest">
-              <Check v-if="shareState" :size="15" />
-              <Share2 v-else :size="15" />
-              <span>{{ shareState || '分享' }}</span>
-            </button>
-          </div>
-        </section>
       </main>
     </div>
   </section>
 </template>
 
 <style scoped>
-.ai-page { display: grid; gap: 12px; padding: 12px 12px 24px; }
+.ai-page { display: grid; gap: 14px; padding: 12px 12px 24px; font-size: 16px; }
 .ai-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; }
 .bot-mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 6px; background: var(--brand); color: #fff; }
-.ai-head h1 { margin: 0; color: var(--ink); font-size: 1.05rem; letter-spacing: 0; }
-.ai-head p { margin: 2px 0 0; color: var(--muted); font-size: .72rem; }
+.ai-head h1 { margin: 0; color: var(--ink); font-size: 1.18rem; letter-spacing: 0; }
+.ai-head p { margin: 2px 0 0; color: var(--muted); font-size: .86rem; }
 .workspace, .side-panel, .query-panel, .question-section, .conversation, .follow-up-section { display: grid; gap: 10px; }
 .preset-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
-.preset-button { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 6px; align-items: center; min-height: 42px; padding: 8px 10px; border: 0; border-right: 1px solid var(--divider); border-bottom: 1px solid var(--divider); background: transparent; color: var(--muted); font-size: .74rem; text-align: left; }
+.preset-button { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 7px; align-items: center; min-height: 46px; padding: 9px 11px; border: 0; border-right: 1px solid var(--divider); border-bottom: 1px solid var(--divider); background: transparent; color: var(--muted); font-size: .88rem; text-align: left; }
 .preset-button:nth-child(2n) { border-right: 0; }
 .preset-button.active { background: var(--brand); color: #fff; font-weight: 780; }
 .query-panel { align-content: start; }
-.question-section, .answer-turn, .follow-up-section, .saved-panel { padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-.selected-match { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-left: 3px solid var(--brand); background: var(--canvas); }
-.selected-match > div { display: grid; gap: 3px; }
-.selected-match span, .selected-match small { color: var(--muted); font-size: .65rem; }
-.selected-match b { font-size: .82rem; }
-.selected-match i { color: var(--muted); font-size: .62rem; font-style: normal; }
-.question-head { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: .88rem; }
-.match-toggle { margin-left: auto; padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--brand); font-size: .65rem; }
+.question-section, .answer-turn, .follow-up-section, .saved-panel { padding: 13px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.selected-match-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line)); border-left: 3px solid var(--brand); border-radius: 5px; background: color-mix(in srgb, var(--brand) 7%, var(--panel)); }
+.selected-match-card > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.selected-match-card span, .selected-match-card small { color: var(--muted); font-size: .78rem; }
+.selected-match-card b { overflow-wrap: anywhere; font-size: .98rem; }
+.selected-match-card i { color: var(--muted); font-size: .78rem; font-style: normal; }
+.selected-match-actions { display: flex; align-items: center; gap: 6px; }
+.question-head { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 1rem; }
+.match-toggle { margin-left: auto; padding: 5px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--brand); font-size: .8rem; }
 .match-selector { display: grid; gap: 8px; padding: 9px; border: 1px solid var(--divider); background: var(--canvas); }
 .selector-tools { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 7px; }
-.selector-tools input, .fields input, .fields select, .follow-up-form input { width: 100%; min-height: 36px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); }
+.selector-tools input, .fields input, .fields select, .follow-up-form input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font-size: .94rem; }
 .selector-list { display: grid; max-height: 300px; overflow-y: auto; border: 1px solid var(--divider); }
-.selector-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 145px; gap: 8px; align-items: center; min-height: 38px; padding: 7px 8px; border: 0; border-bottom: 1px solid var(--divider); background: var(--panel); color: var(--ink); text-align: left; }
+.selector-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 150px; gap: 8px; align-items: center; min-height: 42px; padding: 8px 9px; border: 0; border-bottom: 1px solid var(--divider); background: var(--panel); color: var(--ink); text-align: left; }
 .selector-row:last-child { border-bottom: 0; }
-.selector-row span, .selector-row small, .selector-empty { color: var(--muted); font-size: .65rem; }
-.selector-row b { overflow-wrap: anywhere; font-size: .72rem; }
-.selector-row i { color: var(--muted); font-size: .6rem; font-style: normal; }
+.selector-row span, .selector-row small, .selector-empty { color: var(--muted); font-size: .78rem; }
+.selector-row b { overflow-wrap: anywhere; font-size: .88rem; }
+.selector-row i { color: var(--muted); font-size: .76rem; font-style: normal; }
 .selector-empty { padding: 12px; text-align: center; }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.fields label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .7rem; font-weight: 720; }
-.run-button { display: inline-flex; width: fit-content; min-height: 36px; align-items: center; justify-content: center; gap: 6px; padding: 7px 13px; border: 0; border-radius: 5px; background: var(--brand); color: #fff; font-size: .78rem; font-weight: 780; }
+.fields label { display: grid; gap: 5px; min-width: 0; color: var(--muted); font-size: .82rem; font-weight: 720; }
+.run-button { display: inline-flex; width: fit-content; min-height: 40px; align-items: center; justify-content: center; gap: 7px; padding: 8px 15px; border: 0; border-radius: 5px; background: var(--brand); color: #fff; font-size: .92rem; font-weight: 780; }
 .run-button:disabled, button:disabled { opacity: .6; }
-.error-band { padding: 9px 10px; border: 1px solid #f4b5af; border-radius: 5px; background: #fff2f0; color: #9f1c13; font-size: .77rem; }
+.error-band { padding: 9px 10px; border: 1px solid #f4b5af; border-radius: 5px; background: #fff2f0; color: #9f1c13; font-size: .9rem; }
 .answer-turn { display: grid; gap: 11px; scroll-margin-top: 68px; }
-.answer-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--divider); color: var(--muted); font-size: .65rem; }
-.answer-head > span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: .79rem; }
+.answer-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--divider); color: var(--muted); font-size: .8rem; }
+.answer-head > span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: .96rem; }
+.answer-kind { color: var(--muted); font-size: .82rem; }
 .answer-feedback { display: grid; gap: 8px; padding-top: 2px; border-top: 1px solid var(--divider); }
 .feedback-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.feedback-button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: .66rem; }
+.feedback-button { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: .82rem; }
 .feedback-button.active { border-color: #0f766e; background: #ecfdf5; color: #0f766e; font-weight: 760; }
-.feedback-message { color: var(--muted); font-size: .64rem; }
+.feedback-message { color: var(--muted); font-size: .78rem; }
 .feedback-message.sent { color: #047857; }
 .feedback-message.failed { color: #b42318; }
 .feedback-panel { display: grid; gap: 7px; padding: 8px; border: 1px solid var(--divider); border-radius: 5px; background: var(--canvas); }
 .feedback-tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.feedback-tag { min-height: 27px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: .64rem; }
+.feedback-tag { min-height: 30px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: .78rem; }
 .feedback-tag.active { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; font-weight: 760; }
-.feedback-panel textarea { width: 100%; resize: vertical; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font: inherit; font-size: .72rem; }
+.feedback-panel textarea { width: 100%; resize: vertical; padding: 8px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font: inherit; font-size: .88rem; }
 .feedback-submit-row { display: flex; justify-content: flex-end; }
-.feedback-submit { min-height: 30px; padding: 5px 10px; border: 0; border-radius: 4px; background: var(--brand); color: #fff; font-size: .67rem; font-weight: 780; }
+.feedback-submit { min-height: 34px; padding: 6px 12px; border: 0; border-radius: 4px; background: var(--brand); color: #fff; font-size: .82rem; font-weight: 780; }
 .suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
-.suggestion { padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--ink); font-size: .67rem; }
-.follow-up-form { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 7px; }
+.follow-up-section { position: sticky; top: 64px; z-index: 3; }
+.follow-up-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--ink); font-size: .9rem; }
+.follow-up-head span { color: var(--muted); font-size: .78rem; }
+.suggestion { padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--ink); font-size: .84rem; }
+.follow-up-form { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 7px; }
 .result-actions { display: flex; gap: 7px; }
-.secondary-action { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font-size: .69rem; }
-.icon-button { display: inline-grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); }
+.secondary-action { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font-size: .84rem; }
+.icon-button { display: inline-grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); }
+.icon-button.compact { width: 28px; height: 28px; }
 .icon-button.primary { border-color: var(--brand); background: var(--brand); color: #fff; }
 .saved-panel { align-content: start; }
-.saved-panel > header { display: flex; align-items: center; gap: 5px; font-size: .72rem; }
+.saved-panel > header { display: flex; align-items: center; gap: 5px; font-size: .86rem; }
 .saved-list { display: grid; gap: 1px; background: var(--divider); }
 .saved-row { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; background: var(--panel); }
 .saved-open { display: grid; gap: 2px; padding: 7px; border: 0; background: transparent; color: var(--ink); text-align: left; }
-.saved-open b { overflow: hidden; font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
-.saved-open span { color: var(--muted); font-size: .58rem; }
+.saved-open b { overflow: hidden; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+.saved-open span { color: var(--muted); font-size: .7rem; }
 .saved-delete { display: grid; width: 28px; height: 28px; place-items: center; border: 0; background: transparent; color: #b42318; }
 @media (min-width: 800px) {
   .ai-page { width: min(1180px, 100%); margin: 0 auto; padding: 18px 20px 30px; }
@@ -786,5 +1102,6 @@ onMounted(() => {
   .fields, .selector-tools { grid-template-columns: 1fr; }
   .selector-row { grid-template-columns: 65px minmax(0, 1fr); }
   .selector-row small { grid-column: 1 / 3; }
+  .follow-up-section { position: static; }
 }
 </style>
