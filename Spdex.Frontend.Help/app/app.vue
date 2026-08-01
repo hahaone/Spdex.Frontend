@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bot, ExternalLink, Home, LifeBuoy, Menu, Server, X } from '@lucide/vue'
+import { BookOpen, Bot, ExternalLink, Home, LifeBuoy, Menu, Server, X } from '@lucide/vue'
 
 const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
@@ -7,9 +7,10 @@ const navOpen = ref(false)
 
 const navItems = [
   { label: '首页', to: '/', icon: Home },
-  { label: 'AI 帮助', to: '/ai', icon: Bot },
+  { label: '文档库', to: '/docs', icon: BookOpen },
+  { label: 'AI 专区', to: '/ai', icon: Bot },
   { label: 'MCP 接入', to: '/ai/mcp-quickstart', icon: Server },
-  { label: '客服反馈', to: '/ai/safe-usage', icon: LifeBuoy },
+  { label: '安全反馈', to: '/ai/safe-usage', icon: LifeBuoy },
 ]
 
 watch(() => route.fullPath, () => {
@@ -71,8 +72,8 @@ function isActive(to: string) {
 
     <footer class="site-footer">
       <div class="page-shell footer-inner">
-        <span>SPdex 帮助中心 · AI 试点文档</span>
-        <span>公开域名上线前，内容以试点说明为准。</span>
+        <span>SPdex 帮助中心</span>
+        <span>指数、模型和 AI 结果仅作市场观察，不构成投注建议。</span>
       </div>
     </footer>
   </div>

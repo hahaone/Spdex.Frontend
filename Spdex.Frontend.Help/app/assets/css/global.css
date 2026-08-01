@@ -15,6 +15,7 @@
   --accent-strong: #0a5d57;
   --amber: #b45309;
   --plum: #665a7a;
+  --blue: #2563eb;
   --danger: #b42318;
   --success: #15803d;
   --w-page: 1180px;
@@ -84,33 +85,6 @@ img {
 .page-section {
   padding: 28px 0;
   border-top: 1px solid var(--line);
-}
-
-.status-pill {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f8fafc;
-  color: var(--muted);
-  font-size: .74rem;
-  font-weight: 740;
-  white-space: nowrap;
-}
-
-.status-pill.live {
-  border-color: #bfe3dd;
-  background: #e8f7f4;
-  color: var(--accent-strong);
-}
-
-.status-pill.trial {
-  border-color: #f5d7a6;
-  background: #fff7ed;
-  color: var(--amber);
 }
 
 @media (max-width: 720px) {

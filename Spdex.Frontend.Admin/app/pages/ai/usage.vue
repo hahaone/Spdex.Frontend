@@ -102,6 +102,34 @@
         />
       </NTabPane>
 
+      <NTabPane v-if="can(P.aiAuditView)" name="feedback" tab="回答验收">
+        <NAlert class="mb-4" type="info" title="回答反馈闭环">
+          面向测试与灰度阶段的回答级反馈队列，可按 trace 回查原始调用，并把问题标注到口径校准、展示文案或代码修复。
+        </NAlert>
+        <NSpace class="mb-3" align="center">
+          <NSelect v-model:value="feedbackFilters.status" :options="feedbackStatusOptions" style="width:170px" />
+          <NSelect v-model:value="feedbackFilters.feedbackType" :options="feedbackTypeOptions" style="width:150px" />
+          <NSelect v-model:value="feedbackFilters.tool" :options="toolFilterOptions" style="width:210px" />
+          <NInput v-model:value="feedbackFilters.traceId" clearable placeholder="trace ID" style="width:260px" />
+          <NInputNumber v-model:value="feedbackFilters.limit" :min="1" :max="200" style="width:120px" />
+          <NButton type="primary" :loading="feedbackLoading" @click="loadFeedback">查询</NButton>
+        </NSpace>
+        <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="反馈数" :value="feedback?.count ?? 0" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="待处理" :value="feedbackTotals.open" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="需校准" :value="feedbackTotals.calibration" /></NCard></NGi>
+          <NGi span="4 700:1"><NCard size="small"><NStatistic label="正向反馈" :value="feedbackTotals.helpful" /></NCard></NGi>
+        </NGrid>
+        <NDataTable
+          :columns="feedbackColumns"
+          :data="feedback?.items ?? []"
+          :loading="feedbackLoading"
+          :pagination="{ pageSize: 20 }"
+          :row-key="(row: AiAnswerFeedbackRow) => row.feedbackId"
+          :scroll-x="1680"
+        />
+      </NTabPane>
+
       <NTabPane v-if="can(P.aiAuditView)" name="workflow" tab="Workflow 观察">
         <NAlert class="mb-4" type="info" title="H7 workflow trace">
           当前样本中包含 {{ workflowAuditRows.length }} 条 workflow 调用，可从最近 trace 进入完整调用记录。
@@ -187,13 +215,77 @@
         </NSpace>
       </NTabPane>
     </NTabs>
+
+    <NDrawer v-model:show="traceDrawerVisible" :width="900" placement="right">
+      <NDrawerContent closable :title="traceDrawerTitle">
+        <NSpace class="mb-3" align="center">
+          <NInput
+            v-model:value="traceId"
+            clearable
+            placeholder="完整 trace ID"
+            style="width:min(520px, 70vw)"
+            @keyup.enter="loadTrace"
+          />
+          <NButton type="primary" :loading="traceLoading" @click="loadTrace">查询</NButton>
+        </NSpace>
+        <NEmpty v-if="!trace && !traceLoading" description="输入 trace ID 查询完整调用记录" />
+        <NDataTable
+          v-else
+          :columns="auditColumns"
+          :data="trace?.items ?? []"
+          :loading="traceLoading"
+          :row-key="(row: AiAuditRow) => `${row.traceId}:${row.createdAtUtc}`"
+          :scroll-x="1450"
+        />
+      </NDrawerContent>
+    </NDrawer>
+
+    <NModal
+      v-model:show="feedbackReviewVisible"
+      preset="card"
+      :title="feedbackReviewTitle"
+      style="width:min(560px, calc(100vw - 32px))"
+    >
+      <NSpace v-if="feedbackReviewTarget" vertical size="large">
+        <NDescriptions :column="1" size="small" bordered>
+          <NDescriptionsItem label="回答">{{ feedbackReviewTarget.answerId }}</NDescriptionsItem>
+          <NDescriptionsItem label="工具">{{ feedbackReviewTarget.toolName || '—' }}</NDescriptionsItem>
+          <NDescriptionsItem label="Trace">{{ feedbackReviewTarget.traceId || '—' }}</NDescriptionsItem>
+        </NDescriptions>
+        <NForm label-placement="top">
+          <NFormItem label="处理状态">
+            <NSelect v-model:value="feedbackReviewForm.status" :options="feedbackReviewStatusOptions" />
+          </NFormItem>
+          <NFormItem label="严重度">
+            <NSelect v-model:value="feedbackReviewForm.severity" :options="severityOptions" />
+          </NFormItem>
+          <NFormItem label="处理备注">
+            <NInput
+              v-model:value="feedbackReviewForm.reviewReason"
+              type="textarea"
+              :autosize="{ minRows: 3, maxRows: 6 }"
+              placeholder="记录判断依据、下一步处理口径或复核结果"
+            />
+          </NFormItem>
+        </NForm>
+      </NSpace>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton :disabled="feedbackReviewSubmitting" @click="feedbackReviewVisible = false">取消</NButton>
+          <NButton type="primary" :loading="feedbackReviewSubmitting" @click="submitFeedbackReview">提交</NButton>
+        </NSpace>
+      </template>
+    </NModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { h } from 'vue'
-import { NButton, NTag, useMessage } from 'naive-ui'
+import { NButton, NTag, NTooltip, useMessage } from 'naive-ui'
 import type {
+  AiAnswerFeedbackResult,
+  AiAnswerFeedbackRow,
+  AiAnswerFeedbackUpdateResult,
   AiAuditResult,
   AiAuditRow,
   AiInAppNotificationResult,
@@ -245,11 +337,22 @@ const usage = ref<AiUsageResult | null>(null)
 const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
 const notifications = ref<AiInAppNotificationResult | null>(null)
+const feedback = ref<AiAnswerFeedbackResult | null>(null)
 const usageLoading = ref(false)
 const auditLoading = ref(false)
 const traceLoading = ref(false)
 const notificationsLoading = ref(false)
+const feedbackLoading = ref(false)
+const traceDrawerVisible = ref(false)
+const feedbackReviewVisible = ref(false)
+const feedbackReviewSubmitting = ref(false)
+const feedbackReviewTarget = ref<AiAnswerFeedbackRow | null>(null)
 const traceId = ref('')
+const feedbackReviewForm = reactive({
+  status: 'reviewing',
+  severity: 'medium',
+  reviewReason: '',
+})
 
 const usageFilters = reactive({
   tool: '',
@@ -274,6 +377,19 @@ const notificationFilters = reactive<{
   unreadOnly: '',
   limit: 50,
 })
+const feedbackFilters = reactive<{
+  status: string
+  feedbackType: string
+  tool: string
+  traceId: string
+  limit: number
+}>({
+  status: 'new',
+  feedbackType: '',
+  tool: '',
+  traceId: '',
+  limit: 100,
+})
 
 const toolFilterOptions = [{ label: '全部工具', value: '' }, ...aiToolOptions]
 const subjectTypeOptions = [
@@ -291,6 +407,31 @@ const successOptions = [
 const unreadOptions = [
   { label: '全部状态', value: '' },
   { label: '未读', value: 'true' },
+]
+const feedbackStatusOptions = [
+  { label: '待处理', value: 'new' },
+  { label: '全部状态', value: '' },
+  { label: '已分诊', value: 'triaged' },
+  { label: '处理中', value: 'reviewing' },
+  { label: '需口径校准', value: 'needs_calibration' },
+  { label: '需代码修复', value: 'needs_code_fix' },
+  { label: '需文案调整', value: 'needs_copy_fix' },
+  { label: '已验证', value: 'verified' },
+  { label: '已关闭', value: 'closed' },
+]
+const feedbackReviewStatusOptions = feedbackStatusOptions.filter(option => option.value)
+const feedbackTypeOptions = [
+  { label: '全部类型', value: '' },
+  { label: '有帮助', value: 'helpful' },
+  { label: '有问题', value: 'issue' },
+  { label: '看不懂', value: 'unclear' },
+]
+const severityOptions = [
+  { label: '无', value: 'none' },
+  { label: '低', value: 'low' },
+  { label: '中', value: 'medium' },
+  { label: '高', value: 'high' },
+  { label: '严重', value: 'critical' },
 ]
 const workflowToolOrder = [
   'plan_agent_analysis',
@@ -425,6 +566,47 @@ const notificationSubjectCount = computed(() => new Set(
   (notifications.value?.items ?? []).map(row => `${row.owner.subjectType}:${row.owner.subjectId}`),
 ).size)
 const latestNotification = computed(() => notifications.value?.items.at(0) ?? null)
+const feedbackTotals = computed(() => {
+  const rows = feedback.value?.items ?? []
+  const openStatuses = new Set(['new', 'triaged', 'reviewing', 'needs_calibration', 'needs_code_fix', 'needs_copy_fix'])
+  return {
+    open: rows.filter(row => openStatuses.has(row.status)).length,
+    calibration: rows.filter(row => row.status === 'needs_calibration').length,
+    helpful: rows.filter(row => row.feedbackType === 'helpful').length,
+  }
+})
+const traceDrawerTitle = computed(() => traceId.value ? `Trace ${shortTraceId(traceId.value)}` : 'Trace 回查')
+const feedbackReviewTitle = computed(() => {
+  const status = feedbackStatusLabel(feedbackReviewForm.status)
+  return feedbackReviewTarget.value ? `回答验收：${status}` : '回答验收'
+})
+
+function shortTraceId(value: string) {
+  return value.length > 28 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value
+}
+
+function renderTraceButton(value?: string | null) {
+  const trace = value?.trim()
+  if (!trace) return '—'
+  return h(
+    NTooltip,
+    { trigger: 'hover', placement: 'top' },
+    {
+      trigger: () => h(
+        NButton,
+        {
+          text: true,
+          type: 'primary',
+          class: 'trace-id-link',
+          title: trace,
+          onClick: () => openTraceDrawer(trace),
+        },
+        { default: () => shortTraceId(trace) },
+      ),
+      default: () => trace,
+    },
+  )
+}
 
 const usageColumns = [
   { title: 'UTC 日期', key: 'dateUtc', width: 120 },
@@ -475,18 +657,8 @@ const auditColumns = [
   {
     title: 'Trace ID',
     key: 'traceId',
-    width: 280,
-    render: (row: AiAuditRow) => h(
-      NButton,
-      {
-        text: true,
-        type: 'primary',
-        onClick: () => {
-          openTrace(row.traceId)
-        },
-      },
-      { default: () => row.traceId },
-    ),
+    width: 190,
+    render: (row: AiAuditRow) => renderTraceButton(row.traceId),
   },
 ]
 const qualityColumns = [
@@ -555,16 +727,8 @@ const workflowColumns = [
   {
     title: '最近 Trace',
     key: 'lastTraceId',
-    width: 280,
-    render: (row: WorkflowQualityRow) => h(
-      NButton,
-      {
-        text: true,
-        type: 'primary',
-        onClick: () => openTrace(row.lastTraceId),
-      },
-      { default: () => row.lastTraceId },
-    ),
+    width: 190,
+    render: (row: WorkflowQualityRow) => renderTraceButton(row.lastTraceId),
   },
 ]
 const notificationColumns = [
@@ -615,6 +779,85 @@ const notificationColumns = [
     render: (row: AiInAppNotificationRow) => fmt(row.payloadRef?.matchedAt),
   },
   { title: '写入时间', key: 'createdAt', width: 170, render: (row: AiInAppNotificationRow) => fmt(row.createdAt) },
+]
+const feedbackColumns = [
+  {
+    title: '类型',
+    key: 'feedbackType',
+    width: 100,
+    render: (row: AiAnswerFeedbackRow) => h(
+      NTag,
+      { type: feedbackTypeTag(row.feedbackType), size: 'small' },
+      { default: () => feedbackTypeLabel(row.feedbackType) },
+    ),
+  },
+  {
+    title: '状态',
+    key: 'status',
+    width: 135,
+    render: (row: AiAnswerFeedbackRow) => h(
+      NTag,
+      { type: feedbackStatusTag(row.status), size: 'small' },
+      { default: () => feedbackStatusLabel(row.status) },
+    ),
+  },
+  {
+    title: '回答',
+    key: 'answerId',
+    width: 270,
+    render: (row: AiAnswerFeedbackRow) => h('div', [
+      h('div', row.answerId),
+      h('div', { class: 'text-xs text-gray-400' }, row.questionText || '—'),
+    ]),
+  },
+  {
+    title: '工具',
+    key: 'toolName',
+    width: 220,
+    render: (row: AiAnswerFeedbackRow) => h('div', [
+      h('div', row.toolName || '—'),
+      h('div', { class: 'text-xs text-gray-400' }, [row.preset, row.renderMode].filter(Boolean).join(' / ') || '—'),
+    ]),
+  },
+  {
+    title: '问题标签',
+    key: 'issueTags',
+    width: 260,
+    render: (row: AiAnswerFeedbackRow) => row.issueTags.length
+      ? row.issueTags.map(feedbackIssueLabel).join('、')
+      : '—',
+  },
+  {
+    title: '说明',
+    key: 'commentText',
+    width: 300,
+    render: (row: AiAnswerFeedbackRow) => row.commentText || '—',
+  },
+  {
+    title: '主体',
+    key: 'subjectId',
+    width: 190,
+    render: (row: AiAnswerFeedbackRow) => `${row.subjectType}:${row.subjectId}`,
+  },
+  { title: '比赛', key: 'matchId', width: 110, render: (row: AiAnswerFeedbackRow) => row.matchId ? `match:${row.matchId}` : '—' },
+  { title: '严重度', key: 'severity', width: 100, render: (row: AiAnswerFeedbackRow) => severityLabel(row.severity) },
+  { title: '提交时间', key: 'createdAtUtc', width: 170, render: (row: AiAnswerFeedbackRow) => fmt(row.createdAtUtc) },
+  {
+    title: '处理',
+    key: 'actions',
+    width: 360,
+    fixed: 'right' as const,
+    render: (row: AiAnswerFeedbackRow) => can(P.aiOpsManage)
+      ? h('div', { class: 'flex flex-wrap gap-1' }, [
+          feedbackTraceButton(row),
+          feedbackActionButton(row, 'needs_calibration', '校准'),
+          feedbackActionButton(row, 'needs_copy_fix', '文案'),
+          feedbackActionButton(row, 'needs_code_fix', '代码'),
+          feedbackActionButton(row, 'verified', '验证'),
+          feedbackActionButton(row, 'closed', '关闭'),
+        ])
+      : '—',
+  },
 ]
 
 async function loadUsage() {
@@ -672,9 +915,56 @@ async function loadInAppNotifications() {
   else message.error(result.message || '站内通知查询失败')
 }
 
-function openTrace(value: string) {
+async function loadFeedback() {
+  feedbackLoading.value = true
+  const result = await api.get<AiAnswerFeedbackResult>('ai/feedback/recent', {
+    status: feedbackFilters.status || undefined,
+    feedbackType: feedbackFilters.feedbackType || undefined,
+    tool: feedbackFilters.tool || undefined,
+    traceId: feedbackFilters.traceId.trim() || undefined,
+    limit: feedbackFilters.limit,
+  })
+  feedbackLoading.value = false
+  if (result.code === 0) feedback.value = result.data
+  else message.error(result.message || '回答反馈查询失败')
+}
+
+async function submitFeedbackReview() {
+  const target = feedbackReviewTarget.value
+  if (!target) return
+  if (!feedbackReviewForm.status) {
+    message.warning('请选择处理状态')
+    return
+  }
+
+  feedbackReviewSubmitting.value = true
+  const result = await api.put<AiAnswerFeedbackUpdateResult>(`ai/feedback/${encodeURIComponent(target.feedbackId)}`, {
+    status: feedbackReviewForm.status,
+    severity: feedbackReviewForm.severity,
+    reviewReason: feedbackReviewForm.reviewReason.trim() || undefined,
+  })
+  feedbackReviewSubmitting.value = false
+  if (result.code !== 0 || !result.data?.feedback) {
+    message.error(result.message || '反馈状态更新失败')
+    return
+  }
+
+  feedbackReviewVisible.value = false
+  message.success('反馈状态已更新')
+  await loadFeedback()
+}
+
+function openFeedbackReview(row: AiAnswerFeedbackRow, status: string) {
+  feedbackReviewTarget.value = row
+  feedbackReviewForm.status = status
+  feedbackReviewForm.severity = row.severity && row.severity !== 'none' ? row.severity : inferReviewSeverity(status)
+  feedbackReviewForm.reviewReason = `后台标记为${feedbackStatusLabel(status)}`
+  feedbackReviewVisible.value = true
+}
+
+function openTraceDrawer(value: string) {
   traceId.value = value
-  activeTab.value = 'trace'
+  traceDrawerVisible.value = true
   loadTrace()
 }
 
@@ -744,12 +1034,108 @@ function formatNotificationSubject(row: AiInAppNotificationRow) {
   if (typeof date === 'string' && date) return `date:${date}`
   return '—'
 }
+function feedbackTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    helpful: '有帮助',
+    issue: '有问题',
+    unclear: '看不懂',
+  }
+  return labels[value] ?? value
+}
+function feedbackTypeTag(value: string) {
+  if (value === 'helpful') return 'success'
+  if (value === 'issue') return 'error'
+  return 'warning'
+}
+function feedbackStatusLabel(value: string) {
+  const labels: Record<string, string> = {
+    new: '待处理',
+    triaged: '已分诊',
+    reviewing: '处理中',
+    needs_calibration: '需口径校准',
+    needs_code_fix: '需代码修复',
+    needs_copy_fix: '需文案调整',
+    verified: '已验证',
+    closed: '已关闭',
+  }
+  return labels[value] ?? value
+}
+function feedbackStatusTag(value: string) {
+  if (value === 'verified' || value === 'closed') return 'success'
+  if (value.startsWith('needs_')) return 'warning'
+  if (value === 'new') return 'error'
+  return 'info'
+}
+function feedbackIssueLabel(value: string) {
+  const labels: Record<string, string> = {
+    wrong_data: '数据不准确',
+    missing_critical_context: '缺少关键背景',
+    ranking_issue: '排序不合理',
+    threshold_issue: '阈值需校准',
+    field_name_issue: '字段不清楚',
+    prediction_market_gap: '背离解释不足',
+    unclear_wording: '表达看不懂',
+  }
+  return labels[value] ?? value
+}
+function severityLabel(value: string) {
+  const labels: Record<string, string> = {
+    none: '无',
+    low: '低',
+    medium: '中',
+    high: '高',
+    critical: '严重',
+  }
+  return labels[value] ?? value
+}
+function inferReviewSeverity(status: string) {
+  if (status === 'needs_code_fix' || status === 'needs_calibration') return 'medium'
+  if (status === 'needs_copy_fix') return 'low'
+  return 'none'
+}
+function feedbackTraceButton(row: AiAnswerFeedbackRow) {
+  return h(
+    NButton,
+    {
+      size: 'tiny',
+      tertiary: true,
+      type: 'primary',
+      disabled: !row.traceId,
+      onClick: () => openTraceDrawer(row.traceId),
+    },
+    { default: () => '回查' },
+  )
+}
+function feedbackActionButton(row: AiAnswerFeedbackRow, status: string, label: string) {
+  return h(
+    NButton,
+    {
+      size: 'tiny',
+      tertiary: true,
+      disabled: row.status === status,
+      onClick: () => openFeedbackReview(row, status),
+    },
+    { default: () => label },
+  )
+}
 
 onMounted(() => {
   if (can(P.aiUsageView)) loadUsage()
   if (can(P.aiAuditView)) {
     loadAudit()
     loadInAppNotifications()
+    loadFeedback()
   }
 })
 </script>
+
+<style scoped>
+.trace-id-link {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  vertical-align: middle;
+}
+</style>

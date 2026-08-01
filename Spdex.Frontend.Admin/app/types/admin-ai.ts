@@ -185,6 +185,46 @@ export interface AiInAppNotificationResult {
   items: AiInAppNotificationRow[]
 }
 
+export interface AiAnswerFeedbackRow {
+  feedbackId: string
+  answerId: string
+  traceId: string
+  feedbackType: 'helpful' | 'issue' | 'unclear'
+  issueTags: string[]
+  commentText: string | null
+  toolName: string | null
+  preset: string | null
+  matchId: number | null
+  questionText: string | null
+  clientType: string | null
+  pageUrl: string | null
+  renderMode: string | null
+  subjectType: string
+  subjectId: string
+  userId: string | null
+  aiClientId: string | null
+  principalSource: string | null
+  status: string
+  severity: string
+  reviewReason: string | null
+  reviewerId: string | null
+  reviewedAtUtc: string | null
+  createdAtUtc: string
+  updatedAtUtc: string
+}
+
+export interface AiAnswerFeedbackResult {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiAnswerFeedbackRow[]
+}
+
+export interface AiAnswerFeedbackUpdateResult {
+  generatedAtUtc: string
+  feedback: AiAnswerFeedbackRow
+}
+
 export const aiToolOptions = [
   'search_matches',
   'get_match_snapshot',

@@ -27,6 +27,20 @@ export interface GoodSampleMatchChoice {
   matchTime: string
 }
 
+export type AiAnswerFeedbackType = 'helpful' | 'issue' | 'unclear'
+
+export interface AiAnswerFeedbackResponse {
+  generatedAtUtc: string
+  feedback: {
+    feedbackId: string
+    answerId: string
+    traceId: string
+    feedbackType: AiAnswerFeedbackType
+    status: string
+    severity: string
+  }
+}
+
 export interface SavedGoodSample {
   id: string
   title: string

@@ -14,15 +14,35 @@ import {
   Trash2,
   X,
 } from '@lucide/vue'
-import type { GoodSampleMatchChoice, GoodSampleResponse, SavedGoodSample } from '~/types/good-sample'
+import type {
+  AiAnswerFeedbackResponse,
+  AiAnswerFeedbackType,
+  GoodSampleMatchChoice,
+  GoodSampleResponse,
+  SavedGoodSample,
+} from '~/types/good-sample'
 import type { MatchSummary } from '~/types/match'
 
 type Preset = 'today_hot' | 'search' | 'snapshot' | 'trend' | 'anomaly' | 'metric'
+type FeedbackSendState = 'idle' | 'sending' | 'sent' | 'failed'
+
+interface TurnFeedbackState {
+  selected: AiAnswerFeedbackType | ''
+  sendState: FeedbackSendState
+  panelOpen: boolean
+  issueTags: string[]
+  commentText: string
+  message: string
+}
 
 interface AnalysisTurn {
   id: string
+  answerId: string
   question: string
+  preset: Preset
+  match: GoodSampleMatchChoice | null
   response: GoodSampleResponse
+  feedback: TurnFeedbackState
 }
 
 const storageKey = 'spdex.good-sample.saved.v1'
@@ -35,6 +55,15 @@ const presets: Array<{ value: Preset, label: string, icon: typeof Bot }> = [
   { value: 'trend', label: '盘口走势', icon: ChartNoAxesCombined },
   { value: 'anomaly', label: '异常证据', icon: ShieldAlert },
   { value: 'metric', label: '指标解释', icon: CircleHelp },
+]
+const feedbackIssueOptions = [
+  { value: 'wrong_data', label: '数据不准确' },
+  { value: 'missing_critical_context', label: '缺少关键背景' },
+  { value: 'ranking_issue', label: '排序不合理' },
+  { value: 'threshold_issue', label: '阈值需校准' },
+  { value: 'field_name_issue', label: '字段不清楚' },
+  { value: 'prediction_market_gap', label: '背离解释不足' },
+  { value: 'unclear_wording', label: '表达看不懂' },
 ]
 
 const routePreset = String(route.query.preset || '')
@@ -131,6 +160,9 @@ async function execute(preset: Preset | 'follow_up', question?: string) {
     return
   }
 
+  const requestMatch = selectedMatch.value ? { ...selectedMatch.value } : null
+  const requestPreset = preset === 'follow_up' ? selected.value : preset
+  const questionText = question || selectedLabel.value
   loading.value = true
   errorMessage.value = ''
   saveState.value = ''
@@ -140,7 +172,7 @@ async function execute(preset: Preset | 'follow_up', question?: string) {
       method: 'POST',
       body: {
         preset,
-        matchId: selectedMatch.value?.matchId ?? null,
+        matchId: requestMatch?.matchId ?? null,
         date: form.date,
         query: question ?? form.query,
         market: form.market,
@@ -150,8 +182,12 @@ async function execute(preset: Preset | 'follow_up', question?: string) {
     })
     turns.value.push({
       id: cryptoId(),
-      question: question || selectedLabel.value,
+      answerId: `ans_${cryptoId().replaceAll('-', '')}`,
+      question: questionText,
+      preset: requestPreset,
+      match: requestMatch,
       response,
+      feedback: createFeedbackState(),
     })
     if (turns.value.length > 8) turns.value = turns.value.slice(-8)
     await nextTick()
@@ -286,8 +322,12 @@ function restoreSaved(item: SavedGoodSample) {
   })
   turns.value.push({
     id: cryptoId(),
+    answerId: `ans_${cryptoId().replaceAll('-', '')}`,
     question: item.question || item.title,
+    preset: item.preset ?? presetForTool(item.response.tool),
+    match: item.match ? { ...item.match } : null,
     response: item.response,
+    feedback: createFeedbackState(),
   })
 }
 
@@ -303,6 +343,81 @@ function clearTurns() {
 
 function cryptoId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function createFeedbackState(): TurnFeedbackState {
+  return {
+    selected: '',
+    sendState: 'idle',
+    panelOpen: false,
+    issueTags: [],
+    commentText: '',
+    message: '',
+  }
+}
+
+function openFeedbackPanel(turn: AnalysisTurn, feedbackType: AiAnswerFeedbackType) {
+  turn.feedback.selected = feedbackType
+  turn.feedback.panelOpen = true
+  turn.feedback.message = ''
+}
+
+function toggleFeedbackTag(turn: AnalysisTurn, tag: string) {
+  const current = turn.feedback.issueTags
+  turn.feedback.issueTags = current.includes(tag)
+    ? current.filter(item => item !== tag)
+    : [...current, tag]
+}
+
+async function submitFeedback(turn: AnalysisTurn, feedbackType: AiAnswerFeedbackType) {
+  if (turn.feedback.sendState === 'sending' || turn.feedback.sendState === 'sent') return
+
+  const tags = feedbackType === 'helpful' ? [] : turn.feedback.issueTags
+  const comment = feedbackType === 'helpful' ? '' : turn.feedback.commentText.trim()
+  if (feedbackType !== 'helpful' && !tags.length && !comment) {
+    turn.feedback.selected = feedbackType
+    turn.feedback.panelOpen = true
+    turn.feedback.message = '请选择一个问题类型，或补充一句说明。'
+    return
+  }
+
+  turn.feedback.selected = feedbackType
+  turn.feedback.sendState = 'sending'
+  turn.feedback.message = ''
+  try {
+    await $apiFetch<AiAnswerFeedbackResponse>('/api/newspdex/ai/feedback', {
+      method: 'POST',
+      body: {
+        answerId: turn.answerId,
+        traceId: turn.response.traceId,
+        feedbackType,
+        issueTags: tags,
+        commentText: comment,
+        toolName: turn.response.tool,
+        preset: turn.preset,
+        matchId: turn.match?.matchId ?? null,
+        questionText: turn.question,
+        clientType: 'newspdex_ai',
+        pageUrl: route.fullPath,
+        renderMode: presetForTool(turn.response.tool),
+      },
+    })
+    turn.feedback.sendState = 'sent'
+    turn.feedback.panelOpen = feedbackType !== 'helpful'
+    turn.feedback.message = feedbackType === 'helpful'
+      ? '感谢反馈'
+      : '已提交，我们会用于后续校准。'
+  }
+  catch (error: unknown) {
+    const fetchError = error as {
+      data?: { message?: string, error?: string, error_description?: string }
+    }
+    turn.feedback.sendState = 'failed'
+    turn.feedback.message = fetchError.data?.message
+      || fetchError.data?.error_description
+      || fetchError.data?.error
+      || '反馈提交失败'
+  }
 }
 
 function presetForTool(tool: string): Preset {
@@ -481,6 +596,72 @@ onMounted(() => {
               <span>{{ turn.response.tool }}</span>
             </header>
             <GoodSampleResult :response="turn.response" @select-match="selectMatch" />
+            <section class="answer-feedback" aria-label="回答反馈">
+              <div class="feedback-actions">
+                <button
+                  type="button"
+                  :class="['feedback-button', 'focus-ring', { active: turn.feedback.selected === 'helpful' }]"
+                  :disabled="turn.feedback.sendState === 'sending' || turn.feedback.sendState === 'sent'"
+                  @click="submitFeedback(turn, 'helpful')"
+                >
+                  <Check :size="14" />
+                  <span>有帮助</span>
+                </button>
+                <button
+                  type="button"
+                  :class="['feedback-button', 'focus-ring', { active: turn.feedback.selected === 'issue' }]"
+                  :disabled="turn.feedback.sendState === 'sending' || turn.feedback.sendState === 'sent'"
+                  @click="openFeedbackPanel(turn, 'issue')"
+                >
+                  <ShieldAlert :size="14" />
+                  <span>有问题</span>
+                </button>
+                <button
+                  type="button"
+                  :class="['feedback-button', 'focus-ring', { active: turn.feedback.selected === 'unclear' }]"
+                  :disabled="turn.feedback.sendState === 'sending' || turn.feedback.sendState === 'sent'"
+                  @click="openFeedbackPanel(turn, 'unclear')"
+                >
+                  <CircleHelp :size="14" />
+                  <span>看不懂</span>
+                </button>
+                <span v-if="turn.feedback.message" :class="['feedback-message', turn.feedback.sendState]">
+                  {{ turn.feedback.message }}
+                </span>
+              </div>
+              <div v-if="turn.feedback.panelOpen" class="feedback-panel">
+                <div class="feedback-tags">
+                  <button
+                    v-for="item in feedbackIssueOptions"
+                    :key="item.value"
+                    type="button"
+                    :class="['feedback-tag', 'focus-ring', { active: turn.feedback.issueTags.includes(item.value) }]"
+                    :aria-pressed="turn.feedback.issueTags.includes(item.value)"
+                    :disabled="turn.feedback.sendState === 'sent'"
+                    @click="toggleFeedbackTag(turn, item.value)"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+                <textarea
+                  v-model="turn.feedback.commentText"
+                  maxlength="500"
+                  rows="3"
+                  :disabled="turn.feedback.sendState === 'sent'"
+                  placeholder="补充一句：哪里不准确、哪里看不懂，或你期待怎样呈现。"
+                />
+                <div class="feedback-submit-row">
+                  <button
+                    type="button"
+                    class="feedback-submit focus-ring"
+                    :disabled="turn.feedback.sendState === 'sending' || turn.feedback.sendState === 'sent'"
+                    @click="submitFeedback(turn, turn.feedback.selected || 'issue')"
+                  >
+                    {{ turn.feedback.sendState === 'sending' ? '提交中' : '提交反馈' }}
+                  </button>
+                </div>
+              </div>
+            </section>
           </article>
         </section>
 
@@ -564,6 +745,20 @@ onMounted(() => {
 .answer-turn { display: grid; gap: 11px; scroll-margin-top: 68px; }
 .answer-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--divider); color: var(--muted); font-size: .65rem; }
 .answer-head > span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: .79rem; }
+.answer-feedback { display: grid; gap: 8px; padding-top: 2px; border-top: 1px solid var(--divider); }
+.feedback-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.feedback-button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: .66rem; }
+.feedback-button.active { border-color: #0f766e; background: #ecfdf5; color: #0f766e; font-weight: 760; }
+.feedback-message { color: var(--muted); font-size: .64rem; }
+.feedback-message.sent { color: #047857; }
+.feedback-message.failed { color: #b42318; }
+.feedback-panel { display: grid; gap: 7px; padding: 8px; border: 1px solid var(--divider); border-radius: 5px; background: var(--canvas); }
+.feedback-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.feedback-tag { min-height: 27px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: .64rem; }
+.feedback-tag.active { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; font-weight: 760; }
+.feedback-panel textarea { width: 100%; resize: vertical; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font: inherit; font-size: .72rem; }
+.feedback-submit-row { display: flex; justify-content: flex-end; }
+.feedback-submit { min-height: 30px; padding: 5px 10px; border: 0; border-radius: 4px; background: var(--brand); color: #fff; font-size: .67rem; font-weight: 780; }
 .suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
 .suggestion { padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--ink); font-size: .67rem; }
 .follow-up-form { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 7px; }
