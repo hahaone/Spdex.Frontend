@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { Activity, Bell, Home, UserCircle } from '@lucide/vue'
+import { Activity, Bell, Bot, Home, UserCircle } from '@lucide/vue'
 import IconBasketball from '~/components/icons/IconBasketball.vue'
 import IconSoccer from '~/components/icons/IconSoccer.vue'
 
 const route = useRoute()
+const aiFeaturesVisible = useAiFeatureVisibility()
 
-const navItems = [
+const navItems = computed(() => [
   { label: '首页', to: '/', icon: Home },
   { label: '足球', to: '/football', icon: IconSoccer },
   { label: '篮球', to: '/basketball', icon: IconBasketball },
   { label: '实时', to: '/live', icon: Activity },
+  ...(aiFeaturesVisible.value ? [{ label: 'AI', to: '/ai', icon: Bot }] : []),
   { label: '推送', to: '/push', icon: Bell },
   { label: '会员', to: '/account', icon: UserCircle },
-]
+])
 
 function isActive(to: string): boolean {
   if (to === '/') return route.path === '/'
@@ -43,7 +45,7 @@ function isActive(to: string): boolean {
   left: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(v-bind('navItems.length'), minmax(0, 1fr));
   gap: 0;
   width: 100%;
   max-width: 520px;
