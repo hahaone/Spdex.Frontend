@@ -175,15 +175,158 @@
         />
       </NDrawerContent>
     </NDrawer>
+
+    <NDrawer v-model:show="detailDrawerVisible" :width="960" placement="right">
+      <NDrawerContent closable :title="detailDrawerTitle">
+        <NSpin :show="detailLoading">
+          <NEmpty v-if="!runDetail && !detailLoading" description="请选择一条运行记录查看详情" />
+          <div v-else-if="runDetail" class="run-detail">
+            <section class="run-detail-hero">
+              <div>
+                <NTag size="small" :type="statusTagType(runDetail.run.status)">
+                  {{ statusLabel(runDetail.run.status) }}
+                </NTag>
+                <h3>{{ runDetail.task?.name || runDetail.run.workflowId }}</h3>
+                <p>{{ runDetail.task?.description || runDetail.run.taskId }}</p>
+              </div>
+              <NSpace align="center">
+                <NButton
+                  size="small"
+                  secondary
+                  type="primary"
+                  :disabled="!runDetail.run.traceId"
+                  @click="openTraceDrawer(runDetail.run.traceId)"
+                >
+                  Trace 回查
+                </NButton>
+                <NButton
+                  size="small"
+                  secondary
+                  :disabled="!runDetail.run.traceId"
+                  @click="openFeedbackCenter(runDetail.run.traceId)"
+                >
+                  回答验收
+                </NButton>
+                <NPopconfirm
+                  :disabled="!can(P.aiOpsManage) || !runDetail.retry.eligible"
+                  @positive-click="retryAutomationRun(runDetail.run)"
+                >
+                  <template #trigger>
+                    <NButton
+                      size="small"
+                      type="warning"
+                      secondary
+                      :loading="retryingRunId === runDetail.run.runId"
+                      :disabled="!can(P.aiOpsManage) || !runDetail.retry.eligible"
+                    >
+                      重试任务
+                    </NButton>
+                  </template>
+                  重试会重新调用 AI Agent，并再次执行预算和次数门禁。
+                </NPopconfirm>
+              </NSpace>
+            </section>
+
+            <NAlert
+              class="mt-3"
+              :type="runDetail.retry.eligible ? 'warning' : 'info'"
+              :title="runDetail.retry.eligible ? '可手动重试' : '当前不建议重试'"
+            >
+              {{ runDetail.retry.reason }}
+            </NAlert>
+
+            <NGrid :cols="4" :x-gap="12" :y-gap="12" item-responsive class="mt-3">
+              <NGi span="4 720:1">
+                <NCard size="small">
+                  <NStatistic label="步骤完成" :value="`${runDetail.run.completedStepCount} / ${runDetail.run.stepCount}`" />
+                </NCard>
+              </NGi>
+              <NGi span="4 720:1">
+                <NCard size="small">
+                  <NStatistic label="用量单位" :value="runDetail.run.toolUsageUnits" />
+                </NCard>
+              </NGi>
+              <NGi span="4 720:1">
+                <NCard size="small">
+                  <NStatistic label="耗时" :value="durationLabel(runDetail.run.durationMs)" />
+                </NCard>
+              </NGi>
+              <NGi span="4 720:1">
+                <NCard size="small">
+                  <NStatistic label="触发来源" :value="triggerSourceLabel(runDetail.run.triggerSource)" />
+                </NCard>
+              </NGi>
+            </NGrid>
+
+            <NDescriptions class="mt-4" label-placement="left" :column="2" bordered size="small">
+              <NDescriptionsItem label="运行 ID">{{ runDetail.run.runId }}</NDescriptionsItem>
+              <NDescriptionsItem label="任务 ID">{{ runDetail.run.taskId }}</NDescriptionsItem>
+              <NDescriptionsItem label="主体">{{ subjectTypeLabel(runDetail.run.subjectType) }} {{ runDetail.run.subjectId }}</NDescriptionsItem>
+              <NDescriptionsItem label="流程">{{ runDetail.workflowRun?.workflowName || runDetail.run.workflowId }}</NDescriptionsItem>
+              <NDescriptionsItem label="比赛">{{ runDetail.workflowRun?.matchTitle || runDetail.task?.matchTitle || '—' }}</NDescriptionsItem>
+              <NDescriptionsItem label="开始时间">{{ fmt(runDetail.run.startedAtUtc) }}</NDescriptionsItem>
+              <NDescriptionsItem label="完成时间">{{ fmt(runDetail.run.completedAtUtc) }}</NDescriptionsItem>
+              <NDescriptionsItem label="创建时间">{{ fmt(runDetail.run.createdAtUtc) }}</NDescriptionsItem>
+            </NDescriptions>
+
+            <NAlert v-if="runDetail.run.errorMessage" class="mt-4" type="warning" title="失败或跳过原因">
+              {{ runDetail.run.errorMessage }}
+            </NAlert>
+            <NAlert v-if="runDetail.taskError" class="mt-4" type="error" title="关联任务不可用">
+              {{ runDetail.taskError.message || runDetail.taskError.code }}
+            </NAlert>
+
+            <section class="mt-5">
+              <div class="mb-2 flex items-center justify-between">
+                <h3 class="text-base font-semibold">流程步骤</h3>
+                <span class="text-xs text-gray-400">{{ runDetail.steps.length }} 个步骤</span>
+              </div>
+              <NEmpty v-if="!runDetail.steps.length" description="这条运行没有保存步骤明细。dry-run、预算门禁跳过或旧记录通常不会生成步骤。" />
+              <div v-else class="step-timeline">
+                <article v-for="step in runDetail.steps" :key="`${runDetail.run.runId}:${step.stepId}`" class="step-card">
+                  <div class="step-card-head">
+                    <div>
+                      <NTag size="small" :type="statusTagType(step.status)">
+                        {{ statusLabel(step.status) }}
+                      </NTag>
+                      <b>{{ step.title }}</b>
+                    </div>
+                    <NSpace size="small">
+                      <span>{{ step.toolUsageUnits }} 单位</span>
+                      <span>{{ durationLabel(step.durationMs) }}</span>
+                    </NSpace>
+                  </div>
+                  <p>{{ step.question || '—' }}</p>
+                  <div class="step-card-meta">
+                    <span>{{ presetLabel(step.preset) }}</span>
+                    <button
+                      v-if="step.traceId"
+                      type="button"
+                      class="step-link"
+                      @click="openTraceDrawer(step.traceId)"
+                    >
+                      {{ shortTraceId(step.traceId) }}
+                    </button>
+                    <span v-if="step.errorMessage">{{ step.errorMessage }}</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </NSpin>
+      </NDrawerContent>
+    </NDrawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { h } from 'vue'
-import { NButton, NSpace, NTag, NText, NTooltip, useMessage } from 'naive-ui'
+import { NButton, NPopconfirm, NSpace, NTag, NText, NTooltip, useMessage } from 'naive-ui'
 import type {
   AiAuditResult,
   AiAuditRow,
+  AiAgentAutomationRetryResult,
+  AiAgentAutomationRunDetailResult,
   AiAgentAutomationRunResult,
   AiAgentAutomationRunRow,
   AiAgentAutomationSummaryResult,
@@ -204,14 +347,19 @@ const tasks = ref<AiAgentAutomationTaskResult | null>(null)
 const runs = ref<AiAgentAutomationRunResult | null>(null)
 const abnormalRuns = ref<AiAgentAutomationRunRow[]>([])
 const trace = ref<AiAuditResult | null>(null)
+const runDetail = ref<AiAgentAutomationRunDetailResult | null>(null)
 const summaryLoading = ref(false)
 const tasksLoading = ref(false)
 const runsLoading = ref(false)
 const abnormalLoading = ref(false)
 const traceLoading = ref(false)
+const detailLoading = ref(false)
 const savingTaskId = ref('')
+const retryingRunId = ref('')
 const traceDrawerVisible = ref(false)
+const detailDrawerVisible = ref(false)
 const traceId = ref('')
+const detailRunId = ref('')
 
 const taskFilters = reactive({
   subjectType: '',
@@ -231,7 +379,7 @@ const runFilters = reactive({
 })
 
 const loadingAny = computed(() =>
-  summaryLoading.value || tasksLoading.value || runsLoading.value || abnormalLoading.value || traceLoading.value)
+  summaryLoading.value || tasksLoading.value || runsLoading.value || abnormalLoading.value || traceLoading.value || detailLoading.value)
 const failureLabel = computed(() => {
   const value = summary.value?.summary
   return value ? `${value.failedRunCount} / ${value.skippedRunCount}` : '—'
@@ -242,6 +390,7 @@ const summaryWindowLabel = computed(() => {
 })
 const taskNameMap = computed(() => new Map((tasks.value?.items ?? []).map(row => [row.taskId, row.name])))
 const traceDrawerTitle = computed(() => traceId.value ? `Trace ${shortTraceId(traceId.value)}` : 'Trace 回查')
+const detailDrawerTitle = computed(() => detailRunId.value ? `运行详情 ${shortTraceId(detailRunId.value)}` : '运行详情')
 
 const subjectTypeOptions = [
   { label: '全部主体', value: '' },
@@ -336,7 +485,7 @@ const abnormalColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 260,
+    width: 320,
     fixed: 'right' as const,
     render: (row: AiAgentAutomationRunRow) => renderRunActions(row),
   },
@@ -501,7 +650,7 @@ const runColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 220,
+    width: 300,
     fixed: 'right' as const,
     render: (row: AiAgentAutomationRunRow) => renderRunActions(row),
   },
@@ -645,6 +794,47 @@ function viewRunTask(row: AiAgentAutomationRunRow) {
   loadRuns()
 }
 
+async function loadRunDetail(runId: string) {
+  detailLoading.value = true
+  runDetail.value = null
+  const result = await api.get<AiAgentAutomationRunDetailResult>(`ai/agent/automation-runs/${encodeURIComponent(runId)}`)
+  detailLoading.value = false
+  if (result.code === 0) {
+    runDetail.value = result.data
+  }
+  else {
+    message.error(result.message || '运行详情加载失败')
+  }
+}
+
+function openRunDetail(row: AiAgentAutomationRunRow) {
+  detailRunId.value = row.runId
+  detailDrawerVisible.value = true
+  loadRunDetail(row.runId)
+}
+
+async function retryAutomationRun(row: AiAgentAutomationRunRow) {
+  if (!can(P.aiOpsManage) || retryingRunId.value) return
+  retryingRunId.value = row.runId
+  const result = await api.post<AiAgentAutomationRetryResult>(`ai/agent/automation-runs/${encodeURIComponent(row.runId)}/retry`)
+  retryingRunId.value = ''
+  if (result.code === 0) {
+    message.success('已发起重试并写入新的运行记录')
+    await Promise.all([loadSummary(), loadTasks(), loadRuns(), loadAbnormalRuns()])
+    const nextRunId = result.data?.execution?.automationRun?.runId
+    if (nextRunId) {
+      detailRunId.value = nextRunId
+      await loadRunDetail(nextRunId)
+    }
+    else {
+      await loadRunDetail(row.runId)
+    }
+  }
+  else {
+    message.error(result.message || '重试失败')
+  }
+}
+
 async function loadTrace() {
   const value = traceId.value.trim()
   if (!value) {
@@ -717,6 +907,7 @@ function renderTraceButton(value?: string | null) {
 function renderRunActions(row: AiAgentAutomationRunRow) {
   return h(NSpace, { size: 8 }, {
     default: () => [
+      h(NButton, { size: 'small', secondary: true, type: 'primary', onClick: () => openRunDetail(row) }, { default: () => '详情' }),
       h(NButton, { size: 'small', secondary: true, onClick: () => viewRunTask(row) }, { default: () => '看任务' }),
       h(
         NButton,
@@ -753,6 +944,27 @@ function humanizeRunReason(row: AiAgentAutomationRunRow) {
   if (row.status === 'skipped') return '本次运行被门禁或调度策略跳过。'
   if (row.status === 'partial') return '部分步骤完成，请回查 trace 确认失败步骤。'
   return '—'
+}
+
+function durationLabel(value?: number | null) {
+  if (!value) return '—'
+  return value >= 1000 ? `${(value / 1000).toFixed(1)} 秒` : `${value} ms`
+}
+
+function presetLabel(value: string) {
+  return value === 'today_hot'
+    ? '今日重点'
+    : value === 'search'
+      ? '搜索赛事'
+      : value === 'snapshot'
+        ? '单场快照'
+        : value === 'trend'
+          ? '走势分析'
+          : value === 'anomaly'
+            ? '异常证据'
+            : value === 'metric'
+              ? '指标解读'
+              : value
 }
 
 function subjectTypeLabel(value: string) {
@@ -856,5 +1068,79 @@ onMounted(loadAll)
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   vertical-align: middle;
+}
+
+.run-detail-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.run-detail-hero h3 {
+  margin: 10px 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.run-detail-hero p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.step-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.step-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.step-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.step-card-head > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-card-head b {
+  color: #111827;
+}
+
+.step-card p {
+  margin: 10px 0;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.step-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.step-link {
+  color: #2563eb;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
 }
 </style>

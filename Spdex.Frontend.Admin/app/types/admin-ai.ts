@@ -268,6 +268,73 @@ export interface AiAgentAutomationRunRow {
   createdAtUtc: string
 }
 
+export interface AiAgentWorkflowRunStepRow {
+  stepId: string
+  title: string
+  question: string
+  preset: string
+  status: string
+  toolUsageUnits: number
+  durationMs: number | null
+  traceId: string | null
+  errorMessage: string | null
+}
+
+export interface AiAgentWorkflowRunRow {
+  runId: string
+  workflowId: string
+  subjectType: string
+  subjectId: string
+  workflowName: string | null
+  triggerSource: string
+  status: string
+  stepCount: number
+  completedStepCount: number
+  toolUsageUnits: number
+  durationMs: number | null
+  traceId: string | null
+  errorMessage: string | null
+  matchId: number | null
+  matchTitle: string | null
+  stepResults: AiAgentWorkflowRunStepRow[]
+  startedAtUtc: string
+  completedAtUtc: string | null
+  createdAtUtc: string
+}
+
+export interface AiAgentAutomationRunDetailResult {
+  generatedAtUtc: string
+  run: AiAgentAutomationRunRow
+  task: AiAgentAutomationTaskRow | null
+  taskError: { code: string | null, message: string | null } | null
+  workflowRun: AiAgentWorkflowRunRow | null
+  steps: AiAgentWorkflowRunStepRow[]
+  retry: {
+    eligible: boolean
+    reason: string
+  }
+}
+
+export interface AiAgentAutomationRetryResult {
+  generatedAtUtc: string
+  retriedFromRunId: string
+  item: AiAgentAutomationTaskRow
+  execution: {
+    task: AiAgentAutomationTaskRow
+    workflow: unknown
+    automationRun: AiAgentAutomationRunRow | null
+    workflowRun: AiAgentWorkflowRunRow | null
+    preflight: unknown
+    status: string
+    stepCount: number
+    completedStepCount: number
+    toolUsageUnits: number
+    durationMs: number
+    traceId: string | null
+    errorMessage: string | null
+  }
+}
+
 export interface AiAgentAutomationOpsSummary {
   taskCount: number
   enabledTaskCount: number
