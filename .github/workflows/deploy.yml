@@ -263,6 +263,9 @@ jobs:
           build-args: |
             BUILD_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
+            NUXT_PUBLIC_HELP_BASE_URL=https://help-test.spdex.com
+            NUXT_PUBLIC_NEWSPDEX_URL=https://new.spdex.com
+            NUXT_PUBLIC_MCP_DOCS_URL=/ai/mcp-quickstart
           tags: |
             ${{ env.IMAGE_HELP }}:latest
             ${{ env.IMAGE_HELP }}:${{ github.sha }}
@@ -515,6 +518,7 @@ jobs:
               --network host \
               --restart unless-stopped \
               -e NUXT_PUBLIC_HELP_BASE_URL=https://help-test.spdex.com \
+              -e NUXT_PUBLIC_PUBLIC_BASE_URL=https://help-test.spdex.com \
               -e NUXT_PUBLIC_NEWSPDEX_URL=https://new.spdex.com \
               -e NUXT_PUBLIC_MCP_DOCS_URL=/ai/mcp-quickstart \
               -e NUXT_PORT=3006 \
