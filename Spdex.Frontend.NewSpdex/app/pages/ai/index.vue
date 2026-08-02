@@ -245,6 +245,7 @@ const selectorOpen = ref(false)
 const selectorQuery = ref('')
 const saveState = ref('')
 const shareState = ref('')
+const chatStream = ref<HTMLElement | null>(null)
 const chatEnd = ref<HTMLElement | null>(null)
 const activeRequestController = shallowRef<AbortController | null>(null)
 const elapsedSeconds = ref(0)
@@ -290,6 +291,12 @@ const contextSummary = computed(() => {
 })
 const canSubmit = computed(() => !loading.value && Boolean(followUp.value.trim()))
 const canSaveWorkflow = computed(() => !loading.value && completedTurns.value.length > 0 && !workflowSaving.value)
+const workflowDraftSteps = computed(() => buildWorkflowSteps())
+const workflowSaveHint = computed(() => {
+  const count = workflowDraftSteps.value.length
+  if (!count) return '完成一次分析后，可以把连续提问保存为可复用流程。'
+  return `将保存最近 ${count} 个已完成问题，之后可对其他比赛一键复用。`
+})
 const automationCadenceChoices = computed(() => automationCadenceOptions[automationDraft.triggerType] ?? automationCadenceOptions.scheduled)
 const selectedAutomationWorkflow = computed(() => workflowItems.value.find(item => item.workflowId === automationDraft.workflowId) ?? null)
 const canSaveAutomationTask = computed(() => Boolean(
@@ -431,7 +438,7 @@ async function executeAgentTurn(
 
   const previousTraceId = latestTurn.value?.answerId ?? null
   const pendingTurn = createPendingTurn(questionText, requestPreset, requestMatch)
-  turns.value = [...turns.value, pendingTurn].slice(-10)
+  turns.value = [...turns.value, pendingTurn]
   beginLoading()
   errorMessage.value = ''
   saveState.value = ''
@@ -689,6 +696,11 @@ function openWorkflowDraft() {
   if (!workflowDraftDescription.value.trim()) {
     workflowDraftDescription.value = '按当前对话顺序复用这组分析问题。'
   }
+}
+
+function closeWorkflowDraft() {
+  if (workflowSaving.value) return
+  workflowDraftOpen.value = false
 }
 
 async function saveCurrentWorkflow() {
@@ -1056,7 +1068,6 @@ function restoreHistory(item: AiAgentHistoryRecord) {
     },
     feedback: createFeedbackState(),
   })
-  turns.value = turns.value.slice(-10)
   nextTick(() => scrollToChatEnd('smooth'))
 }
 
@@ -1146,6 +1157,11 @@ function cancelActiveRequest() {
 }
 
 function scrollToChatEnd(behavior: ScrollBehavior = 'auto') {
+  const stream = chatStream.value
+  if (stream) {
+    stream.scrollTo({ top: stream.scrollHeight, behavior })
+    return
+  }
   chatEnd.value?.scrollIntoView({ behavior, block: 'end' })
 }
 
@@ -1682,7 +1698,7 @@ function turnDisplayName(turn: AnalysisTurn): string {
   if (turn.status === 'pending') return 'AI 正在分析'
   if (turn.status === 'failed') return 'AI 回答未完成'
   if (turn.status === 'cancelled') return '已取消本次分析'
-  if (turn.agentResponse) return 'AI Agent 综合回答'
+  if (turn.agentResponse) return '观察助手'
   return turn.response ? toolDisplayName(turn.response.tool) : '数据分析'
 }
 
@@ -1811,33 +1827,12 @@ onBeforeUnmount(() => {
               @click="openWorkflowDraft"
             >
               <Plus :size="13" />
-              <span>保存</span>
+              <span>保存流程</span>
             </button>
           </header>
 
           <p v-if="workflowMessage" class="workflow-message">{{ workflowMessage }}</p>
           <p v-else-if="workflowPending" class="workflow-message">正在读取流程</p>
-
-          <div v-if="workflowDraftOpen" class="workflow-draft">
-            <label>
-              <span>流程名称</span>
-              <input v-model="workflowDraftName" maxlength="80" placeholder="例如：赛前复盘三步法">
-            </label>
-            <label>
-              <span>说明</span>
-              <textarea v-model="workflowDraftDescription" maxlength="240" rows="2" placeholder="这套流程适合什么场景" />
-            </label>
-            <small>将保存当前对话中最近 {{ buildWorkflowSteps().length }} 个已完成问题。</small>
-            <div class="workflow-draft-actions">
-              <button type="button" class="mini-action focus-ring" :disabled="workflowSaving" @click="saveCurrentWorkflow">
-                <Bookmark :size="13" />
-                <span>{{ workflowSaving ? '保存中' : '确认保存' }}</span>
-              </button>
-              <button type="button" class="mini-action quiet focus-ring" :disabled="workflowSaving" @click="workflowDraftOpen = false">
-                取消
-              </button>
-            </div>
-          </div>
 
           <div v-if="pendingWorkflow" class="pending-workflow">
             <span>待运行</span>
@@ -1848,7 +1843,9 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <p v-if="!workflowPending && !workflowItems.length && !workflowDraftOpen" class="workflow-message">暂无自定义流程</p>
+          <p v-if="!workflowPending && !workflowItems.length && !workflowDraftOpen" class="workflow-message">
+            暂无自定义流程。完成一次对话后，可把提问顺序保存为流程复用。
+          </p>
           <div v-if="workflowItems.length" class="workflow-list">
             <div v-for="workflow in workflowItems" :key="workflow.workflowId" class="workflow-row">
               <button
@@ -2159,7 +2156,7 @@ onBeforeUnmount(() => {
         <div v-if="errorMessage" class="error-band">{{ errorMessage }}</div>
 
         <section class="chat-panel">
-          <div class="chat-stream">
+          <div ref="chatStream" class="chat-stream">
             <div v-if="!turns.length" class="empty-chat">
               <div class="empty-icon"><Bot :size="28" /></div>
               <h2>直接提问，AI 会查询 SPdex 数据后回答</h2>
@@ -2367,6 +2364,52 @@ onBeforeUnmount(() => {
           </form>
         </section>
       </main>
+    </div>
+
+    <div
+      v-if="workflowDraftOpen"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="closeWorkflowDraft"
+    >
+      <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-modal-title">
+        <header class="modal-header">
+          <div>
+            <span>保存当前分析流程</span>
+            <h2 id="workflow-modal-title">保存为流程</h2>
+          </div>
+          <button type="button" class="icon-button focus-ring" aria-label="关闭保存流程窗口" :disabled="workflowSaving" @click="closeWorkflowDraft">
+            <X :size="16" />
+          </button>
+        </header>
+
+        <div class="workflow-draft modal-form">
+          <label>
+            <span>流程名称</span>
+            <input v-model="workflowDraftName" maxlength="80" placeholder="例如：赛前复盘三步法" autofocus>
+          </label>
+          <label>
+            <span>说明</span>
+            <textarea v-model="workflowDraftDescription" maxlength="240" rows="3" placeholder="这套流程适合什么场景" />
+          </label>
+          <small>{{ workflowSaveHint }}</small>
+          <ol v-if="workflowDraftSteps.length" class="workflow-step-preview">
+            <li v-for="step in workflowDraftSteps" :key="step.stepId">
+              {{ step.title }}
+            </li>
+          </ol>
+        </div>
+
+        <footer class="modal-actions">
+          <button type="button" class="secondary-action focus-ring" :disabled="workflowSaving" @click="closeWorkflowDraft">
+            取消
+          </button>
+          <button type="button" class="primary-action focus-ring" :disabled="workflowSaving || !workflowDraftSteps.length" @click="saveCurrentWorkflow">
+            <Bookmark :size="15" />
+            <span>{{ workflowSaving ? '保存中' : '确认保存' }}</span>
+          </button>
+        </footer>
+      </section>
     </div>
   </section>
 </template>
@@ -2630,6 +2673,20 @@ onBeforeUnmount(() => {
   color: var(--muted);
   font-size: .76rem;
   line-height: 1.45;
+}
+.workflow-step-preview {
+  display: grid;
+  gap: 4px;
+  margin: -2px 0 0;
+  padding: 8px 0 0 18px;
+  border-top: 1px solid var(--divider);
+  color: var(--ink);
+  font-size: .76rem;
+  line-height: 1.38;
+}
+.workflow-step-preview li::marker {
+  color: #5b4ce8;
+  font-weight: 800;
 }
 .automation-grid {
   display: grid;
@@ -2920,8 +2977,77 @@ onBeforeUnmount(() => {
   background: transparent;
   color: #b42318;
 }
+.modal-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, .42);
+}
+.workflow-modal {
+  display: grid;
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 36px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
+}
+.modal-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--divider);
+}
+.modal-header div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.modal-header span {
+  color: #5b4ce8;
+  font-size: .82rem;
+  font-weight: 780;
+}
+.modal-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.16rem;
+  letter-spacing: 0;
+}
+.modal-form {
+  margin: 14px 16px;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: flex-end;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--divider);
+}
+.primary-action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #6957f5;
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 800;
+}
 .query-panel {
   align-content: start;
+  min-width: 0;
 }
 .context-strip {
   display: grid;
@@ -3089,13 +3215,22 @@ button:disabled {
   font-size: .96rem;
 }
 .chat-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: clamp(620px, calc(100dvh - 188px), 860px);
   min-height: 520px;
   overflow: hidden;
 }
 .chat-stream {
   display: grid;
+  align-content: start;
   gap: 18px;
+  min-height: 0;
   padding: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding: 18px;
+  scrollbar-gutter: stable;
 }
 .empty-chat {
   display: grid;
@@ -3395,8 +3530,7 @@ button:disabled {
   font-weight: 780;
 }
 .composer {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 4;
   display: grid;
   gap: 9px;
@@ -3536,6 +3670,11 @@ button:disabled {
   }
   .chat-stream {
     padding: 12px;
+  }
+  .chat-panel {
+    height: calc(100dvh - 132px);
+    min-height: 500px;
+    max-height: 760px;
   }
   .assistant-bubble {
     padding: 12px;
