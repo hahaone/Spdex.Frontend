@@ -186,7 +186,7 @@ async function refreshAndReturn() {
         </button>
       </div>
       <p v-if="paymentAccess && !paymentAccess.directAlipayAvailable" class="access-note">
-        独立支付宝仅向注册超过 {{ paymentAccess.directAlipayMinimumRegistrationDays || 180 }} 天的用户开放，可使用支付宝扫码。
+        {{ paymentAccess.message || '独立支付宝仅向黄金版及以上有效会籍开放，可使用支付宝扫码。' }}
       </p>
     </section>
 

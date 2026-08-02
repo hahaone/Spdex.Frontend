@@ -93,6 +93,17 @@ function aggregateBucket(src: ChartPoint[], s: number, e: number, zeroMissing: b
     }
     return cnt ? sum / cnt : 0
   }
+  const avgOptional = (pick: (p: ChartPoint) => number | undefined): number | undefined => {
+    let sum = 0
+    let cnt = 0
+    for (let i = s; i < e; i++) {
+      const v = pick(src[i]!)
+      if (v == null || !Number.isFinite(v)) continue
+      sum += v
+      cnt++
+    }
+    return cnt ? sum / cnt : undefined
+  }
   return {
     time: mid.time,
     ts: mid.ts,
@@ -100,6 +111,9 @@ function aggregateBucket(src: ChartPoint[], s: number, e: number, zeroMissing: b
     draw: avg(p => p.draw, zeroMissing),
     away: avg(p => p.away, zeroMissing),
     volume: avg(p => p.volume, false),
+    volumeHome: avgOptional(p => p.volumeHome),
+    volumeDraw: avgOptional(p => p.volumeDraw),
+    volumeAway: avgOptional(p => p.volumeAway),
     priceHome: avg(p => p.priceHome, true),
     priceDraw: avg(p => p.priceDraw, true),
     priceAway: avg(p => p.priceAway, true),

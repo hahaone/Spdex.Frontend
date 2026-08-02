@@ -376,7 +376,7 @@ const successTitle = computed(() => channel.value === 'silk' ? '扣点成功！'
         >
           <CreditCard :size="18" />
           <b>独立支付宝</b>
-          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '注册超过180天账号可用' }}</span>
+          <span>{{ selectedSilkDeduction ? `还需 ¥${cashPayAmount.toFixed(2)}` : '黄金版及以上有效会籍可用' }}</span>
         </button>
         <button class="channel-btn silk focus-ring" type="button" :disabled="!silkNeed?.sufficient" @click="startSilk">
           <Coins :size="18" />

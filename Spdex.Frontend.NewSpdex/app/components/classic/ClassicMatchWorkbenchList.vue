@@ -120,8 +120,7 @@ const pagedMatches = computed(() => visibleMatches.value.slice((page.value - 1) 
 const pageList = computed(() => Array.from({ length: pageCount.value }, (_, i) => i + 1))
 watch(pageCount, (n) => { if (page.value > n) page.value = n })
 watch(sortMode, () => { page.value = 1 })
-watch(() => props.lottery, (lottery) => {
-  applyLotteryDefaultSort(lottery)
+watch(() => props.lottery, () => {
   page.value = 1
 }, { immediate: true })
 watch(selectedLeagues, () => { page.value = 1 })
@@ -168,10 +167,6 @@ function compareByLotteryOrder(a: MatchSummary, b: MatchSummary, lottery: Lotter
   if (orderA !== orderB) return orderA - orderB
 
   return compareByTime(a, b)
-}
-
-function applyLotteryDefaultSort(lottery: string) {
-  if (lotterySortOf(lottery) && sortMode.value === 'time') sortMode.value = 'league'
 }
 
 function setSortMode(value: string) {
@@ -252,8 +247,8 @@ onMounted(() => {
     collapsedIds.value = toIdSet(s.collapsed)
     if (Array.isArray(s.leagues))
       selectedLeagues.value = s.leagues.filter((x): x is string => typeof x === 'string')
-    if (isSortMode(s.sort)) sortMode.value = s.sort
-    applyLotteryDefaultSort(props.lottery)
+    // v1 曾把竞彩/足彩自动切成赛事排序；首次升级到 v2 时统一迁移到新的时间默认值。
+    if (s.sortVersion === 2 && isSortMode(s.sort)) sortMode.value = s.sort
   } catch { /* 损坏的存储忽略 */ }
 })
 
@@ -268,6 +263,7 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
       collapsed: [...collapsedIds.value],
       leagues: selectedLeagues.value,
       sort: sortMode.value,
+      sortVersion: 2,
     }))
   } catch { /* 配额/隐私模式忽略 */ }
 })

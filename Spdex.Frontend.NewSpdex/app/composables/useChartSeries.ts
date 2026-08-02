@@ -96,6 +96,9 @@ interface BackendChartPoint {
   draw: number | null
   away: number | null
   volume: number
+  volumeHome?: number | null
+  volumeDraw?: number | null
+  volumeAway?: number | null
   priceHome?: number | null
   priceDraw?: number | null
   priceAway?: number | null
@@ -132,6 +135,9 @@ function mapPoint(p: BackendChartPoint): ChartPoint {
     draw: p.draw ?? 0,
     away: p.away ?? 0,
     volume: p.volume,
+    volumeHome: p.volumeHome ?? undefined,
+    volumeDraw: p.volumeDraw ?? undefined,
+    volumeAway: p.volumeAway ?? undefined,
     priceHome: p.priceHome ?? 0,
     priceDraw: p.priceDraw ?? 0,
     priceAway: p.priceAway ?? 0,

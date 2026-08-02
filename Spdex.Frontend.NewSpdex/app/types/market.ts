@@ -222,6 +222,10 @@ export interface ChartPoint {
   draw: number
   away: number
   volume: number
+  /** 各选项在该快照的累计成交量，供比例图显示“百分比（成交量）”。 */
+  volumeHome?: number
+  volumeDraw?: number
+  volumeAway?: number
   /** 各选项当桶价位（LastOdds），供成交变化柱图叠加价位线。0=无。 */
   priceHome?: number
   priceDraw?: number

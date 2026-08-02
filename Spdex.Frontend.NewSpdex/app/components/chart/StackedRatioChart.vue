@@ -110,9 +110,9 @@ const tooltip = computed(() => {
     anchor,
     leftPct: Math.max(0, Math.min(100, frac * 100)),
     rows: [
-      { key: 'home', label: labels.value.home, v: h.n.home },
-      ...(hasDraw.value ? [{ key: 'draw', label: labels.value.draw ?? '', v: h.n.draw }] : []),
-      { key: 'away', label: labels.value.away, v: h.n.away },
+      { key: 'home', label: labels.value.home, v: h.n.home, amount: props.points[h.i]?.volumeHome },
+      ...(hasDraw.value ? [{ key: 'draw', label: labels.value.draw ?? '', v: h.n.draw, amount: props.points[h.i]?.volumeDraw }] : []),
+      { key: 'away', label: labels.value.away, v: h.n.away, amount: props.points[h.i]?.volumeAway },
     ],
   }
 })
@@ -126,6 +126,11 @@ function fmtAxisTime(p?: ChartPoint): string {
   const raw = p?.ts || p?.time || ''
   const m = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
   return m?.[1] && m[2] ? `${m[1].slice(5)} ${m[2]}` : (p?.time || '')
+}
+function fmtAmount(value?: number): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.round(value).toLocaleString('en-US')
+    : '-'
 }
 
 function updateFromEvent(e: PointerEvent) {
@@ -194,7 +199,10 @@ function onUp(e: PointerEvent) { if (e.pointerType !== 'mouse') hoverIndex.value
       <div v-for="r in tooltip.rows" :key="r.key" class="tip-row">
         <i :class="r.key" />
         <span class="tl">{{ r.label }}</span>
-        <b class="tv">{{ r.v.toFixed(1) }}%</b>
+        <b class="tv">
+          {{ r.v.toFixed(1) }}%
+          <span v-if="r.amount != null" class="ta">({{ fmtAmount(r.amount) }})</span>
+        </b>
       </div>
     </div>
 
@@ -304,7 +312,8 @@ svg {
 }
 
 .tip-row .tl { flex: 1; color: var(--muted); }
-.tip-row .tv { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tip-row .tv { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tip-row .ta { color: var(--muted); font-weight: 720; }
 
 .tip-row i.home,
 .legend i.home { background: #7e5aa8; }
