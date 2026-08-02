@@ -31,6 +31,7 @@ env:
   IMAGE_NEWSPDEX: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.newspdex
   IMAGE_QUANTILEARN: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.quantilearn
   IMAGE_ADMIN: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.admin
+  IMAGE_HELP: crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com/spdex/spdex.frontend.help
 
 jobs:
   changes:
@@ -46,6 +47,8 @@ jobs:
       newspdex: ${{ steps.detect.outputs.newspdex }}
       quantilearn: ${{ steps.detect.outputs.quantilearn }}
       admin: ${{ steps.detect.outputs.admin }}
+      help: ${{ steps.detect.outputs.help }}
+      web_any: ${{ steps.detect.outputs.web_any }}
       any: ${{ steps.detect.outputs.any }}
 
     steps:
@@ -67,6 +70,7 @@ jobs:
           newspdex=false
           quantilearn=false
           admin=false
+          help=false
 
           if [ "$IS_FULL_RELEASE" = "true" ]; then
             # 手动全量发布用于初始化新节点或做整体验证；日常 [deploy] 走增量发布。
@@ -75,6 +79,7 @@ jobs:
             newspdex=true
             quantilearn=true
             admin=true
+            help=true
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
@@ -109,6 +114,9 @@ jobs:
                 Spdex.Frontend.Admin/*)
                   admin=true
                   ;;
+                Spdex.Frontend.Help/*)
+                  help=true
+                  ;;
                 .github/workflows/deploy.yml)
                   # 部署流水线自身变化影响所有服务，构建一次全量镜像验证新流程。
                   fjc=true
@@ -116,6 +124,7 @@ jobs:
                   newspdex=true
                   quantilearn=true
                   admin=true
+                  help=true
                   ;;
                 deploy/web/ansible/*|deploy/web/ansible/**/*)
                   # 部署编排变化可能影响全部 Web 服务，使用全量镜像验证新编排。
@@ -125,12 +134,17 @@ jobs:
                   quantilearn=true
                   admin=true
                   ;;
-              esac
-            done
+            esac
+          done
+          fi
+
+          web_any=false
+          if [ "$fjc" = "true" ] || [ "$frontend2026" = "true" ] || [ "$newspdex" = "true" ] || [ "$quantilearn" = "true" ] || [ "$admin" = "true" ]; then
+            web_any=true
           fi
 
           any=false
-          if [ "$fjc" = "true" ] || [ "$frontend2026" = "true" ] || [ "$newspdex" = "true" ] || [ "$quantilearn" = "true" ] || [ "$admin" = "true" ]; then
+          if [ "$web_any" = "true" ] || [ "$help" = "true" ]; then
             any=true
           fi
 
@@ -140,6 +154,8 @@ jobs:
             echo "newspdex=$newspdex"
             echo "quantilearn=$quantilearn"
             echo "admin=$admin"
+            echo "help=$help"
+            echo "web_any=$web_any"
             echo "any=$any"
           } >> "$GITHUB_OUTPUT"
 
@@ -151,6 +167,7 @@ jobs:
             echo "- NewSpdex: $newspdex"
             echo "- Quantilearn: $quantilearn"
             echo "- Admin: $admin"
+            echo "- Help test: $help"
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -237,12 +254,25 @@ jobs:
             ${{ env.IMAGE_ADMIN }}:latest
             ${{ env.IMAGE_ADMIN }}:${{ github.sha }}
 
+      - name: Build and push Help Test Docker image
+        if: needs.changes.outputs.help == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Spdex.Frontend.Help
+          push: true
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+          tags: |
+            ${{ env.IMAGE_HELP }}:latest
+            ${{ env.IMAGE_HELP }}:${{ github.sha }}
+
   deploy:
     name: Deploy frontend release to Web nodes
     needs: [changes, build]
     # push 含 [deploy] 时自动部署；手动触发时根据 deploy 参数决定
     if: >-
-      needs.changes.outputs.any == 'true' &&
+      needs.changes.outputs.web_any == 'true' &&
       ((github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy]')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'))
     runs-on: ubuntu-latest
@@ -453,3 +483,70 @@ jobs:
           check_any https://ql.spdex.com/ 200 302
           check_any https://admin2026.spdex.com/login 200 302 403
           check_any http://new.spdex.com/login 301 302
+
+  deploy-help-test:
+    name: Deploy Help test site
+    needs: [changes, build]
+    if: >-
+      needs.changes.outputs.help == 'true' &&
+      ((github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy]')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy help-test to backend server
+        uses: appleboy/ssh-action@v1
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          HELP_IMAGE: ${{ env.IMAGE_HELP }}:${{ github.sha }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: ACR_USERNAME,ACR_PASSWORD,HELP_IMAGE
+          script: |
+            set -euo pipefail
+            echo "$ACR_PASSWORD" | docker login crpi-z3csgr9um1cm0oj6.cn-qingdao.personal.cr.aliyuncs.com -u "$ACR_USERNAME" --password-stdin
+            docker pull "$HELP_IMAGE"
+            docker rm -f spdex-help-test >/dev/null 2>&1 || true
+            docker run -d \
+              --name spdex-help-test \
+              --network host \
+              --restart unless-stopped \
+              -e NUXT_PUBLIC_HELP_BASE_URL=https://help-test.spdex.com \
+              -e NUXT_PUBLIC_NEWSPDEX_URL=https://new.spdex.com \
+              -e NUXT_PUBLIC_MCP_DOCS_URL=/ai/mcp-quickstart \
+              -e NUXT_PORT=3006 \
+              -e PORT=3006 \
+              -e NITRO_PORT=3006 \
+              "$HELP_IMAGE"
+
+            for attempt in $(seq 1 30); do
+              code="$(curl -sS -o /tmp/spdex-help-test-health.html -w "%{http_code}" http://127.0.0.1:3006/ || true)"
+              echo "help-test local attempt ${attempt}: ${code:-000}"
+              if [ "$code" = "200" ]; then
+                break
+              fi
+              if [ "$attempt" = "30" ]; then
+                docker logs --tail 100 spdex-help-test || true
+                exit 1
+              fi
+              sleep 2
+            done
+
+            nginx -t
+
+      - name: Verify help-test public route
+        run: |
+          set -euo pipefail
+          code="$(curl -k -sS -o /tmp/spdex-help-test-public.html -w "%{http_code}" --max-time 20 https://help-test.spdex.com/ || true)"
+          if [ "$code" != "200" ]; then
+            echo "https://help-test.spdex.com/ -> unexpected HTTP ${code:-000}"
+            exit 1
+          fi
+          if ! grep -q "SPdex 帮助中心" /tmp/spdex-help-test-public.html; then
+            echo "help-test response does not look like SPdex Help Center."
+            exit 1
+          fi
+          echo "https://help-test.spdex.com/ -> 200"
