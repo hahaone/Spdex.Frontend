@@ -319,6 +319,83 @@ function tgSpark(eventId: number) {
         },
   }
 }
+
+type XgDiffTone = 'positive' | 'negative' | 'neutral'
+
+function xgDiffTone(value: number): XgDiffTone {
+  if (value > 0.5) return 'positive'
+  if (value < -0.5) return 'negative'
+  return 'neutral'
+}
+
+// 预期进球差走势（BSW 主 xG - 客 xG）：零轴面积 + 正负阈值分段。
+function xgDiffSpark(eventId: number) {
+  const series = xgReplayByEventId.value.get(eventId)?.series ?? []
+  const vals = series.map((point) => {
+    if (point.bswXgHome == null || point.bswXgAway == null) return null
+    const home = Number(point.bswXgHome)
+    const away = Number(point.bswXgAway)
+    return Number.isFinite(home) && Number.isFinite(away) ? home - away : null
+  })
+  const nums = vals.filter((value): value is number => value != null && Number.isFinite(value))
+  if (nums.length === 0) return null
+
+  const W = 320, H = 64, pad = 8
+  const maxAbs = Math.max(0.6, ...nums.map(value => Math.abs(value))) * 1.1
+  const maxMinute = Math.max(90, ...series.map(point => point.minute || 0))
+  const xOf = (minute: number) => pad + (W - pad * 2) * (Math.max(0, minute) / maxMinute)
+  const yOf = (value: number) => pad + (H - pad * 2) * ((maxAbs - value) / (maxAbs * 2))
+  const zeroY = yOf(0)
+  const points = vals.map((value, index) => value == null
+    ? null
+    : { x: xOf(series[index]?.minute ?? index), y: yOf(value), value })
+
+  const fragments: Array<{ areaPath: string, linePath: string, tone: XgDiffTone }> = []
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1]
+    const to = points[index]
+    if (from == null || to == null) continue
+
+    const cuts = [0, 1]
+    for (const threshold of [-0.5, 0.5]) {
+      const delta = to.value - from.value
+      if (delta === 0) continue
+      const ratio = (threshold - from.value) / delta
+      if (ratio > 0 && ratio < 1) cuts.push(ratio)
+    }
+    cuts.sort((a, b) => a - b)
+
+    for (let cutIndex = 1; cutIndex < cuts.length; cutIndex++) {
+      const fromRatio = cuts[cutIndex - 1]!
+      const toRatio = cuts[cutIndex]!
+      const x1 = from.x + (to.x - from.x) * fromRatio
+      const x2 = from.x + (to.x - from.x) * toRatio
+      const value1 = from.value + (to.value - from.value) * fromRatio
+      const value2 = from.value + (to.value - from.value) * toRatio
+      const y1 = yOf(value1)
+      const y2 = yOf(value2)
+      fragments.push({
+        areaPath: `M${x1.toFixed(1)},${zeroY.toFixed(1)} L${x1.toFixed(1)},${y1.toFixed(1)} L${x2.toFixed(1)},${y2.toFixed(1)} L${x2.toFixed(1)},${zeroY.toFixed(1)} Z`,
+        linePath: `M${x1.toFixed(1)},${y1.toFixed(1)} L${x2.toFixed(1)},${y2.toFixed(1)}`,
+        tone: xgDiffTone((value1 + value2) / 2),
+      })
+    }
+  }
+
+  const validPoints = points.filter((point): point is NonNullable<typeof point> => point != null)
+  return {
+    fragments,
+    w: W,
+    h: H,
+    guides: [
+      { value: 0.5, label: '+0.50', y: yOf(0.5), kind: 'threshold' },
+      { value: 0, label: '0', y: zeroY, kind: 'zero' },
+      { value: -0.5, label: '-0.50', y: yOf(-0.5), kind: 'threshold' },
+    ],
+    firstPoint: validPoints[0],
+    lastPoint: validPoints.at(-1),
+  }
+}
 const matches = computed(() => {
   if (liveStatus.value !== 'running') return matchCandidates.value
 
@@ -1626,49 +1703,98 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
             </tr>
             <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
               <td colspan="13">
-                <template v-for="(spark, sparkIdx) in [tgSpark(item.match.eventId)]" :key="sparkIdx">
+                <template
+                  v-for="(charts, chartIdx) in [{ total: tgSpark(item.match.eventId), diff: xgDiffSpark(item.match.eventId) }]"
+                  :key="chartIdx"
+                >
+                  <div class="xg-chart-grid">
                   <div class="tg-chart">
                     <div class="tg-chart-head">
                       <span class="tg-title">预期总进球走势</span>
                       <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
-                      <span v-else-if="spark" class="tg-summary num">
-                        <span>初值 <strong>{{ spark.initialValue }}</strong></span>
-                        <span v-if="spark.maxChange" class="tg-max-change">
+                      <span v-else-if="charts.total" class="tg-summary num">
+                        <span>初值 <strong>{{ charts.total.initialValue }}</strong></span>
+                        <span v-if="charts.total.maxChange" class="tg-max-change">
                           最大变化
-                          <strong :class="`is-${spark.maxChange.direction}`">{{ spark.maxChange.delta }}</strong>：
-                          {{ spark.maxChange.fromValue }} --> {{ spark.maxChange.toValue }}
-                          ({{ spark.maxChange.clockLabel }})
+                          <strong :class="`is-${charts.total.maxChange.direction}`">{{ charts.total.maxChange.delta }}</strong>：
+                          {{ charts.total.maxChange.fromValue }} --> {{ charts.total.maxChange.toValue }}
+                          ({{ charts.total.maxChange.clockLabel }})
                         </span>
                       </span>
                     </div>
                     <svg
-                      v-if="spark"
+                      v-if="charts.total"
                       :key="`tg-${item.match.eventId}-${xgReplayRenderVersion(item.match.eventId)}`"
                       class="tg-svg"
-                      :viewBox="`0 0 ${spark.w} ${spark.h}`"
+                      :viewBox="`0 0 ${charts.total.w} ${charts.total.h}`"
                       preserveAspectRatio="none"
                     >
                       <line
-                        v-for="guide in spark.yGuides"
+                        v-for="guide in charts.total.yGuides"
                         :key="`tg-y-${guide.value}`"
                         class="tg-y-guide"
                         x1="0"
                         :y1="guide.y"
-                        :x2="spark.w"
+                        :x2="charts.total.w"
                         :y2="guide.y"
                       />
-                      <g v-for="g in spark.guides" :key="g.label">
-                        <line class="tg-guide" :x1="g.x" y1="0" :x2="g.x" :y2="spark.h" />
+                      <g v-for="g in charts.total.guides" :key="g.label">
+                        <line class="tg-guide" :x1="g.x" y1="0" :x2="g.x" :y2="charts.total.h" />
                         <text class="tg-guide-label" :x="g.labelX" :y="g.labelY" :text-anchor="g.anchor">{{ g.label }}</text>
                       </g>
-                      <path :d="spark.path" fill="none" class="tg-line" />
-                      <g v-for="(lb, li) in spark.labels" :key="`tgl-${li}`">
+                      <path :d="charts.total.path" fill="none" class="tg-line" />
+                      <g v-for="(lb, li) in charts.total.labels" :key="`tgl-${li}`">
                         <circle :cx="lb.x" :cy="lb.y" r="2.6" class="tg-mark" />
                         <text class="tg-mark-label" :x="lb.textX" :y="lb.textY" :text-anchor="lb.anchor">{{ lb.text }}</text>
                       </g>
-                      <circle :cx="spark.lastX" :cy="spark.lastY" r="3" class="tg-dot" />
+                      <circle :cx="charts.total.lastX" :cy="charts.total.lastY" r="3" class="tg-dot" />
                     </svg>
                     <div v-else class="tg-empty">{{ isXgReplayRefreshing(item.match.eventId) ? '走势刷新中...' : '暂无预期总进球走势（数据积累中或非足球）' }}</div>
+                  </div>
+
+                  <div class="tg-chart">
+                    <div class="tg-chart-head">
+                      <span class="tg-title">预期进球差走势</span>
+                      <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
+                    </div>
+                    <svg
+                      v-if="charts.diff"
+                      :key="`xgd-${item.match.eventId}-${xgReplayRenderVersion(item.match.eventId)}`"
+                      class="tg-svg xgd-svg"
+                      :viewBox="`0 0 ${charts.diff.w} ${charts.diff.h}`"
+                      preserveAspectRatio="none"
+                    >
+                      <g v-for="guide in charts.diff.guides" :key="`xgd-guide-${guide.value}`">
+                        <line
+                          :class="['xgd-guide', `is-${guide.kind}`]"
+                          x1="0"
+                          :y1="guide.y"
+                          :x2="charts.diff.w"
+                          :y2="guide.y"
+                        />
+                        <text class="xgd-guide-label" x="3" :y="guide.y - 2">{{ guide.label }}</text>
+                      </g>
+                      <g v-for="(fragment, fragmentIndex) in charts.diff.fragments" :key="`xgd-fragment-${fragmentIndex}`">
+                        <path :d="fragment.areaPath" :class="['xgd-area', `is-${fragment.tone}`]" />
+                        <path :d="fragment.linePath" :class="['xgd-line', `is-${fragment.tone}`]" />
+                      </g>
+                      <circle
+                        v-if="charts.diff.firstPoint"
+                        :cx="charts.diff.firstPoint.x"
+                        :cy="charts.diff.firstPoint.y"
+                        r="2.5"
+                        class="xgd-dot"
+                      />
+                      <circle
+                        v-if="charts.diff.lastPoint"
+                        :cx="charts.diff.lastPoint.x"
+                        :cy="charts.diff.lastPoint.y"
+                        r="2.8"
+                        class="xgd-dot"
+                      />
+                    </svg>
+                    <div v-else class="tg-empty">{{ isXgReplayRefreshing(item.match.eventId) ? '走势刷新中...' : '暂无预期进球差走势（数据积累中或非足球）' }}</div>
+                  </div>
                   </div>
                 </template>
               </td>
@@ -2055,14 +2181,21 @@ th.col-tg {
   white-space: normal;
 }
 
+.xg-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
 .tg-chart {
-  max-width: 420px;
+  min-width: 0;
 }
 
 .tg-chart-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  min-height: 34px;
   margin-bottom: 6px;
 }
 
@@ -2151,9 +2284,71 @@ th.col-tg {
 }
 
 .tg-empty {
+  min-height: 64px;
   padding: 16px 0;
   color: #8a958f;
   font-size: 13px;
+}
+
+.xgd-guide {
+  vector-effect: non-scaling-stroke;
+}
+
+.xgd-guide.is-threshold {
+  stroke: #aeb9b3;
+  stroke-width: 0.9;
+  stroke-dasharray: 4 3;
+}
+
+.xgd-guide.is-zero {
+  stroke: #6f7f77;
+  stroke-width: 1.1;
+}
+
+.xgd-guide-label {
+  fill: #829189;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.xgd-area {
+  vector-effect: non-scaling-stroke;
+}
+
+.xgd-area.is-positive {
+  fill: rgb(227 74 74 / 24%);
+}
+
+.xgd-area.is-negative {
+  fill: rgb(40 120 208 / 24%);
+}
+
+.xgd-area.is-neutral {
+  fill: rgb(123 138 130 / 14%);
+}
+
+.xgd-line {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.xgd-line.is-positive {
+  stroke: #e34a4a;
+}
+
+.xgd-line.is-negative {
+  stroke: #2878d0;
+}
+
+.xgd-line.is-neutral {
+  stroke: #75857d;
+}
+
+.xgd-dot {
+  fill: #40544a;
 }
 
 .match-row td.live-total-cell.live-latest,

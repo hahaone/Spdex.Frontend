@@ -128,6 +128,8 @@ export interface LiveXgResponse {
 export interface LiveXgReplayPoint {
   capturedAt?: string | null
   minute: number
+  bswXgHome?: number | null
+  bswXgAway?: number | null
   projectedTotalGoals?: number | null
 }
 
