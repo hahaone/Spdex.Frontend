@@ -165,6 +165,54 @@ export interface AiAgentWorkflowMutationResponse {
   item: AiAgentWorkflowRecord
 }
 
+export interface AiAgentWorkflowRunStepResult {
+  stepId: string
+  title: string
+  question: string
+  preset: string
+  status: string
+  toolUsageUnits: number
+  durationMs?: number | null
+  traceId?: string | null
+  errorMessage?: string | null
+}
+
+export interface AiAgentWorkflowRunRecord {
+  runId: string
+  workflowId: string
+  subjectType: string
+  subjectId: string
+  workflowName?: string | null
+  triggerSource: string
+  status: string
+  stepCount: number
+  completedStepCount: number
+  toolUsageUnits: number
+  durationMs?: number | null
+  traceId?: string | null
+  errorMessage?: string | null
+  matchId?: number | null
+  matchTitle?: string | null
+  stepResults: AiAgentWorkflowRunStepResult[]
+  startedAtUtc: string
+  completedAtUtc?: string | null
+  createdAtUtc: string
+}
+
+export interface AiAgentWorkflowRunListResponse {
+  generatedAtUtc: string
+  limit: number
+  workflowId?: string | null
+  count: number
+  items: AiAgentWorkflowRunRecord[]
+}
+
+export interface AiAgentWorkflowRunMutationResponse {
+  generatedAtUtc: string
+  item: AiAgentWorkflowRunRecord
+  workflow?: AiAgentWorkflowRecord | null
+}
+
 export interface AiAgentAutomationTaskRecord {
   taskId: string
   subjectType: string

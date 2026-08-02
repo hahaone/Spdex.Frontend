@@ -36,6 +36,10 @@ import type {
   AiAgentWorkflowListResponse,
   AiAgentWorkflowMutationResponse,
   AiAgentWorkflowRecord,
+  AiAgentWorkflowRunListResponse,
+  AiAgentWorkflowRunMutationResponse,
+  AiAgentWorkflowRunRecord,
+  AiAgentWorkflowRunStepResult,
   AiAgentWorkflowStep,
   GoodSampleMatchChoice,
   GoodSampleResponse,
@@ -48,6 +52,7 @@ type TurnStatus = 'pending' | 'complete' | 'failed' | 'cancelled'
 type AutomationTriggerType = 'scheduled' | 'match_status' | 'watch_condition'
 type AutomationCadence = 'daily' | 'hourly' | 'before_kickoff' | 'live_window' | 'on_signal'
 type AutomationScope = 'daily_watchlist' | 'selected_match' | 'ask_each_run'
+type WorkflowRunStatus = 'success' | 'partial' | 'failed' | 'cancelled' | 'skipped'
 
 interface ScenarioTemplate {
   id: string
@@ -91,11 +96,14 @@ interface AnalysisTurn {
 
 interface WorkflowRunOutcome {
   success: boolean
+  status: WorkflowRunStatus
   completed: number
   total: number
   toolUsageUnits: number
   durationMs: number
   traceId: string
+  errorMessage?: string
+  stepResults: AiAgentWorkflowRunStepResult[]
 }
 
 const route = useRoute()
@@ -210,7 +218,9 @@ const historySavedOnly = ref(false)
 const historyMessage = ref('')
 const usageSummary = ref<AiAgentHistoryUsageSummary | null>(null)
 const workflowItems = ref<AiAgentWorkflowRecord[]>([])
+const workflowRuns = ref<AiAgentWorkflowRunRecord[]>([])
 const workflowPending = ref(false)
+const workflowRunsPending = ref(false)
 const workflowMessage = ref('')
 const workflowDraftOpen = ref(false)
 const workflowDraftName = ref('')
@@ -580,6 +590,7 @@ async function refreshAgentLibrary() {
   await Promise.allSettled([
     refreshAgentRecords(),
     loadAgentWorkflows(),
+    loadAgentWorkflowRuns(),
     loadAgentAutomationTasks(),
     loadAgentAutomationRuns(),
   ])
@@ -629,6 +640,20 @@ async function loadAgentWorkflows() {
   }
   finally {
     workflowPending.value = false
+  }
+}
+
+async function loadAgentWorkflowRuns() {
+  workflowRunsPending.value = true
+  try {
+    const response = await $apiFetch<AiAgentWorkflowRunListResponse>('/api/newspdex/ai/agent/workflows/runs?limit=30')
+    workflowRuns.value = response.items ?? []
+  }
+  catch {
+    workflowRuns.value = []
+  }
+  finally {
+    workflowRunsPending.value = false
   }
 }
 
@@ -883,12 +908,12 @@ async function runAutomationTask(task: AiAgentAutomationTaskRecord) {
 
   automationRunningId.value = task.taskId
   automationMessage.value = `正在试跑「${task.name}」`
-  const outcome = await runWorkflow(workflow)
+  const outcome = await runWorkflow(workflow, 'automation')
   try {
     const response = await $apiFetch<AiAgentAutomationTaskMutationResponse>(`/api/newspdex/ai/agent/automation-tasks/${encodeURIComponent(task.taskId)}/run`, {
       method: 'POST',
       body: {
-        status: outcome.success ? 'success' : 'partial',
+        status: automationStatusFromWorkflowOutcome(outcome),
         triggerSource: 'manual',
         stepCount: outcome.total,
         completedStepCount: outcome.completed,
@@ -956,71 +981,138 @@ function upsertAutomationTask(task: AiAgentAutomationTaskRecord) {
   ].slice(0, 30)
 }
 
-async function runWorkflow(workflow: AiAgentWorkflowRecord): Promise<WorkflowRunOutcome> {
+async function runWorkflow(workflow: AiAgentWorkflowRecord, triggerSource = 'manual'): Promise<WorkflowRunOutcome> {
   const startedAt = Date.now()
   const turnStartIndex = turns.value.length
-  const emptyOutcome = (completed = 0): WorkflowRunOutcome => ({
+  const emptyOutcome = (completed = 0, status: WorkflowRunStatus = 'skipped', errorMessage = ''): WorkflowRunOutcome => ({
     success: false,
+    status,
     completed,
     total: workflow.steps.length,
     toolUsageUnits: workflowRunToolUnits(turnStartIndex),
     durationMs: Date.now() - startedAt,
     traceId: latestTurn.value ? turnTraceId(latestTurn.value) : '',
+    errorMessage,
+    stepResults: [],
   })
   if (loading.value || workflowRunningId.value) return emptyOutcome()
   if (!workflow.steps.length) {
     workflowMessage.value = '这个流程没有可运行的步骤'
-    return emptyOutcome()
+    return emptyOutcome(0, 'skipped', workflowMessage.value)
   }
   if (workflow.matchRequired && !selectedMatch.value) {
     pendingWorkflow.value = workflow
     selected.value = normalizePreset(workflow.steps[0]?.preset) ?? 'snapshot'
     selectorOpen.value = true
     workflowMessage.value = `请先选择比赛，再运行「${workflow.name}」`
-    return emptyOutcome()
+    return emptyOutcome(0, 'skipped', workflowMessage.value)
   }
 
   workflowRunningId.value = workflow.workflowId
   workflowRunningStep.value = 0
   workflowMessage.value = `正在运行「${workflow.name}」`
   pendingWorkflow.value = null
-  try {
-    await $apiFetch<AiAgentWorkflowMutationResponse>(`/api/newspdex/ai/agent/workflows/${encodeURIComponent(workflow.workflowId)}/run`, {
-      method: 'POST',
-    })
-  }
-  catch {
-    // 运行计数失败不阻断用户分析流程。
-  }
 
   let completed = 0
+  const stepResults: AiAgentWorkflowRunStepResult[] = []
   try {
     for (const [index, step] of workflow.steps.entries()) {
       workflowRunningStep.value = index + 1
       applyWorkflowStepConfig(step)
       const preset = normalizePreset(step.preset) ?? 'snapshot'
       const requestMatch = step.requiresMatch ? selectedMatch.value : null
+      const stepStartedAt = Date.now()
+      const beforeStepIndex = turns.value.length
       const ok = await executeAgentTurn(step.question, preset, requestMatch)
+      const newTurns = turns.value.slice(beforeStepIndex)
+      const stepTurn = newTurns[newTurns.length - 1]
+      const status: WorkflowRunStatus = ok
+        ? 'success'
+        : stepTurn?.status === 'cancelled' ? 'cancelled' : 'failed'
+      stepResults.push({
+        stepId: step.stepId || `step_${index + 1}`,
+        title: step.title || workflowStepTitle(step.question, index),
+        question: step.question,
+        preset,
+        status,
+        toolUsageUnits: stepTurn ? turnToolUsageUnits(stepTurn) : 0,
+        durationMs: stepTurn?.completedAt
+          ? stepTurn.completedAt - stepTurn.startedAt
+          : Date.now() - stepStartedAt,
+        traceId: stepTurn ? turnTraceId(stepTurn) || null : null,
+        errorMessage: stepTurn?.errorMessage || null,
+      })
       if (!ok) break
       completed += 1
     }
-    workflowMessage.value = completed === workflow.steps.length
-      ? `流程已完成：${workflow.name}`
-      : `流程已停止：已完成 ${completed}/${workflow.steps.length} 步`
-    await loadAgentWorkflows()
-    return {
-      success: completed === workflow.steps.length,
+    const lastStepResult = stepResults[stepResults.length - 1]
+    const status: WorkflowRunStatus = completed === workflow.steps.length
+      ? 'success'
+      : lastStepResult?.status === 'cancelled' ? 'cancelled' : completed > 0 ? 'partial' : 'failed'
+    const outcome: WorkflowRunOutcome = {
+      success: status === 'success',
+      status,
       completed,
       total: workflow.steps.length,
       toolUsageUnits: workflowRunToolUnits(turnStartIndex),
       durationMs: Date.now() - startedAt,
       traceId: latestTurn.value ? turnTraceId(latestTurn.value) : '',
+      errorMessage: status === 'success' ? '' : lastStepResult?.errorMessage || '流程未完整完成',
+      stepResults,
     }
+    workflowMessage.value = completed === workflow.steps.length
+      ? `流程已完成：${workflow.name}`
+      : `流程已停止：已完成 ${completed}/${workflow.steps.length} 步`
+    await recordWorkflowRun(workflow, outcome, triggerSource)
+    await Promise.allSettled([loadAgentWorkflows(), loadAgentWorkflowRuns()])
+    return outcome
   }
   finally {
     workflowRunningId.value = ''
     workflowRunningStep.value = 0
   }
+}
+
+async function recordWorkflowRun(workflow: AiAgentWorkflowRecord, outcome: WorkflowRunOutcome, triggerSource: string) {
+  const match = selectedMatch.value
+  try {
+    const response = await $apiFetch<AiAgentWorkflowRunMutationResponse>(`/api/newspdex/ai/agent/workflows/${encodeURIComponent(workflow.workflowId)}/runs`, {
+      method: 'POST',
+      body: {
+        workflowName: workflow.name,
+        triggerSource,
+        status: outcome.status,
+        stepCount: outcome.total,
+        completedStepCount: outcome.completed,
+        toolUsageUnits: outcome.toolUsageUnits,
+        durationMs: outcome.durationMs,
+        traceId: outcome.traceId || null,
+        errorMessage: outcome.errorMessage || null,
+        matchId: match?.matchId ?? null,
+        matchTitle: match ? `${match.homeTeam} vs ${match.awayTeam}` : null,
+        stepResults: outcome.stepResults,
+      },
+    })
+    upsertWorkflowRun(response.item)
+    if (response.workflow) upsertWorkflow(response.workflow)
+  }
+  catch {
+    workflowMessage.value = `${workflowMessage.value}；运行记录保存失败`
+  }
+}
+
+function upsertWorkflowRun(run: AiAgentWorkflowRunRecord) {
+  workflowRuns.value = [
+    run,
+    ...workflowRuns.value.filter(item => item.runId !== run.runId),
+  ].slice(0, 30)
+}
+
+function upsertWorkflow(workflow: AiAgentWorkflowRecord) {
+  workflowItems.value = [
+    workflow,
+    ...workflowItems.value.filter(item => item.workflowId !== workflow.workflowId),
+  ].slice(0, 30)
 }
 
 async function deleteWorkflow(workflowId: string) {
@@ -1344,6 +1436,27 @@ function workflowRunText(workflow: AiAgentWorkflowRecord) {
   return `第 ${workflowRunningStep.value || 1}/${total} 步`
 }
 
+function recentWorkflowRuns(workflowId: string) {
+  return workflowRuns.value.filter(run => run.workflowId === workflowId).slice(0, 2)
+}
+
+function workflowRunSummary(run: AiAgentWorkflowRunRecord) {
+  const pieces = [
+    runStatusLabel(run.status),
+    `${run.completedStepCount}/${run.stepCount || '-'} 步`,
+  ]
+  if (run.toolUsageUnits > 0) pieces.push(`计量 ${formatNumber(run.toolUsageUnits)}`)
+  const duration = runDurationText(run.durationMs)
+  if (duration) pieces.push(duration)
+  return pieces.join(' · ')
+}
+
+function workflowRunDetail(run: AiAgentWorkflowRunRecord) {
+  return [run.matchTitle || '未绑定比赛', formatTime(run.createdAtUtc)]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function automationWorkflowName(task: AiAgentAutomationTaskRecord) {
   return workflowItems.value.find(workflow => workflow.workflowId === task.workflowId)?.name || '关联流程'
 }
@@ -1422,6 +1535,13 @@ function runStatusLabel(value: string) {
     skipped: '跳过',
   }
   return values[value] || '已记录'
+}
+
+function automationStatusFromWorkflowOutcome(outcome: WorkflowRunOutcome) {
+  if (outcome.status === 'success' || outcome.status === 'partial' || outcome.status === 'failed' || outcome.status === 'skipped') {
+    return outcome.status
+  }
+  return outcome.completed > 0 ? 'partial' : 'failed'
 }
 
 function runSourceLabel(value: string) {
@@ -1907,6 +2027,13 @@ onBeforeUnmount(() => {
                 <b>{{ workflow.name }}</b>
                 <span>{{ workflowMetaText(workflow) }}</span>
                 <small>{{ workflow.description || workflow.steps[0]?.question }}</small>
+                <span v-if="recentWorkflowRuns(workflow.workflowId).length" class="workflow-run-list" aria-label="最近运行">
+                  <span v-for="run in recentWorkflowRuns(workflow.workflowId)" :key="run.runId" class="workflow-run-item">
+                    <em>{{ workflowRunSummary(run) }}</em>
+                    <small>{{ workflowRunDetail(run) }}</small>
+                  </span>
+                </span>
+                <span v-else-if="workflowRunsPending" class="workflow-run-loading">正在读取运行记录</span>
               </button>
               <button
                 type="button"
@@ -2903,6 +3030,38 @@ onBeforeUnmount(() => {
   line-height: 1.38;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.workflow-open .workflow-run-list {
+  display: grid;
+  gap: 4px;
+  overflow: visible;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--divider);
+  color: inherit;
+  white-space: normal;
+}
+.workflow-open .workflow-run-item {
+  display: grid;
+  gap: 1px;
+  overflow: visible;
+  white-space: normal;
+}
+.workflow-open .workflow-run-item em {
+  color: var(--ink);
+  font-size: .72rem;
+  font-style: normal;
+  font-weight: 780;
+}
+.workflow-open .workflow-run-item small {
+  overflow: visible;
+  color: var(--muted);
+  font-size: .68rem;
+  text-overflow: clip;
+  white-space: normal;
+}
+.workflow-open .workflow-run-loading {
+  margin-top: 4px;
 }
 .workflow-run {
   grid-column: 1 / -1;
