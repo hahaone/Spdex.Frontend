@@ -297,15 +297,27 @@ function replaceAiNotification(next: AiInAppNotificationRow) {
 }
 
 function notificationSubject(item: AiInAppNotificationRow): string {
+  const match = item.payloadRef?.match
+  const matchTitle = match?.title
+  if (typeof matchTitle === 'string' && matchTitle) return matchTitle
   const subject = item.payloadRef?.subject
   const matchId = subject?.match_id ?? subject?.matchId
   if (typeof matchId === 'number' || typeof matchId === 'string') return `赛事 ${matchId}`
+  const workflow = item.payloadRef?.workflow
+  const workflowName = workflow?.name
+  if (typeof workflowName === 'string' && workflowName) return workflowName
+  const task = item.payloadRef?.task
+  const taskName = task?.name
+  if (typeof taskName === 'string' && taskName) return taskName
   const date = subject?.date
   if (typeof date === 'string' && date) return date
   return item.payloadRef?.conditionKind || item.source || 'AI 观察'
 }
 
 function notificationTarget(item: AiInAppNotificationRow): string | null {
+  const match = item.payloadRef?.match
+  const directMatchId = match?.match_id ?? match?.matchId
+  if (typeof directMatchId === 'number' || typeof directMatchId === 'string') return `/football/${directMatchId}`
   const subject = item.payloadRef?.subject
   const matchId = subject?.match_id ?? subject?.matchId
   if (typeof matchId === 'number' || typeof matchId === 'string') return `/football/${matchId}`
@@ -508,7 +520,7 @@ function formatNotificationTime(value?: string | null): string {
                 {{ notificationSubject(item) }}
               </NuxtLink>
               <span v-else>{{ notificationSubject(item) }}</span>
-              <span>{{ item.payloadRef?.conditionKind || item.source }}</span>
+              <span>{{ item.payloadRef?.status || item.payloadRef?.conditionKind || item.source }}</span>
             </div>
           </div>
           <button

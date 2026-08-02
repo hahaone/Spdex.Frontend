@@ -168,12 +168,23 @@ export interface AiInAppNotificationRow {
   readAt: string | null
   payloadRef: {
     type: string | null
+    source: string | null
     channel: string | null
     conditionId: string | null
     triggerId: string | null
     conditionKind: string | null
+    severity: string | null
+    status: string | null
+    taskId: string | null
+    runId: string | null
+    workflowId: string | null
+    traceId: string | null
     subject: Record<string, unknown> | null
+    task: Record<string, unknown> | null
+    workflow: Record<string, unknown> | null
+    match: Record<string, unknown> | null
     matchedAt: string | null
+    completedAt: string | null
     rawPayloadOmitted: boolean
   } | null
 }

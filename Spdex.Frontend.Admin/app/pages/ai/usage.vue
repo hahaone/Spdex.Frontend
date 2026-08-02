@@ -780,14 +780,19 @@ const notificationColumns = [
     width: 190,
     render: (row: AiInAppNotificationRow) => `${row.owner.subjectType}:${row.owner.subjectId}`,
   },
-  { title: '来源', key: 'source', width: 190 },
-  { title: '条件', key: 'conditionId', width: 230 },
-  { title: '触发', key: 'triggerId', width: 250 },
   {
-    title: '类型',
+    title: '来源',
+    key: 'source',
+    width: 160,
+    render: (row: AiInAppNotificationRow) => formatNotificationSource(row.payloadRef?.source || row.source),
+  },
+  { title: '关联对象', key: 'conditionId', width: 230 },
+  { title: '事件/运行', key: 'triggerId', width: 250 },
+  {
+    title: '状态/类型',
     key: 'payloadRef',
     width: 150,
-    render: (row: AiInAppNotificationRow) => row.payloadRef?.conditionKind || row.payloadRef?.type || '—',
+    render: (row: AiInAppNotificationRow) => formatNotificationKind(row),
   },
   {
     title: '对象',
@@ -796,10 +801,10 @@ const notificationColumns = [
     render: (row: AiInAppNotificationRow) => formatNotificationSubject(row),
   },
   {
-    title: '命中时间',
+    title: '事件时间',
     key: 'matchedAt',
     width: 170,
-    render: (row: AiInAppNotificationRow) => fmt(row.payloadRef?.matchedAt),
+    render: (row: AiInAppNotificationRow) => fmt(row.payloadRef?.matchedAt || row.payloadRef?.completedAt),
   },
   { title: '写入时间', key: 'createdAt', width: 170, render: (row: AiInAppNotificationRow) => fmt(row.createdAt) },
 ]
@@ -1049,13 +1054,52 @@ function percentile(sorted: number[], value: number) {
   return sorted[Math.max(0, Math.ceil(sorted.length * value) - 1)] ?? 0
 }
 function formatNotificationSubject(row: AiInAppNotificationRow) {
+  const match = row.payloadRef?.match
+  const matchTitle = match?.title
+  if (typeof matchTitle === 'string' && matchTitle) return matchTitle
+  const directMatchId = match?.match_id ?? match?.matchId
+  if (typeof directMatchId === 'number' || typeof directMatchId === 'string') return `赛事 ${directMatchId}`
+  const workflow = row.payloadRef?.workflow
+  const workflowName = workflow?.name
+  if (typeof workflowName === 'string' && workflowName) return workflowName
+  const task = row.payloadRef?.task
+  const taskName = task?.name
+  if (typeof taskName === 'string' && taskName) return taskName
   const subject = row.payloadRef?.subject
   if (!subject) return '—'
   const matchId = subject.match_id ?? subject.matchId
-  if (typeof matchId === 'number' || typeof matchId === 'string') return `match:${matchId}`
+  if (typeof matchId === 'number' || typeof matchId === 'string') return `赛事 ${matchId}`
   const date = subject.date
-  if (typeof date === 'string' && date) return `date:${date}`
+  if (typeof date === 'string' && date) return date
   return '—'
+}
+function formatNotificationSource(value?: string | null) {
+  const labels: Record<string, string> = {
+    spdex_ai_automation: '自动化流程',
+    spdex_watch_condition: '观察条件',
+  }
+  return value ? labels[value] ?? value : '—'
+}
+function formatNotificationKind(row: AiInAppNotificationRow) {
+  const status = row.payloadRef?.status
+  if (status) {
+    const statusLabels: Record<string, string> = {
+      success: '成功',
+      partial: '部分完成',
+      failed: '失败',
+      skipped: '已跳过',
+    }
+    return statusLabels[status] ?? status
+  }
+  const value = row.payloadRef?.conditionKind || row.payloadRef?.type
+  const labels: Record<string, string> = {
+    ai_agent_automation_run_completed: '自动化执行',
+    odds_movement: '赔率变化',
+    liquidity_shift: '资金变化',
+    market_divergence: '市场背离',
+    lineup_change: '阵容变化',
+  }
+  return value ? labels[value] ?? value : '—'
 }
 function feedbackTypeLabel(value: string) {
   const labels: Record<string, string> = {
