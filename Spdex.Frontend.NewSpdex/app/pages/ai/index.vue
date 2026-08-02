@@ -53,6 +53,7 @@ type AutomationTriggerType = 'scheduled' | 'match_status' | 'watch_condition'
 type AutomationCadence = 'daily' | 'hourly' | 'before_kickoff' | 'live_window' | 'on_signal'
 type AutomationScope = 'daily_watchlist' | 'selected_match' | 'ask_each_run'
 type WorkflowRunStatus = 'success' | 'partial' | 'failed' | 'cancelled' | 'skipped'
+type WorkflowTriggerSource = 'manual' | 'automation'
 
 interface ScenarioTemplate {
   id: string
@@ -65,6 +66,15 @@ interface ScenarioTemplate {
   interval?: string
   metricKey?: string
   badges: string[]
+}
+
+interface WorkflowTemplate {
+  id: string
+  name: string
+  description: string
+  audience: string
+  estimatedUnits: number
+  steps: AiAgentWorkflowStep[]
 }
 
 interface TurnFeedbackState {
@@ -104,6 +114,12 @@ interface WorkflowRunOutcome {
   traceId: string
   errorMessage?: string
   stepResults: AiAgentWorkflowRunStepResult[]
+}
+
+interface WorkflowRunOptions {
+  date?: string
+  market?: string
+  interval?: string
 }
 
 const route = useRoute()
@@ -173,6 +189,93 @@ const scenarioTemplates: ScenarioTemplate[] = [
     badges: ['MCP', '路径'],
   },
 ]
+
+function workflowTemplateStep(
+  stepId: string,
+  title: string,
+  question: string,
+  preset: Preset,
+  options: Partial<Pick<AiAgentWorkflowStep, 'market' | 'interval' | 'metricKey' | 'requiresMatch'>> = {},
+): AiAgentWorkflowStep {
+  return {
+    stepId,
+    title,
+    question,
+    preset,
+    market: options.market ?? null,
+    interval: options.interval ?? null,
+    metricKey: options.metricKey ?? null,
+    requiresMatch: options.requiresMatch ?? preset !== 'today_hot',
+  }
+}
+
+const workflowTemplates: WorkflowTemplate[] = [
+  {
+    id: 'single-match-review',
+    name: '单场快速复盘',
+    audience: '赛前/赛中通用',
+    description: '按数据概览、成交、走势、异常和后续观察顺序快速看清一场比赛。',
+    estimatedUnits: 18,
+    steps: [
+      workflowTemplateStep('step_1', '数据概览', '这场比赛当前数据概览是什么？请先给直接结论，再说明主要盘口、成交活跃度和数据边界。', 'snapshot'),
+      workflowTemplateStep('step_2', '大额交易', '这场比赛有没有明显的大额交易？请区分单笔噪声和连续成交，并说明主要发生在哪些方向。', 'anomaly'),
+      workflowTemplateStep('step_3', '成交走势', '最近 15 分钟成交量时间分布如何？请说明峰值时间、主要方向和是否连续放大。', 'trend', { market: 'trade_volume', interval: '15m' }),
+      workflowTemplateStep('step_4', '异常证据', '这场比赛目前有没有值得注意的异常证据？请按证据强弱排序，并说明不足以判断的地方。', 'anomaly'),
+      workflowTemplateStep('step_5', '继续观察', '后续应该继续观察哪些信号？请给出 3 个最值得追踪的问题。', 'snapshot'),
+    ],
+  },
+  {
+    id: 'big-trade-review',
+    name: '大额交易复核',
+    audience: '资金异动排查',
+    description: '用于复核大额成交是否只是单笔噪声，还是可能形成连续资金信号。',
+    estimatedUnits: 16,
+    steps: [
+      workflowTemplateStep('step_1', '成交分布', '这场比赛当前各方向成交量分布如何？请说明成交主要集中在哪里。', 'snapshot'),
+      workflowTemplateStep('step_2', '大单判断', '这场有没有明显大额交易？请给出是否明显、涉及方向、金额量级和置信度。', 'anomaly'),
+      workflowTemplateStep('step_3', '时间连续性', '最近 15 分钟和最近 1 小时成交量是否有连续放大？请说明是否存在突增后的延续。', 'trend', { market: 'trade_volume', interval: '15m' }),
+      workflowTemplateStep('step_4', '盘口同步', '成交放大是否和胜平负盘口变化同步？请区分资金活跃、盘口反应和无法确认的部分。', 'trend', { market: 'match_odds', interval: '15m' }),
+    ],
+  },
+  {
+    id: 'prediction-divergence-review',
+    name: '预测市场背离排查',
+    audience: '跨市场对照',
+    description: '对照 SPdex 与外部预测市场，识别价格、流动性和解释口径的差异。',
+    estimatedUnits: 14,
+    steps: [
+      workflowTemplateStep('step_1', '内部市场', '先概括这场比赛在 SPdex 内部市场的主要价格、成交和倾向。', 'snapshot'),
+      workflowTemplateStep('step_2', '外部对照', '请比较这场的 SPdex 标盘和 Poly/Kalshi 外部预测市场，说明是否存在背离。', 'snapshot'),
+      workflowTemplateStep('step_3', '流动性限制', '如果存在背离，主要是价格背离、成交量不足、挂单薄还是数据时点差异？请分别说明。', 'anomaly'),
+      workflowTemplateStep('step_4', '复核路径', '针对这场背离，后续应该按什么顺序复核？请给出可执行的追问步骤。', 'snapshot'),
+    ],
+  },
+  {
+    id: 'live-signal-review',
+    name: '赛中信号复盘',
+    audience: '进行中比赛',
+    description: '适合比赛进行中查看成交变化、盘口反应和异常信号，不直接给赛果预测。',
+    estimatedUnits: 17,
+    steps: [
+      workflowTemplateStep('step_1', '赛中状态', '这场比赛现在处于什么阶段？当前市场数据有什么最重要的变化？', 'snapshot'),
+      workflowTemplateStep('step_2', '盘口走势', '赛中胜平负盘口最近有什么明显变化？请说明变化方向和可能的数据含义。', 'trend', { market: 'match_odds', interval: '15m' }),
+      workflowTemplateStep('step_3', '成交节奏', '赛中成交量时间分布是否有突然放大？请说明峰值、方向和是否持续。', 'trend', { market: 'trade_volume', interval: '15m' }),
+      workflowTemplateStep('step_4', '异常与边界', '这场赛中是否有异常证据？请说明哪些只是观察信号，哪些仍需要等待更多数据。', 'anomaly'),
+    ],
+  },
+  {
+    id: 'daily-watchlist',
+    name: '每日重点赛事初筛',
+    audience: '先筛比赛',
+    description: '先从当天赛事里筛出值得观察的比赛，再决定是否进入单场复盘。',
+    estimatedUnits: 8,
+    steps: [
+      workflowTemplateStep('step_1', '今日列表', '请生成今天值得先看的比赛观察列表，按关注度排序并说明入选原因。', 'today_hot', { requiresMatch: false }),
+      workflowTemplateStep('step_2', '优先级解释', '请说明今日列表里前三场分别适合继续追问什么，以及各自主要数据边界。', 'today_hot', { requiresMatch: false }),
+      workflowTemplateStep('step_3', '筛选策略', '如果我今天只能重点看 3 场，应该如何分配复盘顺序？请给出理由。', 'today_hot', { requiresMatch: false }),
+    ],
+  },
+]
 const feedbackIssueOptions = [
   { value: 'wrong_data', label: '数据不准确' },
   { value: 'missing_critical_context', label: '缺少关键背景' },
@@ -227,8 +330,16 @@ const workflowDraftName = ref('')
 const workflowDraftDescription = ref('')
 const workflowDraftSteps = ref<AiAgentWorkflowStep[]>([])
 const workflowSaving = ref(false)
+const workflowTemplateSavingId = ref('')
 const workflowRunningId = ref('')
 const workflowRunningStep = ref(0)
+const workflowRunSetupOpen = ref(false)
+const workflowRunSetupTarget = ref<AiAgentWorkflowRecord | null>(null)
+const workflowRunSetupDate = ref('')
+const workflowRunSetupMarket = ref('trade_volume')
+const workflowRunSetupInterval = ref('15m')
+const workflowRunDetailOpen = ref(false)
+const workflowRunDetailItem = ref<AiAgentWorkflowRunRecord | null>(null)
 const pendingWorkflow = ref<AiAgentWorkflowRecord | null>(null)
 const automationItems = ref<AiAgentAutomationTaskRecord[]>([])
 const automationPending = ref(false)
@@ -317,6 +428,40 @@ const workflowSaveHint = computed(() => {
 })
 const automationCadenceChoices = computed(() => automationCadenceOptions[automationDraft.triggerType] ?? automationCadenceOptions.scheduled)
 const selectedAutomationWorkflow = computed(() => workflowItems.value.find(item => item.workflowId === automationDraft.workflowId) ?? null)
+const savedWorkflowTemplateNames = computed(() => new Set(
+  workflowItems.value.map(item => item.name.trim()).filter(Boolean),
+))
+const workflowRunSetupCanStart = computed(() => {
+  const workflow = workflowRunSetupTarget.value
+  if (!workflow || loading.value || Boolean(workflowRunningId.value)) return false
+  return !workflow.matchRequired || Boolean(selectedMatch.value)
+})
+const workflowRunSetupContext = computed(() => {
+  const workflow = workflowRunSetupTarget.value
+  if (!workflow) return ''
+  if (workflow.matchRequired) {
+    return selectedMatch.value
+      ? `${selectedMatch.value.leagueName || '赛事'} · ${selectedMatch.value.homeTeam} vs ${selectedMatch.value.awayTeam}`
+      : '请先选择一场比赛'
+  }
+  return `${workflowRunSetupDate.value || form.date} · 每日观察`
+})
+const workflowRunSetupEstimate = computed(() => {
+  const workflow = workflowRunSetupTarget.value
+  return workflow ? estimateWorkflowToolUnits(workflow) : 0
+})
+const workflowRunUsageSummary = computed(() => {
+  const runs = workflowRuns.value
+  const units = runs.reduce((sum, run) => sum + Math.max(0, run.toolUsageUnits || 0), 0)
+  const incomplete = runs.filter(run => ['partial', 'failed', 'cancelled', 'skipped'].includes(run.status)).length
+  const automation = runs.filter(run => run.triggerSource === 'automation').length
+  return {
+    runs: runs.length,
+    units,
+    incomplete,
+    automation,
+  }
+})
 const canSaveAutomationTask = computed(() => Boolean(
   automationDraft.name.trim()
   && automationDraft.workflowId
@@ -737,6 +882,23 @@ function closeWorkflowDraft() {
   workflowDraftOpen.value = false
 }
 
+async function persistWorkflow(payload: {
+  name: string
+  description?: string | null
+  matchRequired: boolean
+  steps: AiAgentWorkflowStep[]
+}) {
+  const response = await $apiFetch<AiAgentWorkflowMutationResponse>('/api/newspdex/ai/agent/workflows', {
+    method: 'POST',
+    body: payload,
+  })
+  upsertWorkflow(response.item)
+  if (!automationDraft.workflowId) {
+    automationDraft.workflowId = response.item.workflowId
+  }
+  return response.item
+}
+
 async function saveCurrentWorkflow() {
   if (!canSaveWorkflow.value) return
   const steps = workflowDraftValidSteps.value
@@ -748,19 +910,12 @@ async function saveCurrentWorkflow() {
   workflowSaving.value = true
   workflowMessage.value = '保存流程中'
   try {
-    const response = await $apiFetch<AiAgentWorkflowMutationResponse>('/api/newspdex/ai/agent/workflows', {
-      method: 'POST',
-      body: {
-        name: workflowDraftName.value.trim() || suggestedWorkflowName(),
-        description: workflowDraftDescription.value.trim() || null,
-        matchRequired: steps.some(step => step.requiresMatch),
-        steps,
-      },
+    await persistWorkflow({
+      name: workflowDraftName.value.trim() || suggestedWorkflowName(),
+      description: workflowDraftDescription.value.trim() || null,
+      matchRequired: steps.some(step => step.requiresMatch),
+      steps,
     })
-    workflowItems.value = [
-      response.item,
-      ...workflowItems.value.filter(item => item.workflowId !== response.item.workflowId),
-    ].slice(0, 30)
     workflowDraftOpen.value = false
     workflowDraftName.value = ''
     workflowDraftDescription.value = ''
@@ -772,6 +927,37 @@ async function saveCurrentWorkflow() {
   }
   finally {
     workflowSaving.value = false
+  }
+}
+
+function isWorkflowTemplateSaved(template: WorkflowTemplate) {
+  return savedWorkflowTemplateNames.value.has(template.name.trim())
+}
+
+async function createWorkflowFromTemplate(template: WorkflowTemplate) {
+  if (workflowTemplateSavingId.value || workflowSaving.value) return
+  if (isWorkflowTemplateSaved(template)) {
+    workflowMessage.value = `模板已加入我的流程：${template.name}`
+    return
+  }
+
+  workflowTemplateSavingId.value = template.id
+  workflowMessage.value = `正在创建模板：${template.name}`
+  try {
+    const steps = template.steps.map((step, index) => ({ ...step, stepId: `step_${index + 1}` }))
+    await persistWorkflow({
+      name: template.name,
+      description: template.description,
+      matchRequired: steps.some(step => step.requiresMatch),
+      steps,
+    })
+    workflowMessage.value = `已加入我的流程：${template.name}`
+  }
+  catch {
+    workflowMessage.value = '模板创建失败，请稍后重试'
+  }
+  finally {
+    workflowTemplateSavingId.value = ''
   }
 }
 
@@ -981,7 +1167,59 @@ function upsertAutomationTask(task: AiAgentAutomationTaskRecord) {
   ].slice(0, 30)
 }
 
-async function runWorkflow(workflow: AiAgentWorkflowRecord, triggerSource = 'manual'): Promise<WorkflowRunOutcome> {
+function openWorkflowRunSetup(workflow: AiAgentWorkflowRecord) {
+  if (loading.value || workflowRunningId.value) return
+  if (workflow.matchRequired && !selectedMatch.value) {
+    pendingWorkflow.value = workflow
+    selected.value = normalizePreset(workflow.steps[0]?.preset) ?? 'snapshot'
+    selectorOpen.value = true
+    workflowMessage.value = `请先选择比赛，再运行「${workflow.name}」`
+    return
+  }
+  workflowRunSetupTarget.value = workflow
+  workflowRunSetupDate.value = form.date || new Date().toISOString().slice(0, 10)
+  workflowRunSetupMarket.value = form.market || 'trade_volume'
+  workflowRunSetupInterval.value = form.interval || '15m'
+  workflowRunSetupOpen.value = true
+  workflowMessage.value = ''
+}
+
+function closeWorkflowRunSetup() {
+  if (workflowRunningId.value) return
+  workflowRunSetupOpen.value = false
+}
+
+function chooseWorkflowRunMatch() {
+  const workflow = workflowRunSetupTarget.value
+  if (!workflow) return
+  pendingWorkflow.value = workflow
+  selected.value = normalizePreset(workflow.steps[0]?.preset) ?? 'snapshot'
+  workflowRunSetupOpen.value = false
+  selectorOpen.value = true
+  workflowMessage.value = `选择比赛后可继续运行「${workflow.name}」`
+}
+
+async function confirmWorkflowRunSetup() {
+  const workflow = workflowRunSetupTarget.value
+  if (!workflow) return
+  if (workflow.matchRequired && !selectedMatch.value) {
+    selectorOpen.value = true
+    workflowMessage.value = `请先选择比赛，再运行「${workflow.name}」`
+    return
+  }
+  workflowRunSetupOpen.value = false
+  await runWorkflow(workflow, 'manual', {
+    date: workflowRunSetupDate.value || form.date,
+    market: workflowRunSetupMarket.value || form.market,
+    interval: workflowRunSetupInterval.value || form.interval,
+  })
+}
+
+async function runWorkflow(
+  workflow: AiAgentWorkflowRecord,
+  triggerSource: WorkflowTriggerSource = 'manual',
+  options: WorkflowRunOptions = {},
+): Promise<WorkflowRunOutcome> {
   const startedAt = Date.now()
   const turnStartIndex = turns.value.length
   const emptyOutcome = (completed = 0, status: WorkflowRunStatus = 'skipped', errorMessage = ''): WorkflowRunOutcome => ({
@@ -1007,6 +1245,9 @@ async function runWorkflow(workflow: AiAgentWorkflowRecord, triggerSource = 'man
     workflowMessage.value = `请先选择比赛，再运行「${workflow.name}」`
     return emptyOutcome(0, 'skipped', workflowMessage.value)
   }
+  if (options.date) form.date = options.date
+  if (options.market) form.market = options.market
+  if (options.interval) form.interval = options.interval
 
   workflowRunningId.value = workflow.workflowId
   workflowRunningStep.value = 0
@@ -1018,7 +1259,7 @@ async function runWorkflow(workflow: AiAgentWorkflowRecord, triggerSource = 'man
   try {
     for (const [index, step] of workflow.steps.entries()) {
       workflowRunningStep.value = index + 1
-      applyWorkflowStepConfig(step)
+      applyWorkflowStepConfig(step, options)
       const preset = normalizePreset(step.preset) ?? 'snapshot'
       const requestMatch = step.requiresMatch ? selectedMatch.value : null
       const stepStartedAt = Date.now()
@@ -1349,6 +1590,10 @@ function marketLabel(value: string) {
   return labels[value] || '市场'
 }
 
+function presetLabel(value: string) {
+  return presets.find(item => item.value === value)?.label || '分析步骤'
+}
+
 function intervalLabel(value: string) {
   const labels: Record<string, string> = {
     '1m': '1 分钟',
@@ -1416,10 +1661,13 @@ function workflowStepTitle(question: string, index: number) {
   return trimmed.length > 22 ? `${trimmed.slice(0, 22)}...` : trimmed
 }
 
-function applyWorkflowStepConfig(step: AiAgentWorkflowStep) {
-  selected.value = normalizePreset(step.preset) ?? 'snapshot'
+function applyWorkflowStepConfig(step: AiAgentWorkflowStep, options: WorkflowRunOptions = {}) {
+  const preset = normalizePreset(step.preset) ?? 'snapshot'
+  selected.value = preset
   if (step.market) form.market = step.market
+  else if (preset === 'trend' && options.market) form.market = options.market
   if (step.interval) form.interval = step.interval
+  else if (preset === 'trend' && options.interval) form.interval = options.interval
   if (step.metricKey) form.metricKey = step.metricKey
 }
 
@@ -1455,6 +1703,43 @@ function workflowRunDetail(run: AiAgentWorkflowRunRecord) {
   return [run.matchTitle || '未绑定比赛', formatTime(run.createdAtUtc)]
     .filter(Boolean)
     .join(' · ')
+}
+
+function workflowUsageMessage() {
+  const summary = workflowRunUsageSummary.value
+  if (!summary.runs) return '暂无流程运行计量'
+  const parts = [
+    `最近 ${summary.runs} 次运行`,
+    `计量 ${formatNumber(summary.units)} 单位`,
+  ]
+  if (summary.automation > 0) parts.push(`自动化试跑 ${summary.automation} 次`)
+  if (summary.incomplete > 0) parts.push(`${summary.incomplete} 次未完整完成`)
+  return parts.join(' · ')
+}
+
+function openWorkflowRunDetail(run: AiAgentWorkflowRunRecord) {
+  workflowRunDetailItem.value = run
+  workflowRunDetailOpen.value = true
+}
+
+function closeWorkflowRunDetail() {
+  workflowRunDetailOpen.value = false
+}
+
+function workflowRunTraceText(run: AiAgentWorkflowRunRecord) {
+  if (!run.traceId) return '暂无'
+  return run.traceId.length > 18 ? `${run.traceId.slice(0, 18)}...` : run.traceId
+}
+
+function workflowRunStepMeta(step: AiAgentWorkflowRunStepResult) {
+  const parts = [
+    runStatusLabel(step.status),
+    presetLabel(step.preset),
+  ]
+  if (step.toolUsageUnits > 0) parts.push(`计量 ${formatNumber(step.toolUsageUnits)}`)
+  const duration = runDurationText(step.durationMs)
+  if (duration) parts.push(duration)
+  return parts.join(' · ')
 }
 
 function automationWorkflowName(task: AiAgentAutomationTaskRecord) {
@@ -1532,6 +1817,7 @@ function runStatusLabel(value: string) {
     success: '完成',
     partial: '部分完成',
     failed: '失败',
+    cancelled: '已取消',
     skipped: '跳过',
   }
   return values[value] || '已记录'
@@ -1546,7 +1832,8 @@ function automationStatusFromWorkflowOutcome(outcome: WorkflowRunOutcome) {
 
 function runSourceLabel(value: string) {
   const values: Record<string, string> = {
-    manual: '手动试跑',
+    manual: '手动运行',
+    automation: '自动化试跑',
     scheduler: '定时调度',
     watch_condition: '信号触发',
     system: '系统',
@@ -2003,43 +2290,81 @@ onBeforeUnmount(() => {
 
           <p v-if="workflowMessage" class="workflow-message">{{ workflowMessage }}</p>
           <p v-else-if="workflowPending" class="workflow-message">正在读取流程</p>
+          <div v-if="workflowRuns.length" :class="['workflow-usage-card', { warning: workflowRunUsageSummary.incomplete > 0 }]">
+            <span>流程用量</span>
+            <b>{{ workflowUsageMessage() }}</b>
+            <small>{{ workflowRunUsageSummary.incomplete > 0 ? '有未完整完成的流程，可点最近运行查看步骤详情。' : '当前为测试计量，用于控制成本和排查问题。' }}</small>
+          </div>
 
           <div v-if="pendingWorkflow" class="pending-workflow">
             <span>待运行</span>
             <b>{{ pendingWorkflow.name }}</b>
-            <button type="button" class="mini-action focus-ring" :disabled="loading || Boolean(workflowRunningId)" @click="runWorkflow(pendingWorkflow)">
+            <button type="button" class="mini-action focus-ring" :disabled="loading || Boolean(workflowRunningId)" @click="openWorkflowRunSetup(pendingWorkflow)">
               <Play :size="13" />
               <span>运行流程</span>
             </button>
           </div>
 
+          <div class="workflow-template-library" aria-label="流程模板库">
+            <div class="workflow-template-head">
+              <span>推荐模板</span>
+              <small>一键加入后可编辑、运行或创建自动化任务</small>
+            </div>
+            <div class="workflow-template-list">
+              <button
+                v-for="template in workflowTemplates"
+                :key="template.id"
+                type="button"
+                class="workflow-template-row focus-ring"
+                :disabled="Boolean(workflowTemplateSavingId) || isWorkflowTemplateSaved(template)"
+                @click="createWorkflowFromTemplate(template)"
+              >
+                <span>
+                  <b>{{ template.name }}</b>
+                  <small>{{ template.audience }} · {{ template.steps.length }} 步 · 预计 {{ template.estimatedUnits }} 单位</small>
+                </span>
+                <em>{{ template.description }}</em>
+                <i>
+                  <Check v-if="isWorkflowTemplateSaved(template)" :size="13" />
+                  <Plus v-else :size="13" />
+                  <small>
+                    <template v-if="isWorkflowTemplateSaved(template)">已加入</template>
+                    <template v-else-if="workflowTemplateSavingId === template.id">创建中</template>
+                    <template v-else>加入</template>
+                  </small>
+                </i>
+              </button>
+            </div>
+          </div>
+
           <p v-if="!workflowPending && !workflowItems.length && !workflowDraftOpen" class="workflow-message">
-            暂无自定义流程。完成一次对话后，可把提问顺序保存为流程复用。
+            暂无自定义流程。可以从推荐模板开始，也可以完成一次对话后保存自己的提问顺序。
           </p>
           <div v-if="workflowItems.length" class="workflow-list">
             <div v-for="workflow in workflowItems" :key="workflow.workflowId" class="workflow-row">
-              <button
-                type="button"
-                class="workflow-open focus-ring"
-                :disabled="loading || Boolean(workflowRunningId)"
-                @click="runWorkflow(workflow)"
-              >
+              <div class="workflow-open">
                 <b>{{ workflow.name }}</b>
                 <span>{{ workflowMetaText(workflow) }}</span>
                 <small>{{ workflow.description || workflow.steps[0]?.question }}</small>
                 <span v-if="recentWorkflowRuns(workflow.workflowId).length" class="workflow-run-list" aria-label="最近运行">
-                  <span v-for="run in recentWorkflowRuns(workflow.workflowId)" :key="run.runId" class="workflow-run-item">
+                  <button
+                    v-for="run in recentWorkflowRuns(workflow.workflowId)"
+                    :key="run.runId"
+                    type="button"
+                    class="workflow-run-item focus-ring"
+                    @click="openWorkflowRunDetail(run)"
+                  >
                     <em>{{ workflowRunSummary(run) }}</em>
                     <small>{{ workflowRunDetail(run) }}</small>
-                  </span>
+                  </button>
                 </span>
                 <span v-else-if="workflowRunsPending" class="workflow-run-loading">正在读取运行记录</span>
-              </button>
+              </div>
               <button
                 type="button"
                 class="workflow-run focus-ring"
                 :disabled="loading || Boolean(workflowRunningId)"
-                @click="runWorkflow(workflow)"
+                @click="openWorkflowRunSetup(workflow)"
               >
                 <Play v-if="workflowRunningId !== workflow.workflowId" :size="14" />
                 <span>{{ workflowRunText(workflow) }}</span>
@@ -2607,6 +2932,157 @@ onBeforeUnmount(() => {
         </footer>
       </section>
     </div>
+
+    <div
+      v-if="workflowRunSetupOpen && workflowRunSetupTarget"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="closeWorkflowRunSetup"
+    >
+      <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-run-modal-title">
+        <header class="modal-header">
+          <div>
+            <span>确认运行上下文</span>
+            <h2 id="workflow-run-modal-title">运行流程</h2>
+          </div>
+          <button type="button" class="icon-button focus-ring" aria-label="关闭运行流程窗口" :disabled="Boolean(workflowRunningId)" @click="closeWorkflowRunSetup">
+            <X :size="16" />
+          </button>
+        </header>
+
+        <div class="workflow-run-setup modal-form">
+          <section class="workflow-run-summary">
+            <b>{{ workflowRunSetupTarget.name }}</b>
+            <span>{{ workflowRunSetupTarget.description || '按保存的步骤连续提问并生成回答。' }}</span>
+            <small>{{ workflowRunSetupTarget.steps.length }} 步 · 预计 {{ workflowRunSetupEstimate }} 单位 · {{ workflowRunSetupTarget.matchRequired ? '需要比赛' : '按日期运行' }}</small>
+          </section>
+
+          <section class="workflow-run-context">
+            <div>
+              <span>运行对象</span>
+              <b>{{ workflowRunSetupContext }}</b>
+            </div>
+            <button
+              v-if="workflowRunSetupTarget.matchRequired"
+              type="button"
+              class="mini-action focus-ring"
+              @click="chooseWorkflowRunMatch"
+            >
+              {{ selectedMatch ? '更换比赛' : '选择比赛' }}
+            </button>
+            <label v-else>
+              <span>日期</span>
+              <input v-model="workflowRunSetupDate" type="date">
+            </label>
+          </section>
+
+          <div class="workflow-run-grid">
+            <label>
+              <span>走势市场</span>
+              <select v-model="workflowRunSetupMarket">
+                <option value="trade_volume">成交量</option>
+                <option value="match_odds">胜平负</option>
+                <option value="asian_handicap">亚洲让球</option>
+                <option value="over_under">大小球</option>
+              </select>
+            </label>
+            <label>
+              <span>走势粒度</span>
+              <select v-model="workflowRunSetupInterval">
+                <option value="1m">1 分钟</option>
+                <option value="5m">5 分钟</option>
+                <option value="15m">15 分钟</option>
+                <option value="1h">1 小时</option>
+              </select>
+            </label>
+          </div>
+
+          <ol class="workflow-run-step-list">
+            <li v-for="(step, index) in workflowRunSetupTarget.steps" :key="step.stepId">
+              <span>{{ index + 1 }}</span>
+              <b>{{ step.title || workflowStepTitle(step.question, index) }}</b>
+              <small>{{ step.requiresMatch ? '使用当前比赛' : '不需要比赛' }} · {{ presetLabel(step.preset) }}</small>
+            </li>
+          </ol>
+        </div>
+
+        <footer class="modal-actions">
+          <button type="button" class="secondary-action focus-ring" :disabled="Boolean(workflowRunningId)" @click="closeWorkflowRunSetup">
+            取消
+          </button>
+          <button type="button" class="primary-action focus-ring" :disabled="!workflowRunSetupCanStart" @click="confirmWorkflowRunSetup">
+            <Play :size="15" />
+            <span>开始运行</span>
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      v-if="workflowRunDetailOpen && workflowRunDetailItem"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="closeWorkflowRunDetail"
+    >
+      <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-run-detail-title">
+        <header class="modal-header">
+          <div>
+            <span>{{ workflowRunDetailItem.workflowName || '流程运行记录' }}</span>
+            <h2 id="workflow-run-detail-title">运行详情</h2>
+          </div>
+          <button type="button" class="icon-button focus-ring" aria-label="关闭运行详情" @click="closeWorkflowRunDetail">
+            <X :size="16" />
+          </button>
+        </header>
+
+        <div class="workflow-run-detail modal-form">
+          <section class="workflow-run-detail-summary">
+            <div>
+              <span>运行状态</span>
+              <b>{{ runStatusLabel(workflowRunDetailItem.status) }}</b>
+            </div>
+            <div>
+              <span>完成步骤</span>
+              <b>{{ workflowRunDetailItem.completedStepCount }}/{{ workflowRunDetailItem.stepCount }}</b>
+            </div>
+            <div>
+              <span>工具计量</span>
+              <b>{{ formatNumber(workflowRunDetailItem.toolUsageUnits) }}</b>
+            </div>
+            <div>
+              <span>耗时</span>
+              <b>{{ runDurationText(workflowRunDetailItem.durationMs) || '-' }}</b>
+            </div>
+          </section>
+
+          <section class="workflow-run-detail-context">
+            <span>{{ workflowRunDetailItem.matchTitle || '未绑定比赛' }}</span>
+            <small>{{ formatTime(workflowRunDetailItem.createdAtUtc) }} · {{ runSourceLabel(workflowRunDetailItem.triggerSource) }} · 客服追踪号 {{ workflowRunTraceText(workflowRunDetailItem) }}</small>
+            <p v-if="workflowRunDetailItem.errorMessage">{{ workflowRunDetailItem.errorMessage }}</p>
+          </section>
+
+          <ol v-if="workflowRunDetailItem.stepResults.length" class="workflow-run-detail-steps">
+            <li v-for="(step, index) in workflowRunDetailItem.stepResults" :key="`${step.stepId}-${index}`">
+              <div>
+                <span>{{ index + 1 }}</span>
+                <b>{{ step.title || workflowStepTitle(step.question, index) }}</b>
+                <small>{{ workflowRunStepMeta(step) }}</small>
+              </div>
+              <p>{{ step.question }}</p>
+              <small v-if="step.traceId">客服追踪号 {{ step.traceId.length > 18 ? `${step.traceId.slice(0, 18)}...` : step.traceId }}</small>
+              <small v-if="step.errorMessage" class="workflow-run-error">{{ step.errorMessage }}</small>
+            </li>
+          </ol>
+          <p v-else class="workflow-empty-warning">这次运行没有记录到步骤明细。</p>
+        </div>
+
+        <footer class="modal-actions">
+          <button type="button" class="primary-action focus-ring" @click="closeWorkflowRunDetail">
+            知道了
+          </button>
+        </footer>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -2934,6 +3410,207 @@ onBeforeUnmount(() => {
   color: var(--muted);
   font-size: .82rem;
 }
+.workflow-run-setup {
+  display: grid;
+  gap: 10px;
+}
+.workflow-run-summary,
+.workflow-run-context {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--canvas);
+}
+.workflow-run-summary b,
+.workflow-run-context b {
+  color: var(--ink);
+  font-size: .98rem;
+  overflow-wrap: anywhere;
+}
+.workflow-run-summary span,
+.workflow-run-summary small,
+.workflow-run-context span {
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.42;
+}
+.workflow-run-context {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.workflow-run-context label {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 760;
+}
+.workflow-run-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.workflow-run-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 760;
+}
+.workflow-run-context input,
+.workflow-run-grid select {
+  min-height: 38px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: .9rem;
+}
+.workflow-run-step-list {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workflow-run-step-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.workflow-run-step-list li > span {
+  display: grid;
+  grid-row: span 2;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, #6957f5 12%, var(--panel));
+  color: #5b4ce8;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.workflow-run-step-list b {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: .86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-run-step-list small {
+  color: var(--muted);
+  font-size: .72rem;
+}
+.workflow-run-detail {
+  display: grid;
+  gap: 10px;
+}
+.workflow-run-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.workflow-run-detail-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--canvas);
+}
+.workflow-run-detail-summary span,
+.workflow-run-detail-context small,
+.workflow-run-detail-steps small {
+  color: var(--muted);
+  font-size: .74rem;
+  line-height: 1.35;
+}
+.workflow-run-detail-summary b {
+  color: var(--ink);
+  font-size: .94rem;
+}
+.workflow-run-detail-context {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--canvas);
+}
+.workflow-run-detail-context span {
+  color: var(--ink);
+  font-size: .9rem;
+  font-weight: 800;
+}
+.workflow-run-detail-context p {
+  margin: 4px 0 0;
+  color: #b45309;
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.workflow-run-detail-steps {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workflow-run-detail-steps li {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.workflow-run-detail-steps li > div {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 1px 8px;
+  align-items: center;
+}
+.workflow-run-detail-steps li > div > span {
+  display: grid;
+  grid-row: span 2;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, #6957f5 12%, var(--panel));
+  color: #5b4ce8;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.workflow-run-detail-steps b {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: .88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-run-detail-steps p {
+  margin: 0;
+  color: var(--ink);
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.workflow-run-error {
+  color: #b45309 !important;
+}
 .automation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2992,6 +3669,118 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
   font-size: .88rem;
 }
+.workflow-template-library {
+  display: grid;
+  gap: 7px;
+}
+.workflow-template-head {
+  display: grid;
+  gap: 2px;
+}
+.workflow-template-head span {
+  color: var(--ink);
+  font-size: .82rem;
+  font-weight: 800;
+}
+.workflow-template-head small {
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.35;
+}
+.workflow-template-list {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 2px;
+}
+.workflow-template-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--canvas);
+  color: var(--ink);
+  text-align: left;
+}
+.workflow-template-row:disabled {
+  cursor: default;
+  opacity: .72;
+}
+.workflow-template-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.workflow-template-row b {
+  overflow: hidden;
+  font-size: .82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-template-row small {
+  color: var(--muted);
+  font-size: .7rem;
+  line-height: 1.32;
+}
+.workflow-template-row > em {
+  display: -webkit-box;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .72rem;
+  font-style: normal;
+  line-height: 1.38;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.workflow-template-row > i {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  justify-self: end;
+  color: #5b4ce8;
+  font-style: normal;
+  font-weight: 800;
+}
+.workflow-template-row > i small {
+  color: inherit;
+  font-size: .7rem;
+  white-space: nowrap;
+}
+.workflow-usage-card {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, #0f766e 18%, var(--divider));
+  border-radius: 7px;
+  background: color-mix(in srgb, #0f766e 6%, var(--panel));
+}
+.workflow-usage-card.warning {
+  border-color: color-mix(in srgb, #b45309 22%, var(--divider));
+  background: color-mix(in srgb, #b45309 7%, var(--panel));
+}
+.workflow-usage-card span {
+  color: #0f766e;
+  font-size: .72rem;
+  font-weight: 800;
+}
+.workflow-usage-card.warning span {
+  color: #b45309;
+}
+.workflow-usage-card b {
+  color: var(--ink);
+  font-size: .8rem;
+  line-height: 1.35;
+}
+.workflow-usage-card small {
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.38;
+}
 .workflow-list {
   display: grid;
   gap: 1px;
@@ -3045,6 +3834,11 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 1px;
   overflow: visible;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
   white-space: normal;
 }
 .workflow-open .workflow-run-item em {
@@ -3930,7 +4724,10 @@ button:disabled {
   .selected-match-card,
   .selector-tools,
   .fields,
-  .selector-row {
+  .selector-row,
+  .workflow-run-context,
+  .workflow-run-grid,
+  .workflow-run-detail-summary {
     grid-template-columns: 1fr;
   }
   .selected-match-actions {
