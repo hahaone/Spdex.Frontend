@@ -331,7 +331,9 @@ interface WorkflowQualityRow {
   latestSuccess: boolean
   latestErrorCode: string
 }
-const activeTab = ref(can(P.aiUsageView) ? 'usage' : 'audit')
+const route = useRoute()
+const routeTraceId = queryString(route.query.traceId)
+const activeTab = ref(initialTab())
 const range = ref<[number, number]>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
 const audit = ref<AiAuditResult | null>(null)
@@ -347,7 +349,7 @@ const traceDrawerVisible = ref(false)
 const feedbackReviewVisible = ref(false)
 const feedbackReviewSubmitting = ref(false)
 const feedbackReviewTarget = ref<AiAnswerFeedbackRow | null>(null)
-const traceId = ref('')
+const traceId = ref(routeTraceId)
 const feedbackReviewForm = reactive({
   status: 'reviewing',
   severity: 'medium',
@@ -384,10 +386,10 @@ const feedbackFilters = reactive<{
   traceId: string
   limit: number
 }>({
-  status: 'new',
+  status: routeTraceId ? '' : 'new',
   feedbackType: '',
   tool: '',
-  traceId: '',
+  traceId: routeTraceId,
   limit: 100,
 })
 
@@ -580,6 +582,27 @@ const feedbackReviewTitle = computed(() => {
   const status = feedbackStatusLabel(feedbackReviewForm.status)
   return feedbackReviewTarget.value ? `回答验收：${status}` : '回答验收'
 })
+
+function queryString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function initialTab() {
+  const tab = queryString(route.query.tab)
+  const allowed = new Set<string>()
+  if (can(P.aiUsageView)) allowed.add('usage')
+  if (can(P.aiAuditView)) {
+    allowed.add('audit')
+    allowed.add('quality')
+    allowed.add('feedback')
+    allowed.add('workflow')
+    allowed.add('notifications')
+    allowed.add('trace')
+  }
+  if (can(P.aiBillingReconcile)) allowed.add('billing')
+  if (tab && allowed.has(tab)) return tab
+  return can(P.aiUsageView) ? 'usage' : 'audit'
+}
 
 function shortTraceId(value: string) {
   return value.length > 28 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value
@@ -1125,6 +1148,9 @@ onMounted(() => {
     loadAudit()
     loadInAppNotifications()
     loadFeedback()
+    if (activeTab.value === 'trace' && traceId.value) {
+      loadTrace()
+    }
   }
 })
 </script>

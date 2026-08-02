@@ -75,7 +75,7 @@ const evidenceFields = computed(() => uniqueTexts([
   ...array(evidence.value.source_inputs),
   ...array(evidence.value.ranking_inputs),
   ...array(data.value.evidence_sections),
-].map(value => evidenceFieldLabel(String(value))).filter(Boolean)))
+].map(value => evidenceFieldLabel(String(value))).filter(isUsefulEvidenceLabel)))
 const bigTradeGroups = computed(() => array(data.value.groups)
   .map((value) => {
     const group = record(value)
@@ -545,6 +545,11 @@ function missingFieldLabel(key: string): string {
   return labels[key] || labels[normalized] || evidenceFieldLabel(key) || fallbackLabel(key)
 }
 
+function isUsefulEvidenceLabel(value: string): boolean {
+  const label = value.trim()
+  return Boolean(label) && !['指标', '补充信息', '来源字段', '数据来源'].includes(label)
+}
+
 function sourceLabel(endpoint: string): string {
   if (!endpoint) return 'SPdex 结构化数据'
   if (endpoint.includes('/api/newspdex/matches')) return '赛事列表与市场摘要'
@@ -562,7 +567,7 @@ function sourceLabel(endpoint: string): string {
     <div v-if="!response.success" class="result-error">
       <AlertTriangle :size="18" />
       <div>
-        <b>{{ response.error?.code || 'analysis_failed' }}</b>
+        <b>分析未完成</b>
         <p>{{ response.error?.message || '分析请求未能完成' }}</p>
       </div>
     </div>
@@ -780,9 +785,8 @@ function sourceLabel(endpoint: string): string {
       </div>
     </section>
 
-    <footer class="result-meta">
+    <footer v-if="dataCutoff" class="result-meta">
       <span><Clock3 :size="13" />数据截止 {{ formatTime(dataCutoff) }}</span>
-      <span>{{ response.usage.billable ? '本次计量' : '测试计量' }}：{{ response.usage.usageUnits }} 单位</span>
     </footer>
   </div>
 </template>

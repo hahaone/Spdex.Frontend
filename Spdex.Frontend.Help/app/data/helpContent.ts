@@ -195,6 +195,89 @@ export const helpArticles: HelpArticle[] = [
     ],
   },
   {
+    slug: 'ai-mcp-use-cases',
+    title: 'AI 观察助手场景与最佳实践',
+    summary: '按真实分析任务组织提问：今日筛选、单场诊断、成交深挖、跨市场对照、赛中观察和 MCP 工作流。',
+    audience: 'NewSpdex 用户和 MCP 高级用户',
+    status: '指南',
+    level: '进阶',
+    readMinutes: 8,
+    category: 'ai',
+    updated: '2026-08-01',
+    tags: ['AI', 'MCP', '场景', '工作流'],
+    sections: [
+      {
+        heading: '先按任务提问',
+        body: [
+          'AI 观察助手适合把多个 SPdex 数据入口串成一个分析过程。提问时最好先说明任务目标，例如筛选今日比赛、诊断单场、查看成交时间分布、比较外部预测市场或生成简报。',
+          '这类问题会比只问“怎么看”更容易得到可复核的结论、依据和数据边界。',
+        ],
+      },
+      {
+        heading: '普通用户常用场景',
+        body: [
+          '普通用户可以从今日观察列表开始，再进入单场。每次只追问一个方向，回答会更清楚。',
+        ],
+        examples: [
+          '今天哪些比赛值得先看？只说明数据观察原因。',
+          '这场比赛当前最值得关注的 3 个数据点是什么？',
+          '这场有没有明显大额交易？是否只是单笔噪声？',
+          '这个成交量、亚洲指数或隐含概率是什么意思？',
+        ],
+      },
+      {
+        heading: '进阶用户常用场景',
+        body: [
+          '进阶用户可以把问题拆成量、价、时、空和跨市场复核。重点不是让 AI 给结论，而是让 AI 按固定证据链检查。',
+        ],
+        examples: [
+          '能否查看这场更详细的成交量时间分布？说明峰值时间和方向。',
+          '亚洲让球和大小球最近是否同向变化？',
+          'Hold、提炼表和跨市场共振有没有共同指向？',
+          'Poly/Kalshi 和 SPdex 标盘是否存在背离？说明流动性限制。',
+          '这场赛中 xG、现场大单和活跃信号怎么看？',
+        ],
+      },
+      {
+        heading: 'MCP 高级用法',
+        body: [
+          '如果你在 WorkBuddy、Claude、Cursor 或企业 Agent 中接入 SPdex MCP，可以把站内 AI 观察助手当成最佳实践示例：先用自然语言规划，再按工具证据生成结构化报告。',
+        ],
+        examples: [
+          '如果我用 SPdex MCP 做这场赛前复盘，应该按什么工具顺序查？',
+          '请生成今天交易活跃优先的观察列表，并给前三场各写一句后续追问。',
+          '请按单场分析工作流输出这场的赛前观察简报。',
+        ],
+      },
+      {
+        heading: '好问题的结构',
+        body: [
+          '一个好问题通常包含对象、市场、时间窗口和输出要求。对象可以是今天、某个联赛或某场比赛；市场可以是胜平负、大小球、亚洲让球、成交量或外部预测市场；输出要求可以是一句结论、关键依据、数据边界和下一步追问。',
+        ],
+        table: {
+          headers: ['要素', '示例'],
+          rows: [
+            ['对象', '今天、英超、赫根 vs 卡尔马、match_id=35869272'],
+            ['市场', '成交量、亚洲让球、大小球、标盘、Poly/Kalshi'],
+            ['窗口', '最近 15 分钟、过去 6 小时、赛前、赛中'],
+            ['输出', '先给结论、列 3 条依据、说明数据限制'],
+          ],
+        },
+      },
+      {
+        heading: '使用边界',
+        body: [
+          '排行、异常、共振、外部预测市场差异和信号结果都只能作为市场观察。它们可以帮助你决定下一步看什么，但不是投注建议、胜负推荐或确定收益。',
+        ],
+        callout: {
+          title: '复核原则',
+          body: '单个大单、单个指数或单个外部市场差异都不应单独构成结论。优先看时间分布、盘口同步、成交深度和数据缺失说明。',
+          tone: 'warning',
+        },
+      },
+    ],
+  },
+  {
     slug: 'data-methods',
     title: '数据与分析口径',
     summary: '理解 NewSpdex、FJCX、外部预测市场、赛中信号和报告字段。',
@@ -792,7 +875,7 @@ export const learningPaths: LearningPath[] = [
   {
     title: '新用户先看',
     summary: '先理解 AI 入口、数据口径和必发基础概念。',
-    articleSlugs: ['ai-watch-assistant', 'data-methods', 'betfair-basics'],
+    articleSlugs: ['ai-watch-assistant', 'ai-mcp-use-cases', 'data-methods', 'betfair-basics'],
   },
   {
     title: '指数进阶',
@@ -802,7 +885,7 @@ export const learningPaths: LearningPath[] = [
   {
     title: '工具专题',
     summary: '适合已经会看主站数据，想快速查某个工具入口的用户。',
-    articleSlugs: ['correct-score', 'flashq-price', 'watch-condition'],
+    articleSlugs: ['mcp-quickstart', 'correct-score', 'flashq-price', 'watch-condition'],
   },
 ]
 

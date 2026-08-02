@@ -16,12 +16,37 @@ const confidenceLabel = computed(() => {
 const toolLabel = (tool: string) => {
   const values: Record<string, string> = {
     get_match_snapshot: '单场数据',
+    list_match_market_capabilities: '可用能力',
     get_big_trades: '大额交易',
-    get_market_series: '盘口走势',
+    get_market_series: '走势数据',
+    get_market_metric_series: '指标走势',
+    get_trade_flow: '成交明细',
+    get_market_depth: '盘口深度',
+    get_hold_window_summary: 'Hold 窗口',
+    compare_market_windows: '窗口对比',
+    get_extraction_signals: '提炼信号',
+    detect_cross_market_resonance: '跨市场共振',
+    get_prediction_market_links: '外部市场链接',
+    get_prediction_market_snapshot: '外部市场快照',
+    compare_prediction_market_to_spdex: '预测市场对比',
+    get_live_market_monitor: '赛中监控',
+    get_signal_feed: '活跃信号',
+    explain_signal: '信号解释',
+    generate_match_brief: '比赛简报',
+    generate_watchlist: '观察列表',
+    plan_agent_analysis: '分析路径',
+    run_match_analysis_workflow: '单场工作流',
+    run_watchlist_workflow: '观察列表工作流',
     detect_market_anomalies: '异常证据',
     explain_metric: '指标解释',
   }
   return values[tool] || '数据工具'
+}
+
+const showEvidenceExplanation = (value: string, explanation: string) => {
+  const normalizedValue = value.trim()
+  const normalizedExplanation = explanation.trim()
+  return Boolean(normalizedExplanation) && normalizedExplanation !== normalizedValue
 }
 </script>
 
@@ -53,7 +78,7 @@ const toolLabel = (tool: string) => {
         <article v-for="item in response.answer.keyEvidence" :key="`${item.label}-${item.value}`" class="evidence-item">
           <span>{{ item.label }}</span>
           <b>{{ item.value }}</b>
-          <p>{{ item.explanation }}</p>
+          <p v-if="showEvidenceExplanation(item.value, item.explanation)">{{ item.explanation }}</p>
         </article>
       </div>
     </section>

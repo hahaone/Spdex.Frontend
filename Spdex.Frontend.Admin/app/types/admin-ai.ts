@@ -225,6 +225,87 @@ export interface AiAnswerFeedbackUpdateResult {
   feedback: AiAnswerFeedbackRow
 }
 
+export interface AiAgentAutomationTaskRow {
+  taskId: string
+  subjectType: string
+  subjectId: string
+  name: string
+  description: string | null
+  workflowId: string
+  enabled: boolean
+  triggerType: string
+  cadence: string
+  scope: string
+  matchId: number | null
+  matchTitle: string | null
+  dailyRunLimit: number
+  monthlyUnitBudget: number | null
+  notifyChannels: string[]
+  runCount: number
+  lastRunStatus: string
+  createdAtUtc: string
+  updatedAtUtc: string
+  lastRunAtUtc: string | null
+  nextRunAtUtc: string | null
+}
+
+export interface AiAgentAutomationRunRow {
+  runId: string
+  taskId: string
+  workflowId: string
+  subjectType: string
+  subjectId: string
+  triggerSource: string
+  status: string
+  stepCount: number
+  completedStepCount: number
+  toolUsageUnits: number
+  durationMs: number | null
+  traceId: string | null
+  errorMessage: string | null
+  startedAtUtc: string
+  completedAtUtc: string | null
+  createdAtUtc: string
+}
+
+export interface AiAgentAutomationOpsSummary {
+  taskCount: number
+  enabledTaskCount: number
+  runCount: number
+  successRunCount: number
+  skippedRunCount: number
+  failedRunCount: number
+  partialRunCount: number
+  toolUsageUnits: number
+  fromUtc: string
+  toUtc: string
+}
+
+export interface AiAgentAutomationSummaryResult {
+  generatedAtUtc: string
+  windowDays: number
+  summary: AiAgentAutomationOpsSummary
+}
+
+export interface AiAgentAutomationTaskResult {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiAgentAutomationTaskRow[]
+}
+
+export interface AiAgentAutomationRunResult {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiAgentAutomationRunRow[]
+}
+
+export interface AiAgentAutomationTaskUpdateResult {
+  generatedAtUtc: string
+  task: AiAgentAutomationTaskRow
+}
+
 export const aiToolOptions = [
   'search_matches',
   'get_match_snapshot',

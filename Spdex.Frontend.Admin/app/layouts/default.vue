@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { h } from 'vue'
-import { Bot, Building2, ChartNoAxesCombined, KeyRound, Menu as MenuIcon } from '@lucide/vue'
+import { Bot, Building2, ChartNoAxesCombined, KeyRound, Menu as MenuIcon, Workflow } from '@lucide/vue'
 import { NIcon, useMessage, type MenuOption } from 'naive-ui'
 import { P } from '~/utils/permissions'
 
@@ -92,6 +92,7 @@ const menuOptions = computed(() => {
   if (can(P.analyticsView)) items.push({ label: '访问统计', key: '/analytics' })
   const aiChildren: MenuOption[] = []
   if (can(P.aiOpsView)) aiChildren.push({ label: '运行总览', key: '/ai', icon: icon(Bot) })
+  if (can(P.aiAuditView)) aiChildren.push({ label: 'Agent 自动化', key: '/ai/automation', icon: icon(Workflow) })
   if (can(P.aiOrganizationView)) aiChildren.push({ label: '企业与合同', key: '/ai/organizations', icon: icon(Building2) })
   if (can(P.aiCredentialView)) aiChildren.push({ label: '接入凭据', key: '/ai/credentials', icon: icon(KeyRound) })
   if (canAny(P.aiUsageView, P.aiAuditView)) {

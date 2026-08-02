@@ -67,6 +67,188 @@ export interface AiAgentTurnResponse {
   message?: string | null
 }
 
+export interface AiAgentHistoryRecord {
+  recordId: string
+  subjectType: string
+  subjectId: string
+  title: string
+  question: string
+  preset?: 'today_hot' | 'search' | 'snapshot' | 'trend' | 'anomaly' | 'metric' | string | null
+  matchId?: number | null
+  matchTitle?: string | null
+  leagueName?: string | null
+  matchTime?: string | null
+  traceId: string
+  provider: string
+  model: string
+  answer?: AiAgentAnswer | null
+  toolCalls: AiAgentToolCallSummary[]
+  usage?: AiAgentUsage | null
+  toolUsageUnits: number
+  billable: boolean
+  billingMode: string
+  saved: boolean
+  createdAtUtc: string
+  updatedAtUtc: string
+  savedAtUtc?: string | null
+}
+
+export interface AiAgentHistoryListResponse {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiAgentHistoryRecord[]
+}
+
+export interface AiAgentHistoryMutationResponse {
+  generatedAtUtc: string
+  deleted?: boolean
+  item: AiAgentHistoryRecord
+}
+
+export interface AiAgentHistoryUsageSummary {
+  fromUtc: string
+  toUtc: string
+  records: number
+  savedRecords: number
+  toolUsageUnits: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  billable: boolean
+  billingMode: string
+}
+
+export interface AiAgentHistoryUsageResponse {
+  generatedAtUtc: string
+  days: number
+  summary: AiAgentHistoryUsageSummary
+}
+
+export interface AiAgentWorkflowStep {
+  stepId: string
+  title: string
+  question: string
+  preset: 'today_hot' | 'search' | 'snapshot' | 'trend' | 'anomaly' | 'metric' | string
+  market?: string | null
+  interval?: string | null
+  metricKey?: string | null
+  requiresMatch: boolean
+}
+
+export interface AiAgentWorkflowRecord {
+  workflowId: string
+  subjectType: string
+  subjectId: string
+  name: string
+  description?: string | null
+  matchRequired: boolean
+  steps: AiAgentWorkflowStep[]
+  runCount: number
+  createdAtUtc: string
+  updatedAtUtc: string
+  lastRunAtUtc?: string | null
+}
+
+export interface AiAgentWorkflowListResponse {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiAgentWorkflowRecord[]
+}
+
+export interface AiAgentWorkflowMutationResponse {
+  generatedAtUtc: string
+  deleted?: boolean
+  item: AiAgentWorkflowRecord
+}
+
+export interface AiAgentAutomationTaskRecord {
+  taskId: string
+  subjectType: string
+  subjectId: string
+  name: string
+  description?: string | null
+  workflowId: string
+  enabled: boolean
+  triggerType: 'scheduled' | 'match_status' | 'watch_condition' | string
+  cadence: 'daily' | 'hourly' | 'before_kickoff' | 'live_window' | 'on_signal' | string
+  scope: 'daily_watchlist' | 'selected_match' | 'ask_each_run' | string
+  matchId?: number | null
+  matchTitle?: string | null
+  dailyRunLimit: number
+  monthlyUnitBudget?: number | null
+  notifyChannels: string[]
+  runCount: number
+  lastRunStatus: string
+  createdAtUtc: string
+  updatedAtUtc: string
+  lastRunAtUtc?: string | null
+  nextRunAtUtc?: string | null
+}
+
+export interface AiAgentAutomationTaskListResponse {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiAgentAutomationTaskRecord[]
+}
+
+export interface AiAgentAutomationTaskMutationResponse {
+  generatedAtUtc: string
+  deleted?: boolean
+  item: AiAgentAutomationTaskRecord
+}
+
+export interface AiAgentAutomationRunRecord {
+  runId: string
+  taskId: string
+  workflowId: string
+  subjectType: string
+  subjectId: string
+  triggerSource: string
+  status: string
+  stepCount: number
+  completedStepCount: number
+  toolUsageUnits: number
+  durationMs?: number | null
+  traceId?: string | null
+  errorMessage?: string | null
+  startedAtUtc: string
+  completedAtUtc?: string | null
+  createdAtUtc: string
+}
+
+export interface AiAgentAutomationRunGateResult {
+  allowed: boolean
+  reasonCode: string
+  message: string
+  taskId: string
+  workflowId: string
+  triggerSource: string
+  dailyRunLimit: number
+  dailyRunsUsed: number
+  monthlyUnitBudget?: number | null
+  monthlyUnitsUsed: number
+  estimatedToolUsageUnits: number
+  requestedStepCount: number
+  maxStepCount: number
+  checkedAtUtc: string
+}
+
+export interface AiAgentAutomationRunPreflightResponse {
+  generatedAtUtc: string
+  item: AiAgentAutomationRunGateResult
+}
+
+export interface AiAgentAutomationRunListResponse {
+  generatedAtUtc: string
+  limit: number
+  taskId?: string | null
+  count: number
+  items: AiAgentAutomationRunRecord[]
+}
+
 export interface GoodSampleMatchChoice {
   matchId: number
   homeTeam: string
