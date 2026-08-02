@@ -46,6 +46,7 @@ export interface AiAgentToolCallSummary {
   tool: string
   status: string
   id?: string
+  traceId?: string | null
 }
 
 export interface AiAgentUsage {
@@ -61,6 +62,7 @@ export interface AiAgentTurnResponse {
   provider: string
   model: string
   toolCalls: AiAgentToolCallSummary[]
+  auditTraceIds?: string[]
   usage?: AiAgentUsage | null
   generatedAtUtc: string
   error?: string | null

@@ -215,6 +215,7 @@ const workflowMessage = ref('')
 const workflowDraftOpen = ref(false)
 const workflowDraftName = ref('')
 const workflowDraftDescription = ref('')
+const workflowDraftSteps = ref<AiAgentWorkflowStep[]>([])
 const workflowSaving = ref(false)
 const workflowRunningId = ref('')
 const workflowRunningStep = ref(0)
@@ -291,9 +292,16 @@ const contextSummary = computed(() => {
 })
 const canSubmit = computed(() => !loading.value && Boolean(followUp.value.trim()))
 const canSaveWorkflow = computed(() => !loading.value && completedTurns.value.length > 0 && !workflowSaving.value)
-const workflowDraftSteps = computed(() => buildWorkflowSteps())
+const workflowDraftValidSteps = computed(() => workflowDraftSteps.value
+  .map((step, index) => ({
+    ...step,
+    stepId: `step_${index + 1}`,
+    title: step.title.trim() || workflowStepTitle(step.question, index),
+    question: step.question.trim(),
+  }))
+  .filter(step => step.question))
 const workflowSaveHint = computed(() => {
-  const count = workflowDraftSteps.value.length
+  const count = workflowDraftValidSteps.value.length
   if (!count) return '完成一次分析后，可以把连续提问保存为可复用流程。'
   return `将保存最近 ${count} 个已完成问题，之后可对其他比赛一键复用。`
 })
@@ -485,7 +493,7 @@ async function executeAgentTurn(
       },
     })
     if (!response.success || !response.answer) {
-      throw new Error(response.message || response.error || 'AI Agent 未返回有效回答')
+      throw new Error(response.message || response.error || '观察助手未返回有效回答')
     }
 
     completeAgentTurn(pendingTurn.id, response)
@@ -498,7 +506,7 @@ async function executeAgentTurn(
     const aborted = controller.signal.aborted || (error as { name?: string })?.name === 'AbortError'
     failTurn(
       pendingTurn.id,
-      aborted ? '已取消本次分析。' : errorText(error, 'AI Agent 暂时没有返回有效回答，请稍后重试。'),
+      aborted ? '已取消本次分析。' : errorText(error, '观察助手暂时没有返回有效回答，请稍后重试。'),
       aborted ? 'cancelled' : 'failed',
     )
     errorMessage.value = aborted ? '' : errorText(error, '分析请求失败')
@@ -688,6 +696,7 @@ function openWorkflowDraft() {
     workflowMessage.value = '先完成至少一次分析，再保存为流程'
     return
   }
+  workflowDraftSteps.value = buildWorkflowSteps()
   workflowDraftOpen.value = true
   workflowMessage.value = ''
   if (!workflowDraftName.value.trim()) {
@@ -705,7 +714,7 @@ function closeWorkflowDraft() {
 
 async function saveCurrentWorkflow() {
   if (!canSaveWorkflow.value) return
-  const steps = buildWorkflowSteps()
+  const steps = workflowDraftValidSteps.value
   if (!steps.length) {
     workflowMessage.value = '当前对话没有可保存的分析步骤'
     return
@@ -730,6 +739,7 @@ async function saveCurrentWorkflow() {
     workflowDraftOpen.value = false
     workflowDraftName.value = ''
     workflowDraftDescription.value = ''
+    workflowDraftSteps.value = []
     workflowMessage.value = '流程已保存'
   }
   catch {
@@ -738,6 +748,24 @@ async function saveCurrentWorkflow() {
   finally {
     workflowSaving.value = false
   }
+}
+
+function moveWorkflowDraftStep(index: number, delta: number) {
+  const target = index + delta
+  if (target < 0 || target >= workflowDraftSteps.value.length) return
+  const steps = [...workflowDraftSteps.value]
+  const current = steps[index]
+  const next = steps[target]
+  if (!current || !next) return
+  steps[index] = next
+  steps[target] = current
+  workflowDraftSteps.value = steps.map((step, stepIndex) => ({ ...step, stepId: `step_${stepIndex + 1}` }))
+}
+
+function removeWorkflowDraftStep(index: number) {
+  workflowDraftSteps.value = workflowDraftSteps.value
+    .filter((_, itemIndex) => itemIndex !== index)
+    .map((step, stepIndex) => ({ ...step, stepId: `step_${stepIndex + 1}` }))
 }
 
 function openAutomationDraft(workflow?: AiAgentWorkflowRecord) {
@@ -1088,6 +1116,19 @@ function clearTurns() {
   cancelActiveRequest()
   turns.value = []
   errorMessage.value = ''
+}
+
+async function retryTurn(turn: AnalysisTurn) {
+  if (loading.value) return
+  selected.value = turn.preset
+  if (turn.match) {
+    selectedMatch.value = { ...turn.match }
+    form.matchId = String(turn.match.matchId)
+  }
+  if (turn.market) form.market = turn.market
+  if (turn.interval) form.interval = turn.interval
+  if (turn.metricKey) form.metricKey = turn.metricKey
+  await executeAgentTurn(turn.question, turn.preset, turn.match ? { ...turn.match } : null)
 }
 
 function createPendingTurn(
@@ -1600,6 +1641,7 @@ async function submitFeedback(turn: AnalysisTurn, feedbackType: AiAnswerFeedback
       body: {
         answerId: turn.answerId,
         traceId: turnTraceId(turn),
+        auditTraceIds: turnAuditTraceIds(turn),
         feedbackType,
         issueTags: tags,
         commentText: comment,
@@ -1706,6 +1748,18 @@ function turnTraceId(turn: AnalysisTurn): string {
   return turn.agentResponse?.traceId || turn.response?.traceId || ''
 }
 
+function turnAuditTraceIds(turn: AnalysisTurn): string[] {
+  if (turn.agentResponse) {
+    const traceIds = [
+      ...(turn.agentResponse.auditTraceIds ?? []),
+      ...(turn.agentResponse.toolCalls ?? []).map(call => call.traceId).filter(Boolean),
+      turn.agentResponse.traceId,
+    ].filter((traceId): traceId is string => Boolean(traceId))
+    return Array.from(new Set(traceIds)).slice(0, 40)
+  }
+  return turn.response?.traceId ? [turn.response.traceId] : []
+}
+
 function turnToolName(turn: AnalysisTurn): string {
   if (turn.agentResponse) {
     const tools = turn.agentResponse.toolCalls?.map(call => call.tool).filter(Boolean) ?? []
@@ -1730,18 +1784,14 @@ function buildShareText(heading: string, turn: AnalysisTurn): string {
       ...answer.summary.map(item => `- ${item}`),
       '',
       ...answer.keyEvidence.slice(0, 5).map(item => `${item.label}: ${item.value}（${item.explanation}）`),
-      '',
-      `trace: ${turn.agentResponse.traceId}`,
     ]
     return lines.filter((line, index, array) => line || array[index - 1]).join('\n').slice(0, 4500)
   }
 
-  const raw = JSON.stringify(
-    turn.response?.success ? turn.response.data : turn.response?.error,
-    null,
-    2,
-  )
-  return `${heading}\n${turn.question}\n\n${raw.slice(0, 4500)}\n\ntrace: ${turn.response?.traceId || ''}`
+  const fallbackText = turn.response?.success
+    ? `${turnDisplayName(turn)}已生成结构化结果，请回到 SPdex 页面查看完整内容。`
+    : `本次分析未完成：${turn.response?.error?.message || '请稍后重试'}`
+  return `${heading}\n${turn.question}\n\n${fallbackText}`.slice(0, 4500)
 }
 
 function formatTime(value: string) {
@@ -2215,13 +2265,16 @@ onBeforeUnmount(() => {
                         {{ step.label }}
                       </span>
                     </div>
-                    <p>正在通过 AI Agent 调用 SPdex 数据工具，复杂问题可能需要几十秒。</p>
+                    <p>正在查询 SPdex 数据工具并整理回答，复杂问题可能需要几十秒。</p>
                   </div>
 
                   <div v-else-if="turn.status === 'failed' || turn.status === 'cancelled'" :class="['turn-alert', turn.status]">
                     <ShieldAlert v-if="turn.status === 'failed'" :size="17" />
                     <X v-else :size="17" />
                     <span>{{ turn.errorMessage || '本次回答未完成。' }}</span>
+                    <button type="button" class="mini-action quiet focus-ring" :disabled="loading" @click="retryTurn(turn)">
+                      重试
+                    </button>
                   </div>
 
                   <template v-else>
@@ -2394,17 +2447,33 @@ onBeforeUnmount(() => {
           </label>
           <small>{{ workflowSaveHint }}</small>
           <ol v-if="workflowDraftSteps.length" class="workflow-step-preview">
-            <li v-for="step in workflowDraftSteps" :key="step.stepId">
-              {{ step.title }}
+            <li v-for="(step, index) in workflowDraftSteps" :key="step.stepId">
+              <div class="workflow-step-editor">
+                <span>步骤 {{ index + 1 }}</span>
+                <input v-model="step.title" maxlength="80" aria-label="步骤标题">
+                <textarea v-model="step.question" maxlength="220" rows="2" aria-label="步骤问题" />
+                <div class="workflow-step-actions">
+                  <button type="button" class="mini-action quiet focus-ring" :disabled="index === 0" @click="moveWorkflowDraftStep(index, -1)">
+                    上移
+                  </button>
+                  <button type="button" class="mini-action quiet focus-ring" :disabled="index === workflowDraftSteps.length - 1" @click="moveWorkflowDraftStep(index, 1)">
+                    下移
+                  </button>
+                  <button type="button" class="saved-delete focus-ring" aria-label="删除步骤" @click="removeWorkflowDraftStep(index)">
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
+              </div>
             </li>
           </ol>
+          <p v-else class="workflow-empty-warning">没有可保存的步骤。</p>
         </div>
 
         <footer class="modal-actions">
           <button type="button" class="secondary-action focus-ring" :disabled="workflowSaving" @click="closeWorkflowDraft">
             取消
           </button>
-          <button type="button" class="primary-action focus-ring" :disabled="workflowSaving || !workflowDraftSteps.length" @click="saveCurrentWorkflow">
+          <button type="button" class="primary-action focus-ring" :disabled="workflowSaving || !workflowDraftValidSteps.length" @click="saveCurrentWorkflow">
             <Bookmark :size="15" />
             <span>{{ workflowSaving ? '保存中' : '确认保存' }}</span>
           </button>
@@ -2676,7 +2745,7 @@ onBeforeUnmount(() => {
 }
 .workflow-step-preview {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   margin: -2px 0 0;
   padding: 8px 0 0 18px;
   border-top: 1px solid var(--divider);
@@ -2687,6 +2756,56 @@ onBeforeUnmount(() => {
 .workflow-step-preview li::marker {
   color: #5b4ce8;
   font-weight: 800;
+}
+.workflow-step-editor {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.workflow-step-editor > span {
+  color: #5b4ce8;
+  font-size: .72rem;
+  font-weight: 800;
+}
+.workflow-step-editor input,
+.workflow-step-editor textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--ink);
+  font: inherit;
+}
+.workflow-step-editor input {
+  min-height: 34px;
+  padding: 7px 8px;
+  font-size: .84rem;
+  font-weight: 760;
+}
+.workflow-step-editor textarea {
+  min-height: 48px;
+  padding: 7px 8px;
+  resize: vertical;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.workflow-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.workflow-empty-warning {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: .82rem;
 }
 .automation-grid {
   display: grid;
