@@ -196,6 +196,64 @@ export interface AiInAppNotificationResult {
   items: AiInAppNotificationRow[]
 }
 
+export interface AiNotificationOutboxRow {
+  notificationId: string
+  conditionId: string
+  triggerId: string
+  owner: {
+    subjectType: string
+    subjectId: string
+  }
+  channel: string
+  status: string
+  attemptCount: number
+  nextAttemptAt: string | null
+  lastAttemptAt: string | null
+  deliveredAt: string | null
+  deliveryProvider: string | null
+  deliveryError: string | null
+  createdAt: string
+  updatedAt: string
+  payloadRef: AiInAppNotificationRow['payloadRef']
+}
+
+export interface AiNotificationOutboxResult {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiNotificationOutboxRow[]
+}
+
+export interface AiNotificationOutboxRetryResult {
+  generatedAtUtc: string
+  item: AiNotificationOutboxRow | null
+}
+
+export interface AiNotificationProviderDrillRequest {
+  ownerSubjectType?: string | null
+  ownerSubjectId?: string | null
+  channel?: string | null
+  status?: string | null
+  taskId?: string | null
+  workflowId?: string | null
+  taskName?: string | null
+  workflowName?: string | null
+  matchTitle?: string | null
+  deliverNow?: boolean | null
+}
+
+export interface AiNotificationProviderDrillResult {
+  generatedAtUtc: string
+  deliverNow: boolean
+  delivery: {
+    status: string
+    retryable: boolean
+    provider: string
+    error: string | null
+  } | null
+  item: AiNotificationOutboxRow
+}
+
 export interface AiAnswerFeedbackRow {
   feedbackId: string
   answerId: string

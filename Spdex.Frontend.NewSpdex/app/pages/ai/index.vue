@@ -105,6 +105,16 @@ interface AnalysisTurn {
   feedback: TurnFeedbackState
 }
 
+interface HistoryConversationGroup {
+  groupId: string
+  title: string
+  subtitle: string
+  preview: string
+  latest: AiAgentHistoryRecord
+  items: AiAgentHistoryRecord[]
+  expanded: boolean
+}
+
 interface WorkflowRunOutcome {
   success: boolean
   status: WorkflowRunStatus
@@ -317,6 +327,8 @@ const errorMessage = ref('')
 const followUp = ref('')
 const turns = ref<AnalysisTurn[]>([])
 const historyItems = ref<AiAgentHistoryRecord[]>([])
+const historyDisplayLimit = ref(10)
+const expandedHistoryGroups = ref<Set<string>>(new Set())
 const historyPending = ref(false)
 const historySavedOnly = ref(false)
 const historyMessage = ref('')
@@ -378,6 +390,10 @@ const chatEnd = ref<HTMLElement | null>(null)
 const activeRequestController = shallowRef<AbortController | null>(null)
 const elapsedSeconds = ref(0)
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
+
+const historyGroups = computed(() => buildHistoryGroups(historyItems.value, expandedHistoryGroups.value))
+const visibleHistoryGroups = computed(() => historyGroups.value.slice(0, historyDisplayLimit.value))
+const hiddenHistoryGroupCount = computed(() => Math.max(0, historyGroups.value.length - visibleHistoryGroups.value.length))
 let automationPollingTimer: ReturnType<typeof setInterval> | null = null
 
 const routeMatchId = Number(route.query.matchId)
@@ -556,6 +572,7 @@ watch(selected, (preset) => {
 }, { flush: 'sync' })
 
 watch(historySavedOnly, () => {
+  resetHistoryGrouping()
   loadAgentHistory()
 })
 
@@ -756,7 +773,7 @@ async function loadAgentHistory() {
   historyMessage.value = ''
   try {
     const query = new URLSearchParams({
-      limit: '30',
+      limit: '100',
       savedOnly: String(historySavedOnly.value),
     })
     const response = await $apiFetch<AiAgentHistoryListResponse>(`/api/newspdex/ai/agent/history?${query.toString()}`)
@@ -1543,6 +1560,93 @@ async function shareLatest() {
   catch (error: unknown) {
     if ((error as { name?: string })?.name !== 'AbortError') shareState.value = '分享失败'
   }
+}
+
+function buildHistoryGroups(
+  items: AiAgentHistoryRecord[],
+  expandedKeys: Set<string>,
+): HistoryConversationGroup[] {
+  const groupWindowMs = 45 * 60 * 1000
+  const buckets = new Map<string, AiAgentHistoryRecord[][]>()
+  const sorted = [...items].sort((a, b) => historyRecordTime(b) - historyRecordTime(a))
+
+  for (const item of sorted) {
+    const baseKey = historyRecordContextKey(item)
+    const time = historyRecordTime(item)
+    const candidates = buckets.get(baseKey) ?? []
+    let target = candidates.find((group) => {
+      const anchor = group[0]
+      return anchor ? Math.abs(historyRecordTime(anchor) - time) <= groupWindowMs : false
+    })
+    if (!target) {
+      target = []
+      candidates.push(target)
+      buckets.set(baseKey, candidates)
+    }
+    target.push(item)
+  }
+
+  return [...buckets.values()]
+    .flatMap(groups => groups)
+    .map((group) => {
+      const ordered = [...group].sort((a, b) => historyRecordTime(b) - historyRecordTime(a))
+      const latest = ordered[0]
+      if (!latest) return null
+      const groupId = `${historyRecordContextKey(latest)}:${latest.recordId}`
+      const savedCount = ordered.filter(item => item.saved).length
+      const usageUnits = ordered.reduce((sum, item) => sum + (item.toolUsageUnits || 0), 0)
+      const tokenCount = ordered.reduce((sum, item) => sum + (item.usage?.totalTokens || 0), 0)
+      const meta = [
+        `${ordered.length} 个问题`,
+        usageUnits ? `${usageUnits} 单位` : '',
+        tokenCount ? `${tokenCount.toLocaleString('zh-CN')} tokens` : '',
+        savedCount ? `${savedCount} 条已保存` : '',
+        formatTime(latest.createdAtUtc),
+      ].filter(Boolean)
+      return {
+        groupId,
+        title: historyGroupTitle(latest),
+        subtitle: meta.join(' · '),
+        preview: latest.question || latest.title,
+        latest,
+        items: ordered,
+        expanded: expandedKeys.has(groupId),
+      }
+    })
+    .filter((group): group is HistoryConversationGroup => group !== null)
+    .sort((a, b) => historyRecordTime(b.latest) - historyRecordTime(a.latest))
+}
+
+function historyRecordTime(item: AiAgentHistoryRecord) {
+  return new Date(item.createdAtUtc || item.updatedAtUtc).getTime() || 0
+}
+
+function historyRecordContextKey(item: AiAgentHistoryRecord) {
+  if (item.matchId) return `match:${item.matchId}`
+  if (item.subjectType && item.subjectId) return `${item.subjectType}:${item.subjectId}:${item.preset || item.subjectType}`
+  return `general:${(item.createdAtUtc || '').slice(0, 10)}:${item.preset || 'agent'}`
+}
+
+function historyGroupTitle(item: AiAgentHistoryRecord) {
+  if (item.matchTitle) return item.matchTitle
+  if (item.title) return item.title
+  return item.question || '一次观察助手对话'
+}
+
+function toggleHistoryGroup(groupId: string) {
+  const next = new Set(expandedHistoryGroups.value)
+  if (next.has(groupId)) next.delete(groupId)
+  else next.add(groupId)
+  expandedHistoryGroups.value = next
+}
+
+function loadMoreHistoryGroups() {
+  historyDisplayLimit.value += 10
+}
+
+function resetHistoryGrouping() {
+  historyDisplayLimit.value = 10
+  expandedHistoryGroups.value = new Set()
 }
 
 function restoreHistory(item: AiAgentHistoryRecord) {
@@ -2724,21 +2828,43 @@ onBeforeUnmount(() => {
           <p class="usage-summary">{{ usageText(usageSummary) }}</p>
           <p v-if="historyMessage" class="history-message">{{ historyMessage }}</p>
           <p v-else-if="historyPending" class="history-message">正在读取记录</p>
-          <p v-else-if="!historyItems.length" class="history-message">暂无分析记录</p>
-          <div class="saved-list">
-            <div v-for="item in historyItems" :key="item.recordId" class="saved-row">
-              <button type="button" class="saved-open focus-ring" @click="restoreHistory(item)">
-                <b>{{ item.title }}</b>
-                <span>
-                  {{ formatTime(item.createdAtUtc) }}
-                  <em v-if="item.saved">已保存</em>
-                </span>
-              </button>
-              <button type="button" class="saved-delete focus-ring" aria-label="删除分析记录" @click="deleteHistory(item.recordId)">
-                <Trash2 :size="14" />
-              </button>
-            </div>
+          <p v-else-if="!historyGroups.length" class="history-message">暂无分析记录</p>
+          <div v-else class="saved-list history-group-list">
+            <article v-for="group in visibleHistoryGroups" :key="group.groupId" class="history-group">
+              <div class="history-group-head">
+                <button type="button" class="history-group-toggle focus-ring" @click="toggleHistoryGroup(group.groupId)">
+                  <b>{{ group.title }}</b>
+                  <span>{{ group.subtitle }}</span>
+                  <small>{{ group.preview }}</small>
+                </button>
+                <button type="button" class="history-open-latest focus-ring" @click="restoreHistory(group.latest)">
+                  打开最新
+                </button>
+              </div>
+              <div v-if="group.expanded" class="history-group-items">
+                <div v-for="item in group.items" :key="item.recordId" class="saved-row">
+                  <button type="button" class="saved-open focus-ring" @click="restoreHistory(item)">
+                    <b>{{ item.question || item.title }}</b>
+                    <span>
+                      {{ formatTime(item.createdAtUtc) }}
+                      <em v-if="item.saved">已保存</em>
+                    </span>
+                  </button>
+                  <button type="button" class="saved-delete focus-ring" aria-label="删除分析记录" @click="deleteHistory(item.recordId)">
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
+              </div>
+            </article>
           </div>
+          <button
+            v-if="hiddenHistoryGroupCount"
+            type="button"
+            class="history-more focus-ring"
+            @click="loadMoreHistoryGroups"
+          >
+            加载更多 {{ hiddenHistoryGroupCount }} 组
+          </button>
         </section>
       </aside>
 
@@ -4325,6 +4451,64 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: var(--divider);
 }
+.history-group-list {
+  max-height: 560px;
+  overflow: auto;
+}
+.history-group {
+  background: var(--panel);
+}
+.history-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+}
+.history-group-toggle {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.history-group-toggle b,
+.history-group-toggle small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-group-toggle b {
+  font-size: .86rem;
+}
+.history-group-toggle span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+.history-group-toggle small {
+  color: var(--text-soft);
+  font-size: .74rem;
+}
+.history-open-latest {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand) 7%, var(--panel));
+  color: var(--brand);
+  font-size: .72rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+.history-group-items {
+  display: grid;
+  gap: 1px;
+  border-top: 1px solid var(--divider);
+  background: var(--divider);
+}
 .saved-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 34px;
@@ -4371,6 +4555,17 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   color: #b42318;
+}
+.history-more {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--brand);
+  font-size: .78rem;
+  font-weight: 780;
 }
 .modal-backdrop {
   position: fixed;

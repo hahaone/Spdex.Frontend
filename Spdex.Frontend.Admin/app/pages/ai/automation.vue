@@ -48,6 +48,9 @@
           <span class="text-xs text-gray-400">
             {{ insights ? `最近 ${insights.windowDays} 天 · 样本 ${insights.sampleLimit}` : '最近 30 天' }}
           </span>
+          <NButton size="tiny" secondary @click="showOpsThresholds = !showOpsThresholds">
+            阈值设置
+          </NButton>
           <NButton size="tiny" :loading="insightsLoading" @click="loadInsights">刷新看板</NButton>
         </NSpace>
       </template>
@@ -63,6 +66,66 @@
           >
             {{ insightAlert.description }}
           </NAlert>
+
+          <section class="ops-summary-panel">
+            <div>
+              <h3>运营摘要</h3>
+              <p>{{ opsSummaryText }}</p>
+            </div>
+            <NTag size="small" :type="opsThresholdAlerts.length ? 'warning' : 'success'">
+              {{ opsThresholdAlerts.length ? `${opsThresholdAlerts.length} 个阈值提醒` : '阈值正常' }}
+            </NTag>
+          </section>
+
+          <div v-if="opsThresholdAlerts.length" class="ops-alert-list">
+            <NAlert
+              v-for="item in opsThresholdAlerts"
+              :key="item.title"
+              :type="item.level"
+              :title="item.title"
+            >
+              {{ item.description }}
+            </NAlert>
+          </div>
+
+          <section v-if="showOpsThresholds" class="ops-threshold-panel">
+            <div class="ops-panel-head">
+              <h3>告警阈值</h3>
+              <span>本页即时生效，用于测试期运营判读</span>
+            </div>
+            <NGrid :cols="5" :x-gap="10" :y-gap="10" item-responsive>
+              <NGi span="5 760:1">
+                <NInputNumber v-model:value="opsThresholds.failureRate" :min="0" :max="100" size="small">
+                  <template #prefix>失败率</template>
+                  <template #suffix>%</template>
+                </NInputNumber>
+              </NGi>
+              <NGi span="5 760:1">
+                <NInputNumber v-model:value="opsThresholds.partialRate" :min="0" :max="100" size="small">
+                  <template #prefix>部分完成</template>
+                  <template #suffix>%</template>
+                </NInputNumber>
+              </NGi>
+              <NGi span="5 760:1">
+                <NInputNumber v-model:value="opsThresholds.notificationFailed" :min="0" :max="500" size="small">
+                  <template #prefix>失败通知</template>
+                  <template #suffix>条</template>
+                </NInputNumber>
+              </NGi>
+              <NGi span="5 760:1">
+                <NInputNumber v-model:value="opsThresholds.budgetUsageRate" :min="0" :max="100" size="small">
+                  <template #prefix>预算使用</template>
+                  <template #suffix>%</template>
+                </NInputNumber>
+              </NGi>
+              <NGi span="5 760:1">
+                <NInputNumber v-model:value="opsThresholds.openFeedback" :min="0" :max="1000" size="small">
+                  <template #prefix>待验收</template>
+                  <template #suffix>条</template>
+                </NInputNumber>
+              </NGi>
+            </NGrid>
+          </section>
 
           <div class="ops-metric-grid">
             <section class="ops-metric">
@@ -171,6 +234,80 @@
           </section>
         </div>
       </NSpin>
+    </NCard>
+
+    <NCard title="通知 Provider 演练与失败队列" size="small" class="mb-4">
+      <template #header-extra>
+        <NSpace size="small" align="center">
+          <span class="text-xs text-gray-400">
+            {{ outbox?.count ?? 0 }} 条通知 · 不展示原始 payload
+          </span>
+          <NButton size="tiny" :loading="outboxLoading" @click="loadOutbox">刷新队列</NButton>
+        </NSpace>
+      </template>
+
+      <NAlert class="mb-3" type="info" title="测试期 provider 演练">
+        演练会写入一条自动化通知样本，并按当前通知配置执行投递或审计；失败通知可从队列中手动加入重试。
+      </NAlert>
+
+      <NSpace class="mb-3" align="center" :wrap="true">
+        <NInput v-model:value="outboxFilters.source" clearable placeholder="来源" style="width:220px" />
+        <NSelect
+          v-model:value="outboxFilters.status"
+          :options="notificationStatusOptions"
+          placeholder="通知状态"
+          style="width:150px"
+        />
+        <NSelect
+          v-model:value="outboxFilters.channel"
+          :options="notificationChannelOptions"
+          placeholder="通道"
+          style="width:150px"
+        />
+        <NInputNumber v-model:value="outboxFilters.limit" :min="1" :max="500" style="width:120px" />
+        <NButton type="primary" :loading="outboxLoading" @click="loadOutbox">查询队列</NButton>
+      </NSpace>
+
+      <section class="provider-drill-panel">
+        <NSelect
+          v-model:value="providerDrillForm.channel"
+          :options="notificationChannelOptions.filter(item => item.value)"
+          placeholder="演练通道"
+          style="width:150px"
+        />
+        <NSelect
+          v-model:value="providerDrillForm.status"
+          :options="providerDrillStatusOptions"
+          placeholder="样本状态"
+          style="width:160px"
+        />
+        <NSelect
+          v-model:value="providerDrillForm.ownerSubjectType"
+          :options="subjectTypeOptions.filter(item => item.value)"
+          placeholder="主体类型"
+          style="width:150px"
+        />
+        <NInput v-model:value="providerDrillForm.ownerSubjectId" clearable placeholder="主体 ID" style="width:190px" />
+        <NCheckbox v-model:checked="providerDrillForm.deliverNow">立即投递</NCheckbox>
+        <NButton
+          type="warning"
+          secondary
+          :loading="providerDrillLoading"
+          :disabled="!can(P.aiOpsManage)"
+          @click="runProviderDrill"
+        >
+          运行演练
+        </NButton>
+      </section>
+
+      <NDataTable
+        :columns="outboxColumns"
+        :data="outboxRows"
+        :loading="outboxLoading"
+        :pagination="{ pageSize: 10 }"
+        :row-key="(row: AiNotificationOutboxRow) => row.notificationId"
+        :scroll-x="1320"
+      />
     </NCard>
 
     <NCard title="异常任务队列" size="small" class="mb-4">
@@ -466,6 +603,10 @@ import type {
   AiAgentAutomationTaskRiskRow,
   AiAgentAutomationTaskRow,
   AiAgentAutomationTaskUpdateResult,
+  AiNotificationOutboxResult,
+  AiNotificationOutboxRetryResult,
+  AiNotificationOutboxRow,
+  AiNotificationProviderDrillResult,
 } from '~/types/admin-ai'
 import { P } from '~/utils/permissions'
 
@@ -477,6 +618,7 @@ const message = useMessage()
 
 const summary = ref<AiAgentAutomationSummaryResult | null>(null)
 const insights = ref<AiAgentAutomationInsightsResult | null>(null)
+const outbox = ref<AiNotificationOutboxResult | null>(null)
 const tasks = ref<AiAgentAutomationTaskResult | null>(null)
 const runs = ref<AiAgentAutomationRunResult | null>(null)
 const abnormalRuns = ref<AiAgentAutomationRunRow[]>([])
@@ -484,6 +626,7 @@ const trace = ref<AiAuditResult | null>(null)
 const runDetail = ref<AiAgentAutomationRunDetailResult | null>(null)
 const summaryLoading = ref(false)
 const insightsLoading = ref(false)
+const outboxLoading = ref(false)
 const tasksLoading = ref(false)
 const runsLoading = ref(false)
 const abnormalLoading = ref(false)
@@ -491,6 +634,9 @@ const traceLoading = ref(false)
 const detailLoading = ref(false)
 const savingTaskId = ref('')
 const retryingRunId = ref('')
+const retryingNotificationId = ref('')
+const providerDrillLoading = ref(false)
+const showOpsThresholds = ref(false)
 const traceDrawerVisible = ref(false)
 const detailDrawerVisible = ref(false)
 const traceId = ref('')
@@ -513,8 +659,31 @@ const runFilters = reactive({
   limit: 100,
 })
 
+const outboxFilters = reactive({
+  source: 'spdex_ai_automation',
+  status: '',
+  channel: '',
+  limit: 80,
+})
+
+const providerDrillForm = reactive({
+  ownerSubjectType: 'user',
+  ownerSubjectId: 'ai-provider-drill',
+  channel: 'in_app',
+  status: 'success',
+  deliverNow: true,
+})
+
+const opsThresholds = reactive({
+  failureRate: 10,
+  partialRate: 15,
+  notificationFailed: 1,
+  budgetUsageRate: 85,
+  openFeedback: 10,
+})
+
 const loadingAny = computed(() =>
-  summaryLoading.value || insightsLoading.value || tasksLoading.value || runsLoading.value || abnormalLoading.value || traceLoading.value || detailLoading.value)
+  summaryLoading.value || insightsLoading.value || outboxLoading.value || providerDrillLoading.value || tasksLoading.value || runsLoading.value || abnormalLoading.value || traceLoading.value || detailLoading.value)
 const failureLabel = computed(() => {
   const value = summary.value?.summary
   return value ? `${value.failedRunCount} / ${value.skippedRunCount}` : '—'
@@ -530,6 +699,7 @@ const notificationPendingTotal = computed(() => {
   const value = insights.value?.notifications
   return value ? value.pendingCount + value.retryWaitingCount + value.dispatchingCount : 0
 })
+const outboxRows = computed(() => outbox.value?.items ?? [])
 const compactDailyUsage = computed(() => {
   const items = insights.value?.dailyUsage ?? []
   return items.slice(Math.max(0, items.length - 14))
@@ -564,6 +734,59 @@ const insightAlert = computed(() => {
     title: '自动化运行状态稳定',
     description: '当前窗口内成本、质量、反馈和通知健康没有明显异常。',
   }
+})
+const opsThresholdAlerts = computed(() => {
+  const value = insights.value
+  if (!value) return []
+  const alerts: Array<{ level: 'error' | 'warning' | 'info', title: string, description: string }> = []
+  const failureLimit = opsThresholds.failureRate / 100
+  const partialLimit = opsThresholds.partialRate / 100
+  const budgetLimit = opsThresholds.budgetUsageRate / 100
+  if (value.quality.failureRate >= failureLimit) {
+    alerts.push({
+      level: 'error',
+      title: '失败率超过阈值',
+      description: `当前失败率 ${percentLabel(value.quality.failureRate)}，阈值 ${opsThresholds.failureRate}%。`,
+    })
+  }
+  if (value.quality.partialRate >= partialLimit) {
+    alerts.push({
+      level: 'warning',
+      title: '部分完成比例偏高',
+      description: `当前部分完成 ${percentLabel(value.quality.partialRate)}，阈值 ${opsThresholds.partialRate}%。`,
+    })
+  }
+  if (value.notifications.failedCount >= opsThresholds.notificationFailed) {
+    alerts.push({
+      level: 'error',
+      title: '通知失败需要处理',
+      description: `当前失败通知 ${value.notifications.failedCount} 条，阈值 ${opsThresholds.notificationFailed} 条。`,
+    })
+  }
+  if (value.cost.monthlyBudgetUsageRate >= budgetLimit) {
+    alerts.push({
+      level: 'warning',
+      title: '预算使用接近上限',
+      description: `当前预算使用 ${percentLabel(value.cost.monthlyBudgetUsageRate)}，阈值 ${opsThresholds.budgetUsageRate}%。`,
+    })
+  }
+  if (value.quality.openFeedbackCount >= opsThresholds.openFeedback) {
+    alerts.push({
+      level: 'warning',
+      title: '待验收反馈积压',
+      description: `当前待处理反馈 ${value.quality.openFeedbackCount} 条，阈值 ${opsThresholds.openFeedback} 条。`,
+    })
+  }
+  return alerts
+})
+const opsSummaryText = computed(() => {
+  const value = insights.value
+  if (!value) return '暂无可汇总的运营数据。'
+  return [
+    `最近 ${value.windowDays} 天共 ${value.summary.runCount} 次自动化运行，成功 ${value.summary.successRunCount} 次，失败 ${value.summary.failedRunCount} 次，部分完成 ${value.summary.partialRunCount} 次。`,
+    `AI 用量 ${value.cost.toolUsageUnits} 单位，预计月用量 ${value.cost.estimatedMonthlyUnits} 单位，预算使用 ${percentLabel(value.cost.monthlyBudgetUsageRate)}。`,
+    `通知失败 ${value.notifications.failedCount} 条，待投递 ${notificationPendingTotal.value} 条；回答验收待处理 ${value.quality.openFeedbackCount} 条。`,
+  ].join(' ')
 })
 
 const subjectTypeOptions = [
@@ -604,6 +827,27 @@ const triggerSourceOptions = [
   { label: '后台调度', value: 'scheduler' },
   { label: '观察条件', value: 'watch_condition' },
   { label: '系统', value: 'system' },
+]
+const notificationStatusOptions = [
+  { label: '全部状态', value: '' },
+  { label: '待投递', value: 'pending' },
+  { label: '等待重试', value: 'retry_waiting' },
+  { label: '投递中', value: 'dispatching' },
+  { label: '已送达', value: 'delivered' },
+  { label: '已跳过', value: 'skipped' },
+  { label: '失败', value: 'failed' },
+]
+const notificationChannelOptions = [
+  { label: '全部通道', value: '' },
+  { label: '站内消息', value: 'in_app' },
+  { label: '邮件', value: 'email' },
+  { label: 'Webhook', value: 'webhook' },
+]
+const providerDrillStatusOptions = [
+  { label: '成功样本', value: 'success' },
+  { label: '部分完成样本', value: 'partial' },
+  { label: '失败样本', value: 'failed' },
+  { label: '跳过样本', value: 'skipped' },
 ]
 
 const abnormalColumns = [
@@ -662,6 +906,71 @@ const abnormalColumns = [
     width: 320,
     fixed: 'right' as const,
     render: (row: AiAgentAutomationRunRow) => renderRunActions(row),
+  },
+]
+
+const outboxColumns = [
+  {
+    title: '状态',
+    key: 'status',
+    width: 130,
+    fixed: 'left' as const,
+    render: (row: AiNotificationOutboxRow) => h(NTag, { size: 'small', type: notificationStatusTagType(row.status) }, {
+      default: () => notificationStatusLabel(row.status),
+    }),
+  },
+  {
+    title: '通道与主体',
+    key: 'channel',
+    width: 210,
+    render: (row: AiNotificationOutboxRow) => h('div', [
+      h('div', { class: 'font-medium text-gray-900' }, notificationChannelLabel(row.channel)),
+      h('div', { class: 'mt-1 text-xs text-gray-400' }, `${subjectTypeLabel(row.owner.subjectType)} ${row.owner.subjectId}`),
+    ]),
+  },
+  {
+    title: '业务引用',
+    key: 'payloadRef',
+    width: 330,
+    render: (row: AiNotificationOutboxRow) => h('div', [
+      h('div', { class: 'font-medium text-gray-900' }, notificationPayloadTitle(row)),
+      h('div', { class: 'mt-1 truncate text-xs text-gray-400' }, notificationPayloadSubtitle(row)),
+    ]),
+  },
+  {
+    title: 'Provider',
+    key: 'provider',
+    width: 270,
+    ellipsis: { tooltip: true },
+    render: (row: AiNotificationOutboxRow) => h('div', [
+      h('div', row.deliveryProvider || '—'),
+      row.deliveryError
+        ? h('div', { class: 'mt-1 text-xs text-red-500' }, row.deliveryError)
+        : h('div', { class: 'mt-1 text-xs text-gray-400' }, '无错误'),
+    ]),
+  },
+  {
+    title: '尝试',
+    key: 'attemptCount',
+    width: 100,
+    render: (row: AiNotificationOutboxRow) => `${row.attemptCount} 次`,
+  },
+  {
+    title: '时间',
+    key: 'updatedAt',
+    width: 250,
+    render: (row: AiNotificationOutboxRow) => h('div', [
+      h('div', `更新 ${fmt(row.updatedAt)}`),
+      h('div', { class: 'mt-1 text-xs text-gray-400' }, `下次 ${fmt(row.nextAttemptAt)}`),
+      h('div', { class: 'mt-1 text-xs text-gray-400' }, `送达 ${fmt(row.deliveredAt)}`),
+    ]),
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 180,
+    fixed: 'right' as const,
+    render: (row: AiNotificationOutboxRow) => renderOutboxActions(row),
   },
 ]
 
@@ -855,7 +1164,7 @@ const traceColumns = [
 ]
 
 async function loadAll() {
-  await Promise.all([loadSummary(), loadInsights(), loadTasks(), loadRuns(), loadAbnormalRuns()])
+  await Promise.all([loadSummary(), loadInsights(), loadOutbox(), loadTasks(), loadRuns(), loadAbnormalRuns()])
 }
 
 async function loadSummary() {
@@ -879,6 +1188,60 @@ async function loadInsights() {
   }
   else {
     message.error(result.message || '成本与质量看板加载失败')
+  }
+}
+
+async function loadOutbox() {
+  outboxLoading.value = true
+  const result = await api.get<AiNotificationOutboxResult>('ai/notifications/outbox', compactQuery({
+    source: outboxFilters.source,
+    status: outboxFilters.status,
+    channel: outboxFilters.channel,
+    limit: outboxFilters.limit,
+  }))
+  outboxLoading.value = false
+  if (result.code === 0) {
+    outbox.value = result.data
+  }
+  else {
+    message.error(result.message || '通知队列加载失败')
+  }
+}
+
+async function retryNotification(row: AiNotificationOutboxRow) {
+  if (!can(P.aiOpsManage) || retryingNotificationId.value) return
+  retryingNotificationId.value = row.notificationId
+  const result = await api.post<AiNotificationOutboxRetryResult>(`ai/notifications/outbox/${encodeURIComponent(row.notificationId)}/retry`)
+  retryingNotificationId.value = ''
+  if (result.code === 0) {
+    message.success('已加入通知重试队列')
+    await Promise.all([loadOutbox(), loadInsights()])
+  }
+  else {
+    message.error(result.message || '通知重试失败')
+  }
+}
+
+async function runProviderDrill() {
+  if (!can(P.aiOpsManage) || providerDrillLoading.value) return
+  providerDrillLoading.value = true
+  const result = await api.post<AiNotificationProviderDrillResult>('ai/notifications/provider-drill', {
+    ownerSubjectType: providerDrillForm.ownerSubjectType,
+    ownerSubjectId: providerDrillForm.ownerSubjectId,
+    channel: providerDrillForm.channel,
+    status: providerDrillForm.status,
+    deliverNow: providerDrillForm.deliverNow,
+    taskName: '通知 provider 演练',
+    workflowName: 'AI 自动化通知演练',
+  })
+  providerDrillLoading.value = false
+  if (result.code === 0) {
+    const status = result.data?.item?.status
+    message.success(status ? `演练完成：${notificationStatusLabel(status)}` : '演练完成')
+    await Promise.all([loadOutbox(), loadInsights()])
+  }
+  else {
+    message.error(result.message || '通知 provider 演练失败')
   }
 }
 
@@ -1153,6 +1516,57 @@ function renderRunActions(row: AiAgentAutomationRunRow) {
   })
 }
 
+function renderOutboxActions(row: AiNotificationOutboxRow) {
+  const retryable = isNotificationRetryable(row)
+  return h(NSpace, { size: 8 }, {
+    default: () => [
+      h(
+        NPopconfirm,
+        {
+          disabled: !can(P.aiOpsManage) || !retryable,
+          onPositiveClick: () => retryNotification(row),
+        },
+        {
+          trigger: () => h(
+            NButton,
+            {
+              size: 'small',
+              secondary: true,
+              type: 'warning',
+              disabled: !can(P.aiOpsManage) || !retryable,
+              loading: retryingNotificationId.value === row.notificationId,
+            },
+            { default: () => '重试' },
+          ),
+          default: () => '确认将这条通知加入手动重试队列？',
+        },
+      ),
+    ],
+  })
+}
+
+function isNotificationRetryable(row: AiNotificationOutboxRow) {
+  return row.status !== 'delivered' && row.status !== 'dispatching'
+}
+
+function notificationPayloadTitle(row: AiNotificationOutboxRow) {
+  const ref = row.payloadRef
+  const task = ref?.task as { name?: unknown, id?: unknown } | null
+  const workflow = ref?.workflow as { name?: unknown, id?: unknown } | null
+  const match = ref?.match as { title?: unknown } | null
+  return String(task?.name || workflow?.name || match?.title || ref?.taskId || row.conditionId || '通知任务')
+}
+
+function notificationPayloadSubtitle(row: AiNotificationOutboxRow) {
+  const ref = row.payloadRef
+  const parts = [
+    ref?.workflowId ? `流程 ${ref.workflowId}` : '',
+    ref?.runId ? `运行 ${shortTraceId(ref.runId)}` : '',
+    ref?.traceId ? `Trace ${shortTraceId(ref.traceId)}` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : row.notificationId
+}
+
 function taskDisplayName(row: AiAgentAutomationRunRow) {
   return taskNameMap.value.get(row.taskId) || row.workflowId || row.taskId
 }
@@ -1220,6 +1634,16 @@ function triggerSourceLabel(value: string) {
           : value
 }
 
+function notificationChannelLabel(value: string) {
+  return value === 'in_app'
+    ? '站内消息'
+    : value === 'email'
+      ? '邮件'
+      : value === 'webhook'
+        ? 'Webhook'
+        : value
+}
+
 function cadenceLabel(value: string) {
   return value === 'daily'
     ? '每日'
@@ -1264,6 +1688,22 @@ function statusLabel(value: string) {
                   : value
 }
 
+function notificationStatusLabel(value: string) {
+  return value === 'pending'
+    ? '待投递'
+    : value === 'dispatching'
+      ? '投递中'
+      : value === 'retry_waiting'
+        ? '等待重试'
+        : value === 'delivered'
+          ? '已送达'
+          : value === 'skipped'
+            ? '已跳过'
+            : value === 'failed'
+              ? '失败'
+              : value
+}
+
 function statusTagType(value: string) {
   return value === 'success'
     ? 'success'
@@ -1272,6 +1712,18 @@ function statusTagType(value: string) {
       : value === 'partial' || value === 'skipped'
         ? 'warning'
         : value === 'running' || value === 'queued'
+          ? 'info'
+          : 'default'
+}
+
+function notificationStatusTagType(value: string) {
+  return value === 'delivered'
+    ? 'success'
+    : value === 'failed'
+      ? 'error'
+      : value === 'retry_waiting' || value === 'skipped'
+        ? 'warning'
+        : value === 'dispatching' || value === 'pending'
           ? 'info'
           : 'default'
 }
@@ -1386,6 +1838,56 @@ onMounted(loadAll)
 .ops-dashboard {
   display: grid;
   gap: 14px;
+}
+
+.ops-summary-panel,
+.ops-threshold-panel,
+.provider-drill-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.ops-summary-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+}
+
+.ops-summary-panel h3,
+.ops-threshold-panel h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.ops-summary-panel p {
+  margin: 6px 0 0;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.ops-alert-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ops-threshold-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.provider-drill-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 12px;
 }
 
 .ops-metric-grid {
