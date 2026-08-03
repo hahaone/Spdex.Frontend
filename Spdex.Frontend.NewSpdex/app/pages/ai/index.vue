@@ -28,6 +28,7 @@ import type {
   AiAgentAutomationTaskRecord,
   AiAgentAutomationRunListResponse,
   AiAgentAutomationRunRecord,
+  AiAgentHistoryConversation,
   AiAgentHistoryListResponse,
   AiAgentHistoryMutationResponse,
   AiAgentHistoryRecord,
@@ -327,11 +328,14 @@ const errorMessage = ref('')
 const followUp = ref('')
 const turns = ref<AnalysisTurn[]>([])
 const historyItems = ref<AiAgentHistoryRecord[]>([])
-const historyDisplayLimit = ref(10)
+const historyConversations = ref<AiAgentHistoryConversation[]>([])
+const historyNextCursor = ref<string | null>(null)
+const historyHasMore = ref(false)
 const expandedHistoryGroups = ref<Set<string>>(new Set())
 const historyPending = ref(false)
 const historySavedOnly = ref(false)
 const historyMessage = ref('')
+const activeConversationId = ref<string | null>(null)
 const usageSummary = ref<AiAgentHistoryUsageSummary | null>(null)
 const workflowItems = ref<AiAgentWorkflowRecord[]>([])
 const workflowRuns = ref<AiAgentWorkflowRunRecord[]>([])
@@ -391,9 +395,17 @@ const activeRequestController = shallowRef<AbortController | null>(null)
 const elapsedSeconds = ref(0)
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
 
-const historyGroups = computed(() => buildHistoryGroups(historyItems.value, expandedHistoryGroups.value))
-const visibleHistoryGroups = computed(() => historyGroups.value.slice(0, historyDisplayLimit.value))
-const hiddenHistoryGroupCount = computed(() => Math.max(0, historyGroups.value.length - visibleHistoryGroups.value.length))
+const historyGroups = computed(() => {
+  if (historyConversations.value.length) {
+    return historyConversations.value.map(conversation => historyConversationToGroup(conversation, expandedHistoryGroups.value))
+  }
+  return buildHistoryGroups(historyItems.value, expandedHistoryGroups.value)
+})
+const visibleHistoryGroups = computed(() => historyGroups.value)
+const hiddenHistoryGroupCount = computed(() => historyHasMore.value ? 1 : 0)
+const historyMoreLabel = computed(() => historyHasMore.value
+  ? '加载更多记录'
+  : `加载更多 ${hiddenHistoryGroupCount.value} 组`)
 let automationPollingTimer: ReturnType<typeof setInterval> | null = null
 
 const routeMatchId = Number(route.query.matchId)
@@ -651,8 +663,10 @@ async function executeAgentTurn(
         market: form.market,
         interval: form.interval,
         clientTraceId: previousTraceId,
+        conversationId: activeConversationId.value,
         context: {
           source: 'newspdex_ai',
+          conversationId: activeConversationId.value,
           match: requestMatch,
         },
         history: turns.value
@@ -715,6 +729,9 @@ function selectLocalMatch(match: MatchSummary, switchPreset = true) {
 }
 
 function selectMatch(match: GoodSampleMatchChoice, switchPreset = true) {
+  if (selectedMatch.value?.matchId !== match.matchId) {
+    activeConversationId.value = null
+  }
   selectedMatch.value = match
   form.matchId = String(match.matchId)
   selectorOpen.value = false
@@ -745,6 +762,7 @@ async function analyzeMatch(match: GoodSampleMatchChoice) {
 
 function clearMatch() {
   selectedMatch.value = null
+  activeConversationId.value = null
   form.matchId = ''
   router.replace({
     query: {
@@ -768,16 +786,35 @@ async function refreshAgentLibrary() {
   ])
 }
 
-async function loadAgentHistory() {
+async function loadAgentHistory(append = false) {
+  if (historyPending.value) return
   historyPending.value = true
-  historyMessage.value = ''
+  if (!append) historyMessage.value = ''
   try {
     const query = new URLSearchParams({
-      limit: '100',
+      mode: 'conversations',
+      limit: '10',
       savedOnly: String(historySavedOnly.value),
     })
+    if (append && historyNextCursor.value) {
+      query.set('cursor', historyNextCursor.value)
+    }
     const response = await $apiFetch<AiAgentHistoryListResponse>(`/api/newspdex/ai/agent/history?${query.toString()}`)
+    const conversations = response.conversations ?? []
+    if (conversations.length) {
+      historyConversations.value = append
+        ? mergeHistoryConversations(historyConversations.value, conversations)
+        : conversations
+      historyItems.value = conversations.flatMap(conversation => conversation.items ?? [])
+      historyNextCursor.value = response.nextCursor ?? null
+      historyHasMore.value = Boolean(response.hasMore && response.nextCursor)
+      return
+    }
+
+    historyConversations.value = []
     historyItems.value = response.items ?? []
+    historyNextCursor.value = null
+    historyHasMore.value = false
   }
   catch {
     historyMessage.value = '分析记录暂时无法读取'
@@ -1562,6 +1599,43 @@ async function shareLatest() {
   }
 }
 
+function historyConversationToGroup(
+  conversation: AiAgentHistoryConversation,
+  expandedKeys: Set<string>,
+): HistoryConversationGroup {
+  const items = [...(conversation.items ?? [])].sort((a, b) => historyRecordTime(b) - historyRecordTime(a))
+  const latest = conversation.latest ?? items[0]!
+  const groupId = conversation.conversationId || latest.recordId
+  const usageParts = [
+    `${conversation.turnCount || items.length || 1} 个问题`,
+    conversation.toolUsageUnits ? `${conversation.toolUsageUnits} 单位` : '',
+    conversation.totalTokens ? `${conversation.totalTokens.toLocaleString('zh-CN')} tokens` : '',
+    conversation.saved ? '含已保存' : '',
+    formatTime(conversation.lastTurnAtUtc || latest.createdAtUtc),
+  ].filter(Boolean)
+  return {
+    groupId,
+    title: conversation.title || historyGroupTitle(latest),
+    subtitle: conversation.subtitle || usageParts.join(' · '),
+    preview: conversation.preview || latest.question || latest.title,
+    latest,
+    items,
+    expanded: expandedKeys.has(groupId),
+  }
+}
+
+function mergeHistoryConversations(
+  current: AiAgentHistoryConversation[],
+  incoming: AiAgentHistoryConversation[],
+) {
+  const map = new Map(current.map(item => [item.conversationId, item]))
+  for (const item of incoming) {
+    map.set(item.conversationId, item)
+  }
+  return [...map.values()]
+    .sort((a, b) => new Date(b.lastTurnAtUtc).getTime() - new Date(a.lastTurnAtUtc).getTime())
+}
+
 function buildHistoryGroups(
   items: AiAgentHistoryRecord[],
   expandedKeys: Set<string>,
@@ -1641,11 +1715,15 @@ function toggleHistoryGroup(groupId: string) {
 }
 
 function loadMoreHistoryGroups() {
-  historyDisplayLimit.value += 10
+  if (!historyHasMore.value || historyPending.value) return
+  loadAgentHistory(true)
 }
 
 function resetHistoryGrouping() {
-  historyDisplayLimit.value = 10
+  historyConversations.value = []
+  historyItems.value = []
+  historyNextCursor.value = null
+  historyHasMore.value = false
   expandedHistoryGroups.value = new Set()
 }
 
@@ -1680,12 +1758,14 @@ function restoreHistory(item: AiAgentHistoryRecord) {
       traceId: item.traceId,
       provider: item.provider,
       model: item.model,
+      conversationId: item.conversationId ?? null,
       toolCalls: item.toolCalls ?? [],
       usage: item.usage,
       generatedAtUtc: item.createdAtUtc,
     },
     feedback: createFeedbackState(),
   })
+  activeConversationId.value = item.conversationId ?? null
   nextTick(() => scrollToChatEnd('smooth'))
 }
 
@@ -1694,7 +1774,7 @@ async function deleteHistory(recordId: string) {
     await $apiFetch<AiAgentHistoryMutationResponse>(`/api/newspdex/ai/agent/history/${encodeURIComponent(recordId)}`, {
       method: 'DELETE',
     })
-    historyItems.value = historyItems.value.filter(item => item.recordId !== recordId)
+    await loadAgentHistory()
     await loadAgentUsage()
   }
   catch {
@@ -1705,12 +1785,14 @@ async function deleteHistory(recordId: string) {
 function clearTurns() {
   cancelActiveRequest()
   turns.value = []
+  activeConversationId.value = null
   errorMessage.value = ''
 }
 
 async function retryTurn(turn: AnalysisTurn) {
   if (loading.value) return
   selected.value = turn.preset
+  activeConversationId.value = turn.agentResponse?.conversationId ?? activeConversationId.value
   if (turn.match) {
     selectedMatch.value = { ...turn.match }
     form.matchId = String(turn.match.matchId)
@@ -1743,6 +1825,9 @@ function createPendingTurn(
 
 function completeAgentTurn(turnId: string, response: AiAgentTurnResponse) {
   const completedAt = Date.now()
+  if (response.conversationId) {
+    activeConversationId.value = response.conversationId
+  }
   turns.value = turns.value.map(turn => turn.id === turnId
     ? {
         ...turn,
@@ -2863,7 +2948,7 @@ onBeforeUnmount(() => {
             class="history-more focus-ring"
             @click="loadMoreHistoryGroups"
           >
-            加载更多 {{ hiddenHistoryGroupCount }} 组
+            {{ historyMoreLabel }}
           </button>
         </section>
       </aside>

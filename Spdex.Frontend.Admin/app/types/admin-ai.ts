@@ -294,6 +294,48 @@ export interface AiAnswerFeedbackUpdateResult {
   feedback: AiAnswerFeedbackRow
 }
 
+export interface AiAnswerFeedbackBatchReviewResult {
+  generatedAtUtc: string
+  result: {
+    requested: number
+    updated: number
+    failed: number
+    items: AiAnswerFeedbackRow[]
+    failures: Array<{
+      feedbackId: string
+      errorCode: string
+      errorMessage: string
+    }>
+  }
+}
+
+export interface AiGoldenSampleCandidateRow {
+  feedbackId: string
+  answerId: string
+  traceId: string
+  candidateType: string
+  candidateReason: string
+  priority: number
+  feedbackType: 'helpful' | 'issue' | 'unclear'
+  status: string
+  severity: string
+  toolName: string | null
+  preset: string | null
+  matchId: number | null
+  questionText: string | null
+  issueTags: string[]
+  reviewReason: string | null
+  createdAtUtc: string
+  updatedAtUtc: string
+}
+
+export interface AiGoldenSampleCandidateResult {
+  generatedAtUtc: string
+  limit: number
+  count: number
+  items: AiGoldenSampleCandidateRow[]
+}
+
 export interface AiAgentAutomationTaskRow {
   taskId: string
   subjectType: string

@@ -61,6 +61,7 @@ export interface AiAgentTurnResponse {
   traceId: string
   provider: string
   model: string
+  conversationId?: string | null
   toolCalls: AiAgentToolCallSummary[]
   auditTraceIds?: string[]
   usage?: AiAgentUsage | null
@@ -73,6 +74,8 @@ export interface AiAgentHistoryRecord {
   recordId: string
   subjectType: string
   subjectId: string
+  conversationId?: string | null
+  contextKey?: string | null
   title: string
   question: string
   preset?: 'today_hot' | 'search' | 'snapshot' | 'trend' | 'anomaly' | 'metric' | string | null
@@ -98,7 +101,30 @@ export interface AiAgentHistoryRecord {
 export interface AiAgentHistoryListResponse {
   generatedAtUtc: string
   limit: number
+  mode?: string
+  cursor?: string | null
+  nextCursor?: string | null
+  hasMore?: boolean
   count: number
+  items: AiAgentHistoryRecord[]
+  conversations?: AiAgentHistoryConversation[]
+}
+
+export interface AiAgentHistoryConversation {
+  conversationId: string
+  contextKey: string
+  title: string
+  subtitle: string
+  preview: string
+  turnCount: number
+  toolUsageUnits: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  saved: boolean
+  startedAtUtc: string
+  lastTurnAtUtc: string
+  latest: AiAgentHistoryRecord
   items: AiAgentHistoryRecord[]
 }
 

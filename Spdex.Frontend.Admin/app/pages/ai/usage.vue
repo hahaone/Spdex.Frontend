@@ -114,6 +114,17 @@
           <NInputNumber v-model:value="feedbackFilters.limit" :min="1" :max="200" style="width:120px" />
           <NButton type="primary" :loading="feedbackLoading" @click="loadFeedback">查询</NButton>
         </NSpace>
+        <NCard v-if="can(P.aiOpsManage)" size="small" class="mb-3">
+          <NSpace align="center">
+            <span class="text-sm text-gray-500">已选 {{ selectedFeedbackRows.length }} 条</span>
+            <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('needs_calibration')">批量标记校准</NButton>
+            <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('needs_copy_fix')">批量标记文案</NButton>
+            <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('needs_code_fix')">批量标记代码</NButton>
+            <NButton size="small" type="primary" ghost :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('verified')">批量验证</NButton>
+            <NButton size="small" tertiary :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('closed')">批量关闭</NButton>
+            <NButton size="small" secondary :loading="goldenCandidatesLoading" @click="loadGoldenCandidates">刷新黄金样本候选</NButton>
+          </NSpace>
+        </NCard>
         <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
           <NGi span="4 700:1"><NCard size="small"><NStatistic label="反馈数" :value="feedback?.count ?? 0" /></NCard></NGi>
           <NGi span="4 700:1"><NCard size="small"><NStatistic label="待处理" :value="feedbackTotals.open" /></NCard></NGi>
@@ -121,6 +132,7 @@
           <NGi span="4 700:1"><NCard size="small"><NStatistic label="正向反馈" :value="feedbackTotals.helpful" /></NCard></NGi>
         </NGrid>
         <NDataTable
+          v-model:checked-row-keys="feedbackCheckedKeys"
           :columns="feedbackColumns"
           :data="feedback?.items ?? []"
           :loading="feedbackLoading"
@@ -128,6 +140,19 @@
           :row-key="(row: AiAnswerFeedbackRow) => row.feedbackId"
           :scroll-x="1680"
         />
+        <NCard size="small" class="mt-4" title="黄金样本候选">
+          <template #header-extra>
+            <NButton size="small" :loading="goldenCandidatesLoading" @click="loadGoldenCandidates">刷新</NButton>
+          </template>
+          <NDataTable
+            :columns="goldenCandidateColumns"
+            :data="goldenCandidates?.items ?? []"
+            :loading="goldenCandidatesLoading"
+            :pagination="{ pageSize: 10 }"
+            :row-key="(row: AiGoldenSampleCandidateRow) => row.feedbackId"
+            :scroll-x="1320"
+          />
+        </NCard>
       </NTabPane>
 
       <NTabPane v-if="can(P.aiAuditView)" name="workflow" tab="Workflow 观察">
@@ -283,11 +308,14 @@
 import { h } from 'vue'
 import { NButton, NTag, NTooltip, useMessage } from 'naive-ui'
 import type {
+  AiAnswerFeedbackBatchReviewResult,
   AiAnswerFeedbackResult,
   AiAnswerFeedbackRow,
   AiAnswerFeedbackUpdateResult,
   AiAuditResult,
   AiAuditRow,
+  AiGoldenSampleCandidateResult,
+  AiGoldenSampleCandidateRow,
   AiInAppNotificationResult,
   AiInAppNotificationRow,
   AiUsageResult,
@@ -340,15 +368,18 @@ const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
 const notifications = ref<AiInAppNotificationResult | null>(null)
 const feedback = ref<AiAnswerFeedbackResult | null>(null)
+const goldenCandidates = ref<AiGoldenSampleCandidateResult | null>(null)
 const usageLoading = ref(false)
 const auditLoading = ref(false)
 const traceLoading = ref(false)
 const notificationsLoading = ref(false)
 const feedbackLoading = ref(false)
+const goldenCandidatesLoading = ref(false)
 const traceDrawerVisible = ref(false)
 const feedbackReviewVisible = ref(false)
 const feedbackReviewSubmitting = ref(false)
 const feedbackReviewTarget = ref<AiAnswerFeedbackRow | null>(null)
+const feedbackCheckedKeys = ref<string[]>([])
 const traceId = ref(routeTraceId)
 const feedbackReviewForm = reactive({
   status: 'reviewing',
@@ -576,6 +607,10 @@ const feedbackTotals = computed(() => {
     calibration: rows.filter(row => row.status === 'needs_calibration').length,
     helpful: rows.filter(row => row.feedbackType === 'helpful').length,
   }
+})
+const selectedFeedbackRows = computed(() => {
+  const selected = new Set(feedbackCheckedKeys.value)
+  return (feedback.value?.items ?? []).filter(row => selected.has(row.feedbackId))
 })
 const traceDrawerTitle = computed(() => traceId.value ? `Trace ${shortTraceId(traceId.value)}` : 'Trace 回查')
 const feedbackReviewTitle = computed(() => {
@@ -809,6 +844,7 @@ const notificationColumns = [
   { title: '写入时间', key: 'createdAt', width: 170, render: (row: AiInAppNotificationRow) => fmt(row.createdAt) },
 ]
 const feedbackColumns = [
+  ...(can(P.aiOpsManage) ? [{ type: 'selection' as const, width: 48 }] : []),
   {
     title: '类型',
     key: 'feedbackType',
@@ -887,6 +923,48 @@ const feedbackColumns = [
       : '—',
   },
 ]
+const goldenCandidateColumns = [
+  { title: '优先级', key: 'priority', width: 90 },
+  {
+    title: '候选类型',
+    key: 'candidateType',
+    width: 150,
+    render: (row: AiGoldenSampleCandidateRow) => h(
+      NTag,
+      { type: goldenCandidateTag(row.candidateType), size: 'small' },
+      { default: () => goldenCandidateLabel(row.candidateType) },
+    ),
+  },
+  {
+    title: '问题',
+    key: 'questionText',
+    width: 340,
+    render: (row: AiGoldenSampleCandidateRow) => h('div', [
+      h('div', row.questionText || '—'),
+      h('div', { class: 'text-xs text-gray-400' }, row.candidateReason),
+    ]),
+  },
+  {
+    title: '工具',
+    key: 'toolName',
+    width: 210,
+    render: (row: AiGoldenSampleCandidateRow) => h('div', [
+      h('div', row.toolName || '—'),
+      h('div', { class: 'text-xs text-gray-400' }, row.preset || '—'),
+    ]),
+  },
+  { title: '状态', key: 'status', width: 130, render: (row: AiGoldenSampleCandidateRow) => feedbackStatusLabel(row.status) },
+  { title: '严重度', key: 'severity', width: 90, render: (row: AiGoldenSampleCandidateRow) => severityLabel(row.severity) },
+  { title: '标签', key: 'issueTags', width: 220, render: (row: AiGoldenSampleCandidateRow) => row.issueTags.length ? row.issueTags.map(feedbackIssueLabel).join('、') : '—' },
+  { title: '备注', key: 'reviewReason', width: 260, render: (row: AiGoldenSampleCandidateRow) => row.reviewReason || '—' },
+  {
+    title: 'Trace',
+    key: 'traceId',
+    width: 180,
+    render: (row: AiGoldenSampleCandidateRow) => renderTraceButton(row.traceId),
+  },
+  { title: '更新时间', key: 'updatedAtUtc', width: 170, render: (row: AiGoldenSampleCandidateRow) => fmt(row.updatedAtUtc) },
+]
 
 async function loadUsage() {
   usageLoading.value = true
@@ -957,6 +1035,19 @@ async function loadFeedback() {
   else message.error(result.message || '回答反馈查询失败')
 }
 
+async function loadGoldenCandidates() {
+  goldenCandidatesLoading.value = true
+  const result = await api.get<AiGoldenSampleCandidateResult>('ai/feedback/golden-candidates', {
+    status: feedbackFilters.status || undefined,
+    feedbackType: feedbackFilters.feedbackType || undefined,
+    tool: feedbackFilters.tool || undefined,
+    limit: 50,
+  })
+  goldenCandidatesLoading.value = false
+  if (result.code === 0) goldenCandidates.value = result.data
+  else message.error(result.message || '黄金样本候选查询失败')
+}
+
 async function submitFeedbackReview() {
   const target = feedbackReviewTarget.value
   if (!target) return
@@ -980,6 +1071,32 @@ async function submitFeedbackReview() {
   feedbackReviewVisible.value = false
   message.success('反馈状态已更新')
   await loadFeedback()
+}
+
+async function batchReviewFeedback(status: string) {
+  const feedbackIds = selectedFeedbackRows.value.map(row => row.feedbackId)
+  if (!feedbackIds.length) {
+    message.warning('请先勾选要处理的反馈')
+    return
+  }
+
+  feedbackReviewSubmitting.value = true
+  const result = await api.post<AiAnswerFeedbackBatchReviewResult>('ai/feedback/batch-review', {
+    feedbackIds,
+    status,
+    severity: inferReviewSeverity(status),
+    reviewReason: `后台批量标记为${feedbackStatusLabel(status)}`,
+  })
+  feedbackReviewSubmitting.value = false
+  if (result.code !== 0 || !result.data?.result) {
+    message.error(result.message || '批量更新失败')
+    return
+  }
+
+  const payload = result.data.result
+  feedbackCheckedKeys.value = []
+  message.success(`已更新 ${payload.updated} 条${payload.failed ? `，失败 ${payload.failed} 条` : ''}`)
+  await Promise.allSettled([loadFeedback(), loadGoldenCandidates()])
 }
 
 function openFeedbackReview(row: AiAnswerFeedbackRow, status: string) {
@@ -1155,6 +1272,23 @@ function severityLabel(value: string) {
   }
   return labels[value] ?? value
 }
+function goldenCandidateLabel(value: string) {
+  const labels: Record<string, string> = {
+    positive_verified: '正向优秀样本',
+    needs_calibration: '口径校准样本',
+    needs_code_fix: '代码回归样本',
+    needs_copy_fix: '文案改写样本',
+    calibration_candidate: '待复核样本',
+  }
+  return labels[value] ?? value
+}
+function goldenCandidateTag(value: string) {
+  if (value === 'positive_verified') return 'success'
+  if (value === 'needs_calibration') return 'warning'
+  if (value === 'needs_code_fix') return 'error'
+  if (value === 'needs_copy_fix') return 'info'
+  return 'default'
+}
 function inferReviewSeverity(status: string) {
   if (status === 'needs_code_fix' || status === 'needs_calibration') return 'medium'
   if (status === 'needs_copy_fix') return 'low'
@@ -1192,6 +1326,7 @@ onMounted(() => {
     loadAudit()
     loadInAppNotifications()
     loadFeedback()
+    loadGoldenCandidates()
     if (activeTab.value === 'trace' && traceId.value) {
       loadTrace()
     }
