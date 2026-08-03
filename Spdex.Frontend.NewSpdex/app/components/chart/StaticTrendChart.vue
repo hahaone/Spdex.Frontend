@@ -264,25 +264,26 @@ function fmtValue(v: number): string {
   }
 }
 
-function timeParts(point?: ChartPoint): { ymd?: string, md?: string, hm: string } {
+function timeParts(point?: ChartPoint): { ymd?: string, md?: string, hm: string, hms: string } {
   const raw = (point?.ts || point?.time || '').trim()
-  if (!raw) return { hm: '' }
+  if (!raw) return { hm: '', hms: '' }
 
-  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}:\d{2})/)
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}:\d{2})(?::(\d{2}))?/)
   if (ymd?.[1] && ymd[2] && ymd[3] && ymd[4]) {
     return {
       ymd: `${ymd[1]}-${ymd[2]}-${ymd[3]}`,
       md: `${ymd[2]}-${ymd[3]}`,
       hm: ymd[4],
+      hms: `${ymd[4]}:${ymd[5] ?? '00'}`,
     }
   }
 
-  const md = raw.match(/^(\d{2})-(\d{2})\s+(\d{2}:\d{2})/)
+  const md = raw.match(/^(\d{2})-(\d{2})\s+(\d{2}:\d{2})(?::(\d{2}))?/)
   if (md?.[1] && md[2] && md[3]) {
-    return { md: `${md[1]}-${md[2]}`, hm: md[3] }
+    return { md: `${md[1]}-${md[2]}`, hm: md[3], hms: `${md[3]}:${md[4] ?? '00'}` }
   }
 
-  return { hm: point?.time || raw }
+  return { hm: point?.time || raw, hms: point?.time || raw }
 }
 
 function fmtAxisTime(point?: ChartPoint): string {
@@ -292,9 +293,9 @@ function fmtAxisTime(point?: ChartPoint): string {
 
 function fmtTipTime(point?: ChartPoint): string {
   const p = timeParts(point)
-  if (p.ymd) return `${p.ymd} ${p.hm}`
-  if (p.md) return `${p.md} ${p.hm}`
-  return p.hm
+  if (p.ymd) return `${p.ymd} ${p.hms}`
+  if (p.md) return `${p.md} ${p.hms}`
+  return p.hms
 }
 
 const yTicks = computed(() => {

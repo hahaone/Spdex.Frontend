@@ -29,7 +29,11 @@ const timeOptions = [
 const { detail } = useMatchDetail(eventId)
 const match = computed(() => detail.value?.match)
 
-const { points, status, pending, refresh } = useChartSeries(eventId, graphType)
+const chartExtraQuery = computed(() => ({
+  granularity: 'raw',
+  hoursBack: timeRange.value === 'all' ? 14 * 24 : timeRange.value === '24h' ? 24 : 6,
+}))
+const { points, status, pending, refresh } = useChartSeries(eventId, graphType, chartExtraQuery)
 
 // 桌面加高图表画布(移动端保持 220)
 const isDesktop = useIsDesktop()

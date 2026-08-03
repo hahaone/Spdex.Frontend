@@ -13,7 +13,12 @@ const { entitlements, user } = useAuth()
 const aiFeaturesVisible = useAiFeatureVisibility()
 const hasJcMembership = computed(() => canUseJcData(user.value))
 const { detail, access, euroOdds, pending, refresh } = useMatchDetail(eventId)
-const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
+const previewChartQuery = ref({ granularity: 'raw', hoursBack: 24 })
+const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(
+  eventId,
+  ref('1X2'),
+  previewChartQuery,
+)
 const { fetchSnapshot } = useMatchSnapshot()
 const { buildFlashQLink } = useFlashQLink()
 const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()

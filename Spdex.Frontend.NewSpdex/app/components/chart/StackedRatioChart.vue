@@ -119,7 +119,7 @@ const tooltip = computed(() => {
 
 function fmtTime(p?: ChartPoint): string {
   const raw = p?.ts || p?.time || ''
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/)
   return m?.[1] && m[2] ? `${m[1]} ${m[2]}` : (p?.time || '')
 }
 function fmtAxisTime(p?: ChartPoint): string {

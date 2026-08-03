@@ -328,6 +328,16 @@ function xgDiffTone(value: number): XgDiffTone {
   return 'neutral'
 }
 
+type XgGoalTeam = 'home' | 'away'
+
+function replayScore(point: LiveXgReplayPoint): [number, number] | null {
+  if (!Array.isArray(point.score) || point.score.length < 2) return null
+  const home = Number(point.score[0])
+  const away = Number(point.score[1])
+  if (!Number.isInteger(home) || home < 0 || !Number.isInteger(away) || away < 0) return null
+  return [home, away]
+}
+
 // 预期进球差走势（BSW 主 xG - 客 xG）：零轴面积 + 正负阈值分段。
 function xgDiffSpark(eventId: number) {
   const series = xgReplayByEventId.value.get(eventId)?.series ?? []
@@ -383,10 +393,63 @@ function xgDiffSpark(eventId: number) {
   }
 
   const validPoints = points.filter((point): point is NonNullable<typeof point> => point != null)
+  const timeGuides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }, { minute: 75, label: '75\'' }]
+    .filter(guide => maxMinute >= guide.minute)
+    .map((guide) => {
+      const x = xOf(guide.minute)
+      const nearRight = x > W - 28
+      return {
+        x,
+        label: guide.label,
+        labelX: nearRight ? x - 3 : x + 3,
+        labelY: H - 3,
+        anchor: nearRight ? 'end' : 'start',
+      }
+    })
+  const goalMarkers: Array<{
+    x: number
+    y: number
+    labelY: number
+    minute: number
+    team: XgGoalTeam
+    count: number
+  }> = []
+  let previousScore: [number, number] | null = null
+  series.forEach((point) => {
+    const score = replayScore(point)
+    if (score == null) return
+    if (previousScore != null) {
+      const homeGoals = Math.max(0, score[0] - previousScore[0])
+      const awayGoals = Math.max(0, score[1] - previousScore[1])
+      if (homeGoals > 0) {
+        goalMarkers.push({
+          x: xOf(point.minute),
+          y: yOf(0.5),
+          labelY: yOf(0.5) - 4,
+          minute: point.minute,
+          team: 'home',
+          count: homeGoals,
+        })
+      }
+      if (awayGoals > 0) {
+        goalMarkers.push({
+          x: xOf(point.minute),
+          y: yOf(-0.5),
+          labelY: yOf(-0.5) + 8,
+          minute: point.minute,
+          team: 'away',
+          count: awayGoals,
+        })
+      }
+    }
+    previousScore = score
+  })
   return {
     fragments,
     w: W,
     h: H,
+    timeGuides,
+    goalMarkers,
     guides: [
       { value: 0.5, label: '+0.50', y: yOf(0.5), kind: 'threshold' },
       { value: 0, label: '0', y: zeroY, kind: 'zero' },
@@ -1764,6 +1827,10 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                       :viewBox="`0 0 ${charts.diff.w} ${charts.diff.h}`"
                       preserveAspectRatio="none"
                     >
+                      <g v-for="guide in charts.diff.timeGuides" :key="`xgd-time-${guide.label}`">
+                        <line class="xgd-time-guide" :x1="guide.x" y1="0" :x2="guide.x" :y2="charts.diff.h" />
+                        <text class="xgd-time-guide-label" :x="guide.labelX" :y="guide.labelY" :text-anchor="guide.anchor">{{ guide.label }}</text>
+                      </g>
                       <g v-for="guide in charts.diff.guides" :key="`xgd-guide-${guide.value}`">
                         <line
                           :class="['xgd-guide', `is-${guide.kind}`]"
@@ -1777,6 +1844,17 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                       <g v-for="(fragment, fragmentIndex) in charts.diff.fragments" :key="`xgd-fragment-${fragmentIndex}`">
                         <path :d="fragment.areaPath" :class="['xgd-area', `is-${fragment.tone}`]" />
                         <path :d="fragment.linePath" :class="['xgd-line', `is-${fragment.tone}`]" />
+                      </g>
+                      <g
+                        v-for="(goal, goalIndex) in charts.diff.goalMarkers"
+                        :key="`xgd-goal-${goal.team}-${goal.minute}-${goalIndex}`"
+                        :class="['xgd-goal', `is-${goal.team}`]"
+                      >
+                        <circle :cx="goal.x" :cy="goal.y" r="3.2" class="xgd-goal-mark" />
+                        <text :x="goal.x" :y="goal.labelY" text-anchor="middle" class="xgd-goal-label">
+                          {{ goal.team === 'home' ? '主' : '客' }}{{ goal.count > 1 ? `×${goal.count}` : '' }}
+                        </text>
+                        <title>{{ goal.team === 'home' ? '主队' : '客队' }}进球 · {{ goal.minute }}′</title>
                       </g>
                       <circle
                         v-if="charts.diff.firstPoint"
@@ -2311,6 +2389,19 @@ th.col-tg {
   font-weight: 700;
 }
 
+.xgd-time-guide {
+  stroke: #bfd0c7;
+  stroke-width: 0.8;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.xgd-time-guide-label {
+  fill: #829189;
+  font-size: 7px;
+  font-weight: 700;
+}
+
 .xgd-area {
   vector-effect: non-scaling-stroke;
 }
@@ -2349,6 +2440,33 @@ th.col-tg {
 
 .xgd-dot {
   fill: #40544a;
+}
+
+.xgd-goal-mark {
+  stroke: #fff;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.xgd-goal-label {
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.xgd-goal.is-home .xgd-goal-mark {
+  fill: #e34a4a;
+}
+
+.xgd-goal.is-home .xgd-goal-label {
+  fill: #c93636;
+}
+
+.xgd-goal.is-away .xgd-goal-mark {
+  fill: #2878d0;
+}
+
+.xgd-goal.is-away .xgd-goal-label {
+  fill: #1f64b0;
 }
 
 .match-row td.live-total-cell.live-latest,

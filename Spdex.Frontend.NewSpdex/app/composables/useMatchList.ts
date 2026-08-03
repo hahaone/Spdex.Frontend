@@ -86,6 +86,8 @@ interface BackendMatchListResult {
   earliestBackcheckDate?: string | null
 }
 
+const MAX_AUTO_PAGES = 20
+
 export interface MatchListFilters {
   date?: string
   league?: string
@@ -221,6 +223,30 @@ function mapToMatchSummary(item: BackendMatchSummary): MatchSummary {
   }
 }
 
+function mergeMatchListPages(
+  current: BackendMatchListResult,
+  next: BackendMatchListResult,
+): BackendMatchListResult {
+  const itemsByEventId = new Map<number, BackendMatchSummary>()
+  for (const item of current.items) itemsByEventId.set(item.eventId, item)
+  for (const item of next.items) itemsByEventId.set(item.eventId, item)
+
+  const items = [...itemsByEventId.values()]
+  return {
+    ...current,
+    items,
+    leagues: [...new Set([...current.leagues, ...next.leagues])],
+    jcIssues: [...new Set([...(current.jcIssues ?? []), ...(next.jcIssues ?? [])])].sort((a, b) => b - a),
+    sfcIssues: [...new Set([...(current.sfcIssues ?? []), ...(next.sfcIssues ?? [])])].sort((a, b) => b - a),
+    totalCount: Math.max(current.totalCount, next.totalCount, items.length),
+    prematchSixHourLockApplied: current.prematchSixHourLockApplied || next.prematchSixHourLockApplied,
+    jcOnlyEnforced: current.jcOnlyEnforced || next.jcOnlyEnforced,
+    historicalBackcheckLimitApplied:
+      current.historicalBackcheckLimitApplied || next.historicalBackcheckLimitApplied,
+    earliestBackcheckDate: current.earliestBackcheckDate ?? next.earliestBackcheckDate,
+  }
+}
+
 export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   const query = computed(() => {
     const f = unref(filters)
@@ -252,23 +278,33 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     watch: [query],
   })
 
-  // 20s 自动刷新（赛事开赛/比分/赔率成交变化时反映；后端会动数据缓存 30s，前端略快于它以尽快反映）
-  usePolling(() => result.refresh(), 20_000, { pending: result.pending, errorRef: result.error })
-
   const cachedData = shallowRef<BackendMatchListResult | null>(null)
   const cachedSignature = ref('')
   const transientEmptyCount = ref(0)
+  const additionalPagesPending = ref(false)
+  const additionalPagesError = shallowRef<unknown>(null)
+  let mergeGeneration = 0
+
+  const pending = computed(() => result.pending.value || additionalPagesPending.value)
+  const error = computed(() => result.error.value ?? additionalPagesError.value)
+
+  // 20s 自动刷新（赛事开赛/比分/赔率成交变化时反映；后端会动数据缓存 30s，前端略快于它以尽快反映）
+  usePolling(() => result.refresh(), 20_000, { pending, errorRef: error })
 
   watch(querySignature, () => {
+    mergeGeneration += 1
     cachedData.value = null
     cachedSignature.value = ''
     transientEmptyCount.value = 0
+    additionalPagesPending.value = false
+    additionalPagesError.value = null
   })
 
-  watch(() => result.data.value?.data, (data) => {
+  watch(() => result.data.value?.data, async (data) => {
     if (!data) return
 
     const signature = querySignature.value
+    const generation = ++mergeGeneration
     const hasCachedItems = cachedSignature.value === signature && Boolean(cachedData.value?.items.length)
 
     // 自动刷新偶尔会遇到超时/限流后的空响应，不能立刻把已有赛事清成「暂无赛事」。
@@ -281,7 +317,59 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
       transientEmptyCount.value = 0
     }
 
-    cachedData.value = data
+    let completeData = data
+    additionalPagesError.value = null
+
+    // 页面没有分页控件，必须根据 totalCount 自动拉完后续页，否则单日超过 pageSize 时
+    // 晚场赛事会被静默截断。仅从第 1 页开始自动补齐；显式请求其他页时保持调用方语义。
+    if (data.page <= 1 && data.items.length < data.totalCount) {
+      const pageSize = Math.max(1, data.pageSize)
+      let nextPage = 2
+      additionalPagesPending.value = true
+
+      try {
+        while (completeData.items.length < completeData.totalCount && nextPage <= MAX_AUTO_PAGES) {
+          const response = await $apiFetch<ApiResponse<BackendMatchListResult>>('/api/newspdex/matches', {
+            query: {
+              ...query.value,
+              page: nextPage,
+              pageSize,
+            },
+            timeout: 20_000,
+          })
+          const nextData = response.data
+          if (!nextData)
+            throw new Error(`赛事列表第 ${nextPage} 页返回空响应`)
+          if (generation !== mergeGeneration || signature !== querySignature.value)
+            return
+
+          completeData = mergeMatchListPages(completeData, nextData)
+          if (nextData.items.length === 0)
+            break
+          nextPage += 1
+        }
+      }
+      catch (fetchError) {
+        if (generation !== mergeGeneration || signature !== querySignature.value)
+          return
+        additionalPagesError.value = fetchError
+
+        // 刷新补页失败时保留上一份完整结果；首次进入则至少展示已成功返回的第一页，
+        // 后续轮询会继续尝试补齐，不把页面变成空白。
+        if (hasCachedItems)
+          return
+        completeData = data
+      }
+      finally {
+        if (generation === mergeGeneration)
+          additionalPagesPending.value = false
+      }
+    }
+
+    if (generation !== mergeGeneration || signature !== querySignature.value)
+      return
+
+    cachedData.value = completeData
     cachedSignature.value = signature
   }, { immediate: true })
 
@@ -301,7 +389,7 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   const historicalBackcheckLimitApplied = computed(() => stableData.value?.historicalBackcheckLimitApplied ?? false)
   const earliestBackcheckDate = computed(() => stableData.value?.earliestBackcheckDate ?? null)
   const initialLoading = computed(() =>
-    !stableData.value && (result.pending.value || result.status.value === 'idle'))
+    !stableData.value && (pending.value || result.status.value === 'idle'))
 
   return {
     items,
@@ -313,8 +401,8 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
     historicalBackcheckLimitApplied,
     earliestBackcheckDate,
     initialLoading,
-    pending: result.pending,
-    error: result.error,
+    pending,
+    error,
     refresh: result.refresh,
   }
 }

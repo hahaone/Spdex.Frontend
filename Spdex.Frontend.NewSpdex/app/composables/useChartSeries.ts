@@ -1,7 +1,7 @@
 /**
  * 赛事走势图时间序列（盘口 × 指标矩阵）。
  * 调 /api/newspdex/charts/{eventId}/timeseries?type=market.metric，
- * 把 ISO 时间字符串转 HH:mm，nullable 数值补 0。
+ * 把 ISO 时间字符串转 HH:mm:ss，nullable 数值补 0。
  * 后端额外返回 market/metric/metricLabel/unit/seriesLabels 供前端渲染标题、图例、Y 轴格式。
  */
 
@@ -117,19 +117,24 @@ interface BackendChartResult {
   activeSelectionLabel?: string | null
   points: BackendChartPoint[]
   generatedAt: string
+  resolution: string
+  sourcePointCount: number
+  returnedPointCount: number
+  sampled: boolean
+  timePrecision: string
   status: ChartStatus
 }
 
-function isoToHM(iso: string): string {
+function isoToHMS(iso: string): string {
   // 接受 "2026-05-27T14:30:00Z" 或 "2026-05-27T14:30:00"
   const idx = iso.indexOf('T')
   if (idx < 0) return iso
-  return iso.slice(idx + 1, idx + 6)
+  return iso.slice(idx + 1, idx + 9)
 }
 
 function mapPoint(p: BackendChartPoint): ChartPoint {
   return {
-    time: isoToHM(p.time),
+    time: isoToHMS(p.time),
     ts: p.time,
     home: p.home ?? 0,
     draw: p.draw ?? 0,
@@ -163,7 +168,9 @@ export function useChartSeries(
       Object.entries(extraQueryRef.value ?? {})
         .filter(([, value]) => value != null && value !== ''),
     )
-    return { type: typeRef.value, ...extra }
+    // NewSpdex 图表默认返回真实刷新快照。调用方只有明确传入聚合粒度时才降采样，
+    // 避免不同页面因遗漏 query 而静默回到后端 5 分钟默认值。
+    return { type: typeRef.value, granularity: 'raw', ...extra }
   })
 
   const result = useApiFetch<ApiResponse<BackendChartResult>>(
@@ -202,6 +209,11 @@ export function useChartSeries(
   const selectionGroups = computed<ChartSelectionGroup[]>(() => result.data.value?.data?.selectionGroups ?? [])
   const activeSelection = computed(() => result.data.value?.data?.activeSelection ?? null)
   const activeSelectionLabel = computed(() => result.data.value?.data?.activeSelectionLabel ?? null)
+  const resolution = computed(() => result.data.value?.data?.resolution ?? '5m')
+  const sourcePointCount = computed(() => result.data.value?.data?.sourcePointCount ?? 0)
+  const returnedPointCount = computed(() => result.data.value?.data?.returnedPointCount ?? points.value.length)
+  const sampled = computed(() => result.data.value?.data?.sampled ?? false)
+  const timePrecision = computed(() => result.data.value?.data?.timePrecision ?? 'second')
 
   return {
     points,
@@ -213,6 +225,11 @@ export function useChartSeries(
     selectionGroups,
     activeSelection,
     activeSelectionLabel,
+    resolution,
+    sourcePointCount,
+    returnedPointCount,
+    sampled,
+    timePrecision,
     pending: result.pending,
     error: result.error,
     refresh: result.refresh,

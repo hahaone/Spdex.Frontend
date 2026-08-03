@@ -16,7 +16,12 @@ const basketballBackRoute = computed(() => {
 
 const { entitlements } = useAuth()
 const { detail, access, pending, refresh } = useMatchDetail(eventId)
-const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(eventId, ref('1X2'))
+const previewChartQuery = ref({ granularity: 'raw', hoursBack: 24 })
+const { points: chartPoints, status: chartStatus, refresh: refreshChart } = useChartSeries(
+  eventId,
+  ref('1X2'),
+  previewChartQuery,
+)
 const { fetchSnapshot } = useMatchSnapshot()
 
 const timeMachinePoints = [

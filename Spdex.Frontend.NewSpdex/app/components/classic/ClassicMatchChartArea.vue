@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RefreshCw } from '@lucide/vue'
 import type { RouteLocationRaw } from 'vue-router'
-import type { ChartPoint } from '~/types/market'
 import { isRateLimitedError } from '~/utils/apiError'
 import { canUseJcData } from '~/utils/membership'
 import { withMatchListContext } from '~/utils/matchNavigation'
@@ -70,72 +69,11 @@ const timeOptions = [
 const chartHoursBack = computed(() => timeRange.value === 'all' ? FULL_RANGE_HOURS : RANGE_HOURS[timeRange.value])
 const chartExtraQuery = computed(() => {
   const query: Record<string, string | number> = {}
-  if ((market.value === 'asianindex' || metric.value === 'exchange') && chartHoursBack.value)
+  if (chartHoursBack.value)
     query.hoursBack = chartHoursBack.value
-  if (metric.value === 'exchange')
-    query.granularity = 'raw'
+  query.granularity = 'raw'
   return query
 })
-
-// 「全部」时间段点数可达数千,折线糊成一团 + 圆点云遮挡。超过上限按桶均值抽稀到 ~240 点,
-// 既保留趋势形状又去抖动;首尾保留真实时间点,端点不被桶中点偏移。0 视作缺失(payout 例外,0/负有意义)。
-const MAX_CHART_POINTS = 240
-function aggregateBucket(src: ChartPoint[], s: number, e: number, zeroMissing: boolean): ChartPoint {
-  const mid = src[Math.floor((s + e - 1) / 2)] ?? src[s]!
-  const avg = (pick: (p: ChartPoint) => number | undefined, skipZero: boolean): number => {
-    let sum = 0
-    let cnt = 0
-    for (let i = s; i < e; i++) {
-      const v = pick(src[i]!)
-      if (v == null || !Number.isFinite(v) || (skipZero && v === 0)) continue
-      sum += v
-      cnt++
-    }
-    return cnt ? sum / cnt : 0
-  }
-  const avgOptional = (pick: (p: ChartPoint) => number | undefined): number | undefined => {
-    let sum = 0
-    let cnt = 0
-    for (let i = s; i < e; i++) {
-      const v = pick(src[i]!)
-      if (v == null || !Number.isFinite(v)) continue
-      sum += v
-      cnt++
-    }
-    return cnt ? sum / cnt : undefined
-  }
-  return {
-    time: mid.time,
-    ts: mid.ts,
-    home: avg(p => p.home, zeroMissing),
-    draw: avg(p => p.draw, zeroMissing),
-    away: avg(p => p.away, zeroMissing),
-    volume: avg(p => p.volume, false),
-    volumeHome: avgOptional(p => p.volumeHome),
-    volumeDraw: avgOptional(p => p.volumeDraw),
-    volumeAway: avgOptional(p => p.volumeAway),
-    priceHome: avg(p => p.priceHome, true),
-    priceDraw: avg(p => p.priceDraw, true),
-    priceAway: avg(p => p.priceAway, true),
-  }
-}
-function downsamplePoints(src: ChartPoint[], cap: number, zeroMissing: boolean): ChartPoint[] {
-  if (src.length <= cap) return src
-  const out: ChartPoint[] = []
-  const size = src.length / cap
-  for (let b = 0; b < cap; b++) {
-    const s = Math.floor(b * size)
-    const e = Math.min(src.length, Math.floor((b + 1) * size))
-    if (e > s) out.push(aggregateBucket(src, s, e, zeroMissing))
-  }
-  const first = src[0]!
-  const last = src[src.length - 1]!
-  if (out.length) {
-    out[0] = { ...out[0]!, ts: first.ts, time: first.time }
-    out[out.length - 1] = { ...out[out.length - 1]!, ts: last.ts, time: last.time }
-  }
-  return out
-}
 
 // 框选缩放窗口(优先于时间段下拉);为空时走时间段过滤。
 const zoomWindow = ref<{ start: string, end: string } | null>(null)
@@ -185,7 +123,7 @@ const displayPoints = computed(() => {
       windowed = all.filter(p => p.ts && new Date(p.ts).getTime() >= cutoff)
     }
   }
-  return downsamplePoints(windowed, MAX_CHART_POINTS, unit.value !== 'payout')
+  return windowed
 })
 
 function onZoom(range: { start: string, end: string }) { zoomWindow.value = range }

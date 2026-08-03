@@ -104,10 +104,9 @@ const chartExtraQuery = computed(() => {
     query.scoreGroup = scoreGroup.value
     query.selection = scoreSelection.value
   }
-  if ((market.value === 'asianindex' || metric.value === 'exchange') && chartHoursBack.value)
+  if (chartHoursBack.value)
     query.hoursBack = chartHoursBack.value
-  if (metric.value === 'exchange')
-    query.granularity = 'raw'
+  query.granularity = 'raw'
   return query
 })
 
@@ -155,8 +154,8 @@ const showTooltipVolume = computed(() => metric.value === 'tradeflow' || metric.
 const isTradeFlow = computed(() => metric.value === 'tradeflow')
 // 成交明细必须单选项；"全部"(null) 视为主/大
 const tradeSelection = computed<'home' | 'draw' | 'away'>(() => seriesOnly.value ?? 'home')
-// 时间档 → 粒度：窗口越大粒度越粗，控制桶数
-const tfGranularity = computed(() => (timeRange.value === '2h' ? '5m' : timeRange.value === '6h' ? '15m' : '30m'))
+// 成交明细保留每个真实刷新秒；时间档只负责裁剪可视窗口，不再改变数据精度。
+const tfGranularity = computed(() => 'raw')
 const { data: tradeFlow, status: tfStatus, pending: tfPending, refresh: tfRefresh } = useTradeFlow(
   eventId, market, tradeSelection, tfGranularity,
 )

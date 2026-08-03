@@ -131,7 +131,7 @@ const filters = computed<MatchListFilters>(() => {
     jcIssue: lotteryKind === 'jc' ? issue : 0,
     sfcIssue: lotteryKind === 'lottery' ? issue : 0,
     page: 1,
-    pageSize: 50,
+    pageSize: 100,
   }
 })
 

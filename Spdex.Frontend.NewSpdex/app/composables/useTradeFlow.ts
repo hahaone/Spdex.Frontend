@@ -19,6 +19,11 @@ export interface TradeFlowResult {
   selectionLabel: string
   attrs: string[]
   buckets: TradeFlowBucket[]
+  resolution: string
+  sourcePointCount: number
+  returnedPointCount: number
+  sampled: boolean
+  timePrecision: string
   status: 'ok' | 'pending' | 'no-access'
 }
 
@@ -26,7 +31,7 @@ export function useTradeFlow(
   eventId: MaybeRef<number>,
   market: MaybeRef<string>,
   selection: MaybeRef<string>,
-  granularity: MaybeRef<string> = ref('5m'),
+  granularity: MaybeRef<string> = ref('raw'),
 ) {
   const idRef = computed(() => unref(eventId))
   const marketRef = computed(() => unref(market))
