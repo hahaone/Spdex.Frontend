@@ -11,7 +11,7 @@ withDefaults(defineProps<{
   min: undefined,
   disabled: false,
   ariaLabel: '选择日期',
-  placeholder: 'dd/mm/yyyy',
+  placeholder: '年/月/日',
 })
 
 const emit = defineEmits<{
@@ -24,7 +24,7 @@ function updateValue(event: Event) {
 
 function displayDate(value: string) {
   const [year, month, day] = value.split('-')
-  return year && month && day ? `${day}/${month}/${year}` : value
+  return year && month && day ? `${year}/${month}/${day}` : value
 }
 </script>
 

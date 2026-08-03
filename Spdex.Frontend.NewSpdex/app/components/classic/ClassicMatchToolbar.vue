@@ -167,7 +167,7 @@ onBeforeUnmount(() => {
           </select>
         </label>
 
-        <label class="classic-field">
+        <label class="classic-field backcheck-field">
           <span>回查</span>
           <PortableDateInput
             class="classic-date-input"
@@ -308,6 +308,15 @@ onBeforeUnmount(() => {
   font-weight: 760;
 }
 
+.classic-field > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.classic-field.backcheck-field {
+  flex: 0 0 auto;
+}
+
 .classic-field.league {
   flex: 1 1 160px;
 }
@@ -342,6 +351,11 @@ onBeforeUnmount(() => {
   color: var(--classic-text);
   font-size: 0.76rem;
   font-weight: 740;
+}
+
+.classic-date-input {
+  width: 118px;
+  min-width: 118px;
 }
 
 .classic-field select:disabled,
