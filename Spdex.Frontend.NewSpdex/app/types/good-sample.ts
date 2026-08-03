@@ -291,12 +291,39 @@ export interface AiAgentAutomationRunPreflightResponse {
   item: AiAgentAutomationRunGateResult
 }
 
+export interface AiAgentAutomationBackgroundRunResponse {
+  generatedAtUtc: string
+  queued: boolean
+  item: AiAgentAutomationTaskRecord
+  executionTask?: AiAgentAutomationTaskRecord | null
+  run: AiAgentAutomationRunRecord
+  workflow?: AiAgentWorkflowRecord | null
+  preflight?: AiAgentAutomationRunGateResult | null
+  retriedFrom?: AiAgentAutomationRunRecord | null
+}
+
 export interface AiAgentAutomationRunListResponse {
   generatedAtUtc: string
   limit: number
   taskId?: string | null
   count: number
   items: AiAgentAutomationRunRecord[]
+}
+
+export interface AiAgentAutomationRunDetailResponse {
+  generatedAtUtc: string
+  run: AiAgentAutomationRunRecord
+  task?: AiAgentAutomationTaskRecord | null
+  taskError?: {
+    code?: string | null
+    message?: string | null
+  } | null
+  workflowRun?: AiAgentWorkflowRunRecord | null
+  steps: AiAgentWorkflowRunStepResult[]
+  retry: {
+    eligible: boolean
+    reason: string
+  }
 }
 
 export interface GoodSampleMatchChoice {

@@ -21,11 +21,12 @@ import {
 import type {
   AiAnswerFeedbackResponse,
   AiAnswerFeedbackType,
+  AiAgentAutomationBackgroundRunResponse,
+  AiAgentAutomationRunDetailResponse,
   AiAgentAutomationTaskListResponse,
   AiAgentAutomationTaskMutationResponse,
   AiAgentAutomationTaskRecord,
   AiAgentAutomationRunListResponse,
-  AiAgentAutomationRunPreflightResponse,
   AiAgentAutomationRunRecord,
   AiAgentHistoryListResponse,
   AiAgentHistoryMutationResponse,
@@ -306,7 +307,7 @@ const automationCadenceOptions: Record<AutomationTriggerType, Array<{ value: Aut
 const automationScopeOptions: Array<{ value: AutomationScope, label: string }> = [
   { value: 'daily_watchlist', label: '每日重点赛事' },
   { value: 'selected_match', label: '当前选中比赛' },
-  { value: 'ask_each_run', label: '试跑时选择比赛' },
+  { value: 'ask_each_run', label: '运行时选择比赛' },
 ]
 
 const routePreset = String(route.query.preset || '')
@@ -349,6 +350,11 @@ const automationSaving = ref(false)
 const automationRunningId = ref('')
 const automationRuns = ref<AiAgentAutomationRunRecord[]>([])
 const automationRunsPending = ref(false)
+const automationRunDetailOpen = ref(false)
+const automationRunDetail = ref<AiAgentAutomationRunDetailResponse | null>(null)
+const automationRunDetailPending = ref(false)
+const automationRunRetryingId = ref('')
+const automationPollingRunIds = ref<string[]>([])
 const automationDraft = reactive({
   name: '',
   description: '',
@@ -372,6 +378,7 @@ const chatEnd = ref<HTMLElement | null>(null)
 const activeRequestController = shallowRef<AbortController | null>(null)
 const elapsedSeconds = ref(0)
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
+let automationPollingTimer: ReturnType<typeof setInterval> | null = null
 
 const routeMatchId = Number(route.query.matchId)
 const selectedMatch = ref<GoodSampleMatchChoice | null>(
@@ -462,6 +469,9 @@ const workflowRunUsageSummary = computed(() => {
     automation,
   }
 })
+const activeAutomationRuns = computed(() => automationRuns.value
+  .filter(run => isAutomationRunActive(run.status))
+  .slice(0, 5))
 const canSaveAutomationTask = computed(() => Boolean(
   automationDraft.name.trim()
   && automationDraft.workflowId
@@ -822,9 +832,11 @@ async function loadAgentAutomationRuns() {
   try {
     const response = await $apiFetch<AiAgentAutomationRunListResponse>('/api/newspdex/ai/agent/automation-tasks/runs?limit=30')
     automationRuns.value = response.items ?? []
+    syncAutomationRunPolling()
   }
   catch {
     automationRuns.value = []
+    syncAutomationRunPolling()
   }
   finally {
     automationRunsPending.value = false
@@ -1046,7 +1058,7 @@ async function saveAutomationTask() {
     automationDraftOpen.value = false
     automationMessage.value = response.item.enabled
       ? '自动化任务已创建，后台调度将在测试开关打开后接管'
-      : '自动化任务已保存，可先手动试跑'
+      : '自动化任务已保存，可先手动后台运行'
   }
   catch {
     automationMessage.value = '自动化任务保存失败，请稍后重试'
@@ -1073,7 +1085,7 @@ async function toggleAutomationTask(task: AiAgentAutomationTaskRecord) {
 }
 
 async function runAutomationTask(task: AiAgentAutomationTaskRecord) {
-  if (loading.value || automationRunningId.value) return
+  if (automationRunningId.value || hasActiveAutomationRun(task.taskId)) return
   const workflow = workflowItems.value.find(item => item.workflowId === task.workflowId)
   if (!workflow) {
     automationMessage.value = '关联流程不存在，请重新选择流程'
@@ -1084,67 +1096,57 @@ async function runAutomationTask(task: AiAgentAutomationTaskRecord) {
     automationMessage.value = `本月预算已用完：${task.name}`
     return
   }
-  const preflight = await preflightAutomationTask(task, workflow)
-  if (!preflight) return
-
-  const previousMatch = selectedMatch.value
-  if (task.scope === 'selected_match' && task.matchId) {
-    selectedMatch.value = automationMatchChoice(task)
-  }
+  const requestBody = buildAutomationBackgroundRunBody(task, workflow)
+  if (!requestBody) return
 
   automationRunningId.value = task.taskId
-  automationMessage.value = `正在试跑「${task.name}」`
-  const outcome = await runWorkflow(workflow, 'automation')
+  automationMessage.value = `正在提交后台运行「${task.name}」`
   try {
-    const response = await $apiFetch<AiAgentAutomationTaskMutationResponse>(`/api/newspdex/ai/agent/automation-tasks/${encodeURIComponent(task.taskId)}/run`, {
+    const response = await $apiFetch<AiAgentAutomationBackgroundRunResponse>(`/api/newspdex/ai/agent/automation-tasks/${encodeURIComponent(task.taskId)}/background-runs`, {
       method: 'POST',
-      body: {
-        status: automationStatusFromWorkflowOutcome(outcome),
-        triggerSource: 'manual',
-        stepCount: outcome.total,
-        completedStepCount: outcome.completed,
-        toolUsageUnits: outcome.toolUsageUnits,
-        durationMs: outcome.durationMs,
-        traceId: outcome.traceId || null,
-      },
+      body: requestBody,
     })
     upsertAutomationTask(response.item)
-    await loadAgentAutomationRuns()
+    upsertAutomationRun(response.run)
+    if (response.workflow) upsertWorkflow(response.workflow)
+    startAutomationRunPolling(response.run.runId)
+    showSubmittedAutomationRun(response)
+    void refreshAutomationRunDetail(response.run.runId)
+    automationMessage.value = `已提交后台运行：${task.name}`
   }
   catch {
-    // 统计回写失败不阻断用户查看试跑结果。
+    automationMessage.value = `后台运行提交失败：${task.name}`
   }
   finally {
-    if (task.scope === 'selected_match' && previousMatch?.matchId !== selectedMatch.value?.matchId) {
-      selectedMatch.value = previousMatch
-    }
     automationRunningId.value = ''
-    automationMessage.value = outcome.success ? `试跑完成：${task.name}` : `试跑未完整完成：${task.name}`
   }
 }
 
-async function preflightAutomationTask(task: AiAgentAutomationTaskRecord, workflow: AiAgentWorkflowRecord) {
-  automationMessage.value = `正在检查「${task.name}」的运行额度`
-  try {
-    const response = await $apiFetch<AiAgentAutomationRunPreflightResponse>(`/api/newspdex/ai/agent/automation-tasks/${encodeURIComponent(task.taskId)}/preflight`, {
-      method: 'POST',
-      body: {
-        triggerSource: 'manual',
-        estimatedStepCount: workflow.steps.length,
-        estimatedToolUsageUnits: estimateWorkflowToolUnits(workflow),
-      },
-    })
-    if (!response.item.allowed) {
-      automationMessage.value = response.item.message || `当前不能试跑「${task.name}」`
-      await loadAgentAutomationRuns()
-      return false
+function buildAutomationBackgroundRunBody(
+  task: AiAgentAutomationTaskRecord,
+  workflow: AiAgentWorkflowRecord,
+): { matchId?: number, matchTitle?: string | null } | null {
+  if (task.scope === 'selected_match' && task.matchId) {
+    return {
+      matchId: task.matchId,
+      matchTitle: task.matchTitle || null,
     }
-    return true
   }
-  catch {
-    automationMessage.value = '自动化任务额度检查失败，请稍后重试'
-    return false
+
+  if (workflow.matchRequired || task.scope === 'ask_each_run') {
+    if (!selectedMatch.value) {
+      selectorOpen.value = true
+      selected.value = normalizePreset(workflow.steps[0]?.preset) ?? 'snapshot'
+      automationMessage.value = `请先选择比赛，再运行「${task.name}」`
+      return null
+    }
+    return {
+      matchId: selectedMatch.value.matchId,
+      matchTitle: `${selectedMatch.value.homeTeam} vs ${selectedMatch.value.awayTeam}`,
+    }
   }
+
+  return {}
 }
 
 async function deleteAutomationTask(taskId: string) {
@@ -1165,6 +1167,157 @@ function upsertAutomationTask(task: AiAgentAutomationTaskRecord) {
     task,
     ...automationItems.value.filter(item => item.taskId !== task.taskId),
   ].slice(0, 30)
+}
+
+function upsertAutomationRun(run: AiAgentAutomationRunRecord) {
+  automationRuns.value = [
+    run,
+    ...automationRuns.value.filter(item => item.runId !== run.runId),
+  ].slice(0, 30)
+  if (isAutomationRunActive(run.status)) {
+    startAutomationRunPolling(run.runId)
+  }
+  else {
+    stopAutomationRunPolling(run.runId)
+  }
+}
+
+function showSubmittedAutomationRun(response: AiAgentAutomationBackgroundRunResponse) {
+  automationRunDetail.value = {
+    generatedAtUtc: response.generatedAtUtc,
+    run: response.run,
+    task: response.item,
+    taskError: null,
+    workflowRun: null,
+    steps: [],
+    retry: {
+      eligible: false,
+      reason: '后台运行完成前暂不能重试。',
+    },
+  }
+  automationRunDetailOpen.value = true
+}
+
+function syncAutomationRunPolling() {
+  automationPollingRunIds.value = automationRuns.value
+    .filter(run => isAutomationRunActive(run.status))
+    .map(run => run.runId)
+  if (automationPollingRunIds.value.length) {
+    ensureAutomationPollingTimer()
+  }
+  else {
+    clearAutomationPollingTimer()
+  }
+}
+
+function startAutomationRunPolling(runId: string) {
+  if (!runId) return
+  if (!automationPollingRunIds.value.includes(runId)) {
+    automationPollingRunIds.value = [...automationPollingRunIds.value, runId]
+  }
+  ensureAutomationPollingTimer()
+}
+
+function stopAutomationRunPolling(runId: string) {
+  automationPollingRunIds.value = automationPollingRunIds.value.filter(item => item !== runId)
+  if (!automationPollingRunIds.value.length) {
+    clearAutomationPollingTimer()
+  }
+}
+
+function ensureAutomationPollingTimer() {
+  if (automationPollingTimer) return
+  automationPollingTimer = setInterval(() => {
+    void pollAutomationRuns()
+  }, 3000)
+}
+
+function clearAutomationPollingTimer() {
+  if (!automationPollingTimer) return
+  clearInterval(automationPollingTimer)
+  automationPollingTimer = null
+}
+
+async function pollAutomationRuns() {
+  const runIds = [...automationPollingRunIds.value]
+  if (!runIds.length) return
+  await Promise.allSettled(runIds.map(runId => refreshAutomationRunDetail(runId)))
+}
+
+async function refreshAutomationRunDetail(runId: string) {
+  try {
+    const response = await $apiFetch<AiAgentAutomationRunDetailResponse>(`/api/newspdex/ai/agent/automation-tasks/runs/${encodeURIComponent(runId)}`)
+    upsertAutomationRun(response.run)
+    if (response.workflowRun) upsertWorkflowRun(response.workflowRun)
+    if (automationRunDetail.value?.run.runId === runId) {
+      automationRunDetail.value = response
+    }
+    if (!isAutomationRunActive(response.run.status)) {
+      stopAutomationRunPolling(runId)
+    }
+  }
+  catch {
+    stopAutomationRunPolling(runId)
+  }
+}
+
+async function openAutomationRunDetail(run: AiAgentAutomationRunRecord) {
+  automationRunDetailOpen.value = true
+  automationRunDetailPending.value = true
+  automationRunDetail.value = {
+    generatedAtUtc: new Date().toISOString(),
+    run,
+    task: automationItems.value.find(task => task.taskId === run.taskId) ?? null,
+    taskError: null,
+    workflowRun: null,
+    steps: [],
+    retry: {
+      eligible: false,
+      reason: isAutomationRunActive(run.status) ? '后台运行完成前暂不能重试。' : '正在读取重试状态。',
+    },
+  }
+  try {
+    const response = await $apiFetch<AiAgentAutomationRunDetailResponse>(`/api/newspdex/ai/agent/automation-tasks/runs/${encodeURIComponent(run.runId)}`)
+    automationRunDetail.value = response
+    upsertAutomationRun(response.run)
+    if (response.workflowRun) upsertWorkflowRun(response.workflowRun)
+  }
+  catch {
+    automationMessage.value = '运行详情读取失败'
+  }
+  finally {
+    automationRunDetailPending.value = false
+  }
+}
+
+function closeAutomationRunDetail() {
+  automationRunDetailOpen.value = false
+}
+
+async function retryAutomationRun(run?: AiAgentAutomationRunRecord) {
+  const targetRun = run ?? automationRunDetail.value?.run
+  if (!targetRun || automationRunRetryingId.value) return
+  automationRunRetryingId.value = targetRun.runId
+  automationMessage.value = '正在重新提交后台运行'
+  try {
+    const response = await $apiFetch<AiAgentAutomationBackgroundRunResponse>(`/api/newspdex/ai/agent/automation-tasks/runs/${encodeURIComponent(targetRun.runId)}/retry`, {
+      method: 'POST',
+      body: {},
+    })
+    upsertAutomationTask(response.item)
+    upsertAutomationRun(response.run)
+    if (response.workflow) upsertWorkflow(response.workflow)
+    startAutomationRunPolling(response.run.runId)
+    showSubmittedAutomationRun(response)
+    void refreshAutomationRunDetail(response.run.runId)
+    automationMessage.value = '已重新提交后台运行'
+  }
+  catch {
+    automationMessage.value = '重新提交失败，请稍后重试'
+  }
+  finally {
+    automationRunRetryingId.value = ''
+  }
 }
 
 function openWorkflowRunSetup(workflow: AiAgentWorkflowRecord) {
@@ -1712,7 +1865,7 @@ function workflowUsageMessage() {
     `最近 ${summary.runs} 次运行`,
     `计量 ${formatNumber(summary.units)} 单位`,
   ]
-  if (summary.automation > 0) parts.push(`自动化试跑 ${summary.automation} 次`)
+  if (summary.automation > 0) parts.push(`自动化运行 ${summary.automation} 次`)
   if (summary.incomplete > 0) parts.push(`${summary.incomplete} 次未完整完成`)
   return parts.join(' · ')
 }
@@ -1752,7 +1905,7 @@ function automationMetaText(task: AiAgentAutomationTaskRecord) {
     cadenceLabel(task.cadence),
     scopeLabel(task.scope),
   ]
-  if (task.runCount > 0) parts.push(`已试跑 ${task.runCount} 次`)
+  if (task.runCount > 0) parts.push(`已运行 ${task.runCount} 次`)
   return parts.join(' · ')
 }
 
@@ -1801,12 +1954,38 @@ function recentAutomationRuns(taskId: string) {
   return automationRuns.value.filter(run => run.taskId === taskId).slice(0, 3)
 }
 
+function isAutomationRunActive(status: string) {
+  return status === 'queued' || status === 'running'
+}
+
+function hasActiveAutomationRun(taskId: string) {
+  return automationRuns.value.some(run => run.taskId === taskId && isAutomationRunActive(run.status))
+}
+
+function automationRunSummary(run: AiAgentAutomationRunRecord) {
+  const pieces = [
+    runStatusLabel(run.status),
+    runSourceLabel(run.triggerSource),
+    `${run.completedStepCount}/${run.stepCount || '-'} 步`,
+  ]
+  if (run.toolUsageUnits > 0) pieces.push(`计量 ${formatNumber(run.toolUsageUnits)}`)
+  const duration = runDurationText(run.durationMs)
+  if (duration) pieces.push(duration)
+  return pieces.join(' · ')
+}
+
+function automationRunTaskName(run: AiAgentAutomationRunRecord) {
+  return automationItems.value.find(task => task.taskId === run.taskId)?.name || '自动化任务'
+}
+
 function automationRunText(task: AiAgentAutomationTaskRecord) {
-  return automationRunningId.value === task.taskId ? '试跑中' : '试跑'
+  const activeRun = automationRuns.value.find(run => run.taskId === task.taskId && isAutomationRunActive(run.status))
+  if (activeRun) return runStatusLabel(activeRun.status)
+  return automationRunningId.value === task.taskId ? '提交中' : '后台运行'
 }
 
 function canRunAutomationTask(task: AiAgentAutomationTaskRecord) {
-  return !loading.value && !automationRunningId.value && !automationBudgetState(task).exhausted
+  return !automationRunningId.value && !hasActiveAutomationRun(task.taskId) && !automationBudgetState(task).exhausted
 }
 
 function runStatusLabel(value: string) {
@@ -1823,17 +2002,10 @@ function runStatusLabel(value: string) {
   return values[value] || '已记录'
 }
 
-function automationStatusFromWorkflowOutcome(outcome: WorkflowRunOutcome) {
-  if (outcome.status === 'success' || outcome.status === 'partial' || outcome.status === 'failed' || outcome.status === 'skipped') {
-    return outcome.status
-  }
-  return outcome.completed > 0 ? 'partial' : 'failed'
-}
-
 function runSourceLabel(value: string) {
   const values: Record<string, string> = {
     manual: '手动运行',
-    automation: '自动化试跑',
+    automation: '自动化运行',
     scheduler: '定时调度',
     watch_condition: '信号触发',
     system: '系统',
@@ -1871,7 +2043,7 @@ function scopeLabel(value: string) {
   const values: Record<string, string> = {
     daily_watchlist: '每日重点赛事',
     selected_match: '固定比赛',
-    ask_each_run: '试跑时选择',
+    ask_each_run: '运行时选择',
   }
   return values[value] || '自定义范围'
 }
@@ -1883,18 +2055,6 @@ function notifyLabel(value: string) {
     webhook: 'Webhook',
   }
   return values[value] || value
-}
-
-function automationMatchChoice(task: AiAgentAutomationTaskRecord): GoodSampleMatchChoice {
-  const title = task.matchTitle || `比赛 ${task.matchId}`
-  const [home = title, away = ''] = title.split(/\s+vs\s+/i)
-  return {
-    matchId: task.matchId ?? 0,
-    homeTeam: home,
-    awayTeam: away || '对手',
-    leagueName: '自动化任务',
-    matchTime: '',
-  }
 }
 
 function parsePositiveInt(value: string, fallback: number) {
@@ -2215,6 +2375,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelActiveRequest()
   finishLoading()
+  clearAutomationPollingTimer()
 })
 </script>
 
@@ -2394,6 +2555,24 @@ onBeforeUnmount(() => {
           <p v-if="automationMessage" class="automation-message">{{ automationMessage }}</p>
           <p v-else-if="automationPending" class="automation-message">正在读取任务</p>
 
+          <div v-if="activeAutomationRuns.length" class="automation-background-card" aria-label="后台运行中">
+            <div>
+              <span>后台运行中</span>
+              <small>可以离开当前对话，完成后会写入运行详情。</small>
+            </div>
+            <button
+              v-for="run in activeAutomationRuns"
+              :key="run.runId"
+              type="button"
+              class="automation-background-run focus-ring"
+              @click="openAutomationRunDetail(run)"
+            >
+              <b>{{ automationRunTaskName(run) }}</b>
+              <span>{{ automationRunSummary(run) }}</span>
+              <small>查看详情</small>
+            </button>
+          </div>
+
           <div v-if="automationDraftOpen" class="automation-draft">
             <label>
               <span>任务名称</span>
@@ -2499,7 +2678,13 @@ onBeforeUnmount(() => {
                   <em v-for="channel in task.notifyChannels" :key="channel">{{ notifyLabel(channel) }}</em>
                 </i>
                 <div v-if="recentAutomationRuns(task.taskId).length" class="automation-run-list">
-                  <p v-for="run in recentAutomationRuns(task.taskId)" :key="run.runId">
+                  <button
+                    v-for="run in recentAutomationRuns(task.taskId)"
+                    :key="run.runId"
+                    type="button"
+                    class="automation-run-item focus-ring"
+                    @click="openAutomationRunDetail(run)"
+                  >
                     <b>{{ runStatusLabel(run.status) }}</b>
                     <span>
                       {{ runSourceLabel(run.triggerSource) }}
@@ -2507,7 +2692,7 @@ onBeforeUnmount(() => {
                       <template v-if="runDurationText(run.durationMs)"> · {{ runDurationText(run.durationMs) }}</template>
                     </span>
                     <small>{{ formatTime(run.createdAtUtc) }}</small>
-                  </p>
+                  </button>
                 </div>
                 <small v-else-if="automationRunsPending">正在读取运行记录</small>
               </div>
@@ -3079,6 +3264,86 @@ onBeforeUnmount(() => {
         <footer class="modal-actions">
           <button type="button" class="primary-action focus-ring" @click="closeWorkflowRunDetail">
             知道了
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      v-if="automationRunDetailOpen && automationRunDetail"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="closeAutomationRunDetail"
+    >
+      <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="automation-run-detail-title">
+        <header class="modal-header">
+          <div>
+            <span>{{ automationRunDetail.task?.name || automationRunTaskName(automationRunDetail.run) }}</span>
+            <h2 id="automation-run-detail-title">后台运行详情</h2>
+          </div>
+          <button type="button" class="icon-button focus-ring" aria-label="关闭后台运行详情" @click="closeAutomationRunDetail">
+            <X :size="16" />
+          </button>
+        </header>
+
+        <div class="workflow-run-detail modal-form">
+          <section class="workflow-run-detail-summary">
+            <div>
+              <span>运行状态</span>
+              <b>{{ runStatusLabel(automationRunDetail.run.status) }}</b>
+            </div>
+            <div>
+              <span>完成步骤</span>
+              <b>{{ automationRunDetail.run.completedStepCount }}/{{ automationRunDetail.run.stepCount || '-' }}</b>
+            </div>
+            <div>
+              <span>工具计量</span>
+              <b>{{ formatNumber(automationRunDetail.run.toolUsageUnits) }}</b>
+            </div>
+            <div>
+              <span>耗时</span>
+              <b>{{ runDurationText(automationRunDetail.run.durationMs) || '-' }}</b>
+            </div>
+          </section>
+
+          <section class="workflow-run-detail-context">
+            <span>{{ automationRunDetail.workflowRun?.matchTitle || automationRunDetail.task?.matchTitle || '未绑定比赛' }}</span>
+            <small>{{ formatTime(automationRunDetail.run.createdAtUtc) }} · {{ runSourceLabel(automationRunDetail.run.triggerSource) }} · 客服追踪号 {{ automationRunDetail.run.traceId || automationRunDetail.run.runId }}</small>
+            <p v-if="automationRunDetail.run.errorMessage">{{ automationRunDetail.run.errorMessage }}</p>
+            <p v-if="automationRunDetailPending">正在刷新运行详情...</p>
+          </section>
+
+          <ol v-if="automationRunDetail.steps.length" class="workflow-run-detail-steps">
+            <li v-for="(step, index) in automationRunDetail.steps" :key="`${step.stepId}-${index}`">
+              <div>
+                <span>{{ index + 1 }}</span>
+                <b>{{ step.title || workflowStepTitle(step.question, index) }}</b>
+                <small>{{ workflowRunStepMeta(step) }}</small>
+              </div>
+              <p>{{ step.question }}</p>
+              <small v-if="step.traceId">客服追踪号 {{ step.traceId.length > 18 ? `${step.traceId.slice(0, 18)}...` : step.traceId }}</small>
+              <small v-if="step.errorMessage" class="workflow-run-error">{{ step.errorMessage }}</small>
+            </li>
+          </ol>
+          <p v-else class="workflow-empty-warning">
+            {{ isAutomationRunActive(automationRunDetail.run.status) ? '后台任务正在执行，完成后会显示步骤明细。' : '这次运行没有记录到步骤明细。' }}
+          </p>
+          <p v-if="!automationRunDetail.retry.eligible" class="workflow-empty-warning">{{ automationRunDetail.retry.reason }}</p>
+        </div>
+
+        <footer class="modal-actions">
+          <button type="button" class="secondary-action focus-ring" @click="closeAutomationRunDetail">
+            关闭
+          </button>
+          <button
+            v-if="automationRunDetail.retry.eligible"
+            type="button"
+            class="primary-action focus-ring"
+            :disabled="Boolean(automationRunRetryingId)"
+            @click="retryAutomationRun(automationRunDetail.run)"
+          >
+            <Play :size="15" />
+            <span>{{ automationRunRetryingId === automationRunDetail.run.runId ? '提交中' : '重新运行' }}</span>
           </button>
         </footer>
       </section>
@@ -3863,6 +4128,60 @@ onBeforeUnmount(() => {
   margin: 0 9px 9px;
   color: #5b4ce8;
 }
+.automation-background-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, #7c3aed 18%, var(--divider));
+  border-radius: 7px;
+  background: color-mix(in srgb, #7c3aed 7%, var(--panel));
+}
+.automation-background-card > div {
+  display: grid;
+  gap: 2px;
+}
+.automation-background-card > div > span {
+  color: var(--ink);
+  font-size: .82rem;
+  font-weight: 820;
+}
+.automation-background-card > div > small {
+  color: var(--muted);
+  font-size: .72rem;
+}
+.automation-background-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--panel);
+  text-align: left;
+}
+.automation-background-run b,
+.automation-background-run span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.automation-background-run b {
+  color: var(--ink);
+  font-size: .78rem;
+}
+.automation-background-run span,
+.automation-background-run small {
+  color: var(--muted);
+  font-size: .7rem;
+}
+.automation-background-run small {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  color: #5b4ce8;
+  font-weight: 800;
+}
 .automation-list {
   display: grid;
   gap: 8px;
@@ -3960,17 +4279,21 @@ onBeforeUnmount(() => {
   padding-top: 7px;
   border-top: 1px solid var(--divider);
 }
-.automation-run-list p {
+.automation-run-item {
   display: grid;
   gap: 2px;
-  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--panel);
+  text-align: left;
 }
-.automation-run-list b {
+.automation-run-item b {
   color: var(--ink);
   font-size: .75rem;
 }
-.automation-run-list span,
-.automation-run-list small {
+.automation-run-item span,
+.automation-run-item small {
   color: var(--muted);
   font-size: .7rem;
   line-height: 1.35;
