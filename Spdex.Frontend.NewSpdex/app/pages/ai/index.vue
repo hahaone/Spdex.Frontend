@@ -638,7 +638,7 @@ async function executeAgentTurn(
 ) {
   if (loading.value) return false
 
-  const previousTraceId = latestTurn.value?.answerId ?? null
+  const previousTraceId = latestTurn.value ? turnTraceId(latestTurn.value) : null
   const pendingTurn = createPendingTurn(questionText, requestPreset, requestMatch)
   turns.value = [...turns.value, pendingTurn]
   beginLoading()
