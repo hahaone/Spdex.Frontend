@@ -42,6 +42,137 @@
       </NGi>
     </NGrid>
 
+    <NCard title="成本与质量看板" size="small" class="mb-4">
+      <template #header-extra>
+        <NSpace size="small" align="center">
+          <span class="text-xs text-gray-400">
+            {{ insights ? `最近 ${insights.windowDays} 天 · 样本 ${insights.sampleLimit}` : '最近 30 天' }}
+          </span>
+          <NButton size="tiny" :loading="insightsLoading" @click="loadInsights">刷新看板</NButton>
+        </NSpace>
+      </template>
+
+      <NSpin :show="insightsLoading">
+        <NEmpty v-if="!insights && !insightsLoading" description="暂无自动化成本与质量数据" />
+        <div v-else-if="insights" class="ops-dashboard">
+          <NAlert
+            v-if="insightAlert"
+            class="mb-3"
+            :type="insightAlert.type"
+            :title="insightAlert.title"
+          >
+            {{ insightAlert.description }}
+          </NAlert>
+
+          <div class="ops-metric-grid">
+            <section class="ops-metric">
+              <span>AI 用量</span>
+              <strong>{{ insights.cost.toolUsageUnits }}</strong>
+              <small>
+                平均 {{ decimalLabel(insights.cost.averageUnitsPerRun) }} 单位 / 次 · 预计月用量 {{ insights.cost.estimatedMonthlyUnits }}
+              </small>
+            </section>
+            <section class="ops-metric">
+              <span>预算覆盖</span>
+              <strong>{{ percentLabel(insights.cost.monthlyBudgetUsageRate) }}</strong>
+              <small>
+                {{ insights.cost.budgetedTaskCount }} 个任务有预算 · 剩余 {{ insights.cost.monthlyUnitBudgetRemaining }} / {{ insights.cost.monthlyUnitBudgetTotal || '不限' }}
+              </small>
+            </section>
+            <section class="ops-metric">
+              <span>运行质量</span>
+              <strong>{{ percentLabel(insights.quality.failureRate) }}</strong>
+              <small>
+                失败率 · 部分完成 {{ percentLabel(insights.quality.partialRate) }} · 重试 {{ percentLabel(insights.quality.retryRate) }}
+              </small>
+            </section>
+            <section class="ops-metric">
+              <span>回答验收</span>
+              <strong>{{ insights.quality.openFeedbackCount }}</strong>
+              <small>
+                待处理 · 问题反馈率 {{ percentLabel(insights.quality.feedbackIssueRate) }} · 已验证 {{ insights.quality.verifiedFeedbackCount }}
+              </small>
+            </section>
+            <section class="ops-metric">
+              <span>通知健康</span>
+              <strong>{{ insights.notifications.failedCount }}</strong>
+              <small>
+                失败 · 待投递 {{ notificationPendingTotal }} · 未读站内 {{ insights.notifications.unreadInAppNotificationCount }}
+              </small>
+            </section>
+          </div>
+
+          <div class="ops-dashboard-grid">
+            <section class="ops-panel">
+              <div class="ops-panel-head">
+                <h3>运行结果分布</h3>
+                <span>{{ insights.summary.runCount }} 次</span>
+              </div>
+              <div class="status-bars">
+                <div v-for="bucket in insights.statusBuckets" :key="bucket.status" class="status-bar-row">
+                  <span>{{ statusLabel(bucket.status) }}</span>
+                  <div class="status-bar-track">
+                    <i :class="`status-bar-fill status-${bucket.status}`" :style="{ width: percentStyle(bucket.rate) }" />
+                  </div>
+                  <b>{{ bucket.count }}</b>
+                </div>
+              </div>
+            </section>
+
+            <section class="ops-panel">
+              <div class="ops-panel-head">
+                <h3>每日用量</h3>
+                <span>{{ insights.dailyUsage.length }} 天</span>
+              </div>
+              <div class="usage-bars">
+                <div v-for="point in compactDailyUsage" :key="point.dateUtc" class="usage-bar-row">
+                  <span>{{ point.dateUtc.slice(5) }}</span>
+                  <div class="usage-bar-track">
+                    <i :style="{ width: usageBarWidth(point.toolUsageUnits) }" />
+                  </div>
+                  <b>{{ point.toolUsageUnits }}</b>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="ops-panel">
+            <div class="ops-panel-head">
+              <h3>风险任务</h3>
+              <span>{{ insights.riskTasks.length }} 个</span>
+            </div>
+            <NEmpty v-if="!insights.riskTasks.length" description="当前没有需要优先处置的自动化任务" />
+            <div v-else class="risk-list">
+              <article v-for="row in insights.riskTasks" :key="row.taskId" class="risk-row">
+                <div>
+                  <NTag size="small" :type="riskTagType(row.riskLevel)">
+                    {{ riskLevelLabel(row.riskLevel) }}
+                  </NTag>
+                  <b>{{ row.name }}</b>
+                  <p>{{ row.riskReason }}</p>
+                </div>
+                <div class="risk-meta">
+                  <span>{{ subjectTypeLabel(row.subjectType) }} {{ row.subjectId }}</span>
+                  <span>{{ row.runCount }} 次 · 失败 {{ row.failedRunCount }} · 部分 {{ row.partialRunCount }} · 跳过 {{ row.skippedRunCount }}</span>
+                  <span>用量 {{ row.toolUsageUnits }}{{ row.monthlyUnitBudget ? ` / ${row.monthlyUnitBudget}` : '' }}</span>
+                </div>
+                <NSpace size="small">
+                  <NButton size="tiny" secondary @click="inspectRiskTask(row)">查看运行</NButton>
+                  <NButton
+                    size="tiny"
+                    secondary
+                    @click="openFeedbackDashboard"
+                  >
+                    验收中心
+                  </NButton>
+                </NSpace>
+              </article>
+            </div>
+          </section>
+        </div>
+      </NSpin>
+    </NCard>
+
     <NCard title="异常任务队列" size="small" class="mb-4">
       <template #header-extra>
         <NSpace size="small" align="center">
@@ -326,11 +457,13 @@ import type {
   AiAuditResult,
   AiAuditRow,
   AiAgentAutomationRetryResult,
+  AiAgentAutomationInsightsResult,
   AiAgentAutomationRunDetailResult,
   AiAgentAutomationRunResult,
   AiAgentAutomationRunRow,
   AiAgentAutomationSummaryResult,
   AiAgentAutomationTaskResult,
+  AiAgentAutomationTaskRiskRow,
   AiAgentAutomationTaskRow,
   AiAgentAutomationTaskUpdateResult,
 } from '~/types/admin-ai'
@@ -343,12 +476,14 @@ const { can } = usePermission()
 const message = useMessage()
 
 const summary = ref<AiAgentAutomationSummaryResult | null>(null)
+const insights = ref<AiAgentAutomationInsightsResult | null>(null)
 const tasks = ref<AiAgentAutomationTaskResult | null>(null)
 const runs = ref<AiAgentAutomationRunResult | null>(null)
 const abnormalRuns = ref<AiAgentAutomationRunRow[]>([])
 const trace = ref<AiAuditResult | null>(null)
 const runDetail = ref<AiAgentAutomationRunDetailResult | null>(null)
 const summaryLoading = ref(false)
+const insightsLoading = ref(false)
 const tasksLoading = ref(false)
 const runsLoading = ref(false)
 const abnormalLoading = ref(false)
@@ -379,7 +514,7 @@ const runFilters = reactive({
 })
 
 const loadingAny = computed(() =>
-  summaryLoading.value || tasksLoading.value || runsLoading.value || abnormalLoading.value || traceLoading.value || detailLoading.value)
+  summaryLoading.value || insightsLoading.value || tasksLoading.value || runsLoading.value || abnormalLoading.value || traceLoading.value || detailLoading.value)
 const failureLabel = computed(() => {
   const value = summary.value?.summary
   return value ? `${value.failedRunCount} / ${value.skippedRunCount}` : '—'
@@ -391,6 +526,45 @@ const summaryWindowLabel = computed(() => {
 const taskNameMap = computed(() => new Map((tasks.value?.items ?? []).map(row => [row.taskId, row.name])))
 const traceDrawerTitle = computed(() => traceId.value ? `Trace ${shortTraceId(traceId.value)}` : 'Trace 回查')
 const detailDrawerTitle = computed(() => detailRunId.value ? `运行详情 ${shortTraceId(detailRunId.value)}` : '运行详情')
+const notificationPendingTotal = computed(() => {
+  const value = insights.value?.notifications
+  return value ? value.pendingCount + value.retryWaitingCount + value.dispatchingCount : 0
+})
+const compactDailyUsage = computed(() => {
+  const items = insights.value?.dailyUsage ?? []
+  return items.slice(Math.max(0, items.length - 14))
+})
+const maxDailyUsage = computed(() => Math.max(1, ...compactDailyUsage.value.map(point => point.toolUsageUnits)))
+const insightAlert = computed(() => {
+  const value = insights.value
+  if (!value) return null
+  if (value.notifications.failedCount > 0) {
+    return {
+      type: 'error' as const,
+      title: '存在通知投递失败',
+      description: '自动化任务已产生结果，但部分通知没有成功送达，请优先排查 provider、重试队列和用户通知偏好。',
+    }
+  }
+  if (value.quality.failureRate >= 0.1 || value.quality.partialRate >= 0.15) {
+    return {
+      type: 'warning' as const,
+      title: '自动化运行质量需要关注',
+      description: '失败或部分完成比例偏高，建议从风险任务进入运行详情，结合 trace 回查和回答验收定位原因。',
+    }
+  }
+  if (value.cost.monthlyBudgetUsageRate >= 0.85) {
+    return {
+      type: 'warning' as const,
+      title: '自动化预算接近上限',
+      description: '当前窗口内用量已经接近任务月预算，建议检查高频流程、重复触发和灰度用户范围。',
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: '自动化运行状态稳定',
+    description: '当前窗口内成本、质量、反馈和通知健康没有明显异常。',
+  }
+})
 
 const subjectTypeOptions = [
   { label: '全部主体', value: '' },
@@ -681,7 +855,7 @@ const traceColumns = [
 ]
 
 async function loadAll() {
-  await Promise.all([loadSummary(), loadTasks(), loadRuns(), loadAbnormalRuns()])
+  await Promise.all([loadSummary(), loadInsights(), loadTasks(), loadRuns(), loadAbnormalRuns()])
 }
 
 async function loadSummary() {
@@ -693,6 +867,18 @@ async function loadSummary() {
   }
   else {
     message.error(result.message || '自动化汇总加载失败')
+  }
+}
+
+async function loadInsights() {
+  insightsLoading.value = true
+  const result = await api.get<AiAgentAutomationInsightsResult>('ai/agent/automation-insights', { days: 30 })
+  insightsLoading.value = false
+  if (result.code === 0) {
+    insights.value = result.data
+  }
+  else {
+    message.error(result.message || '成本与质量看板加载失败')
   }
 }
 
@@ -794,6 +980,15 @@ function viewRunTask(row: AiAgentAutomationRunRow) {
   loadRuns()
 }
 
+function inspectRiskTask(row: AiAgentAutomationTaskRiskRow) {
+  runFilters.taskId = row.taskId
+  runFilters.subjectType = row.subjectType
+  runFilters.subjectId = row.subjectId
+  runFilters.status = ''
+  runFilters.triggerSource = ''
+  loadRuns()
+}
+
 async function loadRunDetail(runId: string) {
   detailLoading.value = true
   runDetail.value = null
@@ -867,6 +1062,10 @@ function openFeedbackCenter(value?: string | null) {
   navigateTo(`/ai/usage?tab=feedback&traceId=${encodeURIComponent(trace)}`)
 }
 
+function openFeedbackDashboard() {
+  navigateTo('/ai/usage?tab=feedback')
+}
+
 function compactQuery(values: Record<string, string | number | boolean | null | undefined>) {
   return Object.fromEntries(
     Object.entries(values).filter(([, value]) => value !== '' && value !== null && value !== undefined),
@@ -879,6 +1078,26 @@ function fmt(value?: string | null) {
 
 function shortTraceId(value: string) {
   return value.length > 28 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value
+}
+
+function percentLabel(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
+  return `${(value * 100).toFixed(value > 0 && value < 0.01 ? 2 : 1)}%`
+}
+
+function percentStyle(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '0%'
+  if (value <= 0) return '0%'
+  return `${Math.max(2, Math.min(100, value * 100))}%`
+}
+
+function decimalLabel(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
+  return value.toFixed(value >= 10 ? 1 : 2)
+}
+
+function usageBarWidth(value: number) {
+  return `${Math.max(value > 0 ? 4 : 0, Math.min(100, (value / maxDailyUsage.value) * 100))}%`
 }
 
 function renderTraceButton(value?: string | null) {
@@ -1057,6 +1276,26 @@ function statusTagType(value: string) {
           : 'default'
 }
 
+function riskLevelLabel(value: string) {
+  return value === 'critical'
+    ? '高风险'
+    : value === 'warning'
+      ? '需关注'
+      : value === 'watch'
+        ? '观察'
+        : '正常'
+}
+
+function riskTagType(value: string) {
+  return value === 'critical'
+    ? 'error'
+    : value === 'warning'
+      ? 'warning'
+      : value === 'watch'
+        ? 'info'
+        : 'success'
+}
+
 onMounted(loadAll)
 </script>
 
@@ -1142,5 +1381,191 @@ onMounted(loadAll)
   background: transparent;
   padding: 0;
   cursor: pointer;
+}
+
+.ops-dashboard {
+  display: grid;
+  gap: 14px;
+}
+
+.ops-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ops-metric,
+.ops-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ops-metric {
+  padding: 14px;
+}
+
+.ops-metric span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.ops-metric strong {
+  display: block;
+  margin-top: 6px;
+  color: #111827;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.ops-metric small {
+  display: block;
+  margin-top: 8px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.ops-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 12px;
+}
+
+.ops-panel {
+  padding: 14px;
+}
+
+.ops-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ops-panel-head h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ops-panel-head span {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.status-bars,
+.usage-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.status-bar-row,
+.usage-bar-row {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 10px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.status-bar-row b,
+.usage-bar-row b {
+  color: #111827;
+  text-align: right;
+}
+
+.status-bar-track,
+.usage-bar-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.status-bar-fill,
+.usage-bar-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #8b5cf6;
+}
+
+.status-success {
+  background: #10b981;
+}
+
+.status-partial {
+  background: #f59e0b;
+}
+
+.status-failed {
+  background: #ef4444;
+}
+
+.status-skipped {
+  background: #64748b;
+}
+
+.status-other {
+  background: #94a3b8;
+}
+
+.usage-bar-track i {
+  background: #0f766e;
+}
+
+.risk-list {
+  display: grid;
+  gap: 10px;
+}
+
+.risk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, .8fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.risk-row b {
+  margin-left: 8px;
+  color: #111827;
+}
+
+.risk-row p {
+  margin: 8px 0 0;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.risk-meta {
+  display: grid;
+  gap: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .ops-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-dashboard-grid,
+  .risk-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .ops-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

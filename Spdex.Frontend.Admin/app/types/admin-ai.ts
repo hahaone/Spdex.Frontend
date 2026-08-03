@@ -365,6 +365,98 @@ export interface AiAgentAutomationSummaryResult {
   summary: AiAgentAutomationOpsSummary
 }
 
+export interface AiAgentAutomationCostSnapshot {
+  runCount: number
+  billableRunCount: number
+  toolUsageUnits: number
+  averageUnitsPerRun: number
+  estimatedMonthlyUnits: number
+  activeTaskCount: number
+  budgetedTaskCount: number
+  monthlyUnitBudgetTotal: number
+  monthlyUnitBudgetRemaining: number
+  monthlyBudgetUsageRate: number
+}
+
+export interface AiAgentAutomationQualitySnapshot {
+  feedbackCount: number
+  helpfulFeedbackCount: number
+  issueFeedbackCount: number
+  unclearFeedbackCount: number
+  openFeedbackCount: number
+  needsCalibrationCount: number
+  needsCodeFixCount: number
+  needsCopyFixCount: number
+  verifiedFeedbackCount: number
+  failureRate: number
+  partialRate: number
+  retryRate: number
+  feedbackIssueRate: number
+}
+
+export interface AiAgentAutomationNotificationSnapshot {
+  automationNotificationCount: number
+  inAppNotificationCount: number
+  unreadInAppNotificationCount: number
+  deliveredCount: number
+  skippedCount: number
+  pendingCount: number
+  retryWaitingCount: number
+  dispatchingCount: number
+  failedCount: number
+  failureRate: number
+}
+
+export interface AiAgentAutomationStatusBucket {
+  status: string
+  count: number
+  rate: number
+}
+
+export interface AiAgentAutomationDailyUsagePoint {
+  dateUtc: string
+  runCount: number
+  toolUsageUnits: number
+  failedRunCount: number
+  partialRunCount: number
+  skippedRunCount: number
+}
+
+export interface AiAgentAutomationTaskRiskRow {
+  taskId: string
+  subjectType: string
+  subjectId: string
+  name: string
+  workflowId: string
+  enabled: boolean
+  lastRunStatus: string
+  lastRunAtUtc: string | null
+  runCount: number
+  failedRunCount: number
+  partialRunCount: number
+  skippedRunCount: number
+  toolUsageUnits: number
+  monthlyUnitBudget: number | null
+  monthlyUnitBudgetRemaining: number | null
+  monthlyBudgetUsageRate: number | null
+  riskLevel: string
+  riskReason: string
+}
+
+export interface AiAgentAutomationInsightsResult {
+  generatedAtUtc: string
+  windowDays: number
+  sampleLimit: number
+  summary: AiAgentAutomationOpsSummary
+  cost: AiAgentAutomationCostSnapshot
+  quality: AiAgentAutomationQualitySnapshot
+  notifications: AiAgentAutomationNotificationSnapshot
+  statusBuckets: AiAgentAutomationStatusBucket[]
+  dailyUsage: AiAgentAutomationDailyUsagePoint[]
+  riskTasks: AiAgentAutomationTaskRiskRow[]
+  recentProblemRuns: AiAgentAutomationRunRow[]
+}
+
 export interface AiAgentAutomationTaskResult {
   generatedAtUtc: string
   limit: number
