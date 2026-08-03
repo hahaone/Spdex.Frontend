@@ -4,6 +4,14 @@
 
     <NSpace class="mb-4" align="center">
       <NInputNumber v-model:value="filter.userId" placeholder="UserId" :show-button="false" style="width:130px" />
+      <NInput
+        v-model:value="filter.transactionNo"
+        clearable
+        maxlength="128"
+        placeholder="H交易号 / 支付订单号"
+        style="width:220px"
+        @keyup.enter="reload"
+      />
       <NSelect v-model:value="filter.channel" :options="channelOpts" clearable placeholder="渠道" style="width:120px" />
       <NSelect v-model:value="filter.status" :options="statusOpts" clearable placeholder="状态" style="width:130px" />
       <NSelect v-model:value="filter.productType" :options="typeOpts" clearable placeholder="类型" style="width:130px" />
@@ -80,6 +88,14 @@ interface OrderDetailT extends OrderItem {
   notifyRaw?: string | null
   updateTime: string
 }
+interface RefundableInfo {
+  orderId: string
+  channel: string
+  orderTotalFee: number
+  alreadyRefunded: number
+  refundable: number
+  canAutoRefund: boolean
+}
 
 const api = useAdminApi()
 const message = useMessage()
@@ -87,8 +103,8 @@ const { can } = usePermission()
 const rows = ref<OrderItem[]>([])
 const loading = ref(false)
 const pagination = reactive({ page: 1, pageSize: 30, itemCount: 0 })
-const filter = reactive<{ userId: number | null, channel: string | null, status: number | null, productType: number | null, range: [number, number] | null }>({
-  userId: null, channel: null, status: null, productType: null, range: null,
+const filter = reactive<{ userId: number | null, transactionNo: string, channel: string | null, status: number | null, productType: number | null, range: [number, number] | null }>({
+  userId: null, transactionNo: '', channel: null, status: null, productType: null, range: null,
 })
 
 const channelOpts = [{ label: '支付宝', value: 'alipay' }, { label: '微信', value: 'wxcode' }]
@@ -99,6 +115,7 @@ async function load() {
   loading.value = true
   const query: Record<string, unknown> = { page: pagination.page, pageSize: pagination.pageSize }
   if (filter.userId) query.userId = filter.userId
+  if (filter.transactionNo.trim()) query.transactionNo = filter.transactionNo.trim()
   if (filter.channel) query.channel = filter.channel
   if (filter.status !== null) query.status = filter.status
   if (filter.productType !== null) query.productType = filter.productType
@@ -139,7 +156,7 @@ async function openDetail(orderId: string) {
 
 const showRefund = ref(false)
 const refundSaving = ref(false)
-const refundable = ref<any>(null)
+const refundable = ref<RefundableInfo | null>(null)
 const refundForm = reactive<{ orderId: string, amount: number | null, reason: string }>({ orderId: '', amount: null, reason: '' })
 const refundChannelText = computed(() => {
   const c = refundable.value?.channel
@@ -151,7 +168,7 @@ async function openRefund(r: OrderItem) {
   refundForm.amount = null
   refundable.value = null
   showRefund.value = true
-  const res = await api.get<any>(`refunds/refundable/${r.orderId}`)
+  const res = await api.get<RefundableInfo>(`refunds/refundable/${r.orderId}`)
   if (res.code === 0 && res.data) { refundable.value = res.data; refundForm.amount = res.data.refundable }
 }
 async function submitRefund() {
