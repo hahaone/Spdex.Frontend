@@ -26,6 +26,17 @@
   - ledger 未启用时标记为需关注，不误判为正式扣费事故。
   - 正式售卖前仍要求集中账本或等价双写对账、无差异回放和财务签字。
 - 已通过 `npm run typecheck`、定向 ESLint 和 `npm run build` 验证。
+- Frontend commit `ac8d07afc209cd7c1665101668a4e8b1893a0473` 已推送并触发
+  workflow `31019016819`。
+- GitHub Actions build 和 deploy 均成功；本次仅构建并发布 Admin2026，其他前端
+  子项目未变更。
+- 线上 smoke：
+  - `https://admin2026.spdex.com/login` 返回 200。
+  - `https://admin2026.spdex.com/ai/usage` 返回 200。
+  - 响应头 `x-spdex-web-release=ac8d07afc209cd7c1665101668a4e8b1893a0473`，
+    确认已命中本次 Admin2026 release。
+- 管理台计费页读取的是 WebApi Admin 代理，AI ops key 只存在服务端；前端不会暴露
+  ops key。
 
 ## 2026-08-03
 
