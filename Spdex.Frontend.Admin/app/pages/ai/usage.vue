@@ -108,10 +108,70 @@
         <NAlert class="mb-4" type="info" title="回答反馈闭环">
           面向测试与灰度阶段的回答级反馈队列，可按 trace 回查原始调用，并把问题标注到口径校准、展示文案或代码修复。
         </NAlert>
+        <NGrid :cols="2" :x-gap="12" :y-gap="12" item-responsive class="mb-3">
+          <NGi span="2 1100:1">
+            <NCard size="small" title="无专家阶段质检规则">
+              <NGrid :cols="2" :x-gap="10" :y-gap="10" item-responsive>
+                <NGi v-for="rule in qualityReviewRules" :key="rule.id" span="2 900:1">
+                  <div class="rounded border border-gray-100 bg-gray-50 p-3">
+                    <div class="mb-1 flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium text-gray-700">{{ rule.label }}</span>
+                      <NTag size="small" :type="rule.required ? 'warning' : 'info'">
+                        {{ rule.required ? '必查' : '建议' }}
+                      </NTag>
+                    </div>
+                    <div class="text-xs leading-5 text-gray-500">{{ rule.description }}</div>
+                  </div>
+                </NGi>
+              </NGrid>
+            </NCard>
+          </NGi>
+          <NGi span="2 1100:1">
+            <NCard size="small" title="抽样进度与风险问题池">
+              <NGrid :cols="4" :x-gap="8" :y-gap="8" item-responsive class="mb-3">
+                <NGi span="4 700:1"><NStatistic label="本轮已加载" :value="feedbackSampleStats.loaded" /></NGi>
+                <NGi span="4 700:1"><NStatistic label="已流转" :value="feedbackSampleStats.reviewed" /></NGi>
+                <NGi span="4 700:1"><NStatistic label="目标进度" :value="`${feedbackSampleStats.progress}%`" /></NGi>
+                <NGi span="4 700:1"><NStatistic label="审计 Trace" :value="`${feedbackSampleStats.auditTraceCoverage}%`" /></NGi>
+              </NGrid>
+              <NProgress
+                class="mb-3"
+                type="line"
+                :percentage="feedbackSampleStats.progress"
+                :status="feedbackSampleStats.progress >= 100 ? 'success' : 'warning'"
+                :height="10"
+              />
+              <NAlert
+                v-if="feedbackSampleStats.reviewed < feedbackSampleStats.target"
+                class="mb-3"
+                type="warning"
+                :title="`还需流转 ${feedbackSampleStats.target - feedbackSampleStats.reviewed} 条，才能完成本轮 30 条抽样验收`"
+              >
+                建议优先处理高风险池、严重度高、或 trace 可回查的真实问题。
+              </NAlert>
+              <NSpace size="small">
+                <NButton
+                  v-for="pool in feedbackRiskPools"
+                  :key="pool.id"
+                  size="small"
+                  :type="feedbackFilters.riskPool === pool.id ? 'primary' : 'default'"
+                  secondary
+                  @click="applyFeedbackRiskPool(pool)"
+                >
+                  {{ pool.label }}{{ riskPoolCounts[pool.id] ? ` · ${riskPoolCounts[pool.id]}` : '' }}
+                </NButton>
+                <NButton size="small" tertiary @click="clearFeedbackRiskPool">清除风险池</NButton>
+                <NButton size="small" tertiary :disabled="!feedback?.items?.length" @click="exportFeedbackCsv">导出当前反馈</NButton>
+              </NSpace>
+            </NCard>
+          </NGi>
+        </NGrid>
         <NSpace class="mb-3" align="center">
           <NSelect v-model:value="feedbackFilters.status" :options="feedbackStatusOptions" style="width:170px" />
           <NSelect v-model:value="feedbackFilters.feedbackType" :options="feedbackTypeOptions" style="width:150px" />
           <NSelect v-model:value="feedbackFilters.tool" :options="toolFilterOptions" style="width:210px" />
+          <NSelect v-model:value="feedbackFilters.issueTag" :options="issueTagOptions" style="width:190px" />
+          <NInput v-model:value="feedbackFilters.searchTerm" clearable placeholder="问题/备注关键词" style="width:220px" />
           <NInput v-model:value="feedbackFilters.traceId" clearable placeholder="trace ID" style="width:260px" />
           <NInputNumber v-model:value="feedbackFilters.limit" :min="1" :max="200" style="width:120px" />
           <NButton type="primary" :loading="feedbackLoading" @click="loadFeedback">查询</NButton>
@@ -122,6 +182,7 @@
             <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('needs_calibration')">批量标记校准</NButton>
             <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('needs_copy_fix')">批量标记文案</NButton>
             <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('needs_code_fix')">批量标记代码</NButton>
+            <NButton size="small" :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('triaged')">批量分诊</NButton>
             <NButton size="small" type="primary" ghost :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('verified')">批量验证</NButton>
             <NButton size="small" tertiary :disabled="!selectedFeedbackRows.length" :loading="feedbackReviewSubmitting" @click="batchReviewFeedback('closed')">批量关闭</NButton>
             <NButton size="small" secondary :loading="goldenCandidatesLoading" @click="loadGoldenCandidates">刷新黄金样本候选</NButton>
@@ -319,9 +380,21 @@
       <NSpace v-if="feedbackReviewTarget" vertical size="large">
         <NDescriptions :column="1" size="small" bordered>
           <NDescriptionsItem label="回答">{{ feedbackReviewTarget.answerId }}</NDescriptionsItem>
+          <NDescriptionsItem label="问题">{{ feedbackReviewTarget.questionText || '—' }}</NDescriptionsItem>
+          <NDescriptionsItem label="用户反馈">{{ feedbackReviewTarget.commentText || feedbackIssueSummary(feedbackReviewTarget) }}</NDescriptionsItem>
           <NDescriptionsItem label="工具">{{ feedbackReviewTarget.toolName || '—' }}</NDescriptionsItem>
           <NDescriptionsItem label="Trace">{{ feedbackReviewTarget.traceId || '—' }}</NDescriptionsItem>
+          <NDescriptionsItem label="审计 Trace">
+            {{ feedbackReviewTarget.auditTraceIds?.length ? feedbackReviewTarget.auditTraceIds.map(shortTraceId).join('、') : '—' }}
+          </NDescriptionsItem>
         </NDescriptions>
+        <NAlert type="warning" title="模拟专家验收检查项">
+          <ul class="ml-4 list-disc text-sm leading-6">
+            <li v-for="rule in qualityReviewRules" :key="rule.id">
+              {{ rule.label }}：{{ rule.description }}
+            </li>
+          </ul>
+        </NAlert>
         <NForm label-placement="top">
           <NFormItem label="处理状态">
             <NSelect v-model:value="feedbackReviewForm.status" :options="feedbackReviewStatusOptions" />
@@ -389,6 +462,19 @@ interface ErrorSummaryRow {
   errorCode: string
   calls: number
   lastSeenUtc: string
+}
+interface QualityReviewRule {
+  id: string
+  label: string
+  description: string
+  required: boolean
+}
+interface FeedbackRiskPool {
+  id: string
+  label: string
+  description: string
+  issueTag?: string
+  searchTerm?: string
 }
 interface WorkflowQualityRow {
   toolName: string
@@ -463,13 +549,19 @@ const feedbackFilters = reactive<{
   status: string
   feedbackType: string
   tool: string
+  issueTag: string
+  searchTerm: string
   traceId: string
+  riskPool: string
   limit: number
 }>({
   status: routeTraceId ? '' : 'new',
   feedbackType: '',
   tool: '',
+  issueTag: '',
+  searchTerm: '',
   traceId: routeTraceId,
+  riskPool: '',
   limit: 100,
 })
 
@@ -507,6 +599,87 @@ const feedbackTypeOptions = [
   { label: '有帮助', value: 'helpful' },
   { label: '有问题', value: 'issue' },
   { label: '看不懂', value: 'unclear' },
+]
+const issueTagOptions = [
+  { label: '全部标签', value: '' },
+  { label: '数据不准确', value: 'wrong_data' },
+  { label: '缺少关键背景', value: 'missing_critical_context' },
+  { label: '排序不合理', value: 'ranking_issue' },
+  { label: '阈值需校准', value: 'threshold_issue' },
+  { label: '字段不清楚', value: 'field_name_issue' },
+  { label: '背离解释不足', value: 'prediction_market_gap' },
+  { label: '表达看不懂', value: 'unclear_wording' },
+]
+const qualityReviewRules: QualityReviewRule[] = [
+  {
+    id: 'conclusion_first',
+    label: '结论先行',
+    description: '回答先给直接判断，再展开盘口、成交、异常或背离证据。',
+    required: true,
+  },
+  {
+    id: 'data_boundary',
+    label: '数据边界',
+    description: '说明哪些数据可用、哪些缺失或未返回，避免把缺失说成没有异常。',
+    required: true,
+  },
+  {
+    id: 'non_betting_advice',
+    label: '非投注建议',
+    description: '只表达市场观察和风险提示，不给投注指令、胜负推荐或确定性预测。',
+    required: true,
+  },
+  {
+    id: 'human_labels',
+    label: '中文可读',
+    description: '字段、标签和证据说明使用中文业务语言，不直接暴露内部代码名。',
+    required: true,
+  },
+  {
+    id: 'risk_distinction',
+    label: '风险类型区分',
+    description: '区分异常、大额单笔、连续放量、Hold/共振和预测市场背离。',
+    required: true,
+  },
+  {
+    id: 'trace_linked',
+    label: 'Trace 可回查',
+    description: '反馈记录能关联回答 trace 和工具审计 trace，便于复盘和回归。',
+    required: true,
+  },
+]
+const feedbackRiskPools: FeedbackRiskPool[] = [
+  {
+    id: 'large_trade',
+    label: '大额交易',
+    description: '大额单笔、连续放量、成交量时间分布。',
+    searchTerm: '大额',
+  },
+  {
+    id: 'anomaly',
+    label: '异常证据',
+    description: '异常观察分、阈值、异常标签解释。',
+    searchTerm: '异常',
+  },
+  {
+    id: 'watch_condition',
+    label: '观察条件',
+    description: 'watch condition、触发条件、持续观察。',
+    searchTerm: '观察条件',
+  },
+  {
+    id: 'prediction_divergence',
+    label: '预测市场背离',
+    description: 'SPdex 与外部预测市场差异解释。',
+    issueTag: 'prediction_market_gap',
+    searchTerm: '背离',
+  },
+  {
+    id: 'live_signal',
+    label: '赛中信号',
+    description: '赛中盘、实时数据、临场信号。',
+    searchTerm: '赛中',
+  },
 ]
 const severityOptions = [
   { label: '无', value: 'none' },
@@ -654,6 +827,27 @@ const feedbackTotals = computed(() => {
     calibration: rows.filter(row => row.status === 'needs_calibration').length,
     helpful: rows.filter(row => row.feedbackType === 'helpful').length,
   }
+})
+const feedbackSampleStats = computed(() => {
+  const rows = feedback.value?.items ?? []
+  const target = 30
+  const reviewed = rows.filter(row => row.status !== 'new').length
+  const auditTraceLinked = rows.filter(row => row.auditTraceIds?.length).length
+  return {
+    target,
+    loaded: rows.length,
+    reviewed,
+    progress: Math.min(100, Math.round((reviewed / target) * 100)),
+    auditTraceCoverage: rows.length ? Math.round((auditTraceLinked / rows.length) * 100) : 0,
+  }
+})
+const riskPoolCounts = computed(() => {
+  const counts: Record<string, number> = {}
+  const rows = feedback.value?.items ?? []
+  for (const pool of feedbackRiskPools) {
+    counts[pool.id] = rows.filter(row => feedbackMatchesRiskPool(row, pool)).length
+  }
+  return counts
 })
 const selectedFeedbackRows = computed(() => {
   const selected = new Set(feedbackCheckedKeys.value)
@@ -998,11 +1192,13 @@ const feedbackColumns = [
   {
     title: '处理',
     key: 'actions',
-    width: 360,
+    width: 430,
     fixed: 'right' as const,
     render: (row: AiAnswerFeedbackRow) => can(P.aiOpsManage)
       ? h('div', { class: 'flex flex-wrap gap-1' }, [
           feedbackTraceButton(row),
+          feedbackActionButton(row, 'triaged', '分诊'),
+          feedbackActionButton(row, 'reviewing', '处理中'),
           feedbackActionButton(row, 'needs_calibration', '校准'),
           feedbackActionButton(row, 'needs_copy_fix', '文案'),
           feedbackActionButton(row, 'needs_code_fix', '代码'),
@@ -1131,6 +1327,8 @@ async function loadFeedback() {
     status: feedbackFilters.status || undefined,
     feedbackType: feedbackFilters.feedbackType || undefined,
     tool: feedbackFilters.tool || undefined,
+    issueTag: feedbackFilters.issueTag || undefined,
+    searchTerm: feedbackFilters.searchTerm.trim() || undefined,
     traceId: feedbackFilters.traceId.trim() || undefined,
     limit: feedbackFilters.limit,
   })
@@ -1145,11 +1343,30 @@ async function loadGoldenCandidates() {
     status: feedbackFilters.status || undefined,
     feedbackType: feedbackFilters.feedbackType || undefined,
     tool: feedbackFilters.tool || undefined,
+    issueTag: feedbackFilters.issueTag || undefined,
+    searchTerm: feedbackFilters.searchTerm.trim() || undefined,
     limit: 50,
   })
   goldenCandidatesLoading.value = false
   if (result.code === 0) goldenCandidates.value = result.data
   else message.error(result.message || '黄金样本候选查询失败')
+}
+
+async function applyFeedbackRiskPool(pool: FeedbackRiskPool) {
+  feedbackFilters.riskPool = pool.id
+  feedbackFilters.status = ''
+  feedbackFilters.feedbackType = ''
+  feedbackFilters.issueTag = pool.issueTag || ''
+  feedbackFilters.searchTerm = pool.searchTerm || ''
+  feedbackFilters.limit = Math.max(feedbackFilters.limit, 100)
+  await Promise.allSettled([loadFeedback(), loadGoldenCandidates()])
+}
+
+async function clearFeedbackRiskPool() {
+  feedbackFilters.riskPool = ''
+  feedbackFilters.issueTag = ''
+  feedbackFilters.searchTerm = ''
+  await Promise.allSettled([loadFeedback(), loadGoldenCandidates()])
 }
 
 async function submitFeedbackReview() {
@@ -1189,7 +1406,7 @@ async function batchReviewFeedback(status: string) {
     feedbackIds,
     status,
     severity: inferReviewSeverity(status),
-    reviewReason: `后台批量标记为${feedbackStatusLabel(status)}`,
+    reviewReason: batchReviewReason(status),
   })
   feedbackReviewSubmitting.value = false
   if (result.code !== 0 || !result.data?.result) {
@@ -1203,11 +1420,47 @@ async function batchReviewFeedback(status: string) {
   await Promise.allSettled([loadFeedback(), loadGoldenCandidates()])
 }
 
+function batchReviewReason(status: string) {
+  return [
+    `质检结论：后台批量标记为${feedbackStatusLabel(status)}`,
+    '检查项：结论先行、数据边界、非投注建议、中文可读、风险类型区分、Trace 可回查。',
+    `适用范围：${selectedFeedbackRows.value.length} 条当前勾选反馈。`,
+  ].join('\n')
+}
+
+function reviewReasonTemplate(status: string, row: AiAnswerFeedbackRow) {
+  const issueSummary = feedbackIssueSummary(row)
+  const traceSummary = row.auditTraceIds?.length
+    ? `回答 trace 与 ${row.auditTraceIds.length} 条审计 trace 已关联。`
+    : '仅有回答 trace，需确认是否能回查到底层工具调用。'
+  return [
+    `质检结论：${feedbackStatusLabel(status)}`,
+    `用户问题：${row.questionText || '未记录问题原文'}`,
+    `反馈类型：${feedbackTypeLabel(row.feedbackType)}；问题标签：${issueSummary}`,
+    `检查项：结论先行、数据边界、非投注建议、中文可读、风险类型区分、Trace 可回查。`,
+    `Trace：${traceSummary}`,
+    `处理建议：${reviewActionHint(status)}`,
+  ].join('\n')
+}
+
+function reviewActionHint(status: string) {
+  const hints: Record<string, string> = {
+    triaged: '已完成分诊，后续按问题类型进入复核。',
+    reviewing: '继续结合 trace 和工具证据复核。',
+    needs_calibration: '沉淀为口径校准样本，重点检查阈值、排序、异常/背离表达。',
+    needs_code_fix: '沉淀为代码回归样本，定位工具调用、数据映射或状态流转问题。',
+    needs_copy_fix: '沉淀为文案改写样本，优化字段解释和用户可读性。',
+    verified: '回答满足当前无专家阶段质检规则，可作为正向样本参考。',
+    closed: '无需继续跟进，保留记录用于审计。',
+  }
+  return hints[status] ?? '继续复核。'
+}
+
 function openFeedbackReview(row: AiAnswerFeedbackRow, status: string) {
   feedbackReviewTarget.value = row
   feedbackReviewForm.status = status
   feedbackReviewForm.severity = row.severity && row.severity !== 'none' ? row.severity : inferReviewSeverity(status)
-  feedbackReviewForm.reviewReason = `后台标记为${feedbackStatusLabel(status)}`
+  feedbackReviewForm.reviewReason = reviewReasonTemplate(status, row)
   feedbackReviewVisible.value = true
 }
 
@@ -1272,6 +1525,49 @@ function exportBillingCsv() {
   const [fromLabel, toLabel] = selectedRangeLabels()
   link.href = url
   link.download = `spdex-ai-billing-preview-${fromLabel}-${toLabel}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportFeedbackCsv() {
+  if (!feedback.value?.items.length) return
+  const columns = [
+    'feedbackId',
+    'answerId',
+    'traceId',
+    'auditTraceIds',
+    'feedbackType',
+    'status',
+    'severity',
+    'issueTags',
+    'toolName',
+    'preset',
+    'matchId',
+    'questionText',
+    'commentText',
+    'subjectType',
+    'subjectId',
+    'reviewReason',
+    'reviewerId',
+    'createdAtUtc',
+    'updatedAtUtc',
+  ] as const
+  const rows = [
+    columns.join(','),
+    ...feedback.value.items.map(row => columns.map((key) => {
+      const value = key === 'auditTraceIds'
+        ? row.auditTraceIds?.join(';')
+        : key === 'issueTags'
+          ? row.issueTags.join(';')
+          : row[key]
+      return csv(value)
+    }).join(',')),
+  ]
+  const blob = new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `spdex-ai-feedback-${new Date().toISOString().slice(0, 10)}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -1399,6 +1695,31 @@ function feedbackIssueLabel(value: string) {
     unclear_wording: '表达看不懂',
   }
   return labels[value] ?? value
+}
+function feedbackIssueSummary(row: AiAnswerFeedbackRow) {
+  return row.issueTags?.length
+    ? row.issueTags.map(feedbackIssueLabel).join('、')
+    : '未选择具体问题标签'
+}
+function feedbackMatchesRiskPool(row: AiAnswerFeedbackRow, pool: FeedbackRiskPool) {
+  if (pool.issueTag && !row.issueTags.includes(pool.issueTag)) {
+    return false
+  }
+  if (!pool.searchTerm) {
+    return true
+  }
+  const needle = pool.searchTerm.toLowerCase()
+  const haystack = [
+    row.questionText,
+    row.commentText,
+    row.toolName,
+    row.preset,
+    ...row.issueTags.map(feedbackIssueLabel),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return haystack.includes(needle)
 }
 function severityLabel(value: string) {
   const labels: Record<string, string> = {

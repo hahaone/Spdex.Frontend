@@ -316,6 +316,7 @@ export interface AiAnswerFeedbackRow {
   feedbackId: string
   answerId: string
   traceId: string
+  auditTraceIds: string[]
   feedbackType: 'helpful' | 'issue' | 'unclear'
   issueTags: string[]
   commentText: string | null
@@ -343,6 +344,16 @@ export interface AiAnswerFeedbackRow {
 export interface AiAnswerFeedbackResult {
   generatedAtUtc: string
   limit: number
+  filters?: {
+    status?: string | null
+    feedbackType?: string | null
+    tool?: string | null
+    traceId?: string | null
+    subjectType?: string | null
+    subjectId?: string | null
+    issueTag?: string | null
+    searchTerm?: string | null
+  }
   count: number
   items: AiAnswerFeedbackRow[]
 }

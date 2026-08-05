@@ -372,7 +372,7 @@ export const helpArticles: HelpArticle[] = [
     level: '入门',
     readMinutes: 7,
     category: 'ai',
-    updated: '2026-08-01',
+    updated: '2026-08-05',
     tags: ['FAQ', '安全', '权限', 'Token'],
     sections: [
       {
@@ -402,7 +402,13 @@ export const helpArticles: HelpArticle[] = [
       {
         heading: '如何反馈',
         body: [
-          '反馈时请提供使用入口、客户端名称和版本、问题原文、时间、match_id、可见 trace_id 和截图。截图或导出内容必须先删除 token、header 和账号敏感信息。',
+          '反馈时请尽量说明你问了什么、在哪个入口看到回答、回答哪里不对或看不懂。清楚的反馈能帮助我们回查数据、改进口径和优化界面。',
+        ],
+        bullets: [
+          '提供使用入口、客户端名称和版本、问题原文、发生时间、比赛名称或 match_id。',
+          '如果页面显示客服追踪号或 trace_id，请一并提供。',
+          '指出问题类型：数据不准确、缺少关键背景、排序不合理、阈值需校准、字段不清楚、背离解释不足或表达看不懂。',
+          '截图或导出内容必须先删除 token、Authorization header、cookie、账号、邮箱、手机号和企业敏感信息。',
         ],
       },
     ],
