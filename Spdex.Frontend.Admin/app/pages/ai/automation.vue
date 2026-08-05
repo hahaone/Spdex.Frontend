@@ -591,6 +591,66 @@
         </NSpin>
       </NDrawerContent>
     </NDrawer>
+
+    <NDrawer v-model:show="notificationDrawerVisible" :width="720" placement="right">
+      <NDrawerContent closable :title="notificationDrawerTitle">
+        <NEmpty v-if="!selectedNotification" description="请选择一条通知查看详情" />
+        <div v-else class="notification-detail">
+          <section class="notification-detail-hero">
+            <div>
+              <NTag size="small" :type="notificationStatusTagType(selectedNotification.status)">
+                {{ notificationStatusLabel(selectedNotification.status) }}
+              </NTag>
+              <h3>{{ notificationPayloadTitle(selectedNotification) }}</h3>
+              <p>{{ notificationPayloadSubtitle(selectedNotification) }}</p>
+            </div>
+            <NSpace size="small" align="center">
+              <NButton
+                size="small"
+                secondary
+                type="primary"
+                :disabled="!selectedNotification.payloadRef?.traceId"
+                @click="openTraceDrawer(selectedNotification.payloadRef?.traceId)"
+              >
+                Trace 回查
+              </NButton>
+              <NPopconfirm
+                :disabled="!can(P.aiOpsManage) || !isNotificationRetryable(selectedNotification)"
+                @positive-click="retryNotification(selectedNotification)"
+              >
+                <template #trigger>
+                  <NButton
+                    size="small"
+                    secondary
+                    type="warning"
+                    :loading="retryingNotificationId === selectedNotification.notificationId"
+                    :disabled="!can(P.aiOpsManage) || !isNotificationRetryable(selectedNotification)"
+                  >
+                    重试通知
+                  </NButton>
+                </template>
+                确认将这条通知加入手动重试队列？
+              </NPopconfirm>
+            </NSpace>
+          </section>
+
+          <NAlert v-if="selectedNotification.deliveryError" class="mt-3" type="error" title="最近一次投递错误">
+            {{ selectedNotification.deliveryError }}
+          </NAlert>
+
+          <NDescriptions class="mt-4" label-placement="left" :column="1" bordered size="small">
+            <NDescriptionsItem v-for="row in notificationDetailRows(selectedNotification)" :key="row.label" :label="row.label">
+              {{ row.value }}
+            </NDescriptionsItem>
+          </NDescriptions>
+
+          <section class="notification-detail-note">
+            <b>审计边界</b>
+            <p>这里仅展示通知摘要、业务引用和投递状态，不展示原始 payload、接口地址、密钥或用户敏感内容。</p>
+          </section>
+        </div>
+      </NDrawerContent>
+    </NDrawer>
   </div>
 </template>
 
@@ -631,6 +691,7 @@ const runs = ref<AiAgentAutomationRunResult | null>(null)
 const abnormalRuns = ref<AiAgentAutomationRunRow[]>([])
 const trace = ref<AiAuditResult | null>(null)
 const runDetail = ref<AiAgentAutomationRunDetailResult | null>(null)
+const selectedNotification = ref<AiNotificationOutboxRow | null>(null)
 const summaryLoading = ref(false)
 const insightsLoading = ref(false)
 const outboxLoading = ref(false)
@@ -646,6 +707,7 @@ const providerDrillLoading = ref(false)
 const showOpsThresholds = ref(false)
 const traceDrawerVisible = ref(false)
 const detailDrawerVisible = ref(false)
+const notificationDrawerVisible = ref(false)
 const traceId = ref('')
 const detailRunId = ref('')
 
@@ -704,6 +766,7 @@ const summaryWindowLabel = computed(() => {
 const taskNameMap = computed(() => new Map((tasks.value?.items ?? []).map(row => [row.taskId, row.name])))
 const traceDrawerTitle = computed(() => traceId.value ? `Trace ${shortTraceId(traceId.value)}` : 'Trace 回查')
 const detailDrawerTitle = computed(() => detailRunId.value ? `运行详情 ${shortTraceId(detailRunId.value)}` : '运行详情')
+const notificationDrawerTitle = computed(() => selectedNotification.value ? `通知详情 ${shortTraceId(selectedNotification.value.notificationId)}` : '通知详情')
 const notificationPendingTotal = computed(() => {
   const value = insights.value?.notifications
   return value ? value.pendingCount + value.retryWaitingCount + value.dispatchingCount : 0
@@ -1535,6 +1598,16 @@ function renderOutboxActions(row: AiNotificationOutboxRow) {
   return h(NSpace, { size: 8 }, {
     default: () => [
       h(
+        NButton,
+        {
+          size: 'small',
+          secondary: true,
+          type: 'primary',
+          onClick: () => openNotificationDrawer(row),
+        },
+        { default: () => '详情' },
+      ),
+      h(
         NPopconfirm,
         {
           disabled: !can(P.aiOpsManage) || !retryable,
@@ -1563,6 +1636,11 @@ function isNotificationRetryable(row: AiNotificationOutboxRow) {
   return row.status !== 'delivered' && row.status !== 'dispatching'
 }
 
+function openNotificationDrawer(row: AiNotificationOutboxRow) {
+  selectedNotification.value = row
+  notificationDrawerVisible.value = true
+}
+
 function notificationPayloadTitle(row: AiNotificationOutboxRow) {
   const ref = row.payloadRef
   const task = ref?.task as { name?: unknown, id?: unknown } | null
@@ -1579,6 +1657,86 @@ function notificationPayloadSubtitle(row: AiNotificationOutboxRow) {
     ref?.traceId ? `Trace ${shortTraceId(ref.traceId)}` : '',
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : row.notificationId
+}
+
+function notificationDetailRows(row: AiNotificationOutboxRow) {
+  const ref = row.payloadRef
+  const task = ref?.task as Record<string, unknown> | null
+  const workflow = ref?.workflow as Record<string, unknown> | null
+  const match = ref?.match as Record<string, unknown> | null
+  const subject = ref?.subject as Record<string, unknown> | null
+  const rows: Array<{ label: string, value: string }> = []
+  const add = (label: string, value?: string | number | boolean | null) => {
+    if (value === null || value === undefined || value === '') return
+    rows.push({ label, value: String(value) })
+  }
+
+  add('通知 ID', row.notificationId)
+  add('当前状态', notificationStatusLabel(row.status))
+  add('投递通道', notificationChannelLabel(row.channel))
+  add('主体', `${subjectTypeLabel(row.owner.subjectType)} ${row.owner.subjectId}`)
+  add('业务来源', notificationSourceLabel(ref?.source))
+  add('通知类型', notificationRefTypeLabel(ref?.type))
+  add('观察类型', notificationConditionKindLabel(ref?.conditionKind))
+  add('业务状态', ref?.status ? statusLabel(ref.status) : '')
+  add('业务对象', readRecordText(match, ['title', 'name', 'matchTitle']))
+  add('任务', readRecordText(task, ['name', 'title', 'taskName']))
+  add('流程', readRecordText(workflow, ['name', 'title', 'workflowName']))
+  add('关联比赛', readRecordText(subject, ['matchTitle', 'match_title', 'matchId', 'match_id']))
+  add('Condition ID', row.conditionId)
+  add('Trigger ID', row.triggerId)
+  add('Task ID', ref?.taskId)
+  add('Workflow ID', ref?.workflowId)
+  add('Run ID', ref?.runId)
+  add('Trace ID', ref?.traceId)
+  add('Provider', row.deliveryProvider || '站内 provider')
+  add('尝试次数', row.attemptCount)
+  add('创建时间', fmt(row.createdAt))
+  add('更新时间', fmt(row.updatedAt))
+  add('上次尝试', fmt(row.lastAttemptAt))
+  add('下次尝试', fmt(row.nextAttemptAt))
+  add('送达时间', fmt(row.deliveredAt))
+  add('触发时间', fmt(ref?.matchedAt))
+  add('完成时间', fmt(ref?.completedAt))
+  return rows
+}
+
+function readRecordText(record: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!record) return ''
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'number') return String(value)
+  }
+  return ''
+}
+
+function notificationSourceLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    spdex_ai_automation: 'AI 自动化任务',
+    spdex_watch_condition: '观察条件',
+    spdex_ai_agent: 'AI 观察助手',
+  }
+  return value ? labels[value] ?? value : '—'
+}
+
+function notificationRefTypeLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    ai_agent_automation_run_completed: '自动化运行完成',
+    watch_condition_triggered: '观察条件触发',
+  }
+  return value ? labels[value] ?? value : '—'
+}
+
+function notificationConditionKindLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    brief_ready: '简报完成',
+    odds_movement: '赔率变化',
+    liquidity_shift: '资金变化',
+    market_divergence: '市场背离',
+    lineup_change: '阵容变化',
+  }
+  return value ? labels[value] ?? value : '—'
 }
 
 function taskDisplayName(row: AiAgentAutomationRunRow) {
@@ -2066,6 +2224,55 @@ onMounted(loadAll)
   gap: 4px;
   color: #6b7280;
   font-size: 12px;
+}
+
+.notification-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.notification-detail-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.notification-detail-hero h3 {
+  margin: 10px 0 4px;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.notification-detail-hero p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.notification-detail-note {
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.notification-detail-note b {
+  color: #111827;
+  font-size: 14px;
+}
+
+.notification-detail-note p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  line-height: 1.6;
 }
 
 @media (max-width: 1180px) {

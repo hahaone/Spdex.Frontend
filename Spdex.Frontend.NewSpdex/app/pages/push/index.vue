@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { Bell, BellOff, Check, CheckCheck, ChevronRight, Flame, Inbox, RefreshCw, Save, Settings2, Smartphone } from '@lucide/vue'
+import {
+  Bell,
+  BellOff,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  Flame,
+  Inbox,
+  RefreshCw,
+  Save,
+  Settings2,
+  Smartphone,
+} from '@lucide/vue'
 import type {
   AiInAppNotificationListResult,
   AiInAppNotificationMarkAllReadResult,
@@ -37,6 +50,7 @@ const aiNotificationsLoading = ref(false)
 const aiNotificationError = ref('')
 const aiUnreadOnly = ref(false)
 const aiNotificationSource = ref('')
+const expandedNotificationId = ref('')
 const markingNotificationId = ref('')
 const markingAllNotifications = ref(false)
 const aiPreferences = ref<AiNotificationPreferenceResult | null>(null)
@@ -44,6 +58,7 @@ const aiPreferenceForm = ref<AiPreferenceForm>(defaultAiPreferenceForm())
 const aiPreferencesLoading = ref(false)
 const aiPreferencesSaving = ref(false)
 const aiPreferenceError = ref('')
+const aiPreferencesExpanded = ref(false)
 
 onMounted(async () => {
   await refreshState()
@@ -127,6 +142,14 @@ const aiPreferenceStatus = computed(() => {
   if (!aiPreferences.value) return '未加载'
   return aiPreferences.value.preferences.stored ? '已保存' : '默认值'
 })
+const aiPreferenceSummary = computed(() => {
+  const form = aiPreferenceForm.value
+  const channel = form.inApp ? '站内通知' : '暂停站内通知'
+  const mode = form.deliveryMode === 'digest' ? '摘要' : '实时'
+  const severity = severityText(form.minimumSeverity)
+  const quiet = form.quietHoursEnabled ? '免打扰已开' : '免打扰关闭'
+  return `${channel} · ${mode} · 最低${severity} · ${quiet}`
+})
 
 function defaultAiPreferenceForm(): AiPreferenceForm {
   return {
@@ -150,7 +173,7 @@ async function loadAiNotifications() {
         query: {
           unreadOnly: aiUnreadOnly.value || undefined,
           source: aiNotificationSource.value || undefined,
-          limit: 60,
+          limit: 30,
         },
       },
     )
@@ -286,6 +309,20 @@ async function changeAiNotificationSource() {
   await loadAiNotifications()
 }
 
+function toggleAiPreferencesExpanded() {
+  aiPreferencesExpanded.value = !aiPreferencesExpanded.value
+}
+
+function toggleAiNotificationExpanded(item: AiInAppNotificationRow) {
+  expandedNotificationId.value = expandedNotificationId.value === item.inAppNotificationId
+    ? ''
+    : item.inAppNotificationId
+}
+
+function isAiNotificationExpanded(item: AiInAppNotificationRow): boolean {
+  return expandedNotificationId.value === item.inAppNotificationId
+}
+
 function replaceAiNotification(next: AiInAppNotificationRow) {
   if (!aiNotifications.value) return
   const previous = aiNotifications.value.items.find(item => item.inAppNotificationId === next.inAppNotificationId)
@@ -340,6 +377,16 @@ function notificationConditionText(value?: string | null): string | null {
   return labels[value] || null
 }
 
+function notificationChannelText(value?: string | null): string | null {
+  if (!value) return null
+  const labels: Record<string, string> = {
+    in_app: '站内通知',
+    email: '邮件',
+    webhook: 'Webhook',
+  }
+  return labels[value] || value
+}
+
 function notificationMetaText(item: AiInAppNotificationRow): string {
   const parts = [
     notificationSourceText(item.source),
@@ -365,6 +412,34 @@ function notificationSubject(item: AiInAppNotificationRow): string {
   const date = subject?.date
   if (typeof date === 'string' && date) return date
   return item.payloadRef?.conditionKind || item.source || 'AI 观察'
+}
+
+function readRecordText(record: Record<string, unknown> | null | undefined, keys: string[]): string | null {
+  if (!record) return null
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  }
+  return null
+}
+
+function notificationDetailRows(item: AiInAppNotificationRow): { label: string, value: string }[] {
+  const payload = item.payloadRef
+  const rows = [
+    { label: '通知来源', value: notificationSourceText(item.source) },
+    { label: '通知等级', value: severityText(item.severity) },
+    { label: '当前状态', value: notificationStatusText(payload?.status) },
+    { label: '观察类型', value: notificationConditionText(payload?.conditionKind) },
+    { label: '投递方式', value: notificationChannelText(payload?.channel) },
+    { label: '关联对象', value: notificationSubject(item) },
+    { label: '任务名称', value: readRecordText(payload?.task, ['name', 'title']) },
+    { label: '流程名称', value: readRecordText(payload?.workflow, ['name', 'title']) },
+    { label: '触发时间', value: formatNotificationTime(payload?.matchedAt || item.createdAt) },
+    { label: '完成时间', value: formatNotificationTime(payload?.completedAt || null) },
+    { label: '客服追踪号', value: payload?.traceId || null },
+  ]
+  return rows.filter((row): row is { label: string, value: string } => Boolean(row.value))
 }
 
 function notificationTarget(item: AiInAppNotificationRow): string | null {
@@ -447,11 +522,10 @@ function formatNotificationTime(value?: string | null): string {
       <header class="inbox-head">
         <div>
           <h2><Inbox :size="16" /><span>AI 收件箱</span></h2>
-          <span class="muted num">{{ aiNotificationItems.length }} 条 · {{ aiUnreadCount }} 未读</span>
+          <span class="muted num">最近 {{ aiNotificationItems.length }} 条 · {{ aiUnreadCount }} 条未读</span>
         </div>
         <div class="inbox-actions">
           <label class="source-filter">
-            <span>来源</span>
             <select v-model="aiNotificationSource" @change="changeAiNotificationSource">
               <option
                 v-for="option in aiNotificationSourceOptions"
@@ -490,31 +564,27 @@ function formatNotificationTime(value?: string | null): string {
         </div>
       </header>
 
-      <section class="pref-panel" aria-label="AI 通知偏好">
-        <header class="pref-head">
-          <div class="pref-title">
-            <Settings2 :size="15" />
-            <span>通知偏好</span>
-            <b>{{ aiPreferenceStatus }}</b>
-          </div>
-          <button
-            class="pref-save focus-ring"
-            type="button"
-            :disabled="aiPreferencesLoading || aiPreferencesSaving"
-            @click="saveAiNotificationPreferences"
-          >
-            <Save :size="14" />
-            <span>{{ aiPreferencesSaving ? '保存中' : '保存' }}</span>
-          </button>
-        </header>
+      <button
+        class="pref-toggle focus-ring"
+        type="button"
+        :aria-expanded="aiPreferencesExpanded"
+        @click="toggleAiPreferencesExpanded"
+      >
+        <span class="pref-title">
+          <Settings2 :size="15" />
+          <span>通知偏好</span>
+          <b>{{ aiPreferenceStatus }}</b>
+        </span>
+        <span class="pref-summary">{{ aiPreferenceSummary }}</span>
+        <ChevronDown :size="16" :class="{ open: aiPreferencesExpanded }" />
+      </button>
 
+      <section v-if="aiPreferencesExpanded" class="pref-panel" aria-label="AI 通知偏好">
         <div class="pref-grid">
-          <p class="pref-note">
-            当前仅开放站内通知。邮件和 Webhook 会在独立投递门禁完成后再开放。
-          </p>
+          <p class="pref-note">邮件和 Webhook 暂未开放。</p>
           <label class="check-row">
             <input v-model="aiPreferenceForm.inApp" type="checkbox">
-            <span>站内</span>
+            <span>站内通知</span>
           </label>
           <label class="pref-field">
             <span>最低等级</span>
@@ -548,7 +618,18 @@ function formatNotificationTime(value?: string | null): string {
             <input v-model.trim="aiPreferenceForm.quietHoursTimeZone" type="text" placeholder="UTC">
           </label>
         </div>
-        <div v-if="aiPreferenceError" class="pref-error">{{ aiPreferenceError }}</div>
+        <div class="pref-panel-foot">
+          <div v-if="aiPreferenceError" class="pref-error">{{ aiPreferenceError }}</div>
+          <button
+            class="pref-save focus-ring"
+            type="button"
+            :disabled="aiPreferencesLoading || aiPreferencesSaving"
+            @click="saveAiNotificationPreferences"
+          >
+            <Save :size="14" />
+            <span>{{ aiPreferencesSaving ? '保存中' : '保存偏好' }}</span>
+          </button>
+        </div>
       </section>
 
       <div v-if="aiNotificationError" class="inbox-error">{{ aiNotificationError }}</div>
@@ -558,37 +639,54 @@ function formatNotificationTime(value?: string | null): string {
         <article
           v-for="item in aiNotificationItems"
           :key="item.inAppNotificationId"
-          :class="['inbox-item', { unread: !item.readAt }]"
+          :class="['inbox-item', { unread: !item.readAt, expanded: isAiNotificationExpanded(item) }]"
         >
-          <div class="inbox-main">
-            <div class="item-head">
-              <span class="sev" :class="item.severity.toLowerCase()">{{ severityText(item.severity) }}</span>
-              <span class="num">{{ formatNotificationTime(item.createdAt) }}</span>
+          <div class="inbox-row">
+            <button class="inbox-open focus-ring" type="button" @click="toggleAiNotificationExpanded(item)">
+              <span class="unread-dot" aria-hidden="true" />
+              <span class="inbox-main">
+                <span class="item-head">
+                  <span class="sev" :class="item.severity.toLowerCase()">{{ severityText(item.severity) }}</span>
+                  <span>{{ notificationMetaText(item) }}</span>
+                  <span class="num">{{ formatNotificationTime(item.createdAt) }}</span>
+                </span>
+                <b>{{ item.title }}</b>
+                <span class="item-body">{{ item.body }}</span>
+              </span>
+              <ChevronDown :size="16" :class="{ open: isAiNotificationExpanded(item) }" />
+            </button>
+            <div class="item-actions">
+              <button
+                v-if="!item.readAt"
+                class="read-btn focus-ring"
+                type="button"
+                :disabled="markingNotificationId === item.inAppNotificationId"
+                @click="markAiNotificationRead(item)"
+              >
+                <Check :size="14" />
+                <span>已读</span>
+              </button>
             </div>
-            <b>{{ item.title }}</b>
+          </div>
+
+          <div v-if="isAiNotificationExpanded(item)" class="item-detail">
             <p>{{ item.body }}</p>
-            <div class="item-foot">
+            <dl>
+              <div v-for="row in notificationDetailRows(item)" :key="row.label">
+                <dt>{{ row.label }}</dt>
+                <dd>{{ row.value }}</dd>
+              </div>
+            </dl>
+            <div class="detail-actions">
               <NuxtLink
                 v-if="notificationTarget(item)"
                 :to="notificationTarget(item) || '/'"
                 class="subject-link focus-ring"
               >
-                {{ notificationSubject(item) }}
+                查看赛事
               </NuxtLink>
-              <span v-else>{{ notificationSubject(item) }}</span>
-              <span>{{ notificationMetaText(item) }}</span>
             </div>
           </div>
-          <button
-            v-if="!item.readAt"
-            class="read-btn focus-ring"
-            type="button"
-            :disabled="markingNotificationId === item.inAppNotificationId"
-            @click="markAiNotificationRead(item)"
-          >
-            <Check :size="14" />
-            <span>已读</span>
-          </button>
         </article>
       </div>
     </section>
@@ -768,17 +866,17 @@ function formatNotificationTime(value?: string | null): string {
 
 .ai-inbox {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: 9px;
+  padding: 11px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
 }
 
 .inbox-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
@@ -793,23 +891,19 @@ function formatNotificationTime(value?: string | null): string {
 }
 
 .inbox-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
 }
 
 .source-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 0.7rem;
-  font-weight: 800;
+  display: block;
 }
 
 .source-filter select {
   height: 28px;
-  min-width: 92px;
+  width: 112px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--surface);
@@ -850,19 +944,33 @@ function formatNotificationTime(value?: string | null): string {
   opacity: 0.5;
 }
 
+.pref-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.pref-toggle .open,
+.inbox-open .open {
+  transform: rotate(180deg);
+}
+
 .pref-panel {
   display: grid;
   gap: 8px;
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.pref-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #f9fafc;
 }
 
 .pref-title {
@@ -873,6 +981,16 @@ function formatNotificationTime(value?: string | null): string {
   color: var(--ink);
   font-size: 0.8rem;
   font-weight: 820;
+}
+
+.pref-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pref-title b {
@@ -901,6 +1019,17 @@ function formatNotificationTime(value?: string | null): string {
 
 .pref-save:disabled {
   opacity: 0.6;
+}
+
+.pref-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pref-panel-foot .pref-error {
+  flex: 1 1 auto;
 }
 
 .pref-grid {
@@ -1004,25 +1133,60 @@ function formatNotificationTime(value?: string | null): string {
 .inbox-list {
   display: grid;
   gap: 6px;
-  max-height: min(58vh, 520px);
+  max-height: min(56vh, 540px);
   overflow: auto;
   padding-right: 2px;
 }
 
 .inbox-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 9px;
+  gap: 0;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--surface);
+  overflow: hidden;
 }
 
 .inbox-item.unread {
   border-color: rgba(124, 92, 250, 0.45);
   background: #f4f0ff;
+}
+
+.inbox-item.expanded {
+  border-color: rgba(124, 92, 250, 0.65);
+}
+
+.inbox-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+}
+
+.inbox-open {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.inbox-item.unread .unread-dot {
+  background: var(--brand);
 }
 
 .inbox-main {
@@ -1032,7 +1196,7 @@ function formatNotificationTime(value?: string | null): string {
 }
 
 .item-head,
-.item-foot {
+.detail-actions {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1042,8 +1206,7 @@ function formatNotificationTime(value?: string | null): string {
   font-weight: 740;
 }
 
-.item-foot > span,
-.item-foot > a {
+.item-head > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1054,8 +1217,12 @@ function formatNotificationTime(value?: string | null): string {
   justify-content: space-between;
 }
 
+.item-head > span:nth-child(2) {
+  flex: 1 1 auto;
+}
+
 .inbox-main b,
-.inbox-main p {
+.item-body {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1064,14 +1231,63 @@ function formatNotificationTime(value?: string | null): string {
 
 .inbox-main b {
   color: var(--ink);
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   font-weight: 820;
 }
 
-.inbox-main p {
+.item-body {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   font-weight: 700;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.item-detail {
+  display: grid;
+  gap: 9px;
+  padding: 0 12px 11px 24px;
+  border-top: 1px solid rgba(124, 92, 250, 0.12);
+}
+
+.item-detail p {
+  margin: 9px 0 0;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 720;
+  line-height: 1.55;
+}
+
+.item-detail dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.item-detail dl > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.item-detail dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.item-detail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 780;
 }
 
 .sev {
@@ -1099,7 +1315,15 @@ function formatNotificationTime(value?: string | null): string {
 }
 
 .subject-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--brand);
+  border-radius: 4px;
   color: var(--brand);
+  background: #fff;
+  font-size: 0.72rem;
   font-weight: 820;
   text-decoration: none;
 }
@@ -1121,6 +1345,53 @@ function formatNotificationTime(value?: string | null): string {
 
 .read-btn:disabled {
   opacity: 0.6;
+}
+
+@media (max-width: 720px) {
+  .inbox-head {
+    grid-template-columns: 1fr;
+  }
+
+  .inbox-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+
+  .source-filter select {
+    width: 100%;
+  }
+
+  .pref-toggle {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pref-summary {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .pref-toggle > svg:last-child {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .pref-grid,
+  .item-detail dl {
+    grid-template-columns: 1fr;
+  }
+
+  .pref-note,
+  .pref-field.wide {
+    grid-column: auto;
+  }
+
+  .inbox-row {
+    align-items: start;
+  }
+
+  .read-btn span {
+    display: none;
+  }
 }
 
 .empty {
