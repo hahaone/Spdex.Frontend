@@ -24,6 +24,15 @@
   - 正式售卖前仍处于测试计量与账单预演阶段。
 - 已通过 NewSpdex/Admin 的 `npm run typecheck`、定向 ESLint 和 `npm run build`
   验证；ESLint 使用 Node 24 运行。
+- Frontend commit `7c97fb0d4af7bf93cfb17589de5f656c0a667c3d` 已推送并触发
+  workflow `31020257159`。
+- GitHub Actions build 和 deploy 均成功；本次仅构建并发布 NewSpdex 与 Admin2026。
+- 线上 smoke：
+  - `https://new.spdex.com/account/mcp` 未登录时按预期跳转登录。
+  - `https://new.spdex.com/account/mcp/authorize` 未登录时按预期跳转登录。
+  - `https://admin2026.spdex.com/ai/credentials` 返回 200。
+  - 三个路由响应头均为
+    `x-spdex-web-release=7c97fb0d4af7bf93cfb17589de5f656c0a667c3d`。
 
 ### Admin2026 AI 计费对账与 P5 门禁增强
 
