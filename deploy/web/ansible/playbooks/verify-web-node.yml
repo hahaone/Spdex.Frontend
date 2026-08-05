@@ -45,6 +45,29 @@
         fail_msg: "Host-routed response headers do not match expected node/release values."
       loop: "{{ web_page_checks.results }}"
 
+    - name: Check MCP host route when enabled
+      ansible.builtin.uri:
+        url: "http://127.0.0.1{{ item.path }}"
+        headers:
+          Host: "{{ mcp_public_host | default('mcp.spdex.com') }}"
+        status_code: 200
+        return_content: false
+      loop:
+        - { path: "/health" }
+        - { path: "/health/ready" }
+        - { path: "/.well-known/oauth-protected-resource/mcp" }
+      register: web_mcp_checks
+      when: mcp_alb_enabled | default(false) | bool
+
+    - name: Check MCP host route response headers when enabled
+      ansible.builtin.assert:
+        that:
+          - (item.x_spdex_web_node | default('')) == web_expected_node_header
+          - (item.x_spdex_web_release | default('')) == web_expected_release_header
+        fail_msg: "MCP host-routed response headers do not match expected node/release values."
+      loop: "{{ web_mcp_checks.results | default([]) }}"
+      when: mcp_alb_enabled | default(false) | bool
+
     - name: Check NewSpdex SSR internal API bridge
       ansible.builtin.uri:
         url: "http://{{ web_internal_api_listen }}/api/newspdex/auth/me"

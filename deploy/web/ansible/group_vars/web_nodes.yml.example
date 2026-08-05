@@ -19,6 +19,11 @@ web_internal_api_host_header: new.spdex.com
 web_alb_health_path: /__alb_health
 web_env_force_update: false
 
+# Keep formal MCP host routing disabled until the backend AI API private
+# listener, ALB certificate and production OAuth/resource values are ready.
+mcp_alb_enabled: false
+mcp_public_host: mcp.spdex.com
+
 web_deploy_serial: 1
 web_compose_pull_retries: 2
 web_compose_up_retries: 2

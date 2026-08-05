@@ -24,6 +24,8 @@
           - spdex_web_root is defined
           - spdex_api_internal_url is defined
           - quantilearn_api_internal_url is defined
+          - (not (mcp_alb_enabled | default(false) | bool)) or spdex_ai_internal_url is defined
+          - (not (mcp_alb_enabled | default(false) | bool)) or mcp_public_host is defined
           - web_image_fjc is defined
           - web_image_2026 is defined
           - web_image_newspdex is defined

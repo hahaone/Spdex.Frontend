@@ -14,8 +14,10 @@
 - 后端 API：
   - SPdex WebApi：`http://10.28.23.149:5000`
   - Quantilearn API：`http://10.28.23.149:5015`
+  - SPdex AI/MCP 预发布回源：`http://10.28.23.149:5020`（默认关闭，需后端显式监听私网地址）
 
 Web 节点只运行 Nuxt 前端容器和 Nginx，不运行 Redis、数据库或后端 API。
+公网 HTTPS 证书由阿里云 ALB 承载；Web 节点只接收 ALB 转发的 HTTP `80` 流量。
 
 ## 2. 文件边界
 
@@ -118,6 +120,16 @@ curl -I http://new.spdex.com/login
 - HTTP 返回 `301` 或 `302` 到 HTTPS。
 - 响应头里能看到 `X-SPdex-Web-Node` 和 `X-SPdex-Web-Release`。
 - ALB 服务器组健康检查正常。
+
+MCP 预发布 host route 只有在 `mcp_alb_enabled=true` 时才参与发布后校验。默认关闭时
+`mcp.spdex.com` 到达 Web 节点返回 404 属于预期，不代表 Web 前端故障。
+
+启用预发布后补充校验：
+
+```bash
+curl -skI https://mcp.spdex.com/health
+curl -sk https://mcp.spdex.com/.well-known/oauth-protected-resource/mcp
+```
 
 ## 6. 判断命中哪台 Web 服务器
 
@@ -252,7 +264,53 @@ curl -i http://127.0.0.1:5000/api/newspdex/auth/me
 - `SPDEX_BACKEND_PRIVATE_BASE_URL`
 - 后端 `10.28.23.149:5000` 是否可从 Web 节点访问
 
-### 10.4 发布耗时过长
+### 10.4 MCP 预发布域名返回 404
+
+`mcp.spdex.com` 已解析到 ALB 但返回 404 时，优先判断是否仍处于默认关闭状态：
+
+```bash
+grep -n 'mcp.spdex.com' /etc/nginx/conf.d/spdex-web.conf
+```
+
+如果没有匹配项，说明 `mcp_alb_enabled=false` 或 Web 节点尚未发布包含 MCP host route
+的配置。处理方式：
+
+1. 确认不是正式发布，只是受控预发布 smoke。
+2. 确认 ALB 证书覆盖 `mcp.spdex.com`。
+3. 确认后端 AI API 已监听 `10.28.23.149:5020`。
+4. 确认 Web 节点能访问后端：
+
+```bash
+nc -vz 10.28.23.149 5020
+curl -fsS http://10.28.23.149:5020/health
+```
+
+5. 在真实 Ansible vars 中设置：
+
+```yaml
+mcp_alb_enabled: true
+mcp_public_host: mcp.spdex.com
+```
+
+6. 重新执行 Web 节点发布和验证。
+
+### 10.5 MCP 预发布域名返回 502
+
+常见原因：
+
+- 后端 AI API 仍只监听 `127.0.0.1:5020`。
+- Web 节点到 `10.28.23.149:5020` 的安全组或主机防火墙不通。
+- `spdex_ai_internal_url` 配错。
+- 后端 AI API 健康检查失败。
+
+先在 Web 节点执行：
+
+```bash
+curl -i http://10.28.23.149:5020/health
+curl -i -H 'Host: mcp.spdex.com' http://127.0.0.1/health
+```
+
+### 10.6 发布耗时过长
 
 优先确认本次是否触发了全量构建：
 
