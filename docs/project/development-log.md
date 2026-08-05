@@ -29,6 +29,11 @@
   - `https://new.spdex.com/ai` 未登录时按预期跳转登录，响应头同样命中该 release。
 - 管理台只通过 WebApi Admin 代理访问 replay endpoint；AI ops key 仍仅存在服务端，
   不进入 Admin 浏览器 runtime。
+- 公网 Admin BFF cookie 流程已验证：
+  - `/api/admin/auth/login` 成功写入 httpOnly `admin_token` cookie。
+  - 同一 cookie 调 `/api/admin/ai/billing/reconciliation` 返回 `code=0`。
+  - `2026-08-01` 至 `2026-08-05` 窗口返回 `matches=true`、`callDelta=0`、
+    `usageUnitDelta=0`。
 
 ### NewSpdex / Admin MCP 凭证安全提示一致性
 
