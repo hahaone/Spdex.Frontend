@@ -408,6 +408,76 @@ export const helpArticles: HelpArticle[] = [
     ],
   },
   {
+    slug: 'ai-mcp-usage-quota',
+    title: 'AI 与 MCP 用量、额度和安全边界',
+    summary: '了解 AI 观察助手和 SPdex MCP 的用量统计、额度口径、账单预演和凭证安全。',
+    audience: 'NewSpdex 用户、MCP 用户和企业管理员',
+    status: '安全',
+    level: '进阶',
+    readMinutes: 7,
+    category: 'ai',
+    updated: '2026-08-05',
+    tags: ['AI', 'MCP', '用量', '额度', '安全'],
+    sections: [
+      {
+        heading: '先区分两类费用',
+        body: [
+          'SPdex MCP 负责授权和提供 SPdex 足球数据工具；你在外部 AI 客户端中选择的模型，则由对应模型平台或客户端服务商计费。',
+          '在 NewSpdex 站内使用 AI 观察助手时，模型和工具调用由平台统一管理；在 WorkBuddy、Cherry Studio、Claude、Cursor 或企业 Agent 中接入 SPdex MCP 时，外部模型 Key、模型余额和模型账单通常由你或企业自行管理。',
+        ],
+      },
+      {
+        heading: '额度如何统计',
+        body: [
+          'SPdex 以 UTC 日期聚合工具调用用量，并按主体维度统计。主体可以是个人账号、企业组织、内部服务或接入客户端。',
+          '默认口径下，只有成功完成的工具调用计入预演可扣额度；失败调用仍进入审计记录，但不会计入预演账单。',
+        ],
+        bullets: [
+          '工具发现不计入额度。',
+          '鉴权失败、权限拒绝和参数校验错误不计入额度。',
+          '成功工具调用按 usage units 计入额度。',
+          'Workflow 会按实际记录到的工具用量汇总，不额外叠加一笔包装费用。',
+        ],
+      },
+      {
+        heading: '怎样看账单预演',
+        body: [
+          '管理后台会把审计计量、预演可扣单位和排除单位分开展示。这样既能复盘真实调用，也能提前检查未来账单口径是否合理。',
+          '如果看到“预演可扣单位”和“审计计量”不同，通常说明其中包含失败调用、校验错误或其他不计费事件。',
+        ],
+        table: {
+          headers: ['字段', '含义'],
+          rows: [
+            ['审计计量', '所有已记录工具调用的 usage units，用于排查和复盘。'],
+            ['预演可扣单位', '按当前默认计费口径，可计入额度或账单预演的 usage units。'],
+            ['排除单位', '失败或非计费调用产生的计量，只用于审计，不进入预演账单。'],
+            ['billable', '是否进入正式计费。未开启正式售卖前应为 false。'],
+          ],
+        },
+      },
+      {
+        heading: '凭证安全',
+        body: [
+          'SPdex MCP token 只用于授权访问 SPdex 数据工具，不应粘贴到公开聊天、截图、文档或工单中。外部模型 API Key 同样不要交给不受信任的客户端或网页。',
+          '企业接入建议使用独立凭证、独立额度、IP 限制和定期轮换。离职、外包交付结束或客户端丢失时，应及时撤销对应凭证。',
+        ],
+        bullets: [
+          '不要分享 Authorization header、cookie、MCP token 或模型 API Key。',
+          '截图反馈前先遮挡 token、账号、邮箱、手机号和企业识别信息。',
+          '外部 Agent 的系统提示词应要求模型不得输出密钥或完整原始凭证。',
+          '发现凭证泄露后，立即撤销并重新生成。',
+        ],
+      },
+      {
+        heading: '产品边界',
+        body: [
+          'AI 观察助手和 MCP 工具输出的是规则化市场观察、数据摘要和证据线索，不构成投注建议，也不承诺赛果、收益或胜率。',
+          '遇到关键比赛、异常成交或跨市场背离时，建议结合数据截止时间、缺失字段、权限边界和人工判断复核。',
+        ],
+      },
+    ],
+  },
+  {
     slug: 'betfair-basics',
     title: '必发指数基础：买卖、主力资金与换手',
     summary: '理解必发交易中的买卖、突破、防御、拦截、封锁和换手，建立基础阅读框架。',
@@ -875,7 +945,7 @@ export const learningPaths: LearningPath[] = [
   {
     title: '新用户先看',
     summary: '先理解 AI 入口、数据口径和必发基础概念。',
-    articleSlugs: ['ai-watch-assistant', 'ai-mcp-use-cases', 'data-methods', 'betfair-basics'],
+    articleSlugs: ['ai-watch-assistant', 'ai-mcp-use-cases', 'ai-mcp-usage-quota', 'data-methods', 'betfair-basics'],
   },
   {
     title: '指数进阶',
@@ -885,7 +955,7 @@ export const learningPaths: LearningPath[] = [
   {
     title: '工具专题',
     summary: '适合已经会看主站数据，想快速查某个工具入口的用户。',
-    articleSlugs: ['mcp-quickstart', 'correct-score', 'flashq-price', 'watch-condition'],
+    articleSlugs: ['mcp-quickstart', 'ai-mcp-usage-quota', 'correct-score', 'flashq-price', 'watch-condition'],
   },
 ]
 

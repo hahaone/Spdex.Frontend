@@ -35,11 +35,13 @@
           billing mode: {{ usage.billingMode }}
         </NAlert>
 
-        <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
-          <NGi span="4 700:1"><NCard size="small"><NStatistic label="调用次数" :value="usageTotals.calls" /></NCard></NGi>
-          <NGi span="4 700:1"><NCard size="small"><NStatistic label="成功" :value="usageTotals.success" /></NCard></NGi>
-          <NGi span="4 700:1"><NCard size="small"><NStatistic label="失败" :value="usageTotals.failed" /></NCard></NGi>
-          <NGi span="4 700:1"><NCard size="small"><NStatistic label="用量单位" :value="usageTotals.units" /></NCard></NGi>
+        <NGrid :cols="6" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="6 700:1"><NCard size="small"><NStatistic label="调用次数" :value="usageTotals.calls" /></NCard></NGi>
+          <NGi span="6 700:1"><NCard size="small"><NStatistic label="成功" :value="usageTotals.success" /></NCard></NGi>
+          <NGi span="6 700:1"><NCard size="small"><NStatistic label="失败" :value="usageTotals.failed" /></NCard></NGi>
+          <NGi span="6 700:1"><NCard size="small"><NStatistic label="总计量" :value="usageTotals.units" /></NCard></NGi>
+          <NGi span="6 700:1"><NCard size="small"><NStatistic label="成功用量" :value="usageTotals.successfulUnits" /></NCard></NGi>
+          <NGi span="6 700:1"><NCard size="small"><NStatistic label="排除用量" :value="usageTotals.failedUnits" /></NCard></NGi>
         </NGrid>
 
         <NDataTable
@@ -48,7 +50,7 @@
           :loading="usageLoading"
           :pagination="{ pageSize: 25 }"
           :row-key="(row: AiUsageRow) => `${row.dateUtc}:${row.subjectType}:${row.subjectId}:${row.toolName}`"
-          :scroll-x="1450"
+          :scroll-x="1650"
         />
       </NTabPane>
 
@@ -223,21 +225,64 @@
 
       <NTabPane v-if="can(P.aiBillingReconcile)" name="billing" tab="计费对账">
         <NAlert
+          v-if="billingPreview"
           class="mb-4"
-          :type="usage?.billable ? 'warning' : 'info'"
-          :title="usage?.billable ? '账单数据待财务确认' : '当前仅提供非计费预演'"
+          :type="billingPreview.billable ? 'warning' : 'info'"
+          :title="billingPreview.billable ? '账单数据待财务确认' : '当前仅提供非计费预演'"
         >
-          导出沿用“调用用量”页的筛选条件与 UTC 聚合结果。
+          策略 {{ billingPreview.policy.version }} · {{ billingPreview.billingMode }} ·
+          成功工具调用计入预演可扣额度，工具发现、鉴权失败、参数校验错误和失败调用不计入预演账单。
         </NAlert>
-        <NGrid :cols="3" :x-gap="12" item-responsive class="mb-4">
-          <NGi span="3 700:1"><NCard size="small"><NStatistic label="主体数" :value="billingSubjects" /></NCard></NGi>
-          <NGi span="3 700:1"><NCard size="small"><NStatistic label="调用次数" :value="usageTotals.calls" /></NCard></NGi>
-          <NGi span="3 700:1"><NCard size="small"><NStatistic label="计量单位" :value="usageTotals.units" /></NCard></NGi>
-        </NGrid>
-        <NSpace>
-          <NButton :loading="usageLoading" @click="loadUsage">刷新预演</NButton>
-          <NButton type="primary" :disabled="!usage?.items.length" @click="exportCsv">导出 CSV</NButton>
+        <NAlert v-else class="mb-4" type="info" title="当前仅提供非计费预演">
+          选择日期和主体后刷新预演；正式价格、账单与扣费开关尚未启用。
+        </NAlert>
+
+        <NSpace class="mb-3" align="center">
+          <NDatePicker v-model:value="range" type="daterange" clearable />
+          <NSelect
+            v-model:value="usageFilters.tool"
+            :options="toolFilterOptions"
+            placeholder="全部工具"
+            style="width:210px"
+          />
+          <NSelect
+            v-model:value="usageFilters.subjectType"
+            :options="subjectTypeOptions"
+            style="width:150px"
+          />
+          <NInput v-model:value="usageFilters.subjectId" clearable placeholder="主体 ID" style="width:180px" />
+          <NButton type="primary" :loading="billingLoading" @click="loadBillingPreview">刷新预演</NButton>
         </NSpace>
+
+        <NGrid :cols="5" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="5 700:1"><NCard size="small"><NStatistic label="主体数" :value="billingPreview?.totals.subjectCount ?? 0" /></NCard></NGi>
+          <NGi span="5 700:1"><NCard size="small"><NStatistic label="调用次数" :value="billingPreview?.totals.calls ?? 0" /></NCard></NGi>
+          <NGi span="5 700:1"><NCard size="small"><NStatistic label="预演可扣单位" :value="billingPreview?.totals.previewChargeableUsageUnits ?? 0" /></NCard></NGi>
+          <NGi span="5 700:1"><NCard size="small"><NStatistic label="排除单位" :value="billingPreview?.totals.excludedUsageUnits ?? 0" /></NCard></NGi>
+          <NGi span="5 700:1"><NCard size="small"><NStatistic label="预估金额" :value="`¥${billingPreview?.totals.estimatedAmountCny ?? '0.00'}`" /></NCard></NGi>
+        </NGrid>
+
+        <NCard v-if="billingPreview" size="small" class="mb-4" title="默认计费口径">
+          <NDescriptions :column="1" size="small">
+            <NDescriptionsItem label="计入预演">{{ billingPreview.policy.billableEvents.join('、') }}</NDescriptionsItem>
+            <NDescriptionsItem label="排除事件">{{ billingPreview.policy.excludedEvents.join('、') }}</NDescriptionsItem>
+            <NDescriptionsItem label="Workflow">{{ billingPreview.policy.workflowPolicy }}</NDescriptionsItem>
+            <NDescriptionsItem label="说明">{{ billingPreview.policy.note }}</NDescriptionsItem>
+          </NDescriptions>
+        </NCard>
+
+        <NSpace class="mb-3">
+          <NButton :loading="billingLoading" @click="loadBillingPreview">刷新预演</NButton>
+          <NButton type="primary" :disabled="!billingPreview?.items.length" @click="exportBillingCsv">导出预演 CSV</NButton>
+        </NSpace>
+        <NDataTable
+          :columns="billingColumns"
+          :data="billingPreview?.items ?? []"
+          :loading="billingLoading"
+          :pagination="{ pageSize: 25 }"
+          :row-key="(row: AiBillingPreviewRow) => `${row.dateUtc}:${row.subjectType}:${row.subjectId}:${row.toolName}`"
+          :scroll-x="1680"
+        />
       </NTabPane>
     </NTabs>
 
@@ -314,6 +359,8 @@ import type {
   AiAnswerFeedbackUpdateResult,
   AiAuditResult,
   AiAuditRow,
+  AiBillingPreviewResult,
+  AiBillingPreviewRow,
   AiGoldenSampleCandidateResult,
   AiGoldenSampleCandidateRow,
   AiInAppNotificationResult,
@@ -362,14 +409,16 @@ interface WorkflowQualityRow {
 const route = useRoute()
 const routeTraceId = queryString(route.query.traceId)
 const activeTab = ref(initialTab())
-const range = ref<[number, number]>(defaultRange())
+const range = ref<[number, number] | null>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
+const billingPreview = ref<AiBillingPreviewResult | null>(null)
 const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
 const notifications = ref<AiInAppNotificationResult | null>(null)
 const feedback = ref<AiAnswerFeedbackResult | null>(null)
 const goldenCandidates = ref<AiGoldenSampleCandidateResult | null>(null)
 const usageLoading = ref(false)
+const billingLoading = ref(false)
 const auditLoading = ref(false)
 const traceLoading = ref(false)
 const notificationsLoading = ref(false)
@@ -486,13 +535,11 @@ const usageTotals = computed(() => (usage.value?.items ?? []).reduce(
     success: total.success + row.successfulCalls,
     failed: total.failed + row.failedCalls,
     units: total.units + row.usageUnits,
+    successfulUnits: total.successfulUnits + row.successfulUsageUnits,
+    failedUnits: total.failedUnits + row.failedUsageUnits,
   }),
-  { calls: 0, success: 0, failed: 0, units: 0 },
+  { calls: 0, success: 0, failed: 0, units: 0, successfulUnits: 0, failedUnits: 0 },
 ))
-
-const billingSubjects = computed(() => new Set(
-  (usage.value?.items ?? []).map(row => `${row.subjectType}:${row.subjectId}`),
-).size)
 
 const qualityRows = computed<ToolQualityRow[]>(() => {
   const grouped = new Map<string, AiAuditRow[]>()
@@ -681,11 +728,53 @@ const usageColumns = [
   { title: '调用', key: 'calls', width: 80 },
   { title: '成功', key: 'successfulCalls', width: 80 },
   { title: '失败', key: 'failedCalls', width: 80 },
-  { title: '用量', key: 'usageUnits', width: 90 },
+  { title: '总计量', key: 'usageUnits', width: 90 },
+  { title: '成功用量', key: 'successfulUsageUnits', width: 100 },
+  { title: '排除用量', key: 'failedUsageUnits', width: 100 },
   { title: '来源', key: 'principalSource', width: 170, render: (row: AiUsageRow) => row.principalSource || '—' },
   { title: '权益', key: 'entitlementProfile', width: 120, render: (row: AiUsageRow) => row.entitlementProfile || '—' },
   { title: 'AI Client', key: 'aiClientId', width: 150, render: (row: AiUsageRow) => row.aiClientId || '—' },
   { title: '最后调用', key: 'lastSeenUtc', width: 170, render: (row: AiUsageRow) => fmt(row.lastSeenUtc) },
+]
+
+const billingColumns = [
+  { title: 'UTC 日期', key: 'dateUtc', width: 120 },
+  {
+    title: '主体',
+    key: 'subjectId',
+    width: 210,
+    render: (row: AiBillingPreviewRow) => h('div', [
+      h('div', row.subjectId),
+      h('div', { class: 'text-xs text-gray-400' }, row.subjectType),
+    ]),
+  },
+  { title: '工具', key: 'toolName', width: 220 },
+  { title: '调用', key: 'calls', width: 80 },
+  { title: '成功', key: 'successfulCalls', width: 80 },
+  { title: '失败', key: 'failedCalls', width: 80 },
+  { title: '审计计量', key: 'meteredUsageUnits', width: 100 },
+  { title: '预演可扣', key: 'previewChargeableUsageUnits', width: 100 },
+  { title: '排除', key: 'excludedUsageUnits', width: 80 },
+  {
+    title: '计费状态',
+    key: 'billable',
+    width: 110,
+    render: (row: AiBillingPreviewRow) => h(
+      NTag,
+      { type: row.billable ? 'warning' : 'info', size: 'small' },
+      { default: () => row.billable ? '可计费' : '不计费' },
+    ),
+  },
+  {
+    title: '排除原因',
+    key: 'exclusionReason',
+    width: 210,
+    render: (row: AiBillingPreviewRow) => formatBillingExclusion(row.exclusionReason),
+  },
+  { title: '来源', key: 'principalSource', width: 170, render: (row: AiBillingPreviewRow) => row.principalSource || '—' },
+  { title: '权益', key: 'entitlementProfile', width: 120, render: (row: AiBillingPreviewRow) => row.entitlementProfile || '—' },
+  { title: 'AI Client', key: 'aiClientId', width: 150, render: (row: AiBillingPreviewRow) => row.aiClientId || '—' },
+  { title: '最后调用', key: 'lastSeenUtc', width: 170, render: (row: AiBillingPreviewRow) => fmt(row.lastSeenUtc) },
 ]
 
 const auditColumns = [
@@ -981,6 +1070,21 @@ async function loadUsage() {
   else message.error(result.message || '用量查询失败')
 }
 
+async function loadBillingPreview() {
+  billingLoading.value = true
+  const result = await api.get<AiBillingPreviewResult>('ai/billing/preview', {
+    from: range.value ? toYmd(range.value[0]) : undefined,
+    to: range.value ? toYmd(range.value[1]) : undefined,
+    tool: usageFilters.tool || undefined,
+    subjectType: usageFilters.subjectType || undefined,
+    subjectId: usageFilters.subjectId.trim() || undefined,
+    limit: 500,
+  })
+  billingLoading.value = false
+  if (result.code === 0) billingPreview.value = result.data
+  else message.error(result.message || '计费预演查询失败')
+}
+
 async function loadAudit() {
   auditLoading.value = true
   const result = await api.get<AiAuditResult>('ai/audit/recent', {
@@ -1131,7 +1235,8 @@ function exportCsv() {
   if (!usage.value?.items.length) return
   const columns = [
     'dateUtc', 'subjectType', 'subjectId', 'toolName', 'calls',
-    'successfulCalls', 'failedCalls', 'usageUnits', 'principalSource',
+    'successfulCalls', 'failedCalls', 'usageUnits', 'successfulUsageUnits',
+    'failedUsageUnits', 'principalSource',
     'entitlementProfile', 'aiClientId', 'firstSeenUtc', 'lastSeenUtc',
   ] as const
   const rows = [
@@ -1141,8 +1246,32 @@ function exportCsv() {
   const blob = new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
+  const [fromLabel, toLabel] = selectedRangeLabels()
   link.href = url
-  link.download = `spdex-ai-usage-${toYmd(range.value[0])}-${toYmd(range.value[1])}.csv`
+  link.download = `spdex-ai-usage-${fromLabel}-${toLabel}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportBillingCsv() {
+  if (!billingPreview.value?.items.length) return
+  const columns = [
+    'dateUtc', 'subjectType', 'subjectId', 'toolName', 'calls',
+    'successfulCalls', 'failedCalls', 'meteredUsageUnits',
+    'previewChargeableUsageUnits', 'excludedUsageUnits', 'billable',
+    'billingMode', 'exclusionReason', 'principalSource',
+    'entitlementProfile', 'aiClientId', 'firstSeenUtc', 'lastSeenUtc',
+  ] as const
+  const rows = [
+    columns.join(','),
+    ...billingPreview.value.items.map(row => columns.map(key => csv(row[key])).join(',')),
+  ]
+  const blob = new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const [fromLabel, toLabel] = selectedRangeLabels()
+  link.href = url
+  link.download = `spdex-ai-billing-preview-${fromLabel}-${toLabel}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -1162,6 +1291,9 @@ function toYmd(value: number) {
   const date = new Date(value)
   const pad = (part: number) => String(part).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+function selectedRangeLabels(): [string, string] {
+  return range.value ? [toYmd(range.value[0]), toYmd(range.value[1])] : ['all', 'all']
 }
 function fmt(value?: string | null) {
   return value ? value.substring(0, 19).replace('T', ' ') : '—'
@@ -1189,6 +1321,12 @@ function formatNotificationSubject(row: AiInAppNotificationRow) {
   const date = subject.date
   if (typeof date === 'string' && date) return date
   return '—'
+}
+function formatBillingExclusion(value?: string | null) {
+  const labels: Record<string, string> = {
+    failed_or_non_billable_calls_excluded: '失败或非计费调用已排除',
+  }
+  return value ? labels[value] ?? value : '—'
 }
 function formatNotificationSource(value?: string | null) {
   const labels: Record<string, string> = {
@@ -1322,6 +1460,7 @@ function feedbackActionButton(row: AiAnswerFeedbackRow, status: string, label: s
 
 onMounted(() => {
   if (can(P.aiUsageView)) loadUsage()
+  if (can(P.aiBillingReconcile)) loadBillingPreview()
   if (can(P.aiAuditView)) {
     loadAudit()
     loadInAppNotifications()

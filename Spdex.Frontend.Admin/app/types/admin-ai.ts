@@ -114,6 +114,8 @@ export interface AiUsageRow {
   successfulCalls: number
   failedCalls: number
   usageUnits: number
+  successfulUsageUnits: number
+  failedUsageUnits: number
   firstSeenUtc: string
   lastSeenUtc: string
 }
@@ -124,6 +126,62 @@ export interface AiUsageResult {
   billable: boolean
   count: number
   items: AiUsageRow[]
+}
+
+export interface AiBillingPreviewPolicy {
+  version: string
+  billableEvents: string[]
+  excludedEvents: string[]
+  workflowPolicy: string
+  note: string
+}
+
+export interface AiBillingPreviewTotals {
+  subjectCount: number
+  calls: number
+  successfulCalls: number
+  failedCalls: number
+  meteredUsageUnits: number
+  previewChargeableUsageUnits: number
+  excludedUsageUnits: number
+  estimatedAmountCny: string
+}
+
+export interface AiBillingPreviewRow {
+  dateUtc: string
+  subjectType: string
+  subjectId: string
+  userId: string | null
+  clientNameHash: string | null
+  aiClientId: string | null
+  principalSource: string | null
+  entitlementProfile: string | null
+  quotaPolicy: string | null
+  rateLimitPolicy: string | null
+  toolName: string
+  calls: number
+  successfulCalls: number
+  failedCalls: number
+  meteredUsageUnits: number
+  previewChargeableUsageUnits: number
+  excludedUsageUnits: number
+  billable: boolean
+  billingMode: string
+  exclusionReason: string | null
+  firstSeenUtc: string
+  lastSeenUtc: string
+}
+
+export interface AiBillingPreviewResult {
+  generatedAtUtc: string
+  billingMode: string
+  billable: boolean
+  pricingStatus: string
+  policy: AiBillingPreviewPolicy
+  limit: number
+  count: number
+  totals: AiBillingPreviewTotals
+  items: AiBillingPreviewRow[]
 }
 
 export interface AiAuditRow {
