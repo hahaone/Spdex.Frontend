@@ -359,6 +359,83 @@
           :scroll-x="1680"
         />
       </NTabPane>
+
+      <NTabPane v-if="can(P.aiBillingReconcile)" name="gate" tab="生产门禁">
+        <NAlert
+          class="mb-4"
+          :type="productionGateConclusion.type"
+          :title="productionGateConclusion.title"
+        >
+          {{ productionGateConclusion.description }}
+        </NAlert>
+
+        <NSpace class="mb-3" align="center">
+          <NButton type="primary" :loading="productionGateLoading" @click="loadProductionGateEvidence">
+            刷新门禁证据
+          </NButton>
+          <NButton :disabled="!productionGateRows.length" @click="exportProductionGateMarkdown">
+            导出门禁报告
+          </NButton>
+          <NButton tag="a" :href="usageHelpUrl" target="_blank" rel="noopener noreferrer" tertiary>
+            用户边界文档
+          </NButton>
+        </NSpace>
+
+        <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
+          <NGi span="4 700:1">
+            <NCard size="small"><NStatistic label="阻断项" :value="productionGateTotals.blocked" /></NCard>
+          </NGi>
+          <NGi span="4 700:1">
+            <NCard size="small"><NStatistic label="待复核" :value="productionGateTotals.pending" /></NCard>
+          </NGi>
+          <NGi span="4 700:1">
+            <NCard size="small"><NStatistic label="需关注" :value="productionGateTotals.warning" /></NCard>
+          </NGi>
+          <NGi span="4 700:1">
+            <NCard size="small"><NStatistic label="已通过" :value="productionGateTotals.passed" /></NCard>
+          </NGi>
+        </NGrid>
+
+        <NCard size="small" class="mb-4" title="门禁快照">
+          <NDescriptions :column="2" size="small" bordered>
+            <NDescriptionsItem label="发布策略">测试环境和 allowlist 灰度，不做正式公开售卖。</NDescriptionsItem>
+            <NDescriptionsItem label="计费状态">
+              {{ billingPreview ? `${billingPreview.billingMode} / billable=${billingPreview.billable}` : '未加载' }}
+            </NDescriptionsItem>
+            <NDescriptionsItem label="计费口径">
+              成功工具调用计入预演；鉴权、权限、参数校验、失败调用和工具发现不进入预演扣费。
+            </NDescriptionsItem>
+            <NDescriptionsItem label="通知边界">当前只允许站内通知；email/webhook 保持关闭。</NDescriptionsItem>
+            <NDescriptionsItem label="回答验收">
+              已加载 {{ feedbackSampleStats.loaded }} 条，已流转 {{ feedbackSampleStats.reviewed }} 条，目标 30 条。
+            </NDescriptionsItem>
+            <NDescriptionsItem label="最近样本">
+              审计 {{ qualityTotals.calls }} 条，站内通知 {{ notifications?.count ?? 0 }} 条。
+            </NDescriptionsItem>
+          </NDescriptions>
+        </NCard>
+
+        <NCard v-if="productionGateBlockers.length" size="small" class="mb-4" title="阻断项">
+          <NAlert
+            v-for="item in productionGateBlockers"
+            :key="`${item.section}:${item.item}`"
+            class="mb-2"
+            type="error"
+            :title="item.item"
+          >
+            {{ item.nextAction }}
+          </NAlert>
+        </NCard>
+
+        <NDataTable
+          :columns="productionGateColumns"
+          :data="productionGateRows"
+          :loading="productionGateLoading"
+          :pagination="{ pageSize: 20 }"
+          :row-key="(row: ProductionGateRow) => `${row.section}:${row.item}`"
+          :scroll-x="1320"
+        />
+      </NTabPane>
     </NTabs>
 
     <NDrawer v-model:show="traceDrawerVisible" :width="900" placement="right">
@@ -509,6 +586,15 @@ interface WorkflowQualityRow {
   latestSuccess: boolean
   latestErrorCode: string
 }
+type ProductionGateStatus = 'passed' | 'warning' | 'pending' | 'blocked'
+interface ProductionGateRow {
+  section: string
+  item: string
+  status: ProductionGateStatus
+  evidence: string
+  owner: string
+  nextAction: string
+}
 const route = useRoute()
 const routeTraceId = queryString(route.query.traceId)
 const activeTab = ref(initialTab())
@@ -527,6 +613,7 @@ const traceLoading = ref(false)
 const notificationsLoading = ref(false)
 const feedbackLoading = ref(false)
 const goldenCandidatesLoading = ref(false)
+const productionGateLoading = ref(false)
 const traceDrawerVisible = ref(false)
 const feedbackReviewVisible = ref(false)
 const feedbackReviewSubmitting = ref(false)
@@ -858,6 +945,178 @@ const feedbackSampleStats = computed(() => {
     auditTraceCoverage: rows.length ? Math.round((auditTraceLinked / rows.length) * 100) : 0,
   }
 })
+const productionGateRows = computed<ProductionGateRow[]>(() => {
+  const billing = billingPreview.value
+  const notificationRows = notifications.value?.items ?? []
+  const billingStatus = !billing
+    ? 'pending'
+    : billing.billable
+      ? 'blocked'
+      : billing.billingMode === 'test_metering_only'
+        ? 'passed'
+        : 'warning'
+  const billingTotalsComplete = Boolean(
+    billing &&
+    Number.isFinite(billing.totals.meteredUsageUnits) &&
+    Number.isFinite(billing.totals.previewChargeableUsageUnits) &&
+    Number.isFinite(billing.totals.excludedUsageUnits),
+  )
+  const notificationPayloadSafe = notificationRows.every(row => row.payloadRef?.rawPayloadOmitted !== false)
+  const feedbackLoaded = feedback.value !== null
+  const feedbackStats = feedbackSampleStats.value
+
+  return [
+    productionGateRow(
+      '发布边界',
+      'AI 观察助手仍按 allowlist 灰度',
+      'warning',
+      'NewSpdex AI 入口由后端 AI access gate 控制；正式前仍需用普通账号复核不可见。',
+      '产品 / QA',
+      '发布前用普通非测试账号验证：首页、/ai、/push 和账号中心均不展示 AI/MCP/通知实验入口。',
+    ),
+    productionGateRow(
+      '正式域名',
+      'mcp.spdex.com 仅用于受控预发布 smoke',
+      'warning',
+      'P5 预发布 smoke 已通过 health、readiness、metadata、tools/list 和 bearer 工具调用；仍不对外宣发。',
+      '运维 / 安全',
+      '正式售卖前确认独立生产实例或独立凭证域、Host allowlist、回滚开关和事故响应值班。',
+    ),
+    productionGateRow(
+      '计费',
+      '正式扣费开关保持关闭',
+      billingStatus,
+      billing
+        ? `${billing.billingMode}，billable=${billing.billable}，pricing=${billing.pricingStatus}`
+        : '尚未加载账单预演，请刷新门禁证据。',
+      '产品 / 财务',
+      billing?.billable
+        ? '立即停止发布流程，确认没有真实扣费或正式账单生成。'
+        : '正式售卖前完成套餐、额度扣减、冲正/退款、账单对账和签字流程。',
+    ),
+    productionGateRow(
+      '计费',
+      '预演用量拆分完整',
+      !billing ? 'pending' : billingTotalsComplete ? 'passed' : 'warning',
+      billing
+        ? `审计 ${billing.totals.meteredUsageUnits}，预演可扣 ${billing.totals.previewChargeableUsageUnits}，排除 ${billing.totals.excludedUsageUnits}。`
+        : '尚未加载账单预演。',
+      '财务 / 后端',
+      '对比 usage ledger 与预演 CSV，确认失败调用和校验错误不进入可扣单位。',
+    ),
+    productionGateRow(
+      '计费',
+      'Admin 支持账单预演导出',
+      'passed',
+      '计费对账页可按日期、工具、主体筛选并导出预演 CSV。',
+      '运营 / 财务',
+      '每次灰度评审导出一份样本，与审计 trace 抽查对齐。',
+    ),
+    productionGateRow(
+      '通知',
+      '通知 release switch 独立于 AI 入口',
+      'passed',
+      '站内通知接口使用独立 NotificationsEnabled 门禁；AI 可见不等于通知可见。',
+      '产品 / 后端',
+      '保持 AI 入口、观察条件写入和通知中心三个开关分离。',
+    ),
+    productionGateRow(
+      '通知',
+      'P5 只开放站内通知',
+      'passed',
+      '用户侧隐藏 email/webhook 配置，当前 provider drill 只允许站内消息。',
+      '产品 / 运维',
+      '外部通知 provider 凭证、重试和失败告警完成前，不开放邮件和 Webhook。',
+    ),
+    productionGateRow(
+      '通知',
+      '用户侧收件箱不暴露原始 payload',
+      notifications.value === null
+        ? 'pending'
+        : notificationPayloadSafe
+          ? 'passed'
+          : 'blocked',
+      notifications.value === null
+        ? '尚未加载站内通知样本。'
+        : `${notificationRows.length} 条样本，raw payload ${notificationPayloadSafe ? '均已省略' : '存在暴露风险'}。`,
+      '前端 / 安全',
+      notificationPayloadSafe
+        ? '继续抽样检查通知详情和 Admin 通知抽屉。'
+        : '立即修正通知接口或前端展示，禁止原始 payload 对用户或普通运营可见。',
+    ),
+    productionGateRow(
+      '回答验收',
+      '真实问题抽样状态流转',
+      !feedbackLoaded
+        ? 'pending'
+        : feedbackStats.reviewed >= feedbackStats.target
+          ? 'passed'
+          : 'warning',
+      feedbackLoaded
+        ? `已加载 ${feedbackStats.loaded} 条，已流转 ${feedbackStats.reviewed}/${feedbackStats.target}，trace 覆盖 ${feedbackStats.auditTraceCoverage}%。`
+        : '尚未加载回答反馈。',
+      '运营 / 产品',
+      '继续处理大额交易、异常证据、预测市场背离、watch condition 和赛中信号问题池。',
+    ),
+    productionGateRow(
+      '帮助中心',
+      '用户边界文档已接入',
+      'passed',
+      'NewSpdex AI、MCP token、OAuth 授权、Admin 计费对账已链接到同一帮助中心用量与安全边界文章。',
+      '产品 / 文档',
+      '正式前再做一次普通用户视角校对，避免内部过程、接口和未确认价格进入文案。',
+    ),
+    productionGateRow(
+      '凭证安全',
+      '测试凭证清理与正式凭证域隔离',
+      'pending',
+      '已有 inventory/revoke 脚本和 Host allowlist；正式售卖仍建议独立生产实例或独立凭证域。',
+      '安全 / 运维',
+      '正式评审前导出活跃凭证 inventory，撤销过期测试凭证，确认测试 token 不可用于正式域。',
+    ),
+    productionGateRow(
+      '运维',
+      'Ledger 备份和正式存储策略',
+      'pending',
+      '当前测试期 ledger 可做归档和预演；正式多实例计费前仍需集中存储、日志平台或双写决策。',
+      '后端 / 运维',
+      '完成最近一次备份/恢复演练记录，并确定正式账单源数据位置。',
+    ),
+  ]
+})
+const productionGateTotals = computed(() => productionGateRows.value.reduce(
+  (totals, row) => ({
+    passed: totals.passed + (row.status === 'passed' ? 1 : 0),
+    warning: totals.warning + (row.status === 'warning' ? 1 : 0),
+    pending: totals.pending + (row.status === 'pending' ? 1 : 0),
+    blocked: totals.blocked + (row.status === 'blocked' ? 1 : 0),
+  }),
+  { passed: 0, warning: 0, pending: 0, blocked: 0 },
+))
+const productionGateBlockers = computed(() =>
+  productionGateRows.value.filter(row => row.status === 'blocked'))
+const productionGateConclusion = computed(() => {
+  const totals = productionGateTotals.value
+  if (totals.blocked > 0) {
+    return {
+      type: 'error' as const,
+      title: '不得进入正式灰度',
+      description: `当前存在 ${totals.blocked} 个阻断项，需要先处理真实风险。`,
+    }
+  }
+  if (totals.pending > 0 || totals.warning > 0) {
+    return {
+      type: 'warning' as const,
+      title: '继续测试和预发布，不进入正式售卖',
+      description: `当前无真实阻断风险，但还有 ${totals.pending} 个待复核项、${totals.warning} 个需关注项；仍应保持 billable=false 和 allowlist 灰度。`,
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: '可提交小范围正式灰度评审',
+    description: '所有自动化门禁证据已通过；仍需产品、财务、安全和运维签字后才能正式开放。',
+  }
+})
 const riskPoolCounts = computed(() => {
   const counts: Record<string, number> = {}
   const rows = feedback.value?.items ?? []
@@ -892,7 +1151,10 @@ function initialTab() {
     allowed.add('notifications')
     allowed.add('trace')
   }
-  if (can(P.aiBillingReconcile)) allowed.add('billing')
+  if (can(P.aiBillingReconcile)) {
+    allowed.add('billing')
+    allowed.add('gate')
+  }
   if (tab && allowed.has(tab)) return tab
   return can(P.aiUsageView) ? 'usage' : 'audit'
 }
@@ -1142,6 +1404,23 @@ const notificationColumns = [
     render: (row: AiInAppNotificationRow) => fmt(row.payloadRef?.matchedAt || row.payloadRef?.completedAt),
   },
   { title: '写入时间', key: 'createdAt', width: 170, render: (row: AiInAppNotificationRow) => fmt(row.createdAt) },
+]
+const productionGateColumns = [
+  { title: '模块', key: 'section', width: 120 },
+  { title: '检查项', key: 'item', width: 260 },
+  {
+    title: '状态',
+    key: 'status',
+    width: 110,
+    render: (row: ProductionGateRow) => h(
+      NTag,
+      { type: productionGateStatusTag(row.status), size: 'small' },
+      { default: () => productionGateStatusLabel(row.status) },
+    ),
+  },
+  { title: '证据', key: 'evidence', width: 360 },
+  { title: '负责人', key: 'owner', width: 140 },
+  { title: '下一步', key: 'nextAction', width: 330 },
 ]
 const feedbackColumns = [
   ...(can(P.aiOpsManage) ? [{ type: 'selection' as const, width: 48 }] : []),
@@ -1546,6 +1825,57 @@ function exportBillingCsv() {
   URL.revokeObjectURL(url)
 }
 
+async function loadProductionGateEvidence() {
+  productionGateLoading.value = true
+  await Promise.allSettled([
+    can(P.aiUsageView) ? loadUsage() : Promise.resolve(),
+    can(P.aiBillingReconcile) ? loadBillingPreview() : Promise.resolve(),
+    can(P.aiAuditView) ? loadQuality() : Promise.resolve(),
+    can(P.aiAuditView) ? loadInAppNotifications() : Promise.resolve(),
+    can(P.aiAuditView) ? loadFeedback() : Promise.resolve(),
+  ])
+  productionGateLoading.value = false
+  message.success('生产门禁证据已刷新')
+}
+
+function exportProductionGateMarkdown() {
+  const generatedAt = new Date().toISOString()
+  const rows = productionGateRows.value
+  const totals = productionGateTotals.value
+  const lines = [
+    '# SPdex AI MCP P5 生产灰度门禁报告',
+    '',
+    `生成时间：${generatedAt}`,
+    `结论：${productionGateConclusion.value.title}`,
+    `状态汇总：阻断 ${totals.blocked}，待复核 ${totals.pending}，需关注 ${totals.warning}，已通过 ${totals.passed}`,
+    '',
+    '## 边界',
+    '',
+    '- 当前仍是测试环境和 allowlist 灰度，不代表正式公开售卖。',
+    '- 当前应保持 billable=false，不生成正式账单，不扣真实额度。',
+    '- 当前只开放站内通知，email/webhook 外部投递保持关闭。',
+    '',
+    '## 检查项',
+    '',
+    '| 模块 | 检查项 | 状态 | 证据 | 下一步 |',
+    '| --- | --- | --- | --- | --- |',
+    ...rows.map(row => [
+      row.section,
+      row.item,
+      productionGateStatusLabel(row.status),
+      row.evidence,
+      row.nextAction,
+    ].map(markdownTableCell).join(' | ')).map(line => `| ${line} |`),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `spdex-ai-p5-production-gate-${generatedAt.slice(0, 10)}.md`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 function exportFeedbackCsv() {
   if (!feedback.value?.items.length) return
   const columns = [
@@ -1592,6 +1922,12 @@ function exportFeedbackCsv() {
 function csv(value: unknown) {
   const text = value == null ? '' : String(value)
   return `"${text.replaceAll('"', '""')}"`
+}
+function markdownTableCell(value: unknown) {
+  return String(value ?? '')
+    .replaceAll('|', '\\|')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 function defaultRange(): [number, number] {
   const end = new Date()
@@ -1640,6 +1976,34 @@ function formatBillingExclusion(value?: string | null) {
     failed_or_non_billable_calls_excluded: '失败或非计费调用已排除',
   }
   return value ? labels[value] ?? value : '—'
+}
+function productionGateRow(
+  section: string,
+  item: string,
+  status: ProductionGateStatus,
+  evidence: string,
+  owner: string,
+  nextAction: string,
+): ProductionGateRow {
+  return { section, item, status, evidence, owner, nextAction }
+}
+function productionGateStatusLabel(value: ProductionGateStatus) {
+  const labels: Record<ProductionGateStatus, string> = {
+    passed: '已通过',
+    warning: '需关注',
+    pending: '待复核',
+    blocked: '阻断',
+  }
+  return labels[value]
+}
+function productionGateStatusTag(value: ProductionGateStatus) {
+  const tags: Record<ProductionGateStatus, 'success' | 'warning' | 'info' | 'error'> = {
+    passed: 'success',
+    warning: 'warning',
+    pending: 'info',
+    blocked: 'error',
+  }
+  return tags[value]
 }
 function formatNotificationSource(value?: string | null) {
   const labels: Record<string, string> = {
