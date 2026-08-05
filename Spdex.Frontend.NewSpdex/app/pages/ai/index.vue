@@ -364,6 +364,7 @@ const automationMessage = ref('')
 const automationDraftOpen = ref(false)
 const automationSaving = ref(false)
 const automationRunningId = ref('')
+const automationNotificationSavingId = ref('')
 const automationRuns = ref<AiAgentAutomationRunRecord[]>([])
 const automationRunsPending = ref(false)
 const automationRunDetailOpen = ref(false)
@@ -382,8 +383,6 @@ const automationDraft = reactive({
   dailyRunLimit: '3',
   monthlyUnitBudget: '300',
   notifyInApp: true,
-  notifyEmail: false,
-  notifyWebhook: false,
 })
 const selectorOpen = ref(false)
 const selectorQuery = ref('')
@@ -1064,8 +1063,6 @@ function openAutomationDraft(workflow?: AiAgentWorkflowRecord) {
   automationDraft.dailyRunLimit = targetWorkflow?.matchRequired ? '6' : '3'
   automationDraft.monthlyUnitBudget = targetWorkflow?.matchRequired ? '500' : '300'
   automationDraft.notifyInApp = true
-  automationDraft.notifyEmail = false
-  automationDraft.notifyWebhook = false
   automationDraftOpen.value = true
   automationMessage.value = ''
 }
@@ -1083,8 +1080,6 @@ async function saveAutomationTask() {
   try {
     const notifyChannels = [
       automationDraft.notifyInApp ? 'in_app' : '',
-      automationDraft.notifyEmail ? 'email' : '',
-      automationDraft.notifyWebhook ? 'webhook' : '',
     ].filter(Boolean)
     const response = await $apiFetch<AiAgentAutomationTaskMutationResponse>('/api/newspdex/ai/agent/automation-tasks', {
       method: 'POST',
@@ -1119,6 +1114,43 @@ async function saveAutomationTask() {
   }
   finally {
     automationSaving.value = false
+  }
+}
+
+async function toggleAutomationTaskNotification(task: AiAgentAutomationTaskRecord) {
+  if (automationNotificationSavingId.value) return
+  automationNotificationSavingId.value = task.taskId
+  automationMessage.value = hasInAppNotification(task) ? '正在关闭任务通知' : '正在开启任务通知'
+  try {
+    const notifyChannels = hasInAppNotification(task) ? [] : ['in_app']
+    const response = await $apiFetch<AiAgentAutomationTaskMutationResponse>(
+      `/api/newspdex/ai/agent/automation-tasks/${encodeURIComponent(task.taskId)}`,
+      {
+        method: 'PUT',
+        body: {
+          name: task.name,
+          description: task.description || null,
+          workflowId: task.workflowId,
+          enabled: task.enabled,
+          triggerType: task.triggerType,
+          cadence: task.cadence,
+          scope: task.scope,
+          matchId: task.matchId ?? null,
+          matchTitle: task.matchTitle ?? null,
+          dailyRunLimit: task.dailyRunLimit,
+          monthlyUnitBudget: task.monthlyUnitBudget ?? null,
+          notifyChannels,
+        },
+      },
+    )
+    upsertAutomationTask(response.item)
+    automationMessage.value = notifyChannels.length ? '任务站内通知已开启' : '任务站内通知已关闭'
+  }
+  catch {
+    automationMessage.value = '任务通知设置保存失败'
+  }
+  finally {
+    automationNotificationSavingId.value = ''
   }
 }
 
@@ -2240,10 +2272,14 @@ function scopeLabel(value: string) {
 function notifyLabel(value: string) {
   const values: Record<string, string> = {
     in_app: '站内',
-    email: '邮件',
-    webhook: 'Webhook',
+    email: '邮件（暂未开放）',
+    webhook: 'Webhook（暂未开放）',
   }
   return values[value] || value
+}
+
+function hasInAppNotification(task: AiAgentAutomationTaskRecord) {
+  return task.notifyChannels.includes('in_app')
 }
 
 function parsePositiveInt(value: string, fallback: number) {
@@ -2827,15 +2863,8 @@ onBeforeUnmount(() => {
                 <input v-model="automationDraft.notifyInApp" type="checkbox">
                 <span>站内通知</span>
               </label>
-              <label>
-                <input v-model="automationDraft.notifyEmail" type="checkbox">
-                <span>邮件</span>
-              </label>
-              <label>
-                <input v-model="automationDraft.notifyWebhook" type="checkbox">
-                <span>Webhook</span>
-              </label>
             </div>
+            <small>当前仅支持站内通知；邮件和 Webhook 会在独立投递门禁完成后再开放。</small>
             <small>{{ selectedAutomationWorkflow?.matchRequired ? '这个流程需要比赛上下文，正式自动运行前需固定比赛或接入信号触发。' : '这个流程可用于每日观察类自动任务。' }}</small>
             <div class="workflow-draft-actions">
               <button type="button" class="mini-action focus-ring" :disabled="!canSaveAutomationTask" @click="saveAutomationTask">
@@ -2888,6 +2917,14 @@ onBeforeUnmount(() => {
               <div class="automation-actions">
                 <button type="button" class="mini-action quiet focus-ring" :disabled="automationSaving || Boolean(automationRunningId)" @click="toggleAutomationTask(task)">
                   {{ task.enabled ? '暂停' : '启用' }}
+                </button>
+                <button
+                  type="button"
+                  class="mini-action quiet focus-ring"
+                  :disabled="automationNotificationSavingId === task.taskId || automationSaving"
+                  @click="toggleAutomationTaskNotification(task)"
+                >
+                  {{ hasInAppNotification(task) ? '关闭通知' : '开启通知' }}
                 </button>
                 <button type="button" class="mini-action focus-ring" :disabled="!canRunAutomationTask(task)" @click="runAutomationTask(task)">
                   <Play :size="13" />

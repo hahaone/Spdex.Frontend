@@ -335,7 +335,7 @@ export const helpArticles: HelpArticle[] = [
     level: '进阶',
     readMinutes: 5,
     category: 'ai',
-    updated: '2026-08-01',
+    updated: '2026-08-05',
     tags: ['通知', '观察条件', 'Workflow'],
     sections: [
       {
@@ -358,7 +358,8 @@ export const helpArticles: HelpArticle[] = [
       {
         heading: '通知边界',
         body: [
-          '站内收件箱、邮件和 webhook 均有独立开关、偏好和权限要求。能够使用 AI 观察助手，不代表所有通知渠道都已开启。',
+          '当前用户侧优先使用站内收件箱。站内通知、AI 观察助手入口和观察条件写入是独立权限；能够使用 AI 观察助手，不代表已经开启自动提醒。',
+          '邮件和 Webhook 属于外部投递渠道，会在独立开通和验证后再提供给用户配置。',
         ],
       },
     ],
@@ -987,7 +988,7 @@ export const supportChecklist = [
   '涉及比赛时提供 match_id、联赛、主客队和开赛时间。',
   '截图或导出内容应先删除 token、Authorization、cookie 和账号敏感信息。',
   '模型、指数和共振仅作市场观察，不构成投注建议或收益承诺。',
-  'AI 通知、站内收件箱、邮件和 webhook 可能需要分别开启。',
+  'AI 站内收件箱、AI 观察助手入口和观察条件写入可能需要分别开启。',
 ]
 
 export const aiArticles = helpArticles.filter(article => article.category === 'ai')

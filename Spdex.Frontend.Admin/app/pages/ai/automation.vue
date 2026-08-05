@@ -247,7 +247,7 @@
       </template>
 
       <NAlert class="mb-3" type="info" title="测试期 provider 演练">
-        演练会写入一条自动化通知样本，并按当前通知配置执行投递或审计；失败通知可从队列中手动加入重试。
+        当前 P5 仅演练站内消息；邮件和 Webhook 外部投递暂缓。失败通知可从队列中手动加入重试。
       </NAlert>
 
       <NSpace class="mb-3" align="center" :wrap="true">
@@ -271,7 +271,7 @@
       <section class="provider-drill-panel">
         <NSelect
           v-model:value="providerDrillForm.channel"
-          :options="notificationChannelOptions.filter(item => item.value)"
+          :options="providerDrillChannelOptions"
           placeholder="演练通道"
           style="width:150px"
         />
@@ -843,6 +843,9 @@ const notificationChannelOptions = [
   { label: '邮件', value: 'email' },
   { label: 'Webhook', value: 'webhook' },
 ]
+const providerDrillChannelOptions = [
+  { label: '站内消息', value: 'in_app' },
+]
 const providerDrillStatusOptions = [
   { label: '成功样本', value: 'success' },
   { label: '部分完成样本', value: 'partial' },
@@ -1228,7 +1231,7 @@ async function runProviderDrill() {
   const result = await api.post<AiNotificationProviderDrillResult>('ai/notifications/provider-drill', {
     ownerSubjectType: providerDrillForm.ownerSubjectType,
     ownerSubjectId: providerDrillForm.ownerSubjectId,
-    channel: providerDrillForm.channel,
+    channel: 'in_app',
     status: providerDrillForm.status,
     deliverNow: providerDrillForm.deliverNow,
     taskName: '通知 provider 演练',

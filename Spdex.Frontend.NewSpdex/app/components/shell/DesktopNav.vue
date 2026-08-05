@@ -7,6 +7,11 @@ const { isLoggedIn, user, userName, tier, logout } = useAuth()
 const { isDark, toggle } = useTheme()
 const { show: showCommand } = useCommandPalette()
 const aiFeaturesVisible = useAiFeatureVisibility()
+const { hasUnread, unreadCount, refreshUnreadCount } = useAiNotificationInbox()
+
+onMounted(() => {
+  refreshUnreadCount()
+})
 
 const tierClass: Record<string, string> = {
   Free: 'tier-free',
@@ -62,8 +67,13 @@ async function handleLogout() {
         <button class="action-btn focus-ring" aria-label="搜索 (⌘K)" @click="showCommand()">
           <Search :size="16" />
         </button>
-        <NuxtLink to="/push" class="action-btn focus-ring" aria-label="消息推送">
+        <NuxtLink
+          to="/push"
+          :class="['action-btn', 'focus-ring', { unread: hasUnread }]"
+          :aria-label="hasUnread ? `消息推送，${unreadCount} 条未读` : '消息推送'"
+        >
           <Bell :size="16" />
+          <span v-if="hasUnread" class="notify-dot">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
         </NuxtLink>
         <button class="action-btn focus-ring" :aria-label="isDark ? '日间模式' : '夜间模式'" @click="toggle()">
           <Sun v-if="isDark" :size="16" />
@@ -165,6 +175,7 @@ async function handleLogout() {
 
 .action-btn {
   display: inline-grid;
+  position: relative;
   width: 32px;
   height: 32px;
   place-items: center;
@@ -172,6 +183,23 @@ async function handleLogout() {
   border-radius: 5px;
   background: transparent;
   color: var(--muted);
+}
+
+.notify-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1px solid var(--panel);
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 12px;
+  text-align: center;
 }
 
 .action-btn:hover {

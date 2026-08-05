@@ -11,15 +11,12 @@ import type { ApiResponse } from '~/types/auth'
 
 interface AiPreferenceForm {
   inApp: boolean
-  email: boolean
-  webhook: boolean
   minimumSeverity: string
   deliveryMode: string
   quietHoursEnabled: boolean
   quietHoursStart: string
   quietHoursEnd: string
   quietHoursTimeZone: string
-  emailAddress: string
 }
 
 const { signals, pending, refresh } = useSignals(50)
@@ -30,10 +27,16 @@ const { supported, subscribed, busy, permission, refreshState, subscribe, unsubs
 const { isStandalone, isIOS, canInstall, promptInstall } = usePwaInstall()
 const feedback = ref('')
 const aiNotificationsVisible = useAiNotificationVisibility()
+const {
+  refreshUnreadCount,
+  syncUnreadCount,
+  decrementUnreadCount,
+} = useAiNotificationInbox()
 const aiNotifications = ref<AiInAppNotificationListResult | null>(null)
 const aiNotificationsLoading = ref(false)
 const aiNotificationError = ref('')
 const aiUnreadOnly = ref(false)
+const aiNotificationSource = ref('')
 const markingNotificationId = ref('')
 const markingAllNotifications = ref(false)
 const aiPreferences = ref<AiNotificationPreferenceResult | null>(null)
@@ -114,6 +117,11 @@ const bannerLabel = computed(() => {
 
 const aiNotificationItems = computed(() => aiNotifications.value?.items ?? [])
 const aiUnreadCount = computed(() => aiNotifications.value?.unreadCount ?? 0)
+const aiNotificationSourceOptions = [
+  { label: '全部通知', value: '' },
+  { label: '观察条件', value: 'spdex_ai_watch_condition' },
+  { label: '自动化任务', value: 'spdex_ai_automation' },
+]
 const aiPreferenceStatus = computed(() => {
   if (aiPreferencesLoading.value) return '加载中'
   if (!aiPreferences.value) return '未加载'
@@ -123,15 +131,12 @@ const aiPreferenceStatus = computed(() => {
 function defaultAiPreferenceForm(): AiPreferenceForm {
   return {
     inApp: true,
-    email: false,
-    webhook: false,
     minimumSeverity: 'info',
     deliveryMode: 'realtime',
     quietHoursEnabled: false,
     quietHoursStart: '',
     quietHoursEnd: '',
     quietHoursTimeZone: 'UTC',
-    emailAddress: '',
   }
 }
 
@@ -144,10 +149,12 @@ async function loadAiNotifications() {
       {
         query: {
           unreadOnly: aiUnreadOnly.value || undefined,
-          limit: 50,
+          source: aiNotificationSource.value || undefined,
+          limit: 60,
         },
       },
     )
+    syncUnreadCount(aiNotifications.value)
   }
   catch (error: unknown) {
     const fetchError = error as { data?: { message?: string, error_description?: string }, statusCode?: number }
@@ -189,8 +196,8 @@ async function saveAiNotificationPreferences() {
         body: {
           channels: {
             inApp: form.inApp,
-            email: form.email,
-            webhook: form.webhook,
+            email: false,
+            webhook: false,
           },
           minimumSeverity: form.minimumSeverity,
           deliveryMode: form.deliveryMode,
@@ -200,7 +207,7 @@ async function saveAiNotificationPreferences() {
             end: form.quietHoursEnabled ? form.quietHoursEnd || null : null,
             timeZone: form.quietHoursTimeZone || 'UTC',
           },
-          emailAddress: form.emailAddress.trim(),
+          emailAddress: '',
         },
       },
     )
@@ -220,15 +227,12 @@ function applyAiNotificationPreferences(result: AiNotificationPreferenceResult) 
   const preferences = result.preferences
   aiPreferenceForm.value = {
     inApp: preferences.channels.inApp,
-    email: preferences.channels.email,
-    webhook: preferences.channels.webhook,
     minimumSeverity: preferences.minimumSeverity || 'info',
     deliveryMode: preferences.deliveryMode || 'realtime',
     quietHoursEnabled: preferences.quietHours.enabled,
     quietHoursStart: preferences.quietHours.start || '',
     quietHoursEnd: preferences.quietHours.end || '',
     quietHoursTimeZone: preferences.quietHours.timeZone || 'UTC',
-    emailAddress: preferences.emailAddress || '',
   }
 }
 
@@ -262,6 +266,7 @@ async function markAllAiNotificationsRead() {
       { method: 'POST' },
     )
     await loadAiNotifications()
+    await refreshUnreadCount({ force: true })
   }
   catch (error: unknown) {
     const fetchError = error as { data?: { message?: string } }
@@ -277,10 +282,15 @@ async function toggleAiUnreadOnly() {
   await loadAiNotifications()
 }
 
+async function changeAiNotificationSource() {
+  await loadAiNotifications()
+}
+
 function replaceAiNotification(next: AiInAppNotificationRow) {
   if (!aiNotifications.value) return
   const previous = aiNotifications.value.items.find(item => item.inAppNotificationId === next.inAppNotificationId)
   const unreadDelta = previous && !previous.readAt && next.readAt ? 1 : 0
+  if (unreadDelta) decrementUnreadCount(unreadDelta)
   aiNotifications.value = {
     ...aiNotifications.value,
     unreadCount: Math.max(0, aiNotifications.value.unreadCount - unreadDelta),
@@ -294,6 +304,49 @@ function replaceAiNotification(next: AiInAppNotificationRow) {
       items: aiNotifications.value.items.filter(item => !item.readAt),
     }
   }
+}
+
+function notificationSourceText(value?: string | null): string {
+  if (value === 'spdex_ai_automation') return '自动化任务'
+  if (value === 'spdex_ai_watch_condition') return '观察条件'
+  return 'AI 通知'
+}
+
+function notificationStatusText(value?: string | null): string | null {
+  if (!value) return null
+  const labels: Record<string, string> = {
+    success: '已完成',
+    partial: '部分完成',
+    failed: '失败',
+    skipped: '已跳过',
+    active: '观察中',
+    triggered: '已触发',
+    delivered: '已送达',
+  }
+  return labels[value] || null
+}
+
+function notificationConditionText(value?: string | null): string | null {
+  if (!value) return null
+  const labels: Record<string, string> = {
+    active_signal: '活跃信号',
+    market_anomaly: '盘口异常',
+    live_edge: '赛中信号',
+    external_market_linked: '外部市场联动',
+    external_divergence: '外部市场背离',
+    big_trade: '大额交易',
+    brief_ready: '简报就绪',
+  }
+  return labels[value] || null
+}
+
+function notificationMetaText(item: AiInAppNotificationRow): string {
+  const parts = [
+    notificationSourceText(item.source),
+    notificationStatusText(item.payloadRef?.status),
+    notificationConditionText(item.payloadRef?.conditionKind),
+  ].filter(Boolean)
+  return parts.join(' · ')
 }
 
 function notificationSubject(item: AiInAppNotificationRow): string {
@@ -397,6 +450,18 @@ function formatNotificationTime(value?: string | null): string {
           <span class="muted num">{{ aiNotificationItems.length }} 条 · {{ aiUnreadCount }} 未读</span>
         </div>
         <div class="inbox-actions">
+          <label class="source-filter">
+            <span>来源</span>
+            <select v-model="aiNotificationSource" @change="changeAiNotificationSource">
+              <option
+                v-for="option in aiNotificationSourceOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
           <button
             :class="['tiny-toggle', { active: aiUnreadOnly }]"
             type="button"
@@ -444,17 +509,12 @@ function formatNotificationTime(value?: string | null): string {
         </header>
 
         <div class="pref-grid">
+          <p class="pref-note">
+            当前仅开放站内通知。邮件和 Webhook 会在独立投递门禁完成后再开放。
+          </p>
           <label class="check-row">
             <input v-model="aiPreferenceForm.inApp" type="checkbox">
             <span>站内</span>
-          </label>
-          <label class="check-row">
-            <input v-model="aiPreferenceForm.email" type="checkbox">
-            <span>邮件</span>
-          </label>
-          <label class="check-row">
-            <input v-model="aiPreferenceForm.webhook" type="checkbox">
-            <span>Webhook</span>
           </label>
           <label class="pref-field">
             <span>最低等级</span>
@@ -487,10 +547,6 @@ function formatNotificationTime(value?: string | null): string {
             <span>时区</span>
             <input v-model.trim="aiPreferenceForm.quietHoursTimeZone" type="text" placeholder="UTC">
           </label>
-          <label class="pref-field wide">
-            <span>邮箱</span>
-            <input v-model.trim="aiPreferenceForm.emailAddress" type="email" placeholder="alerts@example.com">
-          </label>
         </div>
         <div v-if="aiPreferenceError" class="pref-error">{{ aiPreferenceError }}</div>
       </section>
@@ -520,7 +576,7 @@ function formatNotificationTime(value?: string | null): string {
                 {{ notificationSubject(item) }}
               </NuxtLink>
               <span v-else>{{ notificationSubject(item) }}</span>
-              <span>{{ item.payloadRef?.status || item.payloadRef?.conditionKind || item.source }}</span>
+              <span>{{ notificationMetaText(item) }}</span>
             </div>
           </div>
           <button
@@ -742,6 +798,26 @@ function formatNotificationTime(value?: string | null): string {
   gap: 5px;
 }
 
+.source-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.source-filter select {
+  height: 28px;
+  min-width: 92px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .tiny-toggle,
 .icon-mini {
   display: inline-grid;
@@ -833,6 +909,18 @@ function formatNotificationTime(value?: string | null): string {
   gap: 6px;
 }
 
+.pref-note {
+  grid-column: span 3;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
 .check-row,
 .pref-field {
   display: flex;
@@ -916,6 +1004,9 @@ function formatNotificationTime(value?: string | null): string {
 .inbox-list {
   display: grid;
   gap: 6px;
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .inbox-item {
@@ -949,6 +1040,14 @@ function formatNotificationTime(value?: string | null): string {
   color: var(--muted);
   font-size: 0.7rem;
   font-weight: 740;
+}
+
+.item-foot > span,
+.item-foot > a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-head {

@@ -5,6 +5,12 @@ const route = useRoute()
 const { isDark, toggle } = useTheme()
 const { show: showCommand } = useCommandPalette()
 const { isClassicDesktop, setDesktopViewMode } = useDesktopViewMode()
+const { hasUnread, unreadCount, refreshUnreadCount } = useAiNotificationInbox()
+
+onMounted(() => {
+  refreshUnreadCount()
+})
+
 function toggleViewMode() {
   setDesktopViewMode(isClassicDesktop.value ? 'modern' : 'classic')
 }
@@ -42,8 +48,13 @@ const title = computed(() => {
       <button class="icon-btn focus-ring" aria-label="搜索" @click="showCommand()">
         <Search :size="17" />
       </button>
-      <NuxtLink to="/push" class="icon-btn focus-ring" aria-label="消息推送">
+      <NuxtLink
+        to="/push"
+        :class="['icon-btn', 'focus-ring', { unread: hasUnread }]"
+        :aria-label="hasUnread ? `消息推送，${unreadCount} 条未读` : '消息推送'"
+      >
         <Bell :size="17" />
+        <span v-if="hasUnread" class="notify-dot">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
       </NuxtLink>
       <button class="icon-btn focus-ring" :aria-label="isDark ? '日间模式' : '夜间模式'" @click="toggle()">
         <Sun v-if="isDark" :size="17" />
@@ -103,6 +114,7 @@ const title = computed(() => {
 
 .icon-btn {
   display: inline-grid;
+  position: relative;
   width: 30px;
   height: 30px;
   place-items: center;
@@ -110,6 +122,23 @@ const title = computed(() => {
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
+}
+
+.notify-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1px solid var(--panel);
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 12px;
+  text-align: center;
 }
 
 .icon-btn:active {

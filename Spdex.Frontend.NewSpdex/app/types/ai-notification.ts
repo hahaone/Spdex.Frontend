@@ -41,6 +41,7 @@ export interface AiInAppNotificationListResult {
   limit: number
   filters: {
     unreadOnly: boolean
+    source?: string | null
   }
   count: number
   unreadCount: number

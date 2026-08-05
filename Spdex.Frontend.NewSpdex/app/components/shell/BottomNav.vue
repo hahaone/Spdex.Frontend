@@ -5,6 +5,11 @@ import IconSoccer from '~/components/icons/IconSoccer.vue'
 
 const route = useRoute()
 const aiFeaturesVisible = useAiFeatureVisibility()
+const { hasUnread, unreadCount, refreshUnreadCount } = useAiNotificationInbox()
+
+onMounted(() => {
+  refreshUnreadCount()
+})
 
 const navItems = computed(() => [
   { label: '首页', to: '/', icon: Home },
@@ -32,6 +37,7 @@ function isActive(to: string): boolean {
       :aria-label="item.label"
     >
       <component :is="item.icon" :size="15" stroke-width="2.2" />
+      <i v-if="item.to === '/push' && hasUnread" class="nav-dot">{{ unreadCount > 9 ? '9+' : unreadCount }}</i>
       <span>{{ item.label }}</span>
     </NuxtLink>
   </nav>
@@ -73,6 +79,24 @@ function isActive(to: string): boolean {
 .nav-item span {
   letter-spacing: 0;
   white-space: nowrap;
+}
+
+.nav-dot {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 5px);
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1px solid var(--panel);
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.56rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 12px;
+  text-align: center;
 }
 
 .nav-item.active {
