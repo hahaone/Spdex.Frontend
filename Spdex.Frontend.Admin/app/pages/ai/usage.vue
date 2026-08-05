@@ -1076,11 +1076,19 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
     ),
     productionGateRow(
       '运维',
-      'Ledger 备份和正式存储策略',
-      'pending',
-      '当前测试期 ledger 可做归档和预演；正式多实例计费前仍需集中存储、日志平台或双写决策。',
+      'Ledger 备份和恢复演练',
+      'passed',
+      '2026-08-05 已完成外部备份与临时 Docker volume 恢复演练，记录数 1777，完整性校验通过，生产 volume 未挂载到恢复流程。',
       '后端 / 运维',
-      '完成最近一次备份/恢复演练记录，并确定正式账单源数据位置。',
+      '保持每日归档和外部备份新鲜度监控；每次正式灰度评审前复跑恢复演练。',
+    ),
+    productionGateRow(
+      '运维',
+      '正式计费账本存储策略',
+      'warning',
+      'P5 决策：预发布和非计费测试继续使用单实例 SQLite ledger；正式多实例售卖前必须迁移集中账本或启用双写对账。',
+      '后端 / 运维',
+      '在 billable=true 之前完成集中存储/双写实施、回放校验、备份恢复和财务对账签字。',
     ),
   ]
 })
