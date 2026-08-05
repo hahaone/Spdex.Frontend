@@ -251,6 +251,13 @@
       </NAlert>
 
       <NSpace class="mb-3" align="center" :wrap="true">
+        <NSelect
+          v-model:value="outboxFilters.ownerSubjectType"
+          :options="subjectTypeOptions"
+          placeholder="主体类型"
+          style="width:150px"
+        />
+        <NInput v-model:value="outboxFilters.ownerSubjectId" clearable placeholder="主体 ID" style="width:180px" />
         <NInput v-model:value="outboxFilters.source" clearable placeholder="来源" style="width:220px" />
         <NSelect
           v-model:value="outboxFilters.status"
@@ -660,6 +667,8 @@ const runFilters = reactive({
 })
 
 const outboxFilters = reactive({
+  ownerSubjectType: '',
+  ownerSubjectId: '',
   source: 'spdex_ai_automation',
   status: '',
   channel: '',
@@ -1197,6 +1206,8 @@ async function loadInsights() {
 async function loadOutbox() {
   outboxLoading.value = true
   const result = await api.get<AiNotificationOutboxResult>('ai/notifications/outbox', compactQuery({
+    ownerSubjectType: outboxFilters.ownerSubjectType,
+    ownerSubjectId: outboxFilters.ownerSubjectId,
     source: outboxFilters.source,
     status: outboxFilters.status,
     channel: outboxFilters.channel,
@@ -1231,7 +1242,7 @@ async function runProviderDrill() {
   const result = await api.post<AiNotificationProviderDrillResult>('ai/notifications/provider-drill', {
     ownerSubjectType: providerDrillForm.ownerSubjectType,
     ownerSubjectId: providerDrillForm.ownerSubjectId,
-    channel: 'in_app',
+    channel: providerDrillForm.channel,
     status: providerDrillForm.status,
     deliverNow: providerDrillForm.deliverNow,
     taskName: '通知 provider 演练',
