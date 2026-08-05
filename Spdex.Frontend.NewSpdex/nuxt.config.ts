@@ -20,6 +20,7 @@ export default defineNuxtConfig({
       captchaPrefix: process.env.NUXT_PUBLIC_CAPTCHA_PREFIX || '',
       captchaRegion: process.env.NUXT_PUBLIC_CAPTCHA_REGION || 'cn',
       authCookieDomain: process.env.NUXT_PUBLIC_AUTH_COOKIE_DOMAIN || '',
+      helpCenterUrl: process.env.NUXT_PUBLIC_HELP_CENTER_URL || 'https://help-test.spdex.com',
       // 用户侧 AI/MCP 正式环境默认隐藏；本地调试可显式设为 true。
       aiFeaturesVisible: process.env.NUXT_PUBLIC_AI_FEATURES_VISIBLE === 'true',
       // AI watch condition 站内收件箱：auto=跟随后端 AI 权限；false=显式关闭；true=显式开启但仍需后端 AI 权限。

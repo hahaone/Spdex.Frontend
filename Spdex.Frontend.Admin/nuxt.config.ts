@@ -26,6 +26,7 @@ export default defineNuxtConfig({
       requireAuth,
       buildSha: process.env.BUILD_SHA || 'dev',
       buildTime: process.env.BUILD_TIME || '',
+      helpCenterUrl: process.env.NUXT_PUBLIC_HELP_CENTER_URL || 'https://help-test.spdex.com',
     },
   },
 

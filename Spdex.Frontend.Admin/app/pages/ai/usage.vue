@@ -24,6 +24,7 @@
           />
           <NInput v-model:value="usageFilters.subjectId" clearable placeholder="主体 ID" style="width:180px" />
           <NButton type="primary" :loading="usageLoading" @click="loadUsage">查询</NButton>
+          <NButton :disabled="!usage?.items.length" @click="exportCsv">导出用量 CSV</NButton>
         </NSpace>
 
         <NAlert
@@ -298,6 +299,19 @@
           选择日期和主体后刷新预演；正式价格、账单与扣费开关尚未启用。
         </NAlert>
 
+        <NCard size="small" class="mb-4" title="P5 上线门禁">
+          <template #header-extra>
+            <NButton tag="a" :href="usageHelpUrl" target="_blank" rel="noopener noreferrer" size="small" tertiary>
+              用户帮助
+            </NButton>
+          </template>
+          <NDescriptions :column="1" size="small">
+            <NDescriptionsItem label="当前状态">测试计量与账单预演，不生成正式账单，不扣用户真实额度。</NDescriptionsItem>
+            <NDescriptionsItem label="预演口径">成功工具调用按 usage units 计入；工具发现、鉴权失败、权限失败、参数校验错误和系统失败排除。</NDescriptionsItem>
+            <NDescriptionsItem label="正式前置">套餐定价、额度扣减、冲正/退款、账单对账、帮助中心说明和上线门禁签字完成后，才允许打开 billable。</NDescriptionsItem>
+          </NDescriptions>
+        </NCard>
+
         <NSpace class="mb-3" align="center">
           <NDatePicker v-model:value="range" type="daterange" clearable />
           <NSelect
@@ -447,6 +461,9 @@ import { P } from '~/utils/permissions'
 const api = useAdminApi()
 const { can } = usePermission()
 const message = useMessage()
+const config = useRuntimeConfig()
+const helpCenterUrl = computed(() => String(config.public.helpCenterUrl || 'https://help-test.spdex.com').replace(/\/$/, ''))
+const usageHelpUrl = computed(() => `${helpCenterUrl.value}/ai/ai-mcp-usage-quota`)
 interface ToolQualityRow {
   toolName: string
   calls: number

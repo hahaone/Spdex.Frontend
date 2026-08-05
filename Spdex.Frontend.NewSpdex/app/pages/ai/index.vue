@@ -136,6 +136,10 @@ interface WorkflowRunOptions {
 
 const route = useRoute()
 const router = useRouter()
+const config = useRuntimeConfig()
+const helpCenterUrl = computed(() => String(config.public.helpCenterUrl || 'https://help-test.spdex.com').replace(/\/$/, ''))
+const aiHelpUrl = computed(() => `${helpCenterUrl.value}/ai/ai-watch-assistant`)
+const aiUsageHelpUrl = computed(() => `${helpCenterUrl.value}/ai/ai-mcp-usage-quota`)
 const presets: Array<{ value: Preset, label: string, icon: typeof Bot }> = [
   { value: 'today_hot', label: '今日重点赛事', icon: CalendarDays },
   { value: 'search', label: '搜索赛事', icon: Search },
@@ -2613,6 +2617,10 @@ onBeforeUnmount(() => {
         <p>像对话一样查询 SPdex 足球市场数据</p>
       </div>
       <div class="head-actions">
+        <a class="text-button help-link focus-ring" :href="aiHelpUrl" target="_blank" rel="noopener noreferrer">
+          <CircleHelp :size="15" />
+          <span>使用帮助</span>
+        </a>
         <button v-if="loading" type="button" class="text-button danger focus-ring" @click="cancelActiveRequest">
           <X :size="15" />
           <span>取消</span>
@@ -2622,6 +2630,12 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </header>
+
+    <div class="boundary-strip" role="note">
+      <ShieldAlert :size="16" />
+      <span>AI 回答用于 SPdex 数据观察，不构成投注建议；当前 AI/MCP 用量按测试计量和账单预演展示，不产生正式扣费。</span>
+      <a :href="aiUsageHelpUrl" target="_blank" rel="noopener noreferrer">查看用量与安全边界</a>
+    </div>
 
     <div class="workspace">
       <aside class="side-panel">
@@ -3641,8 +3655,33 @@ onBeforeUnmount(() => {
 }
 .head-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.boundary-strip {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 7px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: .88rem;
+  line-height: 1.55;
+}
+.boundary-strip span {
+  min-width: min(100%, 420px);
+  flex: 1;
+}
+.boundary-strip a,
+.help-link {
+  color: #6957f5;
+  font-weight: 760;
+  text-decoration: none;
 }
 .workspace {
   display: grid;

@@ -45,6 +45,7 @@ const spotlightArticles = computed(() => [
   'jc-studio-models',
   'ai-watch-assistant',
   'mcp-quickstart',
+  'ai-mcp-usage-quota',
 ].map(slug => findArticle(slug)).filter((article): article is HelpArticle => Boolean(article)))
 
 const shownArticles = computed(() => (
@@ -74,6 +75,7 @@ const quickQuestions = [
   { label: 'Poly 大热代表什么', to: '/docs/poly-index' },
   { label: '现场 xG 怎么使用', to: '/docs/live-data-xg' },
   { label: 'AI 助手可以问什么', to: '/ai/ai-watch-assistant' },
+  { label: 'AI / MCP 会如何计量', to: '/ai/ai-mcp-usage-quota' },
 ]
 
 function categoryName(categoryId: HelpCategoryId) {

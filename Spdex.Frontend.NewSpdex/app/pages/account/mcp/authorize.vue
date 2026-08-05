@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, KeyRound, ShieldCheck, X } from '@lucide/vue'
+import { Check, CircleHelp, KeyRound, ShieldAlert, ShieldCheck, X } from '@lucide/vue'
 
 interface OAuthAuthorization {
   id: string
@@ -16,6 +16,9 @@ interface OAuthDecision {
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
+const helpCenterUrl = computed(() => String(config.public.helpCenterUrl || 'https://help-test.spdex.com').replace(/\/$/, ''))
+const usageHelpUrl = computed(() => `${helpCenterUrl.value}/ai/ai-mcp-usage-quota`)
 const requestId = computed(() => typeof route.query.request_id === 'string' ? route.query.request_id : '')
 const authorization = ref<OAuthAuthorization | null>(null)
 const loading = ref(true)
@@ -81,6 +84,10 @@ onMounted(load)
       <template v-else-if="authorization">
         <h1>授权 {{ authorization.clientName }}</h1>
         <p class="lead">该客户端申请访问你的 SPdex AI 数据工具。</p>
+        <div class="boundary-note">
+          <ShieldAlert :size="16" />
+          <span>允许后，该客户端可以代表你调用已勾选的数据工具。第三方客户端可能记录问题、上下文和工具结果。</span>
+        </div>
         <div class="scope-list">
           <div v-for="scope in authorization.scopes" :key="scope" class="scope-row">
             <Check :size="15" />
@@ -95,6 +102,10 @@ onMounted(load)
             <ShieldCheck :size="16" /><span>{{ deciding ? '处理中' : '允许访问' }}</span>
           </button>
         </div>
+        <a class="help-link focus-ring" :href="usageHelpUrl" target="_blank" rel="noopener noreferrer">
+          <CircleHelp :size="15" />
+          <span>查看用量、额度和凭证安全说明</span>
+        </a>
       </template>
       <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
     </div>
@@ -107,6 +118,7 @@ onMounted(load)
 .app-mark { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 6px; background: var(--brand); color: #fff; }
 h1 { margin: 0; color: var(--ink); font-size: 1.08rem; letter-spacing: 0; }
 .lead { margin: -7px 0 0; color: var(--muted); font-size: .8rem; }
+.boundary-note { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 10px; border: 1px solid #fed7aa; border-radius: 5px; background: #fff7ed; color: #9a3412; font-size: .76rem; line-height: 1.55; }
 .scope-list { display: grid; border: 1px solid var(--divider); border-radius: 5px; overflow: hidden; }
 .scope-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px; align-items: center; min-height: 39px; padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--ink); font-size: .78rem; }
 .scope-row:last-child { border-bottom: 0; }
@@ -115,5 +127,6 @@ h1 { margin: 0; color: var(--ink); font-size: 1.08rem; letter-spacing: 0; }
 .actions button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 6px; border-radius: 5px; font-size: .8rem; font-weight: 780; }
 .deny { border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 .approve { border: 0; background: var(--brand); color: #fff; }
+.help-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; color: var(--brand); font-size: .78rem; font-weight: 760; text-decoration: none; }
 .error-message { padding: 9px 10px; border: 1px solid #f4b5af; border-radius: 5px; background: #fff2f0; color: #9f1c13; font-size: .77rem; }
 </style>

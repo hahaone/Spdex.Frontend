@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ChevronLeft, Clipboard, KeyRound, Link2, Plus, RefreshCw, ShieldCheck, Trash2, X } from '@lucide/vue'
+import { Check, ChevronLeft, CircleHelp, Clipboard, KeyRound, Link2, Plus, RefreshCw, ShieldAlert, ShieldCheck, Trash2, X } from '@lucide/vue'
 
 interface AiCredential {
   id: string
@@ -41,6 +41,10 @@ const scopeOptions = [
 
 const connections = ref<AiCredential[]>([])
 const grants = ref<OAuthGrant[]>([])
+const config = useRuntimeConfig()
+const helpCenterUrl = computed(() => String(config.public.helpCenterUrl || 'https://help-test.spdex.com').replace(/\/$/, ''))
+const mcpHelpUrl = computed(() => `${helpCenterUrl.value}/ai/mcp-quickstart`)
+const usageHelpUrl = computed(() => `${helpCenterUrl.value}/ai/ai-mcp-usage-quota`)
 const loading = ref(true)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -162,12 +166,26 @@ onMounted(load)
         <h1>AI 与 MCP 连接</h1>
         <p>管理外部 Agent 和 OAuth 客户端</p>
       </div>
-      <button class="icon-button focus-ring" type="button" aria-label="刷新" @click="load">
-        <RefreshCw :size="17" />
-      </button>
+      <div class="head-actions">
+        <a class="icon-button focus-ring" :href="mcpHelpUrl" target="_blank" rel="noopener noreferrer" aria-label="打开 MCP 接入帮助">
+          <CircleHelp :size="17" />
+        </a>
+        <button class="icon-button focus-ring" type="button" aria-label="刷新" @click="load">
+          <RefreshCw :size="17" />
+        </button>
+      </div>
     </header>
 
     <div v-if="errorMessage" class="error-band">{{ errorMessage }}</div>
+
+    <section class="notice-band" aria-label="MCP 使用边界">
+      <ShieldAlert :size="16" />
+      <div>
+        <b>MCP token 只用于授权 SPdex 数据工具。</b>
+        <span>不要把 token、Authorization header 或本地配置文件发给聊天模型；外部 Agent 的模型费用由对应平台或你的模型 Key 承担。</span>
+      </div>
+      <a :href="usageHelpUrl" target="_blank" rel="noopener noreferrer">查看用量与安全边界</a>
+    </section>
 
     <section class="content-band">
       <div class="band-head">
@@ -204,6 +222,7 @@ onMounted(load)
           <ShieldCheck :size="16" />
           <span>{{ saving ? '创建中' : '创建连接' }}</span>
         </button>
+        <p class="form-note">创建后完整 token 只显示一次；建议按客户端单独创建、定期轮换，并在设备丢失或人员变更后立即撤销。</p>
       </form>
 
       <div v-if="loading" class="empty-state">正在读取连接</div>
@@ -278,6 +297,10 @@ onMounted(load)
             <X :size="17" />
           </button>
         </div>
+        <div class="token-warning">
+          <ShieldAlert :size="16" />
+          <span>复制后只放入受信任客户端的 Header 或 OAuth 配置，不要粘贴到公开对话、截图、工单或文档中。</span>
+        </div>
         <code class="issued-token">{{ issuedToken }}</code>
         <button class="submit-button focus-ring" type="button" @click="copyToken">
           <Check v-if="copied" :size="16" />
@@ -291,12 +314,17 @@ onMounted(load)
 
 <style scoped>
 .mcp-page { display: grid; gap: 10px; padding: 12px 12px 18px; }
-.page-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; gap: 9px; align-items: center; }
+.page-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 9px; align-items: center; }
 .page-head h1, .token-head h2 { margin: 0; color: var(--ink); font-size: 1rem; letter-spacing: 0; }
 .page-head p, .token-head p { margin: 2px 0 0; color: var(--muted); font-size: .72rem; }
+.head-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .icon-button { display: inline-grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); }
 .icon-button.danger { color: #b42318; }
 .error-band { padding: 9px 11px; border: 1px solid #f4b5af; border-radius: 5px; background: #fff2f0; color: #9f1c13; font-size: .8rem; }
+.notice-band, .token-warning { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 10px 11px; border: 1px solid #fed7aa; border-radius: 6px; background: #fff7ed; color: #9a3412; font-size: .76rem; line-height: 1.55; }
+.notice-band b { display: block; margin-bottom: 2px; color: #7c2d12; }
+.notice-band a { grid-column: 2; color: var(--brand); font-weight: 760; text-decoration: none; }
+.form-note { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
 .content-band { display: grid; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
 .band-head { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--divider); }
 .band-head > span { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-size: .84rem; }
@@ -330,6 +358,7 @@ legend { margin-bottom: 6px; color: var(--muted); font-size: .74rem; font-weight
 .token-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(15, 22, 35, .58); }
 .token-dialog { display: grid; gap: 14px; width: min(100%, 560px); padding: 16px; border-radius: 7px; background: var(--panel); box-shadow: 0 18px 50px rgba(0, 0, 0, .25); }
 .token-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.token-warning { background: #fff7ed; }
 .issued-token { display: block; max-height: 150px; overflow: auto; padding: 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--ink); }
 @media (min-width: 760px) {
   .mcp-page { width: min(920px, 100%); margin: 0 auto; padding: 18px 20px 28px; }

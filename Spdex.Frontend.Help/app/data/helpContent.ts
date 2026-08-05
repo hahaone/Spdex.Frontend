@@ -434,6 +434,18 @@ export const helpArticles: HelpArticle[] = [
         ],
       },
       {
+        heading: '当前阶段',
+        body: [
+          'AI 观察助手和 SPdex MCP 当前处于测试与受控灰度准备阶段。后台可以查看调用用量、审计记录和账单预演，但正式价格、正式扣费和真实额度扣减尚未开启。',
+          '如果页面或后台显示 billable=false、billingMode=test_metering_only，表示这些记录只用于排查、容量评估和未来账单口径校准。',
+        ],
+        callout: {
+          title: '不要把预演当作正式账单',
+          body: '账单预演用于让管理员提前核对扣费规则。正式售卖前，SPdex 会另行确认套餐、额度、冲正和客服处理流程。',
+          tone: 'info',
+        },
+      },
+      {
         heading: '额度如何统计',
         body: [
           'SPdex 以 UTC 日期聚合工具调用用量，并按主体维度统计。主体可以是个人账号、企业组织、内部服务或接入客户端。',
