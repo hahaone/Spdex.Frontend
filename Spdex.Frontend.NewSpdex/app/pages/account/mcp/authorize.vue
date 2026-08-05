@@ -86,7 +86,11 @@ onMounted(load)
         <p class="lead">该客户端申请访问你的 SPdex AI 数据工具。</p>
         <div class="boundary-note">
           <ShieldAlert :size="16" />
-          <span>允许后，该客户端可以代表你调用已勾选的数据工具。第三方客户端可能记录问题、上下文和工具结果。</span>
+          <span>允许后，该客户端可以代表你调用已勾选的数据工具。第三方客户端可能记录问题、上下文和工具结果，并可能另行收取模型或平台费用。</span>
+        </div>
+        <div class="safety-note">
+          <ShieldCheck :size="15" />
+          <span>只授权你信任的客户端；授权后可在账号中心随时撤销。不要把 token、Authorization header 或本地 MCP 配置交给聊天模型阅读。</span>
         </div>
         <div class="scope-list">
           <div v-for="scope in authorization.scopes" :key="scope" class="scope-row">
@@ -119,6 +123,8 @@ onMounted(load)
 h1 { margin: 0; color: var(--ink); font-size: 1.08rem; letter-spacing: 0; }
 .lead { margin: -7px 0 0; color: var(--muted); font-size: .8rem; }
 .boundary-note { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 10px; border: 1px solid #fed7aa; border-radius: 5px; background: #fff7ed; color: #9a3412; font-size: .76rem; line-height: 1.55; }
+.safety-note { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--canvas); color: var(--muted); font-size: .74rem; line-height: 1.5; }
+.safety-note svg { color: var(--brand); }
 .scope-list { display: grid; border: 1px solid var(--divider); border-radius: 5px; overflow: hidden; }
 .scope-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px; align-items: center; min-height: 39px; padding: 8px 10px; border-bottom: 1px solid var(--divider); color: var(--ink); font-size: .78rem; }
 .scope-row:last-child { border-bottom: 0; }

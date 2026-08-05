@@ -17,6 +17,11 @@
       {{ expiringCount }} 个活跃凭据将在 14 天内到期。
     </NAlert>
 
+    <NAlert type="info" class="mb-4" title="凭据安全边界">
+      企业凭据只用于受信任的 MCP 客户端或企业 Agent。签发前确认合同主体、scope、IP 白名单和有效期；
+      不要把 token、Authorization header 或本地 MCP 配置写入工单、截图、帮助中心或聊天模型上下文。发现泄露时先撤销，再重新签发。
+    </NAlert>
+
     <NDataTable
       :columns="columns"
       :data="filteredCredentials"
@@ -78,17 +83,21 @@
               </NCheckboxGroup>
             </NFormItem>
           </NGi>
-          <NGi span="2">
-            <NFormItem label="IP 白名单">
-              <NInput
-                v-model:value="createForm.ipAllowList"
+        <NGi span="2">
+          <NFormItem label="IP 白名单">
+            <NInput
+              v-model:value="createForm.ipAllowList"
                 type="textarea"
                 :autosize="{ minRows: 2, maxRows: 5 }"
                 placeholder="每行一个 IP 或 CIDR；留空不限制"
-              />
-            </NFormItem>
-          </NGi>
-        </NGrid>
+            />
+          </NFormItem>
+        </NGi>
+      </NGrid>
+      <NAlert type="warning" title="签发前确认" class="mt-1">
+        正式售卖前仍处于测试计量与账单预演阶段。企业凭据会受合同、scope、额度和审计约束；
+        外部 Agent 平台可能另行保存对话并收取模型费用。
+      </NAlert>
       </NForm>
       <template #footer>
         <NSpace justify="end">
@@ -121,7 +130,7 @@
       @after-leave="clearIssuedToken"
     >
       <NAlert type="warning" class="mb-3">
-        此 token 关闭后无法再次查看。
+        此 token 关闭后无法再次查看。复制后只交给受信任客户端配置；如果已经出现在截图、聊天记录、日志或工单中，应立即撤销该凭据并重新签发。
       </NAlert>
       <NDescriptions v-if="issued?.credential" :column="1" label-placement="left" size="small" class="mb-3">
         <NDescriptionsItem label="凭据">{{ issued.credential.name }}</NDescriptionsItem>

@@ -8,6 +8,23 @@
 
 ## 2026-08-05
 
+### NewSpdex / Admin MCP 凭证安全提示一致性
+
+- NewSpdex `/account/mcp` 增加凭证安全处理说明：
+  - 建议按客户端单独创建 token，便于单独审计和撤销。
+  - 发现 token 出现在截图、日志、聊天记录或共享文档中时，先撤销再重建。
+  - 提醒外部 Agent 不应读取或输出本地 MCP 配置、请求头、cookie 或完整凭证。
+- NewSpdex OAuth 授权页补充第三方客户端边界：
+  - 第三方客户端可能保存问题、上下文和工具结果。
+  - 第三方平台可能另行收取模型或平台费用。
+  - 授权后可在账号中心撤销。
+- Admin2026 企业凭据页补充运营安全提示：
+  - 签发前确认合同主体、scope、IP 白名单和有效期。
+  - 一次性 token 关闭后不可再次查看；如已泄露应立即撤销并重新签发。
+  - 正式售卖前仍处于测试计量与账单预演阶段。
+- 已通过 NewSpdex/Admin 的 `npm run typecheck`、定向 ESLint 和 `npm run build`
+  验证；ESLint 使用 Node 24 运行。
+
 ### Admin2026 AI 计费对账与 P5 门禁增强
 
 - `/ai/usage` 的“计费对账”页接入 billing ledger 状态：

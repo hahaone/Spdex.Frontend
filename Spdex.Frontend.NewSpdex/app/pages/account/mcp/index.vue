@@ -187,6 +187,24 @@ onMounted(load)
       <a :href="usageHelpUrl" target="_blank" rel="noopener noreferrer">查看用量与安全边界</a>
     </section>
 
+    <section class="safety-steps" aria-label="MCP 凭证安全处理">
+      <div>
+        <ShieldCheck :size="16" />
+        <b>建议每个客户端单独创建 token</b>
+        <span>例如 WorkBuddy、Cherry、Claude 或企业 Agent 分开命名，便于审计和单独撤销。</span>
+      </div>
+      <div>
+        <RefreshCw :size="16" />
+        <b>发现泄露时先撤销再重建</b>
+        <span>如果 token 出现在截图、日志、聊天记录或共享文档中，应立即撤销对应连接，再创建新 token。</span>
+      </div>
+      <div>
+        <ShieldAlert :size="16" />
+        <b>不要让 Agent 读取本地配置</b>
+        <span>外部 Agent 的提示词应要求模型不得输出密钥、请求头、cookie 或完整原始凭证。</span>
+      </div>
+    </section>
+
     <section class="content-band">
       <div class="band-head">
         <span><KeyRound :size="16" /><b>我的 MCP 连接</b></span>
@@ -299,7 +317,7 @@ onMounted(load)
         </div>
         <div class="token-warning">
           <ShieldAlert :size="16" />
-          <span>复制后只放入受信任客户端的 Header 或 OAuth 配置，不要粘贴到公开对话、截图、工单或文档中。</span>
+          <span>复制后只放入受信任客户端的 Header 或 OAuth 配置，不要粘贴到公开对话、截图、工单或文档中。若已暴露，请立即关闭窗口并撤销该连接。</span>
         </div>
         <code class="issued-token">{{ issuedToken }}</code>
         <button class="submit-button focus-ring" type="button" @click="copyToken">
@@ -324,6 +342,11 @@ onMounted(load)
 .notice-band, .token-warning { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 10px 11px; border: 1px solid #fed7aa; border-radius: 6px; background: #fff7ed; color: #9a3412; font-size: .76rem; line-height: 1.55; }
 .notice-band b { display: block; margin-bottom: 2px; color: #7c2d12; }
 .notice-band a { grid-column: 2; color: var(--brand); font-weight: 760; text-decoration: none; }
+.safety-steps { display: grid; grid-template-columns: 1fr; gap: 7px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.safety-steps > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px 8px; align-items: start; min-width: 0; color: var(--muted); font-size: .72rem; line-height: 1.5; }
+.safety-steps svg { color: var(--brand); }
+.safety-steps b { color: var(--ink); font-size: .76rem; }
+.safety-steps span { grid-column: 2; }
 .form-note { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
 .content-band { display: grid; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
 .band-head { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--divider); }
@@ -362,6 +385,7 @@ legend { margin-bottom: 6px; color: var(--muted); font-size: .74rem; font-weight
 .issued-token { display: block; max-height: 150px; overflow: auto; padding: 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--ink); }
 @media (min-width: 760px) {
   .mcp-page { width: min(920px, 100%); margin: 0 auto; padding: 18px 20px 28px; }
+  .safety-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .scope-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 </style>
