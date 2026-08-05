@@ -384,6 +384,55 @@
           </NGi>
         </NGrid>
 
+        <NCard size="small" class="mb-4" title="Billing Ledger 回放预检">
+          <template #header-extra>
+            <NSpace size="small">
+              <NButton size="small" :loading="billingReplayLoading" @click="runBillingReplay(true)">
+                预检回放
+              </NButton>
+              <NPopconfirm
+                positive-text="执行非计费回放"
+                negative-text="取消"
+                :disabled="!billingReplayCanExecute"
+                @positive-click="runBillingReplay(false)"
+              >
+                <template #trigger>
+                  <NButton
+                    size="small"
+                    type="warning"
+                    ghost
+                    :disabled="!billingReplayCanExecute"
+                    :loading="billingReplayLoading"
+                  >
+                    执行回放
+                  </NButton>
+                </template>
+                仅将当前筛选范围内的历史成功调用幂等写入非计费 shadow ledger，不生成正式账单。
+              </NPopconfirm>
+            </NSpace>
+          </template>
+          <NAlert class="mb-3" :type="billingReplayNotice.type" :title="billingReplayNotice.title">
+            {{ billingReplayNotice.description }}
+          </NAlert>
+          <NGrid :cols="5" :x-gap="8" item-responsive>
+            <NGi span="5 700:1">
+              <NStatistic label="候选记录" :value="billingReplay?.candidateRecords ?? 0" />
+            </NGi>
+            <NGi span="5 700:1">
+              <NStatistic label="尝试写入" :value="billingReplay?.attemptedRecords ?? 0" />
+            </NGi>
+            <NGi span="5 700:1">
+              <NStatistic label="新增记录" :value="billingReplay?.insertedRecords ?? 0" />
+            </NGi>
+            <NGi span="5 700:1">
+              <NStatistic label="已存在/跳过" :value="billingReplay?.existingOrSkippedRecords ?? 0" />
+            </NGi>
+            <NGi span="5 700:1">
+              <NStatistic label="账本记录数" :value="billingReplay ? `${billingReplay.recordCountBefore} → ${billingReplay.recordCountAfter}` : '—'" />
+            </NGi>
+          </NGrid>
+        </NCard>
+
         <NGrid :cols="5" :x-gap="12" item-responsive class="mb-4">
           <NGi span="5 700:1"><NCard size="small"><NStatistic label="主体数" :value="billingPreview?.totals.subjectCount ?? 0" /></NCard></NGi>
           <NGi span="5 700:1"><NCard size="small"><NStatistic label="调用次数" :value="billingPreview?.totals.calls ?? 0" /></NCard></NGi>
@@ -597,6 +646,7 @@ import type {
   AiBillingPreviewRow,
   AiBillingReconciliationItem,
   AiBillingReconciliationResult,
+  AiBillingReplayResult,
   AiGoldenSampleCandidateResult,
   AiGoldenSampleCandidateRow,
   AiInAppNotificationResult,
@@ -674,6 +724,7 @@ const range = ref<[number, number] | null>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
 const billingPreview = ref<AiBillingPreviewResult | null>(null)
 const billingReconciliation = ref<AiBillingReconciliationResult | null>(null)
+const billingReplay = ref<AiBillingReplayResult | null>(null)
 const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
 const notifications = ref<AiInAppNotificationResult | null>(null)
@@ -682,6 +733,7 @@ const goldenCandidates = ref<AiGoldenSampleCandidateResult | null>(null)
 const usageLoading = ref(false)
 const billingLoading = ref(false)
 const billingReconciliationLoading = ref(false)
+const billingReplayLoading = ref(false)
 const auditLoading = ref(false)
 const traceLoading = ref(false)
 const notificationsLoading = ref(false)
@@ -997,6 +1049,61 @@ const billingReconciliationSnapshot = computed(() => {
   const reconciliation = billingReconciliation.value
   if (!reconciliation) return '未加载'
   return `${reconciliation.matches ? '一致' : '有差异'} · 调用差 ${reconciliation.totals.callDelta} · 用量差 ${reconciliation.totals.usageUnitDelta}`
+})
+const billingReplayCanExecute = computed(() => {
+  const ledger = billingLedger.value
+  const replay = billingReplay.value
+  return Boolean(
+    ledger?.enabled &&
+    ledger.healthy &&
+    !ledger.billable &&
+    replay?.dryRun &&
+    replay.candidateRecords > 0,
+  )
+})
+const billingReplayNotice = computed(() => {
+  const ledger = billingLedger.value
+  const replay = billingReplay.value
+  if (!replay) {
+    return {
+      type: 'info' as const,
+      title: '先做 dry-run 预检',
+      description: '回放用于把历史 successful usage 幂等写入非计费 shadow ledger，帮助排查账本启用前造成的对账差异。',
+    }
+  }
+  if (replay.status.startsWith('blocked')) {
+    return {
+      type: 'error' as const,
+      title: '回放被阻断',
+      description: replay.message,
+    }
+  }
+  if (!ledger?.enabled) {
+    return {
+      type: 'warning' as const,
+      title: '账本未启用',
+      description: '当前只能预检候选记录，不能写入 billing ledger。正式售卖前应启用集中账本或双写对账。',
+    }
+  }
+  if (ledger.billable) {
+    return {
+      type: 'error' as const,
+      title: '正式扣费开关异常',
+      description: 'billable=true 时前端和后端都会阻断普通回放，避免历史记录被误写成正式计费事件。',
+    }
+  }
+  if (replay.dryRun) {
+    return {
+      type: replay.candidateRecords > 0 ? 'warning' as const : 'success' as const,
+      title: replay.candidateRecords > 0 ? '发现可回放成功调用' : '当前筛选范围无候选记录',
+      description: replay.message,
+    }
+  }
+  return {
+    type: replay.healthy ? 'success' as const : 'warning' as const,
+    title: replay.healthy ? '非计费回放完成' : '回放完成但账本需复核',
+    description: replay.message,
+  }
 })
 
 const qualityRows = computed<ToolQualityRow[]>(() => {
@@ -1876,6 +1983,33 @@ async function loadBillingEvidence() {
     loadBillingPreview(),
     loadBillingReconciliation(),
   ])
+}
+
+async function runBillingReplay(dryRun: boolean) {
+  billingReplayLoading.value = true
+  const result = await api.post<AiBillingReplayResult>('ai/billing/replay', {
+    from: range.value ? toYmd(range.value[0]) : undefined,
+    to: range.value ? toYmd(range.value[1]) : undefined,
+    tool: usageFilters.tool || undefined,
+    subjectType: usageFilters.subjectType || undefined,
+    subjectId: usageFilters.subjectId.trim() || undefined,
+    limit: 5000,
+    dryRun,
+  })
+  billingReplayLoading.value = false
+  if (result.code !== 0 || !result.data) {
+    message.error(result.message || 'Billing Ledger 回放失败')
+    return
+  }
+
+  billingReplay.value = result.data
+  if (dryRun) {
+    message.success(`回放预检完成，候选 ${result.data.candidateRecords} 条`)
+    return
+  }
+
+  message.success(`非计费回放完成，新增 ${result.data.insertedRecords} 条`)
+  await loadBillingEvidence()
 }
 
 async function loadAudit() {

@@ -8,6 +8,16 @@
 
 ## 2026-08-05
 
+### Admin2026 Billing Ledger 回放预检
+
+- `/ai/usage` 的“计费对账”页新增 Billing Ledger 回放预检卡片：
+  - 默认执行 dry-run，只统计当前筛选范围内可回放的历史成功调用。
+  - 执行按钮仅在 billing ledger 已启用、健康、且 `billable=false` 时可用。
+  - 回放结果展示候选记录、尝试写入、新增记录、已存在/跳过记录和账本记录数变化。
+- 页面文案明确该能力只用于非计费 shadow ledger 的历史数据补齐与 reconciliation 排查，
+  不生成正式账单，也不扣用户真实额度。
+- 已通过 Admin `npm run typecheck`、定向 ESLint 和 `npm run build` 验证。
+
 ### NewSpdex / Admin MCP 凭证安全提示一致性
 
 - NewSpdex `/account/mcp` 增加凭证安全处理说明：

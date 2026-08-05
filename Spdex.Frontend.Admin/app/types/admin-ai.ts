@@ -247,6 +247,24 @@ export interface AiBillingReconciliationResult {
   items: AiBillingReconciliationItem[]
 }
 
+export interface AiBillingReplayResult {
+  generatedAtUtc: string
+  dryRun: boolean
+  enabled: boolean
+  billable: boolean
+  billingMode: string
+  policyVersion: string
+  healthy: boolean
+  status: string
+  message: string
+  candidateRecords: number
+  attemptedRecords: number
+  recordCountBefore: number
+  recordCountAfter: number
+  insertedRecords: number
+  existingOrSkippedRecords: number
+}
+
 export interface AiAuditRow {
   traceId: string
   toolName: string
