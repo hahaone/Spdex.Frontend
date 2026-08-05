@@ -13,6 +13,7 @@ export function useAiNotificationInbox() {
   const loading = useState<boolean>('newspdex_ai_notification_unread_loading', () => false)
   const lastLoadedAt = useState<number>('newspdex_ai_notification_unread_loaded_at', () => 0)
   const error = useState<string>('newspdex_ai_notification_unread_error', () => '')
+  const watcherRegistered = useState<boolean>('newspdex_ai_notification_unread_watcher_registered', () => false)
 
   const hasUnread = computed(() => visible.value && unreadCount.value > 0)
 
@@ -58,6 +59,19 @@ export function useAiNotificationInbox() {
   function decrementUnreadCount(delta = 1) {
     unreadCount.value = Math.max(0, unreadCount.value - Math.max(0, delta))
     lastLoadedAt.value = Date.now()
+  }
+
+  if (import.meta.client && !watcherRegistered.value) {
+    watcherRegistered.value = true
+    watch([visible, isLoggedIn], ([nextVisible, nextLoggedIn]) => {
+      if (nextVisible && nextLoggedIn) {
+        void refreshUnreadCount({ force: true })
+        return
+      }
+
+      unreadCount.value = 0
+      error.value = ''
+    })
   }
 
   return {
