@@ -326,8 +326,63 @@
             style="width:150px"
           />
           <NInput v-model:value="usageFilters.subjectId" clearable placeholder="主体 ID" style="width:180px" />
-          <NButton type="primary" :loading="billingLoading" @click="loadBillingPreview">刷新预演</NButton>
+          <NButton type="primary" :loading="billingEvidenceLoading" @click="loadBillingEvidence">刷新计费证据</NButton>
         </NSpace>
+
+        <NGrid :cols="2" :x-gap="12" :y-gap="12" item-responsive class="mb-4">
+          <NGi span="2 1100:1">
+            <NCard size="small" title="Billing Ledger">
+              <template #header-extra>
+                <NTag size="small" :type="billingLedgerStatusTag">{{ billingLedgerStatusText }}</NTag>
+              </template>
+              <NAlert class="mb-3" :type="billingLedgerNotice.type" :title="billingLedgerNotice.title">
+                {{ billingLedgerNotice.description }}
+              </NAlert>
+              <NDescriptions :column="2" size="small">
+                <NDescriptionsItem label="Provider">{{ billingLedger?.provider ?? '—' }}</NDescriptionsItem>
+                <NDescriptionsItem label="Billing mode">{{ billingLedger?.billingMode ?? '—' }}</NDescriptionsItem>
+                <NDescriptionsItem label="Policy">{{ billingLedger?.policyVersion ?? '—' }}</NDescriptionsItem>
+                <NDescriptionsItem label="记录数">{{ billingLedger?.recordCount ?? 0 }}</NDescriptionsItem>
+                <NDescriptionsItem label="最新写入">{{ fmt(billingLedger?.latestRecordAtUtc) }}</NDescriptionsItem>
+                <NDescriptionsItem label="失败次数">{{ billingLedger?.failureCount ?? 0 }}</NDescriptionsItem>
+              </NDescriptions>
+            </NCard>
+          </NGi>
+          <NGi span="2 1100:1">
+            <NCard size="small" title="Usage 与 Billing Ledger 对账">
+              <template #header-extra>
+                <NSpace size="small">
+                  <NTag
+                    size="small"
+                    :type="billingReconciliation?.matches ? 'success' : billingReconciliation?.enabled ? 'warning' : 'info'"
+                  >
+                    {{ billingReconciliation ? (billingReconciliation.matches ? '一致' : '有差异') : '未加载' }}
+                  </NTag>
+                  <NButton size="small" :loading="billingReconciliationLoading" @click="loadBillingReconciliation">
+                    刷新对账
+                  </NButton>
+                </NSpace>
+              </template>
+              <NAlert class="mb-3" :type="billingReconciliationNotice.type" :title="billingReconciliationNotice.title">
+                {{ billingReconciliationNotice.description }}
+              </NAlert>
+              <NGrid :cols="4" :x-gap="8" item-responsive>
+                <NGi span="4 700:1">
+                  <NStatistic label="Usage 成功调用" :value="billingReconciliation?.totals.usageSuccessfulCalls ?? 0" />
+                </NGi>
+                <NGi span="4 700:1">
+                  <NStatistic label="Ledger 记录" :value="billingReconciliation?.totals.billingRows ?? 0" />
+                </NGi>
+                <NGi span="4 700:1">
+                  <NStatistic label="调用差异" :value="billingReconciliation?.totals.callDelta ?? 0" />
+                </NGi>
+                <NGi span="4 700:1">
+                  <NStatistic label="用量差异" :value="billingReconciliation?.totals.usageUnitDelta ?? 0" />
+                </NGi>
+              </NGrid>
+            </NCard>
+          </NGi>
+        </NGrid>
 
         <NGrid :cols="5" :x-gap="12" item-responsive class="mb-4">
           <NGi span="5 700:1"><NCard size="small"><NStatistic label="主体数" :value="billingPreview?.totals.subjectCount ?? 0" /></NCard></NGi>
@@ -347,9 +402,22 @@
         </NCard>
 
         <NSpace class="mb-3">
-          <NButton :loading="billingLoading" @click="loadBillingPreview">刷新预演</NButton>
+          <NButton :loading="billingEvidenceLoading" @click="loadBillingEvidence">刷新计费证据</NButton>
           <NButton type="primary" :disabled="!billingPreview?.items.length" @click="exportBillingCsv">导出预演 CSV</NButton>
+          <NButton :disabled="!billingReconciliation?.items.length" @click="exportBillingReconciliationCsv">
+            导出对账差异 CSV
+          </NButton>
         </NSpace>
+        <NDataTable
+          v-if="billingReconciliation?.items.length"
+          class="mb-4"
+          :columns="billingReconciliationColumns"
+          :data="billingReconciliation.items"
+          :loading="billingReconciliationLoading"
+          :pagination="{ pageSize: 10 }"
+          :row-key="(row: AiBillingReconciliationItem) => `${row.dateUtc}:${row.subjectType}:${row.subjectId}:${row.toolName}`"
+          :scroll-x="1160"
+        />
         <NDataTable
           :columns="billingColumns"
           :data="billingPreview?.items ?? []"
@@ -406,6 +474,8 @@
               成功工具调用计入预演；鉴权、权限、参数校验、失败调用和工具发现不进入预演扣费。
             </NDescriptionsItem>
             <NDescriptionsItem label="通知边界">当前只允许站内通知；email/webhook 保持关闭。</NDescriptionsItem>
+            <NDescriptionsItem label="Billing Ledger">{{ billingLedgerSnapshot }}</NDescriptionsItem>
+            <NDescriptionsItem label="Usage 对账">{{ billingReconciliationSnapshot }}</NDescriptionsItem>
             <NDescriptionsItem label="回答验收">
               已加载 {{ feedbackSampleStats.loaded }} 条，已流转 {{ feedbackSampleStats.reviewed }} 条，目标 30 条。
             </NDescriptionsItem>
@@ -525,6 +595,8 @@ import type {
   AiAuditRow,
   AiBillingPreviewResult,
   AiBillingPreviewRow,
+  AiBillingReconciliationItem,
+  AiBillingReconciliationResult,
   AiGoldenSampleCandidateResult,
   AiGoldenSampleCandidateRow,
   AiInAppNotificationResult,
@@ -601,6 +673,7 @@ const activeTab = ref(initialTab())
 const range = ref<[number, number] | null>(defaultRange())
 const usage = ref<AiUsageResult | null>(null)
 const billingPreview = ref<AiBillingPreviewResult | null>(null)
+const billingReconciliation = ref<AiBillingReconciliationResult | null>(null)
 const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
 const notifications = ref<AiInAppNotificationResult | null>(null)
@@ -608,6 +681,7 @@ const feedback = ref<AiAnswerFeedbackResult | null>(null)
 const goldenCandidates = ref<AiGoldenSampleCandidateResult | null>(null)
 const usageLoading = ref(false)
 const billingLoading = ref(false)
+const billingReconciliationLoading = ref(false)
 const auditLoading = ref(false)
 const traceLoading = ref(false)
 const notificationsLoading = ref(false)
@@ -818,6 +892,113 @@ const usageTotals = computed(() => (usage.value?.items ?? []).reduce(
   { calls: 0, success: 0, failed: 0, units: 0, successfulUnits: 0, failedUnits: 0 },
 ))
 
+const billingEvidenceLoading = computed(() => billingLoading.value || billingReconciliationLoading.value)
+const billingLedger = computed(() => billingPreview.value?.billingLedger ?? null)
+const billingLedgerStatusText = computed(() => {
+  const ledger = billingLedger.value
+  if (!ledger) return '未加载'
+  if (ledger.billable) return '正式扣费已开启'
+  if (!ledger.enabled) return '未启用'
+  if (!ledger.healthy) return '异常'
+  return '健康'
+})
+const billingLedgerStatusTag = computed(() => {
+  const ledger = billingLedger.value
+  if (!ledger) return 'default'
+  if (ledger.billable || !ledger.healthy) return 'error'
+  if (!ledger.enabled) return 'warning'
+  return 'success'
+})
+const billingLedgerNotice = computed(() => {
+  const ledger = billingLedger.value
+  if (!ledger) {
+    return {
+      type: 'info' as const,
+      title: 'Billing Ledger 尚未加载',
+      description: '刷新计费证据后，可查看影子账本开关、健康状态和记录规模。',
+    }
+  }
+  if (ledger.billable) {
+    return {
+      type: 'error' as const,
+      title: '正式扣费开关已开启',
+      description: '当前阶段不应打开 billable。请立即停止发布流程，确认没有生成正式账单或扣除真实额度。',
+    }
+  }
+  if (!ledger.enabled) {
+    return {
+      type: 'warning' as const,
+      title: '影子账本未启用',
+      description: '当前只做非计费预演和接口门禁验证；正式售卖前必须启用集中账本或等价的双写对账链路。',
+    }
+  }
+  if (!ledger.healthy) {
+    return {
+      type: 'error' as const,
+      title: 'Billing Ledger 写入或读取异常',
+      description: '账本不健康时不得进入正式扣费；需要先排查写入失败、存储权限、备份恢复和对账结果。',
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: 'Billing Ledger 可用',
+    description: '影子账本已启用且健康，可用于与 usage ledger 进行非计费对账。',
+  }
+})
+const billingReconciliationNotice = computed(() => {
+  const reconciliation = billingReconciliation.value
+  if (!reconciliation) {
+    return {
+      type: 'info' as const,
+      title: 'Usage 对账尚未加载',
+      description: '刷新对账后，可查看成功工具调用与 billing ledger 写入是否一致。',
+    }
+  }
+  if (reconciliation.billable && !reconciliation.matches) {
+    return {
+      type: 'error' as const,
+      title: '正式计费对账不一致',
+      description: 'billable=true 时任何 usage 与 billing ledger 差异都属于阻断项。',
+    }
+  }
+  if (!reconciliation.healthy) {
+    return {
+      type: 'error' as const,
+      title: '对账链路异常',
+      description: '无法可靠读取 billing ledger，需先修复后再继续灰度评审。',
+    }
+  }
+  if (!reconciliation.enabled) {
+    return {
+      type: 'warning' as const,
+      title: '账本未启用，对账只验证接口可达',
+      description: '当前差异来自 billing ledger 未写入，是非计费测试阶段的预期状态；正式售卖前必须消除该差异。',
+    }
+  }
+  if (!reconciliation.matches) {
+    return {
+      type: 'warning' as const,
+      title: '影子账本存在对账差异',
+      description: '非计费阶段可继续排查；正式扣费前需要把调用数和 usage units 差异归零。',
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: 'Usage 与 Billing Ledger 一致',
+    description: '当前筛选范围内成功调用数和可扣 usage units 均已对齐。',
+  }
+})
+const billingLedgerSnapshot = computed(() => {
+  const ledger = billingLedger.value
+  if (!ledger) return '未加载'
+  return `${billingLedgerStatusText.value} · ${ledger.provider} · ${ledger.billingMode} · ${ledger.recordCount} 条`
+})
+const billingReconciliationSnapshot = computed(() => {
+  const reconciliation = billingReconciliation.value
+  if (!reconciliation) return '未加载'
+  return `${reconciliation.matches ? '一致' : '有差异'} · 调用差 ${reconciliation.totals.callDelta} · 用量差 ${reconciliation.totals.usageUnitDelta}`
+})
+
 const qualityRows = computed<ToolQualityRow[]>(() => {
   const grouped = new Map<string, AiAuditRow[]>()
   for (const row of audit.value?.items ?? []) {
@@ -947,6 +1128,8 @@ const feedbackSampleStats = computed(() => {
 })
 const productionGateRows = computed<ProductionGateRow[]>(() => {
   const billing = billingPreview.value
+  const ledger = billing?.billingLedger ?? null
+  const reconciliation = billingReconciliation.value
   const notificationRows = notifications.value?.items ?? []
   const billingStatus = !billing
     ? 'pending'
@@ -964,6 +1147,26 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
   const notificationPayloadSafe = notificationRows.every(row => row.payloadRef?.rawPayloadOmitted !== false)
   const feedbackLoaded = feedback.value !== null
   const feedbackStats = feedbackSampleStats.value
+  const ledgerStatus = !ledger
+    ? 'pending'
+    : ledger.billable
+      ? 'blocked'
+      : !ledger.healthy
+        ? 'blocked'
+        : ledger.enabled
+          ? 'passed'
+          : 'warning'
+  const reconciliationStatus = !reconciliation
+    ? 'pending'
+    : !reconciliation.healthy
+      ? 'blocked'
+      : reconciliation.billable && !reconciliation.matches
+        ? 'blocked'
+        : !reconciliation.enabled
+          ? 'warning'
+          : reconciliation.matches
+            ? 'passed'
+            : 'warning'
 
   return [
     productionGateRow(
@@ -1011,6 +1214,36 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
       '计费对账页可按日期、工具、主体筛选并导出预演 CSV。',
       '运营 / 财务',
       '每次灰度评审导出一份样本，与审计 trace 抽查对齐。',
+    ),
+    productionGateRow(
+      '计费',
+      'Billing ledger 写入开关和健康状态',
+      ledgerStatus,
+      ledger
+        ? `${ledger.enabled ? 'enabled' : 'disabled'}，provider=${ledger.provider}，billable=${ledger.billable}，healthy=${ledger.healthy}，records=${ledger.recordCount}。`
+        : '尚未加载 billing ledger 状态。',
+      '后端 / 财务',
+      ledger?.billable
+        ? '立即关闭 billable 并核查是否产生真实账单。'
+        : ledger?.healthy === false
+          ? '修复账本读写异常后再继续灰度评审。'
+          : ledger?.enabled
+            ? '继续复核 usage 对账结果和备份恢复状态。'
+            : '测试阶段可保持关闭；正式售卖前必须启用集中账本或等价双写对账链路。',
+    ),
+    productionGateRow(
+      '计费',
+      'Usage 与 billing ledger 可对账',
+      reconciliationStatus,
+      reconciliation
+        ? `matches=${reconciliation.matches}，usage calls=${reconciliation.totals.usageSuccessfulCalls}，ledger rows=${reconciliation.totals.billingRows}，usage units=${reconciliation.totals.usageChargeableUnits}，ledger units=${reconciliation.totals.billingUsageUnits}。`
+        : '尚未加载 usage 与 billing ledger 对账。',
+      '财务 / 后端',
+      reconciliation?.billable && !reconciliation.matches
+        ? '正式扣费状态下对账差异为阻断项，必须暂停发布并回放账本。'
+        : reconciliation?.enabled
+          ? '对差异明细逐项核查，正式扣费前把调用数和 usage units 差异归零。'
+          : '当前 ledger 未启用导致差异属预期；正式售卖前必须跑通无差异对账。',
     ),
     productionGateRow(
       '通知',
@@ -1086,7 +1319,7 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
       '运维',
       '正式计费账本存储策略',
       'warning',
-      'P5 决策：预发布和非计费测试继续使用单实例 SQLite ledger；正式多实例售卖前必须迁移集中账本或启用双写对账。',
+      '本地 shadow billing ledger、append-only 保护和 reconciliation API 已实现；正式多实例售卖前仍必须迁移集中账本或启用双写对账。',
       '后端 / 运维',
       '在 billable=true 之前完成集中存储/双写实施、回放校验、备份恢复和财务对账签字。',
     ),
@@ -1256,6 +1489,44 @@ const billingColumns = [
   { title: '权益', key: 'entitlementProfile', width: 120, render: (row: AiBillingPreviewRow) => row.entitlementProfile || '—' },
   { title: 'AI Client', key: 'aiClientId', width: 150, render: (row: AiBillingPreviewRow) => row.aiClientId || '—' },
   { title: '最后调用', key: 'lastSeenUtc', width: 170, render: (row: AiBillingPreviewRow) => fmt(row.lastSeenUtc) },
+]
+
+const billingReconciliationColumns = [
+  { title: 'UTC 日期', key: 'dateUtc', width: 120 },
+  {
+    title: '主体',
+    key: 'subjectId',
+    width: 210,
+    render: (row: AiBillingReconciliationItem) => h('div', [
+      h('div', row.subjectId),
+      h('div', { class: 'text-xs text-gray-400' }, row.subjectType),
+    ]),
+  },
+  { title: '工具', key: 'toolName', width: 250 },
+  { title: 'Usage 成功调用', key: 'usageSuccessfulCalls', width: 130 },
+  { title: 'Ledger 记录', key: 'billingRows', width: 110 },
+  {
+    title: '调用差异',
+    key: 'callDelta',
+    width: 100,
+    render: (row: AiBillingReconciliationItem) => h(
+      NTag,
+      { type: row.callDelta === 0 ? 'success' : 'warning', size: 'small' },
+      { default: () => String(row.callDelta) },
+    ),
+  },
+  { title: 'Usage 可扣单位', key: 'usageChargeableUnits', width: 130 },
+  { title: 'Ledger 用量', key: 'billingUsageUnits', width: 110 },
+  {
+    title: '用量差异',
+    key: 'usageUnitDelta',
+    width: 100,
+    render: (row: AiBillingReconciliationItem) => h(
+      NTag,
+      { type: row.usageUnitDelta === 0 ? 'success' : 'warning', size: 'small' },
+      { default: () => String(row.usageUnitDelta) },
+    ),
+  },
 ]
 
 const auditColumns = [
@@ -1585,6 +1856,28 @@ async function loadBillingPreview() {
   else message.error(result.message || '计费预演查询失败')
 }
 
+async function loadBillingReconciliation() {
+  billingReconciliationLoading.value = true
+  const result = await api.get<AiBillingReconciliationResult>('ai/billing/reconciliation', {
+    from: range.value ? toYmd(range.value[0]) : undefined,
+    to: range.value ? toYmd(range.value[1]) : undefined,
+    tool: usageFilters.tool || undefined,
+    subjectType: usageFilters.subjectType || undefined,
+    subjectId: usageFilters.subjectId.trim() || undefined,
+    limit: 500,
+  })
+  billingReconciliationLoading.value = false
+  if (result.code === 0) billingReconciliation.value = result.data
+  else message.error(result.message || '计费对账查询失败')
+}
+
+async function loadBillingEvidence() {
+  await Promise.allSettled([
+    loadBillingPreview(),
+    loadBillingReconciliation(),
+  ])
+}
+
 async function loadAudit() {
   auditLoading.value = true
   const result = await api.get<AiAuditResult>('ai/audit/recent', {
@@ -1833,11 +2126,39 @@ function exportBillingCsv() {
   URL.revokeObjectURL(url)
 }
 
+function exportBillingReconciliationCsv() {
+  if (!billingReconciliation.value?.items.length) return
+  const columns = [
+    'dateUtc',
+    'subjectType',
+    'subjectId',
+    'toolName',
+    'usageSuccessfulCalls',
+    'billingRows',
+    'usageChargeableUnits',
+    'billingUsageUnits',
+    'callDelta',
+    'usageUnitDelta',
+  ] as const
+  const rows = [
+    columns.join(','),
+    ...billingReconciliation.value.items.map(row => columns.map(key => csv(row[key])).join(',')),
+  ]
+  const blob = new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const [fromLabel, toLabel] = selectedRangeLabels()
+  link.href = url
+  link.download = `spdex-ai-billing-reconciliation-${fromLabel}-${toLabel}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 async function loadProductionGateEvidence() {
   productionGateLoading.value = true
   await Promise.allSettled([
     can(P.aiUsageView) ? loadUsage() : Promise.resolve(),
-    can(P.aiBillingReconcile) ? loadBillingPreview() : Promise.resolve(),
+    can(P.aiBillingReconcile) ? loadBillingEvidence() : Promise.resolve(),
     can(P.aiAuditView) ? loadQuality() : Promise.resolve(),
     can(P.aiAuditView) ? loadInAppNotifications() : Promise.resolve(),
     can(P.aiAuditView) ? loadFeedback() : Promise.resolve(),
@@ -1861,6 +2182,7 @@ function exportProductionGateMarkdown() {
     '',
     '- 当前仍是测试环境和 allowlist 灰度，不代表正式公开售卖。',
     '- 当前应保持 billable=false，不生成正式账单，不扣真实额度。',
+    '- Billing ledger 仍处于影子验证链路；正式售卖前必须完成无差异对账和财务签字。',
     '- 当前只开放站内通知，email/webhook 外部投递保持关闭。',
     '',
     '## 检查项',
@@ -2170,7 +2492,7 @@ function feedbackActionButton(row: AiAnswerFeedbackRow, status: string, label: s
 
 onMounted(() => {
   if (can(P.aiUsageView)) loadUsage()
-  if (can(P.aiBillingReconcile)) loadBillingPreview()
+  if (can(P.aiBillingReconcile)) loadBillingEvidence()
   if (can(P.aiAuditView)) {
     loadAudit()
     loadInAppNotifications()

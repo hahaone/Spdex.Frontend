@@ -6,6 +6,27 @@
 
 ---
 
+## 2026-08-05
+
+### Admin2026 AI 计费对账与 P5 门禁增强
+
+- `/ai/usage` 的“计费对账”页接入 billing ledger 状态：
+  - 展示影子账本启用状态、provider、billing mode、policy version、记录数、最新写入和失败次数。
+  - 对 `billable=true`、ledger 未启用、ledger 不健康分别给出管理台级风险提示。
+- 新增 Usage 与 Billing Ledger 对账区：
+  - 读取 WebApi 管理代理 `/api/admin/ai/billing/reconciliation`。
+  - 展示成功调用数、billing ledger 记录数、调用差异和 usage units 差异。
+  - 支持导出对账差异 CSV，便于财务和后端共同复核。
+- “生产门禁”页新增两个计费检查项：
+  - Billing ledger 写入开关和健康状态。
+  - Usage 与 billing ledger 可对账。
+- 仍保持测试期产品边界：
+  - `billable=false`。
+  - 不生成正式账单。
+  - ledger 未启用时标记为需关注，不误判为正式扣费事故。
+  - 正式售卖前仍要求集中账本或等价双写对账、无差异回放和财务签字。
+- 已通过 `npm run typecheck`、定向 ESLint 和 `npm run build` 验证。
+
 ## 2026-08-03
 
 ### NewSpdex AI 分析记录折叠与 P3 联调

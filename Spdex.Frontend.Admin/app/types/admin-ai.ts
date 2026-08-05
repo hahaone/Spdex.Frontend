@@ -28,6 +28,7 @@ export interface AiOpsStatus {
     recentRecordCount: number
   }
   usage: { retentionDays: number, aggregateCount: number }
+  billing: AiOpsBillingStatus
   subjectPolicyCoordination: {
     provider: string
     centralized: boolean
@@ -51,6 +52,19 @@ export interface AiOpsStatus {
     externalBackupIntegrityOk: boolean | null
   }
   warnings: string[]
+}
+
+export interface AiOpsBillingStatus {
+  billingLedgerEnabled: boolean
+  billingLedgerProvider: string
+  billable: boolean
+  billingMode: string
+  policyVersion: string
+  healthy: boolean
+  recordCount: number
+  latestRecordAtUtc: string | null
+  failureCount: number
+  lastError: string | null
 }
 
 export interface AiOrganization {
@@ -172,6 +186,18 @@ export interface AiBillingPreviewRow {
   lastSeenUtc: string
 }
 
+export interface AiBillingLedgerStatus {
+  enabled: boolean
+  provider: string
+  billable: boolean
+  billingMode: string
+  policyVersion: string
+  healthy: boolean
+  recordCount: number
+  latestRecordAtUtc: string | null
+  failureCount: number
+}
+
 export interface AiBillingPreviewResult {
   generatedAtUtc: string
   billingMode: string
@@ -181,7 +207,44 @@ export interface AiBillingPreviewResult {
   limit: number
   count: number
   totals: AiBillingPreviewTotals
+  billingLedger: AiBillingLedgerStatus
   items: AiBillingPreviewRow[]
+}
+
+export interface AiBillingReconciliationTotals {
+  usageSuccessfulCalls: number
+  billingRows: number
+  usageChargeableUnits: number
+  billingUsageUnits: number
+  callDelta: number
+  usageUnitDelta: number
+}
+
+export interface AiBillingReconciliationItem {
+  dateUtc: string
+  subjectType: string
+  subjectId: string
+  toolName: string
+  usageSuccessfulCalls: number
+  billingRows: number
+  usageChargeableUnits: number
+  billingUsageUnits: number
+  callDelta: number
+  usageUnitDelta: number
+}
+
+export interface AiBillingReconciliationResult {
+  generatedAtUtc: string
+  enabled: boolean
+  provider: string
+  billable: boolean
+  billingMode: string
+  policyVersion: string
+  healthy: boolean
+  matches: boolean
+  count: number
+  totals: AiBillingReconciliationTotals
+  items: AiBillingReconciliationItem[]
 }
 
 export interface AiAuditRow {
