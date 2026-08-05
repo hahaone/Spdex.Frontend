@@ -17,6 +17,18 @@
 - 页面文案明确该能力只用于非计费 shadow ledger 的历史数据补齐与 reconciliation 排查，
   不生成正式账单，也不扣用户真实额度。
 - 已通过 Admin `npm run typecheck`、定向 ESLint 和 `npm run build` 验证。
+- Frontend commit `3774a80dc7799333c210a62bfb8ee9c6aa9d4354` 已推送并触发
+  workflow `31024358489`。
+- GitHub Actions build 和 deploy 均成功；本次仅构建并发布 Admin2026，其他前端
+  子项目未变更。
+- 线上 smoke：
+  - `https://admin2026.spdex.com/ai/usage` 返回 200。
+  - 响应头
+    `x-spdex-web-release=3774a80dc7799333c210a62bfb8ee9c6aa9d4354`，
+    确认已命中本次 Admin2026 release。
+  - `https://new.spdex.com/ai` 未登录时按预期跳转登录，响应头同样命中该 release。
+- 管理台只通过 WebApi Admin 代理访问 replay endpoint；AI ops key 仍仅存在服务端，
+  不进入 Admin 浏览器 runtime。
 
 ### NewSpdex / Admin MCP 凭证安全提示一致性
 
