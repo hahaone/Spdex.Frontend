@@ -459,6 +459,8 @@ watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLe
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
   gap: 6px;
   padding: 6px 0 2px;
 }
