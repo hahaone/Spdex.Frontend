@@ -156,6 +156,7 @@ export function useChartSeries(
   type: MaybeRef<string> = ref('1X2'),
   extraQuery: MaybeRef<Record<string, string | number | null | undefined>> = ref({}),
   enabled?: MaybeRef<boolean>,
+  loadContext?: string,
 ) {
   const idRef = computed(() => unref(eventId))
   const typeRef = computed(() => unref(type))
@@ -180,6 +181,7 @@ export function useChartSeries(
       server: false,
       query,
       timeout: 45_000,
+      ...(loadContext ? { headers: { 'X-Spdex-Load-Context': loadContext } } : {}),
       ...(manualRefresh
         ? { immediate: false, watch: false }
         : { watch: [idRef, typeRef, extraQueryRef] }),

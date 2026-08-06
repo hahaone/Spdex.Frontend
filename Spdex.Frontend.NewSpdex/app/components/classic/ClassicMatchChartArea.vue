@@ -23,10 +23,12 @@ const props = withDefaults(defineProps<{
   sport?: 'football' | 'basketball'
   defaultTradeSelection?: TradeDirection
   showJc?: boolean
+  active?: boolean
 }>(), {
   sport: 'football',
   defaultTradeSelection: 'home',
   showJc: false,
+  active: true,
 })
 
 const eventIdRef = computed(() => props.eventId)
@@ -97,12 +99,13 @@ const trendOnly = computed<TradeDirection | null>(() =>
 // 成交系 + 只看单方向(主/客/平)→ 切「成交明细」:买/卖/买+/卖+/冲/换 attr 拆分 + 单价位线。
 // 后端 tradeflow 已用整盘口记录补完整时间网格，单方向不会再因为只看目标 selection 而稀疏。
 const isTradeFlowDetail = computed(() => trendOnly.value !== null)
-const needsSeriesChart = computed(() => view.value === 'chart' && !isTradeFlowDetail.value)
+const needsSeriesChart = computed(() => props.active && view.value === 'chart' && !isTradeFlowDetail.value)
 const { points, status, pending, refresh, metricLabel, unit, seriesLabels, loadedType, error: chartError } = useChartSeries(
   eventIdRef,
   chartType,
   chartExtraQuery,
   needsSeriesChart,
+  'classic-list-passive',
 )
 // 已加载数据是否对应当前请求类型;切指标时旧数据 type 不匹配 → 先显「加载中」,不渲染陈旧序列。
 const chartReady = computed(() => loadedType.value === chartType.value)
@@ -192,7 +195,7 @@ const chartTitle = computed(() => {
 })
 
 // ── 重大成交提示(默认视图)──
-const needsBigTrades = computed(() => view.value === 'tips')
+const needsBigTrades = computed(() => props.active && view.value === 'tips')
 const { data: btData, group: bigGroup, pending: btPending } = useBigTrades(eventIdRef, 6, needsBigTrades)
 const stdTips = computed(() => bigGroup('std-all'))
 const ouTips = computed(() => bigGroup('ou-all'))
@@ -374,6 +377,7 @@ const detailButtons = computed<DetailBtn[]>(() => {
             :height="chartHeight"
             :refresh-key="tradeFlowRefreshKey"
             :zoom-window="zoomWindow"
+            :active="active"
             @zoom="onZoom"
             @reset="resetZoom"
           />

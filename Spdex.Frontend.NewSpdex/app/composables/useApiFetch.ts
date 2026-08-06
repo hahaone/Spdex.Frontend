@@ -6,6 +6,8 @@
  * 4. 单点登录被踢出（"已在其他设备登录"）提示后再跳
  */
 
+import { useApiRateLimit } from './useApiRateLimit'
+
 export function useApiFetch<T>(
   path: string | Ref<string> | (() => string),
   opts: Record<string, unknown> = {},
@@ -14,6 +16,7 @@ export function useApiFetch<T>(
   const token = useNewSpdexTokenCookie()
   const sessionHint = useNewSpdexSessionHintCookie()
   const authVersion = useState<number>('newspdex_auth_version', () => 0)
+  const rateLimit = useApiRateLimit()
   const fetchOpts = withAuthVersionWatch(opts, authVersion)
   const headers = withFrontendSourceHeader(withServerCookieHeader(fetchOpts.headers))
 
@@ -25,7 +28,11 @@ export function useApiFetch<T>(
     baseURL: config.public.apiBase as string,
     credentials: 'include',
     ...(headers ? { headers } : {}),
-    onResponseError({ response }: { response: { status: number, _data?: { message?: string } } }) {
+    onRequest({ request }: { request: unknown }) {
+      rateLimit.assertRequestAllowed(request)
+    },
+    onResponseError({ request, response }: { request: unknown, response: { status: number, headers?: Headers, _data?: { message?: string } } }) {
+      rateLimit.noteResponseError(request, response)
       if (response.status === 401) {
         const msg = response._data?.message ?? ''
         token.value = null
@@ -78,6 +85,7 @@ export function $apiFetch<T>(path: string, opts: Record<string, unknown> = {}): 
   const config = useRuntimeConfig()
   const token = useNewSpdexTokenCookie()
   const sessionHint = useNewSpdexSessionHintCookie()
+  const rateLimit = useApiRateLimit()
   const headers = withFrontendSourceHeader(withServerCookieHeader(opts.headers))
 
   return $fetch<T>(path, {
@@ -85,7 +93,11 @@ export function $apiFetch<T>(path: string, opts: Record<string, unknown> = {}): 
     baseURL: config.public.apiBase as string,
     credentials: 'include',
     ...(headers ? { headers } : {}),
-    onResponseError({ response }: { response: { status: number, _data?: { message?: string } } }) {
+    onRequest({ request }: { request: unknown }) {
+      rateLimit.assertRequestAllowed(request)
+    },
+    onResponseError({ request, response }: { request: unknown, response: { status: number, headers?: Headers, _data?: { message?: string } } }) {
+      rateLimit.noteResponseError(request, response)
       if (response.status === 401) {
         token.value = null
         sessionHint.value = null

@@ -32,11 +32,15 @@ export function useTradeFlow(
   market: MaybeRef<string>,
   selection: MaybeRef<string>,
   granularity: MaybeRef<string> = ref('raw'),
+  enabled?: MaybeRef<boolean>,
+  loadContext?: string,
 ) {
   const idRef = computed(() => unref(eventId))
   const marketRef = computed(() => unref(market))
   const selectionRef = computed(() => unref(selection))
   const granRef = computed(() => unref(granularity))
+  const enabledRef = computed(() => enabled == null ? true : unref(enabled))
+  const manualRefresh = enabled != null
 
   const query = computed(() => ({
     market: marketRef.value,
@@ -50,12 +54,25 @@ export function useTradeFlow(
       key: () => `newspdex-tradeflow-${idRef.value}-${marketRef.value}-${selectionRef.value}-${granRef.value}`,
       server: false,
       query,
-      watch: [idRef, marketRef, selectionRef, granRef],
+      ...(loadContext ? { headers: { 'X-Spdex-Load-Context': loadContext } } : {}),
+      ...(manualRefresh
+        ? { immediate: false, watch: false }
+        : { watch: [idRef, marketRef, selectionRef, granRef] }),
     },
   )
 
+  if (manualRefresh) {
+    watch([idRef, marketRef, selectionRef, granRef, enabledRef], () => {
+      if (enabledRef.value && idRef.value > 0) result.refresh()
+    }, { immediate: true })
+  }
+
   // 60s 自动刷新
-  usePolling(() => result.refresh(), 60_000, { pending: result.pending, errorRef: result.error })
+  usePolling(() => { if (enabledRef.value) result.refresh() }, 60_000, {
+    enabled: enabledRef,
+    pending: result.pending,
+    errorRef: result.error,
+  })
 
   const data = computed<TradeFlowResult | null>(() => result.data.value?.data ?? null)
   const status = computed<'ok' | 'pending' | 'no-access'>(() => data.value?.status ?? 'pending')

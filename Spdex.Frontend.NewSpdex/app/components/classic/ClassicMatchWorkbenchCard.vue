@@ -27,27 +27,27 @@ type TradeDirection = 'home' | 'draw' | 'away'
 const { buildFlashQLink } = useFlashQLink()
 const { canOpenFlashQ, flashQLockMessage } = useFlashQAccess()
 
-// 视口门控:赛事块滚近视口才置 visible(置后停止观察,保留图表/补全状态)。
-// visible 驱动「整行补全(enrich)」与「内嵌走势图」的懒加载,避免整页 N 场并发拉详情。
+// 视口门控分成两层：loaded 负责首次懒挂载并保留图表状态；inViewport 只允许当前视口附近卡片轮询。
+// 这样滚过的赛事不会一直在后台刷新，避免长列表正常浏览被误判为短时间访问大量不同赛事。
 const rootEl = ref<HTMLElement | null>(null)
-const visible = ref(false)
+const loaded = ref(false)
+const inViewport = ref(false)
 const chartAreaRef = ref<{ showTips: () => void } | null>(null)
 const eventIdRef = computed(() => props.match.eventId)
-const active = computed(() => visible.value && !props.collapsed)
+const active = computed(() => inViewport.value && !props.collapsed)
 const { enrich } = useClassicMatchEnrich(eventIdRef, active)
 
 let io: IntersectionObserver | null = null
 onMounted(() => {
   if (!rootEl.value || typeof IntersectionObserver === 'undefined') {
-    visible.value = true
+    loaded.value = true
+    inViewport.value = true
     return
   }
   io = new IntersectionObserver((entries) => {
-    if (entries.some(e => e.isIntersecting)) {
-      visible.value = true
-      io?.disconnect()
-      io = null
-    }
+    const next = entries.some(e => e.isIntersecting)
+    inViewport.value = next
+    if (next) loaded.value = true
   }, { rootMargin: '300px 0px' })
   io.observe(rootEl.value)
 })
@@ -150,7 +150,7 @@ const bigBetText = computed(() => {
       </div>
 
       <ClassicMatchChartArea
-        v-if="visible"
+        v-if="loaded"
         ref="chartAreaRef"
         :event-id="match.eventId"
         :home-team="match.homeTeam"
@@ -159,10 +159,11 @@ const bigBetText = computed(() => {
         :sport="sport"
         :default-trade-selection="defaultTradeSelection"
         :show-jc="match.isJc || Boolean(match.jcOrder)"
+        :active="active"
       />
 
-      <!-- 内盘/外盘资金细分(足球 1X2);懒挂载,与图表同 visible 门控 -->
-      <InnerOuterPanel v-if="visible && sport !== 'basketball'" class="classic-inner-outer" :event-id="match.eventId" />
+      <!-- 内盘/外盘资金细分(足球 1X2);首次进入视口后懒挂载。面板自身默认收起,不会主动拉取。 -->
+      <InnerOuterPanel v-if="loaded && sport !== 'basketball'" class="classic-inner-outer" :event-id="match.eventId" />
     </template>
   </article>
 </template>

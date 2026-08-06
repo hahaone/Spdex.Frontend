@@ -18,11 +18,13 @@ const props = withDefaults(defineProps<{
   height?: number
   refreshKey?: number
   zoomWindow?: ZoomWindow | null
+  active?: boolean
 }>(), {
   timeRange: '6h',
   height: 240,
   refreshKey: 0,
   zoomWindow: null,
+  active: true,
 })
 const emit = defineEmits<{
   zoom: [range: ZoomWindow]
@@ -34,10 +36,12 @@ const { data, status, pending, refresh, error } = useTradeFlow(
   computed(() => props.market),
   computed(() => props.selection),
   computed(() => 'raw'),
+  computed(() => props.active),
+  'classic-list-passive',
 )
 const rateLimited = computed(() => isRateLimitedError(error.value))
 
-watch(() => props.refreshKey, () => { refresh() })
+watch(() => props.refreshKey, () => { if (props.active) refresh() })
 
 const RANGE_HOURS: Record<string, number> = { '3h': 3, '6h': 6, '12h': 12, '24h': 24 }
 const ATTR_ORDER = ['买', '卖', '冲', '买+', '卖+', '换']

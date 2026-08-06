@@ -170,6 +170,18 @@
       />
     </NCard>
 
+    <NCard size="small" title="冷却命中历史（保留 30 天）" class="mt-4">
+      <NDataTable
+        :columns="historyColumns"
+        :data="cooldownHistory"
+        :loading="loading"
+        :pagination="{ pageSize: 20 }"
+        :row-key="(r: CooldownHistoryEntry) => r.id"
+        :scroll-x="1900"
+        :single-line="false"
+      />
+    </NCard>
+
     <NModal v-model:show="showBlock" preset="card" title="新增运行时封禁" style="width:460px">
       <NForm label-placement="left" label-width="90">
         <NFormItem label="类型">
@@ -236,6 +248,26 @@ interface SecurityBlocksResult {
   staticBlocks: BlockEntry[]
   runtimeBlocks: BlockEntry[]
   recentActors: ActorSnapshot[]
+  cooldownHistory: CooldownHistoryEntry[]
+}
+
+interface CooldownHistoryEntry {
+  id: string
+  triggeredAt: string
+  cooldownUntil: string
+  actorKey: string
+  userId?: string | null
+  userName?: string | null
+  ip: string
+  path: string
+  loadContext?: string | null
+  requestCount: number
+  distinctEvents: number
+  distinctOrderPages: number
+  elapsedSeconds: number
+  requestsPerSecond: number
+  reason: string
+  userAgent?: string | null
 }
 
 interface RuntimeConfig {
@@ -272,6 +304,7 @@ const savingConfig = ref(false)
 const staticBlocks = ref<BlockEntry[]>([])
 const runtimeBlocks = ref<BlockEntry[]>([])
 const recentActors = ref<ActorSnapshot[]>([])
+const cooldownHistory = ref<CooldownHistoryEntry[]>([])
 const configSnapshot = ref<ConfigSnapshot | null>(null)
 
 const defaultConfig = (): RuntimeConfig => ({
@@ -290,7 +323,7 @@ const defaultConfig = (): RuntimeConfig => ({
   whitelistedIps: [],
   windowSeconds: 60,
   maxHeavyRequestsPerWindow: 80,
-  maxDistinctEventsPerWindow: 20,
+  maxDistinctEventsPerWindow: 60,
   maxDistinctOrderPagesPerWindow: 25,
   cooldownMinutes: 10,
   stateTtlMinutes: 30,
@@ -342,6 +375,7 @@ async function loadBlocks() {
   staticBlocks.value = res.data.staticBlocks ?? []
   runtimeBlocks.value = res.data.runtimeBlocks ?? []
   recentActors.value = res.data.recentActors ?? []
+  cooldownHistory.value = res.data.cooldownHistory ?? []
 }
 
 async function loadConfig() {
@@ -385,7 +419,7 @@ function normalizeConfigForm(): RuntimeConfig {
     whitelistedIps: normalizeStringTags(configForm.whitelistedIps),
     windowSeconds: Number(configForm.windowSeconds) || 60,
     maxHeavyRequestsPerWindow: Number(configForm.maxHeavyRequestsPerWindow) || 80,
-    maxDistinctEventsPerWindow: Number(configForm.maxDistinctEventsPerWindow) || 20,
+    maxDistinctEventsPerWindow: Number(configForm.maxDistinctEventsPerWindow) || 60,
     maxDistinctOrderPagesPerWindow: Number(configForm.maxDistinctOrderPagesPerWindow) || 25,
     cooldownMinutes: Number(configForm.cooldownMinutes) || 10,
     stateTtlMinutes: Number(configForm.stateTtlMinutes) || 30,
@@ -543,6 +577,11 @@ function actorUser(row: ActorSnapshot) {
   return row.userName || row.userId || '匿名'
 }
 
+function historyUser(row: CooldownHistoryEntry) {
+  if (row.userName && row.userId) return `${row.userName} #${row.userId}`
+  return row.userName || row.userId || row.actorKey || '匿名'
+}
+
 function cooldownReason(row: ActorSnapshot) {
   const reason = row.cooldownReason || ''
   if (!reason) return '—'
@@ -642,6 +681,30 @@ const actorColumns = [
       ].filter(Boolean),
     }),
   },
+]
+
+const historyColumns = [
+  { title: '触发时间', key: 'triggeredAt', width: 170, render: (r: CooldownHistoryEntry) => fmt(r.triggeredAt) },
+  { title: '用户', key: 'user', width: 230, render: (r: CooldownHistoryEntry) => historyUser(r) },
+  { title: 'IP', key: 'ip', width: 150 },
+  { title: '请求', key: 'requestCount', width: 80 },
+  { title: '赛事', key: 'distinctEvents', width: 80 },
+  { title: '明细页', key: 'distinctOrderPages', width: 80 },
+  {
+    title: '频率',
+    key: 'requestsPerSecond',
+    width: 120,
+    render: (r: CooldownHistoryEntry) => `${trimNumber(r.requestsPerSecond, r.requestsPerSecond >= 10 ? 1 : 2)} 次/秒`,
+  },
+  { title: '路径', key: 'path', width: 300, ellipsis: { tooltip: true } },
+  {
+    title: '来源',
+    key: 'loadContext',
+    width: 160,
+    render: (r: CooldownHistoryEntry) => r.loadContext === 'classic-list-passive' ? '经典列表被动加载' : r.loadContext || '普通请求',
+  },
+  { title: '原因', key: 'reason', width: 430, ellipsis: { tooltip: true } },
+  { title: 'UA', key: 'userAgent', width: 360, ellipsis: { tooltip: true }, render: (r: CooldownHistoryEntry) => r.userAgent || '—' },
 ]
 
 onMounted(load)
