@@ -64,11 +64,12 @@ const hasSelection = computed(() => props.selectedCount > 0)
 const isInitialCounting = computed(() => props.pending && props.count === 0)
 const countText = computed(() => isInitialCounting.value ? '加载中' : `${props.count} 场`)
 const lotteryKind = computed(() => props.lottery.split(':')[0])
-const leagueSortLabel = computed(() => {
+const lotterySortLabel = computed(() => {
   if (lotteryKind.value === 'jc') return '按竞彩排序'
   if (lotteryKind.value === 'lottery') return '按足彩排序'
-  return '按赛事排序'
+  return ''
 })
+const hasLotterySort = computed(() => lotterySortLabel.value.length > 0)
 
 function updateDay(value: string) {
   if (props.backcheckLocked) return
@@ -210,7 +211,8 @@ onBeforeUnmount(() => {
         <label class="classic-field sort">
           <span>排序</span>
           <select :value="sortMode" @change="emit('update:sortMode', ($event.target as HTMLSelectElement).value)">
-            <option value="league">{{ leagueSortLabel }}</option>
+            <option value="league">按赛事排序</option>
+            <option v-if="hasLotterySort" value="lottery">{{ lotterySortLabel }}</option>
             <option value="time">按时间排序</option>
             <option value="amount">按成交量排序</option>
           </select>

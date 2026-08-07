@@ -7,7 +7,7 @@ interface Option {
   value: string
 }
 
-type SortMode = 'league' | 'time' | 'amount'
+type SortMode = 'league' | 'lottery' | 'time' | 'amount'
 type LotterySort = 'jc' | 'lottery'
 
 const props = defineProps<{
@@ -103,7 +103,9 @@ const visibleMatches = computed(() => {
       return amountDelta || (lotterySort ? compareByLotteryOrder(a, b, lotterySort) : compareByTime(a, b))
     }
 
-    if (lotterySort) return compareByLotteryOrder(a, b, lotterySort)
+    if (sortMode.value === 'lottery') {
+      return lotterySort ? compareByLotteryOrder(a, b, lotterySort) : compareByTime(a, b)
+    }
 
     const leagueDelta = (a.leagueCode || a.leagueName).localeCompare(b.leagueCode || b.leagueName)
     return leagueDelta || compareByTime(a, b)
@@ -121,6 +123,7 @@ const pageList = computed(() => Array.from({ length: pageCount.value }, (_, i) =
 watch(pageCount, (n) => { if (page.value > n) page.value = n })
 watch(sortMode, () => { page.value = 1 })
 watch(() => props.lottery, () => {
+  if (!activeLotterySort.value && sortMode.value === 'lottery') sortMode.value = 'time'
   page.value = 1
 }, { immediate: true })
 watch(selectedLeagues, () => { page.value = 1 })
@@ -141,7 +144,7 @@ function intersectSet(source: Set<number>, available: Set<number>): Set<number> 
 }
 
 function isSortMode(value: unknown): value is SortMode {
-  return value === 'league' || value === 'time' || value === 'amount'
+  return value === 'league' || value === 'lottery' || value === 'time' || value === 'amount'
 }
 
 function lotterySortOf(value: string): LotterySort | null {

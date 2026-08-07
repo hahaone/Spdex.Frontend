@@ -382,8 +382,14 @@ export function useMatchList(filters: MaybeRef<MatchListFilters> = {}) {
   })
 
   const leagues = computed(() => stableData.value?.leagues ?? [])
-  const jcIssues = computed(() => stableData.value?.jcIssues ?? [])
-  const sfcIssues = computed(() => stableData.value?.sfcIssues ?? [])
+  const issuesFromResponse = (metadata: number[] | undefined, field: 'jcIssue' | 'sfcIssue') =>
+    [...new Set([
+      ...(metadata ?? []),
+      ...(stableData.value?.items ?? []).map(item => item[field] ?? 0),
+    ].filter(issue => issue > 0))].sort((a, b) => b - a)
+  // 顶层期号用于完整筛选；赛事项中的期号作为接口降级/旧缓存兼容兜底，避免显示裸“竞彩/足彩”。
+  const jcIssues = computed(() => issuesFromResponse(stableData.value?.jcIssues, 'jcIssue'))
+  const sfcIssues = computed(() => issuesFromResponse(stableData.value?.sfcIssues, 'sfcIssue'))
   const totalCount = computed(() => stableData.value?.totalCount ?? 0)
   const prematchSixHourLockApplied = computed(() => stableData.value?.prematchSixHourLockApplied ?? false)
   const historicalBackcheckLimitApplied = computed(() => stableData.value?.historicalBackcheckLimitApplied ?? false)
