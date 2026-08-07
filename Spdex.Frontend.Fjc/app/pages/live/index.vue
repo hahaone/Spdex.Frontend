@@ -283,6 +283,12 @@ function tgSpark(eventId: number) {
       anchor: nearRight ? 'end' : 'start',
     }
   })
+  const riseMarkers = summary.significantRises.map((rise) => ({
+    x: xOf(series[rise.toIndex]?.minute ?? rise.toIndex),
+    y: yOf(rise.toValue),
+    delta: rise.delta,
+    index: rise.toIndex,
+  }))
   // 20 分钟、中场、75 分钟时间轴竖线（带标签）
   const guides = [{ minute: 20, label: '20\'' }, { minute: 45, label: '中场' }, { minute: 75, label: '75\'' }]
     .filter(g => maxMinute >= g.minute)
@@ -301,6 +307,7 @@ function tgSpark(eventId: number) {
     guides,
     yGuides,
     labels,
+    riseMarkers,
     lastX,
     lastY,
     initialValue: formatTgSparkValue(summary.initialValue),
@@ -1811,6 +1818,16 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                         <text class="tg-mark-label" :x="lb.textX" :y="lb.textY" :text-anchor="lb.anchor">{{ lb.text }}</text>
                       </g>
                       <circle :cx="charts.total.lastX" :cy="charts.total.lastY" r="3" class="tg-dot" />
+                      <circle
+                        v-for="rise in charts.total.riseMarkers"
+                        :key="`tg-rise-${rise.index}`"
+                        :cx="rise.x"
+                        :cy="rise.y"
+                        r="3"
+                        class="tg-rise-mark"
+                      >
+                        <title>拉升 +{{ rise.delta.toFixed(2) }}</title>
+                      </circle>
                     </svg>
                     <div v-else class="tg-empty">{{ isXgReplayRefreshing(item.match.eventId) ? '走势刷新中...' : '暂无预期总进球走势（数据积累中或非足球）' }}</div>
                   </div>
@@ -2353,6 +2370,13 @@ th.col-tg {
 
 .tg-mark {
   fill: #2e9c5f;
+}
+
+.tg-rise-mark {
+  fill: #e34a4a;
+  stroke: #fff;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .tg-mark-label {
