@@ -688,6 +688,25 @@ function getLiveItem(item: MatchListItem): LiveMatchOddsEventItem | undefined {
   return liveByEventId.value.get(item.match.eventId)
 }
 
+function getLatestTopTrade(live: LiveMatchOddsEventItem | undefined): LiveMatchOddsTopTradeSummary | null {
+  if (!live) return null
+
+  if (live.latestTopTradeKey) {
+    const keyedTrade = live.topTrades.find(trade => trade.key === live.latestTopTradeKey)
+    if (keyedTrade) return keyedTrade
+  }
+
+  return live.topTrades.reduce<LiveMatchOddsTopTradeSummary | null>((latest, trade) => {
+    if (!latest) return trade
+    const tradeTime = Date.parse(trade.timestamp)
+    const latestTime = Date.parse(latest.timestamp)
+    if (Number.isNaN(tradeTime)) return latest
+    if (Number.isNaN(latestTime) || tradeTime > latestTime) return trade
+    if (tradeTime === latestTime && Number(trade.sequence ?? 0) > Number(latest.sequence ?? 0)) return trade
+    return latest
+  }, null)
+}
+
 function isLiveMaxLatest(live: LiveMatchOddsEventItem | undefined): boolean {
   const maxKey = live?.maxTopTrade?.key
   return !!maxKey && maxKey === live?.latestTopTradeKey
@@ -1453,6 +1472,20 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
   return `${formatHkdMoney(tradeTotalDeltaHkd(trade))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
 }
 
+function latestBigTradeSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem) {
+  const trade = getLatestTopTrade(live)
+  if (!trade) return null
+
+  return {
+    selection: runnerLabel(trade, item),
+    price: formatPriceMove(trade),
+    amount: formatHkdMoney(tradeTotalDeltaHkd(trade)),
+    clock: formatTradeClock(trade) || '-',
+    clockTitle: tradeClockTitle(trade),
+    clockEstimated: !!trade.matchClock && !trade.matchClock.reliable,
+  }
+}
+
 function formatRunnerLtp(live: LiveMatchOddsEventItem, selectionId: number): string {
   const row = live.runnerLtps?.find(item => parseSelectionId(item.selectionId) === selectionId)
   const value = Number(row?.lastPriceTraded ?? 0)
@@ -1774,7 +1807,11 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
             <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
               <td colspan="13">
                 <template
-                  v-for="(charts, chartIdx) in [{ total: tgSpark(item.match.eventId), diff: xgDiffSpark(item.match.eventId) }]"
+                  v-for="(charts, chartIdx) in [{
+                    total: tgSpark(item.match.eventId),
+                    diff: xgDiffSpark(item.match.eventId),
+                    latestTrade: latestBigTradeSummary(getLiveItem(item), item),
+                  }]"
                   :key="chartIdx"
                 >
                   <div class="xg-chart-grid">
@@ -1835,7 +1872,19 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                   <div class="tg-chart">
                     <div class="tg-chart-head">
                       <span class="tg-title">预期进球差走势</span>
-                      <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
+                      <span class="xgd-chart-meta">
+                        <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
+                        <span v-if="charts.latestTrade" class="xgd-latest-trade num">
+                          <span class="xgd-latest-label">最新大单：</span>
+                          <strong>{{ charts.latestTrade.selection }}</strong>
+                          <span>{{ charts.latestTrade.price }}</span>
+                          <span>{{ charts.latestTrade.amount }}</span>
+                          <span
+                            :class="{ 'match-clock-estimated': charts.latestTrade.clockEstimated }"
+                            :title="charts.latestTrade.clockTitle"
+                          >{{ charts.latestTrade.clock }}</span>
+                        </span>
+                      </span>
                     </div>
                     <svg
                       v-if="charts.diff"
@@ -2312,6 +2361,33 @@ th.col-tg {
 
 .tg-summary strong {
   color: #35443c;
+}
+
+.xgd-chart-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.xgd-latest-trade {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  flex-wrap: wrap;
+  color: #e34a4a;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.xgd-latest-trade strong {
+  color: #cc3434;
+}
+
+.xgd-latest-label {
+  font-weight: 700;
 }
 
 .tg-max-change strong.is-positive {
