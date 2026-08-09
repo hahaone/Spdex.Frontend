@@ -1472,6 +1472,10 @@ function formatLiveSummary(live: LiveMatchOddsEventItem | undefined, item: Match
   return `${formatHkdMoney(tradeTotalDeltaHkd(trade))} ${sideLabel(trade.sideHint)} ${runnerLabel(trade, item)} ${formatPriceMove(trade)}`
 }
 
+function liveMaxHasValueGap(live: LiveMatchOddsEventItem | undefined): boolean {
+  return !!live?.maxTopTrade && shouldMarkTopTradeValueGap(live.maxTopTrade)
+}
+
 function latestBigTradeSummary(live: LiveMatchOddsEventItem | undefined, item: MatchListItem) {
   const trade = getLatestTopTrade(live)
   if (!trade) return null
@@ -1483,6 +1487,7 @@ function latestBigTradeSummary(live: LiveMatchOddsEventItem | undefined, item: M
     clock: formatTradeClock(trade) || '-',
     clockTitle: tradeClockTitle(trade),
     clockEstimated: !!trade.matchClock && !trade.matchClock.reliable,
+    promptClass: getLiveTradePromptClass(trade, item),
   }
 }
 
@@ -1672,6 +1677,7 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                   <span>现场价位 {{ formatLiveLtp(getLiveItem(item), item) }}</span>
                   <span :class="['mobile-live-max', liveMaxPromptClass(getLiveItem(item), item)]">
                     现场最大单 {{ formatLiveSummary(getLiveItem(item), item) }}
+                    <span v-if="liveMaxHasValueGap(getLiveItem(item))" class="live-value-gap-marker">[V]</span>
                     <span v-if="topTradeCollisionDisplayCount(getLiveItem(item)) > 0" class="live-collision-count">
                       [{{ topTradeCollisionDisplayCount(getLiveItem(item)) }}]
                     </span>
@@ -1704,6 +1710,7 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                 ]"
               >
                 {{ formatLiveSummary(getLiveItem(item), item) }}
+                <span v-if="liveMaxHasValueGap(getLiveItem(item))" class="live-value-gap-marker">[V]</span>
                 <span v-if="topTradeCollisionDisplayCount(getLiveItem(item)) > 0" class="live-collision-count">
                   [{{ topTradeCollisionDisplayCount(getLiveItem(item)) }}]
                 </span>
@@ -1874,7 +1881,10 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                       <span class="tg-title">预期进球差走势</span>
                       <span class="xgd-chart-meta">
                         <span v-if="isXgReplayRefreshing(item.match.eventId)" class="tg-refreshing">刷新中...</span>
-                        <span v-if="charts.latestTrade" class="xgd-latest-trade num">
+                        <span
+                          v-if="charts.latestTrade"
+                          :class="['xgd-latest-trade', 'num', charts.latestTrade.promptClass]"
+                        >
                           <span class="xgd-latest-label">最新大单：</span>
                           <strong>{{ charts.latestTrade.selection }}</strong>
                           <span>{{ charts.latestTrade.price }}</span>
@@ -2377,17 +2387,32 @@ th.col-tg {
   justify-content: flex-end;
   gap: 5px;
   flex-wrap: wrap;
-  color: #e34a4a;
   font-size: 12px;
   line-height: 1.35;
 }
 
+.xgd-latest-trade.live-trade-normal {
+  color: #2f3746;
+  font-weight: 400;
+}
+
+.xgd-latest-trade.live-trade-alert {
+  color: #d62929;
+  font-weight: 400;
+}
+
+.xgd-latest-trade.live-trade-alert-strong {
+  color: #d62929;
+  font-weight: 800;
+}
+
 .xgd-latest-trade strong {
-  color: #cc3434;
+  color: inherit;
+  font-weight: inherit;
 }
 
 .xgd-latest-label {
-  font-weight: 700;
+  font-weight: inherit;
 }
 
 .tg-max-change strong.is-positive {
