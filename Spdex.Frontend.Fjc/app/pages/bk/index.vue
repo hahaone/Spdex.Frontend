@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import type { MatchListResult } from '~/types/match'
-import type { ApiResponse } from '~/types/api'
-import { formatDateCN, formatMatchTimeSlash, formatDateTime } from '~/utils/formatters'
+import type { MatchListItem, MatchListResult } from '~/types/match'
+import { formatDateCN, formatMatchTimeSlash } from '~/utils/formatters'
 
 // --- 关注（置顶）功能 ---
 const {
@@ -154,7 +153,7 @@ const pageRange = computed(() => {
 })
 
 // 格式化篮球最大单注（与旧站一致）
-function formatBkMaxBet(item: any): string {
+function formatBkMaxBet(item: MatchListItem): string {
   if (!item.maxBet || item.maxBet === 0) return ''
   const amount = Math.round(item.maxBet).toLocaleString()
   const pct = Math.round(item.maxBetPercent)
@@ -166,7 +165,7 @@ function formatBkMaxBet(item: any): string {
   return `${amount} (${pct}%, ${attr}, ${priceChange}); 价位: ${odds}; 时间: ${time}; 比分项: ${selection};`
 }
 
-function isMaxBetLowOdds(item: any): boolean {
+function isMaxBetLowOdds(item: MatchListItem): boolean {
   return item.maxBetOdds > 0 && item.maxBetOdds < 2
 }
 

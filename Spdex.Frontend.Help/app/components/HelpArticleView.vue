@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft, BookOpen, Clock3, Layers, ListChecks, Tags } from '@lucide/vue'
 import type { HelpArticle } from '~/data/helpContent'
-import { getArticlePath, getCategory, getRelatedArticles } from '~/data/helpContent'
+import { getArticlePath, getCategory, getRelatedArticles, getVisibleHelpSections, normalizeHelpContentProfile } from '~/data/helpContent'
 
 const props = withDefaults(defineProps<{
   article: HelpArticle
@@ -14,7 +14,10 @@ const props = withDefaults(defineProps<{
 
 const category = computed(() => getCategory(props.article.category))
 const relatedArticles = computed(() => getRelatedArticles(props.article))
-const toc = computed(() => props.article.sections.map((section, index) => ({
+const runtimeConfig = useRuntimeConfig()
+const contentProfile = computed(() => normalizeHelpContentProfile(runtimeConfig.public.helpContentProfile))
+const visibleSections = computed(() => getVisibleHelpSections(props.article, contentProfile.value))
+const toc = computed(() => visibleSections.value.map((section, index) => ({
   id: sectionId(index),
   heading: section.heading,
 })))
@@ -63,7 +66,7 @@ function sectionId(index: number) {
         </header>
 
         <section
-          v-for="(section, sectionIndex) in article.sections"
+          v-for="(section, sectionIndex) in visibleSections"
           :id="sectionId(sectionIndex)"
           :key="section.heading"
           class="article-section"

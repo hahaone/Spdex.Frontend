@@ -15,6 +15,7 @@ export default defineNuxtConfig({
       publicBaseUrl: process.env.NUXT_PUBLIC_HELP_BASE_URL || 'https://help.spdex.com',
       newspdexUrl: process.env.NUXT_PUBLIC_NEWSPDEX_URL || 'https://new.spdex.com',
       mcpDocsUrl: process.env.NUXT_PUBLIC_MCP_DOCS_URL || '/ai/mcp-quickstart',
+      helpContentProfile: process.env.NUXT_PUBLIC_HELP_CONTENT_PROFILE === 'public' ? 'public' : 'test',
     },
   },
 

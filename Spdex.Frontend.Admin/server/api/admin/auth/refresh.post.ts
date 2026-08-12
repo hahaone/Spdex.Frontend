@@ -1,5 +1,15 @@
 import { defineEventHandler, getCookie, setCookie } from 'h3'
 
+interface AdminAuthResponse {
+  code?: number
+  message?: string
+  data?: {
+    token?: string
+    expiresAt?: string
+    admin?: unknown
+  }
+}
+
 // 续签：后端旋转 jti 返回新 token，BFF 更新 httpOnly cookie。
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -12,7 +22,9 @@ export default defineEventHandler(async (event) => {
     headers: { Authorization: `Bearer ${token}` },
   }).catch(() => null)
 
-  const json: any = upstream ? await upstream.json().catch(() => null) : null
+  const json = upstream
+    ? await upstream.json().catch(() => null) as AdminAuthResponse | null
+    : null
   if (!json || json.code !== 0 || !json.data?.token) {
     return { code: json?.code ?? 401, message: json?.message || '续签失败', data: null }
   }

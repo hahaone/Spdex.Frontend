@@ -24,6 +24,7 @@
           />
           <NInput v-model:value="usageFilters.subjectId" clearable placeholder="主体 ID" style="width:180px" />
           <NButton type="primary" :loading="usageLoading" @click="loadUsage">查询</NButton>
+          <NButton v-if="usageFilters.subjectId" @click="clearSubjectDrill">返回全部主体</NButton>
           <NButton :disabled="!usage?.items.length" @click="exportCsv">导出用量 CSV</NButton>
         </NSpace>
 
@@ -77,6 +78,26 @@
         <NAlert class="mb-4" type="info" title="最近调用样本">
           质量指标从当前加载的最近 {{ audit?.items.length ?? 0 }} 条 append-only 审计记录计算，不作为正式 SLA 账单依据。
         </NAlert>
+        <NCard size="small" class="mb-4" title="模型用量与成本基线">
+          <NAlert class="mb-3" type="info" title="以模型返回 token 和实际响应耗时为准">
+            这里不硬编码供应商单价，也不等同于供应商账单。财务估算应将输入、输出 token 与对应模型在调用时适用的价格表另行核对。
+          </NAlert>
+          <NGrid :cols="5" :x-gap="10" item-responsive class="mb-3">
+            <NGi span="5 700:1"><NStatistic label="模型调用" :value="modelUsage?.summary.calls ?? 0" /></NGi>
+            <NGi span="5 700:1"><NStatistic label="失败率" :value="modelFailureRate" /></NGi>
+            <NGi span="5 700:1"><NStatistic label="输入 token" :value="modelUsage?.summary.inputTokens ?? 0" /></NGi>
+            <NGi span="5 700:1"><NStatistic label="输出 token" :value="modelUsage?.summary.outputTokens ?? 0" /></NGi>
+            <NGi span="5 700:1"><NStatistic label="平均响应" :value="modelUsage ? `${modelUsage.summary.averageDurationMs} ms` : '—'" /></NGi>
+          </NGrid>
+          <NDataTable
+            :columns="modelUsageColumns"
+            :data="modelUsage?.summary.items ?? []"
+            :loading="modelUsageLoading"
+            :pagination="{ pageSize: 10 }"
+            :row-key="(row: AiAgentModelUsageRow) => `${row.provider}:${row.model}`"
+            :scroll-x="1160"
+          />
+        </NCard>
         <NGrid :cols="4" :x-gap="12" item-responsive class="mb-4">
           <NGi span="4 700:1"><NCard size="small"><NStatistic label="样本调用" :value="qualityTotals.calls" /></NCard></NGi>
           <NGi span="4 700:1"><NCard size="small"><NStatistic label="失败调用" :value="qualityTotals.failed" /></NCard></NGi>
@@ -84,7 +105,7 @@
           <NGi span="4 700:1"><NCard size="small"><NStatistic label="最慢工具 P95" :value="slowestQuality ? `${slowestQuality.p95Ms} ms` : '—'" /></NCard></NGi>
         </NGrid>
         <NSpace class="mb-3">
-          <NButton type="primary" :loading="auditLoading" @click="loadQuality">刷新质量样本</NButton>
+          <NButton type="primary" :loading="auditLoading || modelUsageLoading" @click="loadQuality">刷新质量与模型用量</NButton>
         </NSpace>
         <NDataTable
           class="mb-5"
@@ -109,6 +130,30 @@
         <NAlert class="mb-4" type="info" title="回答反馈闭环">
           面向测试与灰度阶段的回答级反馈队列，可按 trace 回查原始调用，并把问题标注到口径校准、展示文案或代码修复。
         </NAlert>
+        <NCard size="small" class="mb-4" title="内部模拟评测">
+          <NAlert class="mb-3" type="warning" title="仅用于提前发现可读性、数据边界和安全问题">
+            这是确定性规则检查，不代表足球专家验收，也不会自动把回答标记为已验证。专家签字门禁保持独立。
+          </NAlert>
+          <NSpace class="mb-3" align="center">
+            <NSelect v-model:value="answerQualityFilters.category" :options="answerQualityCategoryOptions" style="width:190px" />
+            <NSelect v-model:value="answerQualityFilters.passed" :options="answerQualityPassedOptions" style="width:150px" />
+            <NInputNumber v-model:value="answerQualityFilters.limit" :min="1" :max="500" style="width:120px" />
+            <NButton type="primary" :loading="answerQualityLoading" @click="loadAnswerQualityEvaluations">刷新评测</NButton>
+          </NSpace>
+          <NGrid :cols="3" :x-gap="12" item-responsive class="mb-3">
+            <NGi span="3 700:1"><NStatistic label="评测样本" :value="answerQuality?.count ?? 0" /></NGi>
+            <NGi span="3 700:1"><NStatistic label="规则通过" :value="answerQuality?.passedCount ?? 0" /></NGi>
+            <NGi span="3 700:1"><NStatistic label="需人工复核" :value="answerQuality?.failedCount ?? 0" /></NGi>
+          </NGrid>
+          <NDataTable
+            :columns="answerQualityColumns"
+            :data="answerQuality?.items ?? []"
+            :loading="answerQualityLoading"
+            :pagination="{ pageSize: 10 }"
+            :row-key="(row: AiAnswerQualityEvaluation) => row.evaluationId"
+            :scroll-x="1120"
+          />
+        </NCard>
         <NGrid :cols="2" :x-gap="12" :y-gap="12" item-responsive class="mb-3">
           <NGi span="2 1100:1">
             <NCard size="small" title="无专家阶段质检规则">
@@ -299,7 +344,7 @@
           选择日期和主体后刷新预演；正式价格、账单与扣费开关尚未启用。
         </NAlert>
 
-        <NCard size="small" class="mb-4" title="P5 上线门禁">
+        <NCard size="small" class="mb-4" title="计费上线边界">
           <template #header-extra>
             <NButton tag="a" :href="usageHelpUrl" target="_blank" rel="noopener noreferrer" size="small" tertiary>
               用户帮助
@@ -345,7 +390,24 @@
                 <NDescriptionsItem label="记录数">{{ billingLedger?.recordCount ?? 0 }}</NDescriptionsItem>
                 <NDescriptionsItem label="最新写入">{{ fmt(billingLedger?.latestRecordAtUtc) }}</NDescriptionsItem>
                 <NDescriptionsItem label="失败次数">{{ billingLedger?.failureCount ?? 0 }}</NDescriptionsItem>
+                <NDescriptionsItem label="送达计费策略">{{ billingLedger?.deliveryPolicy ?? '—' }}</NDescriptionsItem>
+                <NDescriptionsItem label="中心账本">{{ billingLedger?.centralized ? '已接入' : '未接入' }}</NDescriptionsItem>
+                <NDescriptionsItem label="持久双写">{{ billingLedger?.durableDoubleWrite ? '已启用' : '未启用' }}</NDescriptionsItem>
+                <NDescriptionsItem label="中心复制">
+                  {{ billingLedger?.replicationEnabled ? (billingLedger.replicationHealthy ? '健康' : '异常') : '未启用' }}
+                </NDescriptionsItem>
+                <NDescriptionsItem label="待复制事件">{{ billingLedger?.pendingReplicationEvents ?? 0 }}</NDescriptionsItem>
+                <NDescriptionsItem label="死信事件">{{ billingLedger?.deadLetterReplicationEvents ?? 0 }}</NDescriptionsItem>
+                <NDescriptionsItem label="最近复制">{{ fmt(billingLedger?.lastReplicatedAtUtc) }}</NDescriptionsItem>
+                <NDescriptionsItem label="商业化计费门禁">
+                  <NTag size="small" :type="billingLedger?.commercialBillingReady ? 'success' : 'warning'">
+                    {{ billingLedger?.commercialBillingReady ? '已满足技术门禁' : '未满足' }}
+                  </NTag>
+                </NDescriptionsItem>
               </NDescriptions>
+              <NAlert class="mt-3" :type="billingReplicationNotice.type" :title="billingReplicationNotice.title">
+                {{ billingReplicationNotice.description }}
+              </NAlert>
             </NCard>
           </NGi>
           <NGi span="2 1100:1">
@@ -524,6 +586,7 @@
             </NDescriptionsItem>
             <NDescriptionsItem label="通知边界">当前只允许站内通知；email/webhook 保持关闭。</NDescriptionsItem>
             <NDescriptionsItem label="Billing Ledger">{{ billingLedgerSnapshot }}</NDescriptionsItem>
+            <NDescriptionsItem label="中心复制">{{ billingReplicationSnapshot }}</NDescriptionsItem>
             <NDescriptionsItem label="Usage 对账">{{ billingReconciliationSnapshot }}</NDescriptionsItem>
             <NDescriptionsItem label="回答验收">
               已加载 {{ feedbackSampleStats.loaded }} 条，已流转 {{ feedbackSampleStats.reviewed }} 条，目标 30 条。
@@ -531,7 +594,54 @@
             <NDescriptionsItem label="最近样本">
               审计 {{ qualityTotals.calls }} 条，站内通知 {{ notifications?.count ?? 0 }} 条。
             </NDescriptionsItem>
+            <NDescriptionsItem label="模型成本基线">
+              {{ modelUsage ? `${modelUsage.summary.calls} 次模型调用 · ${modelUsage.summary.totalTokens} tokens · 平均 ${modelUsage.summary.averageDurationMs} ms` : '未加载' }}
+            </NDescriptionsItem>
+            <NDescriptionsItem label="正式签核">
+              {{ releaseSignoffs ? (releaseSignoffs.snapshot.formalReady ? '五个责任角色均已人工批准' : '未完成；内部模拟不计入正式批准') : '未加载' }}
+            </NDescriptionsItem>
           </NDescriptions>
+        </NCard>
+
+        <NCard v-if="can(P.aiOpsView)" size="small" class="mb-4" title="发布签核记录">
+          <template #header-extra>
+            <NSpace>
+              <NButton size="small" :loading="releaseSignoffsLoading" @click="loadReleaseSignoffs">刷新</NButton>
+              <NButton v-if="can(P.aiOpsManage)" size="small" type="primary" @click="openReleaseSignoffModal">
+                追加记录
+              </NButton>
+            </NSpace>
+          </template>
+          <NAlert
+            class="mb-3"
+            :type="releaseSignoffs?.snapshot.formalReady ? 'success' : 'warning'"
+            :title="releaseSignoffs?.snapshot.formalReady ? '正式人工签核已齐备' : '尚未达到正式发布条件'"
+          >
+            内部模拟用于发现问题和保存测试证据，不具备人工专家、财务、安全或运维签字效力，也不会让正式门禁通过。
+          </NAlert>
+          <NGrid :cols="5" :x-gap="10" :y-gap="10" item-responsive class="mb-3">
+            <NGi v-for="role in releaseSignoffs?.snapshot.roles ?? []" :key="role.role" span="5 720:1">
+              <NCard size="small">
+                <div class="flex items-center justify-between gap-2">
+                  <strong>{{ releaseRoleLabel(role.role) }}</strong>
+                  <NTag size="small" :type="role.formallyApproved ? 'success' : 'warning'">
+                    {{ role.formallyApproved ? '人工已批准' : releaseDecisionLabel(role.latest?.decision) }}
+                  </NTag>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                  {{ role.latest ? `${role.latest.reviewer} · ${fmt(role.latest.createdAtUtc)}` : '暂无记录' }}
+                </div>
+              </NCard>
+            </NGi>
+          </NGrid>
+          <NDataTable
+            :columns="releaseSignoffColumns"
+            :data="releaseSignoffs?.snapshot.items ?? []"
+            :loading="releaseSignoffsLoading"
+            :pagination="{ pageSize: 10 }"
+            :row-key="(row: AiReleaseSignoffRecord) => row.signoffId"
+            :scroll-x="1180"
+          />
         </NCard>
 
         <NCard v-if="productionGateBlockers.length" size="small" class="mb-4" title="阻断项">
@@ -580,6 +690,60 @@
         />
       </NDrawerContent>
     </NDrawer>
+
+    <NModal
+      v-model:show="releaseSignoffVisible"
+      preset="card"
+      title="追加发布签核记录"
+      style="width:min(620px, calc(100vw - 32px))"
+    >
+      <NAlert class="mb-4" type="warning" title="记录只追加，提交后不可覆盖或删除">
+        当前默认使用内部模拟。只有具名人工评审选择“人工评审 / 批准”，并覆盖全部责任角色，才可能满足正式签核门禁。
+      </NAlert>
+      <NForm label-placement="top">
+        <NFormItem label="发布批次">
+          <NInput v-model:value="releaseSignoffForm.releaseId" maxlength="96" />
+        </NFormItem>
+        <NGrid :cols="2" :x-gap="12">
+          <NGi>
+            <NFormItem label="责任角色">
+              <NSelect v-model:value="releaseSignoffForm.role" :options="releaseRoleOptions" />
+            </NFormItem>
+          </NGi>
+          <NGi>
+            <NFormItem label="评审类型">
+              <NSelect v-model:value="releaseSignoffForm.reviewerType" :options="releaseReviewerTypeOptions" />
+            </NFormItem>
+          </NGi>
+        </NGrid>
+        <NFormItem label="结论">
+          <NSelect v-model:value="releaseSignoffForm.decision" :options="releaseDecisionOptions" />
+        </NFormItem>
+        <NFormItem label="评审记录">
+          <NInput
+            v-model:value="releaseSignoffForm.notes"
+            type="textarea"
+            maxlength="2000"
+            show-count
+            :autosize="{ minRows: 4, maxRows: 8 }"
+            placeholder="记录检查范围、依据、发现的问题和剩余风险；不要粘贴密码、token、请求头或连接串。"
+          />
+        </NFormItem>
+        <NFormItem label="证据引用（可选）">
+          <NInput
+            v-model:value="releaseSignoffForm.evidenceRef"
+            maxlength="500"
+            placeholder="文档路径、工单编号或不含凭证的报告引用"
+          />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton :disabled="releaseSignoffSubmitting" @click="releaseSignoffVisible = false">取消</NButton>
+          <NButton type="primary" :loading="releaseSignoffSubmitting" @click="submitReleaseSignoff">确认追加</NButton>
+        </NSpace>
+      </template>
+    </NModal>
 
     <NModal
       v-model:show="feedbackReviewVisible"
@@ -640,6 +804,12 @@ import type {
   AiAnswerFeedbackResult,
   AiAnswerFeedbackRow,
   AiAnswerFeedbackUpdateResult,
+  AiAnswerQualityEvaluation,
+  AiAnswerQualityEvaluationResult,
+  AiAgentModelUsageResult,
+  AiAgentModelUsageRow,
+  AiReleaseSignoffRecord,
+  AiReleaseSignoffResult,
   AiAuditResult,
   AiAuditRow,
   AiBillingPreviewResult,
@@ -729,6 +899,9 @@ const audit = ref<AiAuditResult | null>(null)
 const trace = ref<AiAuditResult | null>(null)
 const notifications = ref<AiInAppNotificationResult | null>(null)
 const feedback = ref<AiAnswerFeedbackResult | null>(null)
+const answerQuality = ref<AiAnswerQualityEvaluationResult | null>(null)
+const modelUsage = ref<AiAgentModelUsageResult | null>(null)
+const releaseSignoffs = ref<AiReleaseSignoffResult | null>(null)
 const goldenCandidates = ref<AiGoldenSampleCandidateResult | null>(null)
 const usageLoading = ref(false)
 const billingLoading = ref(false)
@@ -738,10 +911,15 @@ const auditLoading = ref(false)
 const traceLoading = ref(false)
 const notificationsLoading = ref(false)
 const feedbackLoading = ref(false)
+const answerQualityLoading = ref(false)
+const modelUsageLoading = ref(false)
+const releaseSignoffsLoading = ref(false)
 const goldenCandidatesLoading = ref(false)
 const productionGateLoading = ref(false)
 const traceDrawerVisible = ref(false)
 const feedbackReviewVisible = ref(false)
+const releaseSignoffVisible = ref(false)
+const releaseSignoffSubmitting = ref(false)
 const feedbackReviewSubmitting = ref(false)
 const feedbackReviewTarget = ref<AiAnswerFeedbackRow | null>(null)
 const feedbackCheckedKeys = ref<string[]>([])
@@ -750,6 +928,17 @@ const feedbackReviewForm = reactive({
   status: 'reviewing',
   severity: 'medium',
   reviewReason: '',
+})
+const releaseSignoffForm = reactive({
+  releaseId: 'p6-controlled-pre-release',
+  role: 'product',
+  reviewerType: 'internal_simulation',
+  decision: 'simulated',
+  notes: '',
+  evidenceRef: '',
+})
+watch(() => releaseSignoffForm.reviewerType, (reviewerType) => {
+  releaseSignoffForm.decision = reviewerType === 'internal_simulation' ? 'simulated' : 'needs_work'
 })
 
 const usageFilters = reactive({
@@ -794,6 +983,11 @@ const feedbackFilters = reactive<{
   riskPool: '',
   limit: 100,
 })
+const answerQualityFilters = reactive({
+  category: '',
+  passed: '',
+  limit: 100,
+})
 
 const toolFilterOptions = [{ label: '全部工具', value: '' }, ...aiToolOptions]
 const subjectTypeOptions = [
@@ -830,6 +1024,39 @@ const feedbackTypeOptions = [
   { label: '有问题', value: 'issue' },
   { label: '看不懂', value: 'unclear' },
 ]
+const answerQualityCategoryOptions = [
+  { label: '全部场景', value: '' },
+  { label: '大额交易', value: 'big_trades' },
+  { label: '市场异常', value: 'market_anomaly' },
+  { label: '预测市场背离', value: 'prediction_divergence' },
+  { label: '观察条件', value: 'watch_condition' },
+  { label: '赛中信号', value: 'live_signal' },
+  { label: '指标解释', value: 'metric_explanation' },
+  { label: '通用问题', value: 'general' },
+]
+const answerQualityPassedOptions = [
+  { label: '全部结果', value: '' },
+  { label: '规则通过', value: 'true' },
+  { label: '需人工复核', value: 'false' },
+]
+const releaseRoleOptions = [
+  { label: '产品负责人', value: 'product' },
+  { label: '财务负责人', value: 'finance' },
+  { label: '安全负责人', value: 'security' },
+  { label: '运维负责人', value: 'operations' },
+  { label: '足球专家', value: 'football_expert' },
+]
+const releaseReviewerTypeOptions = [
+  { label: '内部模拟（不具备正式效力）', value: 'internal_simulation' },
+  { label: '具名人工评审', value: 'human' },
+]
+const releaseDecisionOptions = computed(() => releaseSignoffForm.reviewerType === 'internal_simulation'
+  ? [{ label: '完成内部模拟', value: 'simulated' }]
+  : [
+      { label: '需要继续完善', value: 'needs_work' },
+      { label: '不批准', value: 'rejected' },
+      { label: '批准', value: 'approved' },
+    ])
 const issueTagOptions = [
   { label: '全部标签', value: '' },
   { label: '数据不准确', value: 'wrong_data' },
@@ -997,6 +1224,42 @@ const billingLedgerNotice = computed(() => {
     description: '影子账本已启用且健康，可用于与 usage ledger 进行非计费对账。',
   }
 })
+const billingReplicationNotice = computed(() => {
+  const ledger = billingLedger.value
+  if (!ledger) {
+    return {
+      type: 'info' as const,
+      title: '中心复制状态尚未加载',
+      description: '刷新计费证据后，可查看待复制、死信和最近成功复制时间。',
+    }
+  }
+  if (!ledger.replicationEnabled) {
+    return {
+      type: 'warning' as const,
+      title: '中心复制保持关闭',
+      description: '当前只运行本地非计费影子账本。正式收费前必须完成独立中心账本、持久双写和恢复演练。',
+    }
+  }
+  if (!ledger.replicationHealthy || ledger.deadLetterReplicationEvents > 0) {
+    return {
+      type: 'error' as const,
+      title: '中心复制链路异常',
+      description: `待复制 ${ledger.pendingReplicationEvents} 条，死信 ${ledger.deadLetterReplicationEvents} 条。应先停止计费发布流程并完成重放或冲正。`,
+    }
+  }
+  if (ledger.pendingReplicationEvents > 0) {
+    return {
+      type: 'warning' as const,
+      title: '中心复制仍有积压',
+      description: `当前有 ${ledger.pendingReplicationEvents} 条待复制事件，需确认积压能在运行手册规定的时限内清零。`,
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: '中心复制链路健康',
+    description: '复制队列无积压和死信，仍需结合 Usage 对账、备份恢复与人工签字判断是否可正式收费。',
+  }
+})
 const billingReconciliationNotice = computed(() => {
   const reconciliation = billingReconciliation.value
   if (!reconciliation) {
@@ -1044,6 +1307,12 @@ const billingLedgerSnapshot = computed(() => {
   const ledger = billingLedger.value
   if (!ledger) return '未加载'
   return `${billingLedgerStatusText.value} · ${ledger.provider} · ${ledger.billingMode} · ${ledger.recordCount} 条`
+})
+const billingReplicationSnapshot = computed(() => {
+  const ledger = billingLedger.value
+  if (!ledger) return '未加载'
+  if (!ledger.replicationEnabled) return '未启用 · 正式收费阻断'
+  return `${ledger.replicationHealthy ? '健康' : '异常'} · 待复制 ${ledger.pendingReplicationEvents} · 死信 ${ledger.deadLetterReplicationEvents}`
 })
 const billingReconciliationSnapshot = computed(() => {
   const reconciliation = billingReconciliation.value
@@ -1156,6 +1425,11 @@ const qualityTotals = computed(() => {
     successRate: calls ? Math.round(((calls - failed) / calls) * 1000) / 10 : 0,
   }
 })
+const modelFailureRate = computed(() => {
+  const summary = modelUsage.value?.summary
+  if (!summary?.calls) return '0%'
+  return `${Math.round((summary.failedCalls / summary.calls) * 1000) / 10}%`
+})
 const slowestQuality = computed(() => qualityRows.value.at(0) ?? null)
 const workflowAuditRows = computed(() => (audit.value?.items ?? []).filter(row => workflowTools.has(row.toolName)))
 const workflowRows = computed<WorkflowQualityRow[]>(() => {
@@ -1263,6 +1537,11 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
         : ledger.enabled
           ? 'passed'
           : 'warning'
+  const commercialBillingStatus = !ledger
+    ? 'pending'
+    : ledger.commercialBillingReady
+      ? 'passed'
+      : 'blocked'
   const reconciliationStatus = !reconciliation
     ? 'pending'
     : !reconciliation.healthy
@@ -1340,6 +1619,18 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
     ),
     productionGateRow(
       '计费',
+      '商业化计费链路完整',
+      commercialBillingStatus,
+      ledger
+        ? `中心账本=${ledger.centralized ? '是' : '否'}，持久双写=${ledger.durableDoubleWrite ? '是' : '否'}，送达确认=${ledger.deliveryFinalizationEnabled ? '是' : '否'}，冲正落账=${ledger.appliedAdjustmentsEnabled ? '是' : '否'}，复制=${ledger.replicationEnabled ? (ledger.replicationHealthy ? '健康' : '异常') : '关闭'}，待复制=${ledger.pendingReplicationEvents}，死信=${ledger.deadLetterReplicationEvents}。`
+        : '尚未加载商业化计费链路证据。',
+      '后端 / 财务 / 运维',
+      ledger?.commercialBillingReady
+        ? '继续执行财务对账、恢复演练与发布签字；自动门禁通过不等于已经批准正式收费。'
+        : '保持 billable=false；完成独立中心账本、持久双写、送达确认、冲正落账、零死信和无差异对账后再提交正式收费评审。',
+    ),
+    productionGateRow(
+      '计费',
       'Usage 与 billing ledger 可对账',
       reconciliationStatus,
       reconciliation
@@ -1397,6 +1688,32 @@ const productionGateRows = computed<ProductionGateRow[]>(() => {
         : '尚未加载回答反馈。',
       '运营 / 产品',
       '继续处理大额交易、异常证据、预测市场背离、watch condition 和赛中信号问题池。',
+    ),
+    productionGateRow(
+      '成本治理',
+      '模型用量可按 provider 和 model 追踪',
+      modelUsage.value ? 'passed' : 'pending',
+      modelUsage.value
+        ? `${modelUsage.value.summary.calls} 次调用，输入 ${modelUsage.value.summary.inputTokens} tokens，输出 ${modelUsage.value.summary.outputTokens} tokens，失败 ${modelUsage.value.summary.failedCalls} 次，平均响应 ${modelUsage.value.summary.averageDurationMs} ms。`
+        : '尚未加载模型用量聚合。',
+      '后端 / 运营 / 财务',
+      '供应商单价变化时单独维护价格表和生效区间；不要把当前 token 聚合误认为供应商正式账单。',
+    ),
+    productionGateRow(
+      '发布签核',
+      '五个责任角色均已具名人工批准',
+      !releaseSignoffs.value
+        ? 'pending'
+        : releaseSignoffs.value.snapshot.formalReady
+          ? 'passed'
+          : 'blocked',
+      releaseSignoffs.value
+        ? `${releaseSignoffs.value.snapshot.roles.filter(role => role.formallyApproved).length}/${releaseSignoffs.value.snapshot.requiredRoles.length} 个角色已人工批准；内部模拟记录不计入正式批准。`
+        : '尚未加载发布签核记录。',
+      '产品 / 财务 / 安全 / 运维 / 足球专家',
+      releaseSignoffs.value?.snapshot.formalReady
+        ? '保留追加式证据记录；任何角色后续追加“不批准”或“需要完善”都会重新阻断门禁。'
+        : '当前继续按测试环境和 allowlist 灰度运行；正式发布前完成五个角色的具名人工评审。',
     ),
     productionGateRow(
       '帮助中心',
@@ -1534,6 +1851,26 @@ function renderTraceButton(value?: string | null) {
   )
 }
 
+async function drillIntoSubject(row: Pick<AiUsageRow, 'subjectType' | 'subjectId'>) {
+  usageFilters.subjectType = row.subjectType
+  usageFilters.subjectId = row.subjectId
+  activeTab.value = 'usage'
+  await Promise.allSettled([
+    loadUsage(),
+    can(P.aiBillingReconcile) ? loadBillingEvidence() : Promise.resolve(),
+  ])
+  message.success(`已切换到 ${row.subjectType}:${row.subjectId} 的用量详情`)
+}
+
+async function clearSubjectDrill() {
+  usageFilters.subjectType = ''
+  usageFilters.subjectId = ''
+  await Promise.allSettled([
+    loadUsage(),
+    can(P.aiBillingReconcile) ? loadBillingEvidence() : Promise.resolve(),
+  ])
+}
+
 const usageColumns = [
   { title: 'UTC 日期', key: 'dateUtc', width: 120 },
   {
@@ -1541,7 +1878,16 @@ const usageColumns = [
     key: 'subjectId',
     width: 210,
     render: (row: AiUsageRow) => h('div', [
-      h('div', row.subjectId),
+      h(
+        NButton,
+        {
+          text: true,
+          type: 'primary',
+          title: '查看该主体的用量与账单预演',
+          onClick: () => drillIntoSubject(row),
+        },
+        { default: () => row.subjectId },
+      ),
       h('div', { class: 'text-xs text-gray-400' }, row.subjectType),
     ]),
   },
@@ -1685,6 +2031,54 @@ const qualityColumns = [
   { title: '平均耗时', key: 'averageMs', width: 120, render: (row: ToolQualityRow) => `${row.averageMs} ms` },
   { title: 'P95', key: 'p95Ms', width: 110, render: (row: ToolQualityRow) => `${row.p95Ms} ms` },
   { title: '最大耗时', key: 'maxMs', width: 120, render: (row: ToolQualityRow) => `${row.maxMs} ms` },
+]
+const modelUsageColumns = [
+  { title: 'Provider', key: 'provider', width: 150 },
+  { title: '模型', key: 'model', width: 190 },
+  { title: '调用', key: 'calls', width: 80 },
+  {
+    title: '失败率',
+    key: 'failureRate',
+    width: 100,
+    render: (row: AiAgentModelUsageRow) => {
+      const rate = row.calls ? Math.round((row.failedCalls / row.calls) * 1000) / 10 : 0
+      return h(NTag, { size: 'small', type: rate === 0 ? 'success' : rate <= 5 ? 'warning' : 'error' }, { default: () => `${rate}%` })
+    },
+  },
+  { title: '输入 token', key: 'inputTokens', width: 110 },
+  { title: '输出 token', key: 'outputTokens', width: 110 },
+  { title: '总 token', key: 'totalTokens', width: 110 },
+  { title: '工具单位', key: 'toolUsageUnits', width: 100 },
+  { title: '平均响应', key: 'averageDurationMs', width: 120, render: (row: AiAgentModelUsageRow) => `${row.averageDurationMs} ms` },
+  { title: '最大响应', key: 'maximumDurationMs', width: 120, render: (row: AiAgentModelUsageRow) => `${row.maximumDurationMs} ms` },
+  { title: '最近调用', key: 'lastSeenUtc', width: 170, render: (row: AiAgentModelUsageRow) => fmt(row.lastSeenUtc) },
+]
+const releaseSignoffColumns = [
+  { title: '角色', key: 'role', width: 130, render: (row: AiReleaseSignoffRecord) => releaseRoleLabel(row.role) },
+  {
+    title: '效力',
+    key: 'reviewerType',
+    width: 150,
+    render: (row: AiReleaseSignoffRecord) => h(
+      NTag,
+      { size: 'small', type: row.reviewerType === 'human' ? 'info' : 'warning' },
+      { default: () => row.reviewerType === 'human' ? '具名人工评审' : '内部模拟' },
+    ),
+  },
+  {
+    title: '结论',
+    key: 'decision',
+    width: 120,
+    render: (row: AiReleaseSignoffRecord) => h(
+      NTag,
+      { size: 'small', type: row.decision === 'approved' ? 'success' : row.decision === 'rejected' ? 'error' : 'warning' },
+      { default: () => releaseDecisionLabel(row.decision) },
+    ),
+  },
+  { title: '记录人', key: 'reviewer', width: 160 },
+  { title: '评审记录', key: 'notes', width: 360, ellipsis: { tooltip: true } },
+  { title: '证据引用', key: 'evidenceRef', width: 220, ellipsis: { tooltip: true }, render: (row: AiReleaseSignoffRecord) => row.evidenceRef || '—' },
+  { title: '时间', key: 'createdAtUtc', width: 170, render: (row: AiReleaseSignoffRecord) => fmt(row.createdAtUtc) },
 ]
 const errorColumns = [
   { title: '错误码', key: 'errorCode', width: 220 },
@@ -1932,6 +2326,47 @@ const goldenCandidateColumns = [
   },
   { title: '更新时间', key: 'updatedAtUtc', width: 170, render: (row: AiGoldenSampleCandidateRow) => fmt(row.updatedAtUtc) },
 ]
+const answerQualityColumns = [
+  {
+    title: '结果',
+    key: 'passed',
+    width: 120,
+    render: (row: AiAnswerQualityEvaluation) => h(
+      NTag,
+      { type: row.passed ? 'success' : 'warning', size: 'small' },
+      { default: () => row.passed ? '规则通过' : '需人工复核' },
+    ),
+  },
+  {
+    title: '场景',
+    key: 'category',
+    width: 150,
+    render: (row: AiAnswerQualityEvaluation) => answerQualityCategoryLabel(row.category),
+  },
+  { title: '得分', key: 'score', width: 90 },
+  {
+    title: '未通过项',
+    key: 'checks',
+    width: 280,
+    render: (row: AiAnswerQualityEvaluation) => row.checks
+      .filter(check => !check.passed)
+      .map(check => check.label)
+      .join('、') || '—',
+  },
+  {
+    title: '建议',
+    key: 'recommendations',
+    width: 330,
+    render: (row: AiAnswerQualityEvaluation) => row.recommendations.join('；') || '—',
+  },
+  {
+    title: 'Trace',
+    key: 'traceId',
+    width: 180,
+    render: (row: AiAnswerQualityEvaluation) => renderTraceButton(row.traceId),
+  },
+  { title: '评测时间', key: 'evaluatedAtUtc', width: 170, render: (row: AiAnswerQualityEvaluation) => fmt(row.evaluatedAtUtc) },
+]
 
 async function loadUsage() {
   usageLoading.value = true
@@ -2028,7 +2463,66 @@ async function loadQuality() {
   auditFilters.tool = ''
   auditFilters.success = ''
   auditFilters.limit = 500
-  await loadAudit()
+  await Promise.allSettled([loadAudit(), loadModelUsage()])
+}
+
+async function loadModelUsage() {
+  modelUsageLoading.value = true
+  const result = await api.get<AiAgentModelUsageResult>('ai/agent/model-usage', {
+    from: range.value ? toYmd(range.value[0]) : undefined,
+    to: range.value ? toYmd(range.value[1]) : undefined,
+    limit: 100,
+  })
+  modelUsageLoading.value = false
+  if (result.code === 0) modelUsage.value = result.data
+  else message.error(result.message || '模型用量查询失败')
+}
+
+async function loadReleaseSignoffs() {
+  releaseSignoffsLoading.value = true
+  const result = await api.get<AiReleaseSignoffResult>('ai/release-signoffs', {
+    releaseId: releaseSignoffForm.releaseId.trim() || 'p6-controlled-pre-release',
+    limit: 100,
+  })
+  releaseSignoffsLoading.value = false
+  if (result.code === 0) releaseSignoffs.value = result.data
+  else message.error(result.message || '发布签核记录加载失败')
+}
+
+function openReleaseSignoffModal() {
+  releaseSignoffForm.releaseId = releaseSignoffs.value?.snapshot.releaseId || 'p6-controlled-pre-release'
+  releaseSignoffForm.role = 'product'
+  releaseSignoffForm.reviewerType = 'internal_simulation'
+  releaseSignoffForm.decision = 'simulated'
+  releaseSignoffForm.notes = ''
+  releaseSignoffForm.evidenceRef = ''
+  releaseSignoffVisible.value = true
+}
+
+async function submitReleaseSignoff() {
+  if (!releaseSignoffForm.releaseId.trim() || !releaseSignoffForm.notes.trim()) {
+    message.warning('请填写发布批次和评审记录')
+    return
+  }
+  releaseSignoffSubmitting.value = true
+  const result = await api.post('ai/release-signoffs', {
+    releaseId: releaseSignoffForm.releaseId.trim(),
+    role: releaseSignoffForm.role,
+    reviewerType: releaseSignoffForm.reviewerType,
+    decision: releaseSignoffForm.decision,
+    notes: releaseSignoffForm.notes.trim(),
+    evidenceRef: releaseSignoffForm.evidenceRef.trim() || undefined,
+  })
+  releaseSignoffSubmitting.value = false
+  if (result.code !== 0) {
+    message.error(result.message || '发布签核记录追加失败')
+    return
+  }
+  releaseSignoffVisible.value = false
+  message.success(releaseSignoffForm.reviewerType === 'internal_simulation'
+    ? '内部模拟记录已追加，不计入正式批准'
+    : '人工评审记录已追加')
+  await loadReleaseSignoffs()
 }
 
 async function loadWorkflowSample() {
@@ -2066,6 +2560,18 @@ async function loadFeedback() {
   feedbackLoading.value = false
   if (result.code === 0) feedback.value = result.data
   else message.error(result.message || '回答反馈查询失败')
+}
+
+async function loadAnswerQualityEvaluations() {
+  answerQualityLoading.value = true
+  const result = await api.get<AiAnswerQualityEvaluationResult>('ai/quality/recent', {
+    category: answerQualityFilters.category || undefined,
+    passed: answerQualityFilters.passed === '' ? undefined : answerQualityFilters.passed === 'true',
+    limit: answerQualityFilters.limit,
+  })
+  answerQualityLoading.value = false
+  if (result.code === 0) answerQuality.value = result.data
+  else message.error(result.message || '内部模拟评测查询失败')
 }
 
 async function loadGoldenCandidates() {
@@ -2296,6 +2802,8 @@ async function loadProductionGateEvidence() {
     can(P.aiAuditView) ? loadQuality() : Promise.resolve(),
     can(P.aiAuditView) ? loadInAppNotifications() : Promise.resolve(),
     can(P.aiAuditView) ? loadFeedback() : Promise.resolve(),
+    can(P.aiAuditView) ? loadAnswerQualityEvaluations() : Promise.resolve(),
+    can(P.aiOpsView) ? loadReleaseSignoffs() : Promise.resolve(),
   ])
   productionGateLoading.value = false
   message.success('生产门禁证据已刷新')
@@ -2306,7 +2814,7 @@ function exportProductionGateMarkdown() {
   const rows = productionGateRows.value
   const totals = productionGateTotals.value
   const lines = [
-    '# SPdex AI MCP P5 生产灰度门禁报告',
+    '# SPdex AI MCP 生产灰度门禁报告',
     '',
     `生成时间：${generatedAt}`,
     `结论：${productionGateConclusion.value.title}`,
@@ -2316,8 +2824,9 @@ function exportProductionGateMarkdown() {
     '',
     '- 当前仍是测试环境和 allowlist 灰度，不代表正式公开售卖。',
     '- 当前应保持 billable=false，不生成正式账单，不扣真实额度。',
-    '- Billing ledger 仍处于影子验证链路；正式售卖前必须完成无差异对账和财务签字。',
+    '- Billing ledger 仍处于影子验证链路；正式售卖前必须完成中心账本、持久双写、送达确认、冲正落账、无差异对账和财务签字。',
     '- 当前只开放站内通知，email/webhook 外部投递保持关闭。',
+    '- 内部模拟评测和模拟签核只作为研发证据，不具备正式人工批准效力。',
     '',
     '## 检查项',
     '',
@@ -2330,6 +2839,47 @@ function exportProductionGateMarkdown() {
       row.evidence,
       row.nextAction,
     ].map(markdownTableCell).join(' | ')).map(line => `| ${line} |`),
+    '',
+    '## Usage 与 Billing Ledger 对账',
+    '',
+    billingReconciliation.value
+      ? `- 状态：${billingReconciliation.value.matches ? '一致' : '存在差异'}；调用差异 ${billingReconciliation.value.totals.callDelta}；用量差异 ${billingReconciliation.value.totals.usageUnitDelta}。`
+      : '- 尚未加载对账证据。',
+    '',
+    '## 模型成本基线',
+    '',
+    '| Provider | Model | 调用 | 失败 | 输入 tokens | 输出 tokens | 平均响应 ms |',
+    '| --- | --- | ---: | ---: | ---: | ---: | ---: |',
+    ...(modelUsage.value?.summary.items.length
+      ? modelUsage.value.summary.items.map(row => `| ${[
+          row.provider,
+          row.model,
+          row.calls,
+          row.failedCalls,
+          row.inputTokens,
+          row.outputTokens,
+          row.averageDurationMs,
+        ].map(markdownTableCell).join(' | ')} |`)
+      : ['| 未加载 | — | 0 | 0 | 0 | 0 | 0 |']),
+    '',
+    '## 发布签核',
+    '',
+    `- 发布批次：${releaseSignoffs.value?.snapshot.releaseId || '未加载'}`,
+    `- 正式人工签核：${releaseSignoffs.value?.snapshot.formalReady ? '已齐备' : '未齐备'}`,
+    '- 内部模拟记录不计入正式批准。',
+    '',
+    '| 责任角色 | 最新结论 | 评审类型 | 评审人 | 时间 | 证据引用 |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...(releaseSignoffs.value?.snapshot.roles.length
+      ? releaseSignoffs.value.snapshot.roles.map(role => `| ${[
+          releaseRoleLabel(role.role),
+          releaseDecisionLabel(role.latest?.decision),
+          role.latest?.reviewerType === 'human' ? '人工评审' : role.latest ? '内部模拟' : '无记录',
+          role.latest?.reviewer || '—',
+          role.latest ? fmt(role.latest.createdAtUtc) : '—',
+          role.latest?.evidenceRef || '—',
+        ].map(markdownTableCell).join(' | ')} |`)
+      : ['| 未加载 | — | — | — | — | — |']),
   ]
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -2410,6 +2960,23 @@ function selectedRangeLabels(): [string, string] {
 }
 function fmt(value?: string | null) {
   return value ? value.substring(0, 19).replace('T', ' ') : '—'
+}
+function releaseRoleLabel(value?: string | null) {
+  return {
+    product: '产品负责人',
+    finance: '财务负责人',
+    security: '安全负责人',
+    operations: '运维负责人',
+    football_expert: '足球专家',
+  }[String(value ?? '')] ?? String(value || '未知角色')
+}
+function releaseDecisionLabel(value?: string | null) {
+  return {
+    approved: '人工已批准',
+    rejected: '不批准',
+    needs_work: '需要完善',
+    simulated: '完成内部模拟',
+  }[String(value ?? '')] ?? '暂无记录'
 }
 function percentile(sorted: number[], value: number) {
   if (!sorted.length) return 0
@@ -2576,6 +3143,18 @@ function severityLabel(value: string) {
   }
   return labels[value] ?? value
 }
+function answerQualityCategoryLabel(value: string) {
+  const labels: Record<string, string> = {
+    big_trades: '大额交易',
+    market_anomaly: '市场异常',
+    prediction_divergence: '预测市场背离',
+    watch_condition: '观察条件',
+    live_signal: '赛中信号',
+    metric_explanation: '指标解释',
+    general: '通用问题',
+  }
+  return labels[value] ?? value
+}
 function goldenCandidateLabel(value: string) {
   const labels: Record<string, string> = {
     positive_verified: '正向优秀样本',
@@ -2627,10 +3206,13 @@ function feedbackActionButton(row: AiAnswerFeedbackRow, status: string, label: s
 onMounted(() => {
   if (can(P.aiUsageView)) loadUsage()
   if (can(P.aiBillingReconcile)) loadBillingEvidence()
+  if (can(P.aiOpsView)) loadReleaseSignoffs()
   if (can(P.aiAuditView)) {
     loadAudit()
+    loadModelUsage()
     loadInAppNotifications()
     loadFeedback()
+    loadAnswerQualityEvaluations()
     loadGoldenCandidates()
     if (activeTab.value === 'trace' && traceId.value) {
       loadTrace()

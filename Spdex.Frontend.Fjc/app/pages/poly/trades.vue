@@ -153,25 +153,6 @@ function localizeName(name: string): string {
 // 服务端已按 serverConditionId/serverOutcome 过滤，这里直接使用返回的 items
 const filteredItems = computed(() => ticks.value?.items ?? [])
 
-// ── 统计 ──
-interface TradeStats {
-  count: number
-  buyCount: number
-  sellCount: number
-  buyAmount: number
-  sellAmount: number
-}
-
-function computeStats(trades: PolymarketTradeTick[]): TradeStats {
-  let buyCount = 0, sellCount = 0, buyAmount = 0, sellAmount = 0
-  for (const t of trades) {
-    const notional = t.price * t.size
-    if (t.side === 'BUY') { buyCount++; buyAmount += notional }
-    else { sellCount++; sellAmount += notional }
-  }
-  return { count: trades.length, buyCount, sellCount, buyAmount, sellAmount }
-}
-
 // 全量统计（来自 meta 聚合 API，非当前页）
 const globalStats = computed(() => {
   if (!meta.value?.markets) return { count: 0, buyCount: 0, sellCount: 0, buyAmount: 0, sellAmount: 0 }

@@ -65,6 +65,83 @@ export interface AiOpsBillingStatus {
   latestRecordAtUtc: string | null
   failureCount: number
   lastError: string | null
+  deliveryPolicy: string
+  centralized: boolean
+  durableDoubleWrite: boolean
+  deliveryFinalizationEnabled: boolean
+  appliedAdjustmentsEnabled: boolean
+  replicationEnabled: boolean
+  replicationHealthy: boolean
+  pendingReplicationEvents: number
+  deadLetterReplicationEvents: number
+  lastReplicatedAtUtc: string | null
+  commercialBillingReady: boolean
+}
+
+export interface AiAgentModelUsageRow {
+  provider: string
+  model: string
+  calls: number
+  successfulCalls: number
+  failedCalls: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  toolUsageUnits: number
+  averageDurationMs: number
+  maximumDurationMs: number
+  lastSeenUtc: string | null
+}
+
+export interface AiAgentModelUsageSummary {
+  fromUtc: string
+  toUtc: string
+  calls: number
+  successfulCalls: number
+  failedCalls: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  toolUsageUnits: number
+  averageDurationMs: number
+  items: AiAgentModelUsageRow[]
+}
+
+export interface AiAgentModelUsageResult {
+  generatedAtUtc: string
+  summary: AiAgentModelUsageSummary
+}
+
+export interface AiReleaseSignoffRecord {
+  signoffId: string
+  releaseId: string
+  role: string
+  reviewerType: 'human' | 'internal_simulation'
+  reviewer: string
+  decision: 'approved' | 'rejected' | 'needs_work' | 'simulated'
+  notes: string
+  evidenceRef: string | null
+  createdAtUtc: string
+}
+
+export interface AiReleaseSignoffRoleStatus {
+  role: string
+  formallyApproved: boolean
+  latest: AiReleaseSignoffRecord | null
+}
+
+export interface AiReleaseSignoffSnapshot {
+  releaseId: string
+  formalReady: boolean
+  requiredRoles: string[]
+  roles: AiReleaseSignoffRoleStatus[]
+  items: AiReleaseSignoffRecord[]
+}
+
+export interface AiReleaseSignoffResult {
+  generatedAtUtc: string
+  boundary: 'internal_simulation_never_counts_as_formal_approval'
+  snapshot: AiReleaseSignoffSnapshot
 }
 
 export interface AiOrganization {
@@ -111,6 +188,27 @@ export interface AiCredentialIssue {
   credential: AiCredential
   accessToken: string
   tokenType: string
+}
+
+export interface AiCredentialIncidentRecord {
+  incidentId: string
+  credentialId: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  action: 'detected' | 'investigating' | 'rotated' | 'revoked' | 'contained' | 'closed'
+  reporter: string
+  notes: string
+  evidenceRef: string | null
+  createdAtUtc: string
+}
+
+export interface AiCredentialIncidentResult {
+  generatedAtUtc: string
+  appendOnly: boolean
+  snapshot: {
+    count: number
+    openCredentialCount: number
+    items: AiCredentialIncidentRecord[]
+  }
 }
 
 export interface AiUsageRow {
@@ -196,6 +294,17 @@ export interface AiBillingLedgerStatus {
   recordCount: number
   latestRecordAtUtc: string | null
   failureCount: number
+  deliveryPolicy: string
+  centralized: boolean
+  durableDoubleWrite: boolean
+  deliveryFinalizationEnabled: boolean
+  appliedAdjustmentsEnabled: boolean
+  replicationEnabled: boolean
+  replicationHealthy: boolean
+  pendingReplicationEvents: number
+  deadLetterReplicationEvents: number
+  lastReplicatedAtUtc: string | null
+  commercialBillingReady: boolean
 }
 
 export interface AiBillingPreviewResult {
@@ -484,6 +593,38 @@ export interface AiGoldenSampleCandidateResult {
   limit: number
   count: number
   items: AiGoldenSampleCandidateRow[]
+}
+
+export interface AiAnswerQualityCheck {
+  key: string
+  label: string
+  passed: boolean
+  weight: number
+  message: string
+  critical: boolean
+}
+
+export interface AiAnswerQualityEvaluation {
+  evaluationId: string
+  category: string
+  score: number
+  passed: boolean
+  reviewerMode: string
+  traceId: string | null
+  answerId: string | null
+  toolNames: string[]
+  checks: AiAnswerQualityCheck[]
+  recommendations: string[]
+  evaluatedAtUtc: string
+}
+
+export interface AiAnswerQualityEvaluationResult {
+  generatedAtUtc: string
+  reviewerBoundary: string
+  count: number
+  passedCount: number
+  failedCount: number
+  items: AiAnswerQualityEvaluation[]
 }
 
 export interface AiAgentAutomationTaskRow {

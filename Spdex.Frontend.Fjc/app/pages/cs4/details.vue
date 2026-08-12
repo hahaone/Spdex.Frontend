@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { BigHoldItemView, PriceSizeRow } from '~/types/bighold'
 import type { UoTimeWindowData } from '~/types/uobighold'
-import type { GlBigItem } from '~/types/glbighold'
 import { parseRawData } from '~/utils/parseRawData'
 import { formatMoney, formatDateTime, formatMatchTime, formatPercent } from '~/utils/formatters'
 import { holdClass, amountClass, pmarkClass, priceBgClass, tradedClass } from '~/utils/styleHelpers'
@@ -105,12 +104,6 @@ function getLastPriceRows(selectionId: number): PriceSizeRow[] {
   const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
   if (!lp?.rawData) return []
   return parseRawData(lp.rawData)
-}
-
-function hasLargeOrder(selectionId: number): boolean {
-  if (!activeWindow.value?.lastPrices) return false
-  const lp = activeWindow.value.lastPrices.find(p => p.selectionId === selectionId)
-  return lp?.hasLargeOrderAt500Or1000 ?? false
 }
 
 /** 百分比格式化 */

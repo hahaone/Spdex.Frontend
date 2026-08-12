@@ -266,6 +266,7 @@ jobs:
             NUXT_PUBLIC_HELP_BASE_URL=https://help-test.spdex.com
             NUXT_PUBLIC_NEWSPDEX_URL=https://new.spdex.com
             NUXT_PUBLIC_MCP_DOCS_URL=/ai/mcp-quickstart
+            NUXT_PUBLIC_HELP_CONTENT_PROFILE=test
           tags: |
             ${{ env.IMAGE_HELP }}:latest
             ${{ env.IMAGE_HELP }}:${{ github.sha }}
@@ -521,6 +522,7 @@ jobs:
               -e NUXT_PUBLIC_PUBLIC_BASE_URL=https://help-test.spdex.com \
               -e NUXT_PUBLIC_NEWSPDEX_URL=https://new.spdex.com \
               -e NUXT_PUBLIC_MCP_DOCS_URL=/ai/mcp-quickstart \
+              -e NUXT_PUBLIC_HELP_CONTENT_PROFILE=test \
               -e NUXT_PORT=3006 \
               -e PORT=3006 \
               -e NITRO_PORT=3006 \
@@ -544,13 +546,24 @@ jobs:
       - name: Verify help-test public route
         run: |
           set -euo pipefail
-          code="$(curl -k -sS -o /tmp/spdex-help-test-public.html -w "%{http_code}" --max-time 20 https://help-test.spdex.com/ || true)"
-          if [ "$code" != "200" ]; then
+          curl -k -sS -D /tmp/spdex-help-test-public.headers -o /dev/null --max-time 20 https://help-test.spdex.com/ || true
+          code="$(awk 'toupper($1) ~ /^HTTP\// { value=$2 } END { print value }' /tmp/spdex-help-test-public.headers)"
+          if [ "$code" != "401" ]; then
             echo "https://help-test.spdex.com/ -> unexpected HTTP ${code:-000}"
             exit 1
           fi
-          if ! grep -q "SPdex 帮助中心" /tmp/spdex-help-test-public.html; then
-            echo "help-test response does not look like SPdex Help Center."
+          if ! grep -qi '^x-robots-tag:.*noindex' /tmp/spdex-help-test-public.headers; then
+            echo "help-test unauthorized response is missing X-Robots-Tag: noindex."
             exit 1
           fi
-          echo "https://help-test.spdex.com/ -> 200"
+
+          curl -k -fsS -D /tmp/spdex-help-test-robots.headers -o /tmp/spdex-help-test-robots.txt --max-time 20 https://help-test.spdex.com/robots.txt
+          if ! grep -q '^Disallow:$' /tmp/spdex-help-test-robots.txt; then
+            echo "help-test robots.txt does not allow crawlers to consume the removal signals."
+            exit 1
+          fi
+          if ! grep -qi '^x-robots-tag:.*noindex' /tmp/spdex-help-test-robots.headers; then
+            echo "help-test robots.txt response is missing X-Robots-Tag: noindex."
+            exit 1
+          fi
+          echo "https://help-test.spdex.com/ -> protected (401), robots=noindex removal phase"

@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import type { ApiResponse } from '~/types/api'
 import type {
   Signal,
   SignalListResult,
   SignalModelSummary,
   SignalHistoryResult,
   SignalStats,
-  SignalRecord,
-  ConditionResult,
-  SignalSnapshot,
 } from '~/types/signal'
 import { formatMatchTimeSlash, formatDateTime, formatMoney } from '~/utils/formatters'
 
@@ -59,16 +55,6 @@ function openDetail(signal: Signal) {
 }
 function closeDetail() {
   detailSignal.value = null
-}
-
-// 解析 JSON 快照（历史记录用）
-function parseSnapshot(json: string | null): SignalSnapshot | null {
-  if (!json) return null
-  try { return JSON.parse(json) } catch { return null }
-}
-function parseConditions(json: string | null): ConditionResult[] {
-  if (!json) return []
-  try { return JSON.parse(json) } catch { return [] }
 }
 
 // ── 信号操作 ──

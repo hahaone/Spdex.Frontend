@@ -39,6 +39,7 @@ function ratio2(v: number | undefined): string { return v != null && v > 0 ? v.t
 // 旧站着色:挂牌指数 正蓝/负绿;亚洲指数 正红/负紫。
 function guaClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-blue' : 'c-green') }
 function asianClass(v: number | undefined): string { return v == null || v === 0 ? '' : (v > 0 ? 'c-red' : 'c-purple') }
+function asianTendencyLabel(value: string | null | undefined): string { return value?.replace(/^让分/, '') ?? '' }
 // 旧站阈值:模拟盈亏 >60 标红、冷热指数 <0 标红(#5/#6)。
 function pnlClass(v: number | undefined): string { return v != null && v > 60 ? 'c-red' : '' }
 function heatClass(v: number | undefined): string { return v != null && v < 0 ? 'c-red' : '' }
@@ -101,7 +102,7 @@ const footballColumns: Col[] = [
   { key: 'hcpPrice', label: '让分价位', tone: 'handicap', get: i => odds(props.match.handicapOdds?.[i]) },
   { key: 'listing3', label: '挂牌指数', tone: 'handicap', get: i => pct2(props.match.stockHandicap?.[i]), cls: i => guaClass(props.match.stockHandicap?.[i]) },
   // 其他(VendorBase 同源)
-  { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct2(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : ''), sub: i => (i === 1 ? (props.match.asianIndexTo ?? '') : '') },
+  { key: 'asian', label: '亚洲指数', tone: 'extra', get: i => (i === 1 ? pct2(props.match.asianIndex) : ''), cls: i => (i === 1 ? asianClass(props.match.asianIndex) : ''), sub: i => (i === 1 ? asianTendencyLabel(props.match.asianIndexTo) : '') },
   { key: 'csIndex', label: '比分指数', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.csIndex) : '') },
   { key: 'goalBalance', label: '进球均衡', tone: 'extra', get: i => (i === 1 ? ratio2(props.match.goalBalance) : '') },
 ]
@@ -199,7 +200,7 @@ td {
   text-overflow: ellipsis;
 }
 
-/* 亚洲指数值下方的实时倾向小字(让分主/让分客) */
+/* 亚洲指数值下方的实时倾向小字（主/客）。 */
 .cell-sub {
   display: block;
   margin-top: 1px;

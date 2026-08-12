@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { AsianHcRow, AsianHcGroup, AsianTimeWindowData, AsianBigItem } from '~/types/asianbighold'
-import type { PriceSizeRow, PreviousRecordResult } from '~/types/bighold'
-import type { ApiResponse } from '~/types/api'
+import type { PriceSizeRow } from '~/types/bighold'
 import { parseRawData, calcTradedDiff } from '~/utils/parseRawData'
 import { formatMoney, formatMatchTimeFull, formatPercent, formatOdds, formatDense, formatBestPrice, formatNetPayout, formatTimeWithSeconds } from '~/utils/formatters'
 import { highlightClass } from '~/utils/styleHelpers'

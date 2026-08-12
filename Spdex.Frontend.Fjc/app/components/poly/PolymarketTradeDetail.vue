@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed } from 'vue'
 import type { PolymarketTradeTick } from '~/types/polymarket'
-import { formatPolyOdds, ODDS_FORMAT_KEY, type OddsFormat } from '~/composables/usePolymarketMetrics'
 import { outcomeLabel } from '~/composables/useMarketClassification'
 import dayjs from 'dayjs'
 
@@ -18,8 +17,6 @@ const props = withDefaults(
 function displayOutcome(outcome: string): string {
   return outcomeLabel(outcome, props.sportsMarketType, props.question)
 }
-
-const oddsFormat = inject(ODDS_FORMAT_KEY, ref<OddsFormat>('decimal'))
 
 // ── 筛选 ──
 type FilterKey = 'all' | 'yes' | 'no'
@@ -69,9 +66,6 @@ const yesStats = computed(() => computeStats(props.trades.filter(t => t.outcome 
 const noStats = computed(() => computeStats(props.trades.filter(t => t.outcome === 'No')))
 
 // ── 格式化 ──
-function fmt(price: number | null | undefined): string {
-  return formatPolyOdds(price, oddsFormat.value)
-}
 function formatTime(utc: string): string {
   return dayjs(utc).format('MM-DD HH:mm:ss')
 }

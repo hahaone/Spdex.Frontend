@@ -172,6 +172,7 @@ export interface AiAgentWorkflowRecord {
   description?: string | null
   matchRequired: boolean
   steps: AiAgentWorkflowStep[]
+  version: number
   runCount: number
   createdAtUtc: string
   updatedAtUtc: string

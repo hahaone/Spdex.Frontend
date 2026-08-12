@@ -3,15 +3,19 @@ import { ArrowRight, BookOpen, Bot, LifeBuoy, Search, ShieldCheck } from '@lucid
 import type { HelpArticle, HelpCategoryId } from '~/data/helpContent'
 import {
   findArticle,
+  getVisibleHelpSections,
   getArticlePath,
   glossaryTerms,
   helpArticles,
   helpCategories,
   learningPaths,
   supportChecklist,
+  normalizeHelpContentProfile,
 } from '~/data/helpContent'
 
 const query = ref('')
+const runtimeConfig = useRuntimeConfig()
+const contentProfile = computed(() => normalizeHelpContentProfile(runtimeConfig.public.helpContentProfile))
 const selectedCategory = ref<'all' | HelpCategoryId>('all')
 
 const normalizedQuery = computed(() => query.value.trim().toLowerCase())
@@ -25,7 +29,7 @@ const activeArticles = computed(() => {
       article.audience,
       article.level,
       ...article.tags,
-      ...article.sections.flatMap(section => [
+      ...getVisibleHelpSections(article, contentProfile.value).flatMap(section => [
         section.heading,
         ...section.body,
         ...(section.bullets ?? []),

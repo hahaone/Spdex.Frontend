@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { createChart, LineSeries, type IChartApi, type LineData, type Time, ColorType, LineStyle, CrosshairMode } from 'lightweight-charts'
+import { createChart, LineSeries, ColorType, LineStyle, CrosshairMode, type ChartOptions, type DeepPartial, type IChartApi, type ISeriesApi, type LineData, type MouseEventParams, type Time } from 'lightweight-charts'
 import type { TrendChartSeries, TrendDataPoint } from '~/utils/polymarketChart'
 import dayjs from 'dayjs'
 
@@ -50,7 +50,8 @@ function selectPreset(p: TimePreset) { activePreset.value = p; applyTimeRange() 
 // ─── Chart ───
 const chartContainer = ref<HTMLDivElement | null>(null)
 let chart: IChartApi | null = null
-let seriesList: { api: any; meta: TrendChartSeries; points: TrendDataPoint[] }[] = []
+let seriesList: { api: ISeriesApi<'Line'>; meta: TrendChartSeries; points: TrendDataPoint[] }[] = []
+const resizeObservers = new WeakMap<HTMLDivElement, ResizeObserver>()
 
 function dedupeByTime(pts: { time: Time; value: number }[]): LineData[] {
   if (!pts.length) return []
@@ -101,9 +102,9 @@ const tzOffsetSec = -new Date().getTimezoneOffset() * 60
 
 function buildChart() {
   if (!chartContainer.value || !props.series.length) return
-  if (chart) { chart.remove(); chart = null; seriesList = [] }
+  if (chart) { disconnectResizeObserver(); chart.remove(); chart = null; seriesList = [] }
 
-  chart = createChart(chartContainer.value, {
+  const chartOptions: DeepPartial<ChartOptions> = {
     width: chartContainer.value.clientWidth,
     height: props.height,
     layout: {
@@ -126,7 +127,9 @@ function buildChart() {
     timeScale: { borderVisible: false, rightOffset: 8, fixLeftEdge: true, fixRightEdge: true, timeVisible: true, secondsVisible: false },
     handleScroll: { mouseWheel: false, pressedMouseMove: false },
     handleScale: { mouseWheel: false, pinch: false },
-  } as any)
+  }
+
+  chart = createChart(chartContainer.value, chartOptions)
 
   let hasData = false
   for (const s of props.series) {
@@ -160,7 +163,7 @@ function buildChart() {
   if (hasData) applyTimeRange()
 
   const localChart = chart
-  chart.subscribeCrosshairMove((param: any) => {
+  chart.subscribeCrosshairMove((param: MouseEventParams<Time>) => {
     if (!param?.time) {
       isHovering.value = false
       hoverTime.value = null
@@ -203,7 +206,7 @@ function buildChart() {
     if (chart && chartContainer.value) chart.applyOptions({ width: chartContainer.value.clientWidth })
   })
   obs.observe(chartContainer.value)
-  ;(chartContainer.value as any).__ro = obs
+  resizeObservers.set(chartContainer.value, obs)
 }
 
 function applyTimeRange() {
@@ -222,8 +225,15 @@ function applyTimeRange() {
 }
 
 onMounted(() => nextTick(buildChart))
+function disconnectResizeObserver() {
+  if (!chartContainer.value) return
+  const observer = resizeObservers.get(chartContainer.value)
+  if (!observer) return
+  observer.disconnect()
+  resizeObservers.delete(chartContainer.value)
+}
 onUnmounted(() => {
-  if (chartContainer.value) { const o = (chartContainer.value as any).__ro; if (o) o.disconnect() }
+  disconnectResizeObserver()
   if (chart) { chart.remove(); chart = null }
 })
 watch(() => [props.series, props.timeRange], () => nextTick(buildChart), { deep: true })

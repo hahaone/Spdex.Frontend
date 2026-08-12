@@ -1,5 +1,15 @@
 import { defineEventHandler, readBody, setCookie } from 'h3'
 
+interface AdminAuthResponse {
+  code?: number
+  message?: string
+  data?: {
+    token?: string
+    expiresAt?: string
+    admin?: unknown
+  }
+}
+
 // 登录：转发后端校验，成功后把 AdminJwt 写入 httpOnly cookie（前端 JS 取不到）。
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -12,7 +22,9 @@ export default defineEventHandler(async (event) => {
     body: JSON.stringify({ userName: body?.userName, password: body?.password }),
   }).catch(() => null)
 
-  const json: any = upstream ? await upstream.json().catch(() => null) : null
+  const json = upstream
+    ? await upstream.json().catch(() => null) as AdminAuthResponse | null
+    : null
 
   if (!json || json.code !== 0 || !json.data?.token) {
     return { code: json?.code ?? 401, message: json?.message || '登录失败', data: null }

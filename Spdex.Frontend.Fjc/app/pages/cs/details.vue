@@ -158,9 +158,12 @@ watch(bigList, (list) => {
 }, { immediate: true })
 
 // ── 高亮/样式（页面特有逻辑） ──
-function ssdClassFor(val: number, w: GlTimeWindowData, field: 'MaxBet' | 'TotalBet' | 'MaxHold' | 'TotalHold'): string {
-  const t3 = (w as any)[`threshold3Sigma${field}`] as number
-  const t2 = (w as any)[`threshold2Sigma${field}`] as number
+type SigmaField = 'MaxBet' | 'TotalBet' | 'MaxHold' | 'TotalHold'
+type GlSigmaKey = `threshold${2 | 3}Sigma${SigmaField}`
+
+function ssdClassFor(val: number, w: GlTimeWindowData, field: SigmaField): string {
+  const t3 = w[`threshold3Sigma${field}` as GlSigmaKey]
+  const t2 = w[`threshold2Sigma${field}` as GlSigmaKey]
   return ssdClass(val, t2, t3)
 }
 

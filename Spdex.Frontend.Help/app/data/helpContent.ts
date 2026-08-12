@@ -1,6 +1,7 @@
 export type HelpStatus = '指南' | '参考' | '安全' | '专题' | '进阶'
 export type HelpLevel = '入门' | '进阶' | '专家'
 export type HelpCategoryId = 'ai' | 'betfair' | 'poly' | 'live' | 'tools'
+export type HelpContentProfile = 'test' | 'public'
 
 export interface HelpMetric {
   label: string
@@ -28,6 +29,7 @@ export interface HelpSection {
   metrics?: HelpMetric[]
   table?: HelpTable
   callout?: HelpCallout
+  profiles?: HelpContentProfile[]
 }
 
 export interface HelpArticle {
@@ -106,7 +108,7 @@ export const helpArticles: HelpArticle[] = [
     level: '入门',
     readMinutes: 6,
     category: 'ai',
-    updated: '2026-08-01',
+    updated: '2026-08-05',
     tags: ['AI', 'NewSpdex', '自然语言'],
     sections: [
       {
@@ -126,7 +128,7 @@ export const helpArticles: HelpArticle[] = [
           '选择一场比赛，点击“分析这场”或继续问“查看这场比赛快照”。',
           '按一个方向追问，例如“大额交易”“成交量时间分布”“亚洲让球走势”或“预测市场背离”。',
           '如果回答看不懂，点“看不懂”或继续问“用普通话解释这些字段”。',
-          '需要后续复盘时，保存结果或流程，并保留客服追踪号或 trace_id。',
+          '需要后续复盘时，保存结果或流程；遇到问题时保留页面显示的回答追踪号。',
         ],
       },
       {
@@ -148,16 +150,36 @@ export const helpArticles: HelpArticle[] = [
           '回答里的排行、异常、Hold、共振、外部预测市场差异，都只能理解为市场观察。它们不是投注建议、胜负推荐或确定性预测。',
         ],
         bullets: [
-          '优先确认 match_id、主客队、联赛和比赛时间是否正确。',
-          '查看数据截止时间、missing_fields 和 permission_locked。',
-          '复杂结论应带 evidence refs 或可追溯字段。',
-          '遇到问题时保留问题原文、时间和 trace_id。',
+          '优先确认赛事、主客队、联赛和比赛时间是否正确。',
+          '查看数据截止时间，以及页面是否提示“数据暂缺”或“当前权限不可见”。',
+          '复杂结论应说明关键依据及其来源范围。',
+          '遇到问题时保留问题原文、发生时间和回答追踪号。',
         ],
       },
       {
         heading: '入口与权限',
         body: [
           'AI 观察助手是否可见取决于账号权限和功能开通范围。看不到入口时，优先确认当前账号、会员权益或企业权限是否覆盖对应功能。',
+        ],
+      },
+      {
+        heading: '历史记录与数据管理',
+        body: [
+          '普通分析记录默认保留 30 天；主动保存的记录和用户提交的回答反馈可保留更长时间，便于复盘、问题回查和服务改进。企业合同可约定更短的保留时间。',
+          '删除分析记录后，问题和回答正文会立即从用户可见历史中移除并脱敏。为防止滥用、核对用量和处理安全事件，系统可能继续保留不含正文的最小审计信息。',
+        ],
+        bullets: [
+          '主动保存的分析记录默认最长保留 365 天，可随时取消保存或删除。',
+          '回答反馈默认最长保留 365 天，用于问题回查和质量改进。',
+          '企业账号默认不进入内部回答质量样本池；如合同另有约定，以企业数据条款为准。',
+          '导出和运营查看只提供必要字段，并隐藏凭证、授权头、内部数据源和原始下游内容。',
+        ],
+      },
+      {
+        heading: '保存、分享与导出',
+        body: [
+          '“保存最新结果”用于以后在分析记录中快速找回回答；“保存为流程”会把当前对话中的提问顺序整理成可复用步骤；“导出对话报告”会生成适合归档的 Markdown 文件。',
+          '导出报告只包含用户可见的问题、结论、关键依据、数据边界和建议追问，不包含模型配置、工具代码、内部接口、原始数据或授权信息。',
         ],
       },
     ],
@@ -169,9 +191,9 @@ export const helpArticles: HelpArticle[] = [
     audience: 'MCP 用户和企业 Agent',
     status: '指南',
     level: '进阶',
-    readMinutes: 8,
+    readMinutes: 10,
     category: 'ai',
-    updated: '2026-08-01',
+    updated: '2026-08-08',
     tags: ['MCP', 'Agent', 'OAuth', 'Token'],
     sections: [
       {
@@ -185,6 +207,21 @@ export const helpArticles: HelpArticle[] = [
         heading: '接入地址',
         body: [
           'Remote MCP 接入地址以账号中心或企业配置页展示为准。配置时请确认客户端支持 HTTPS Remote MCP、授权回调和所需的鉴权方式。',
+        ],
+      },
+      {
+        heading: '获取访问凭证',
+        body: [
+          '个人用户登录 NewSpdex 后，进入会员中心的“AI 与 MCP 连接”，点击“新建”。请用客户端和用途命名，选择有效期与所需授权范围，并在创建后立即把只完整显示一次的 token 保存到客户端安全配置中。',
+          '如果关闭页面前没有保存 token，原文无法恢复。请在连接列表中轮换该连接或重新创建，并用新 token 完成一次真实工具调用。访问页面被跳回首页或看不到新建入口时，说明当前账号尚未开通对应权限，请联系服务人员确认账号权益，不要借用他人账号或 token。',
+          '企业凭证由 SPdex 按企业主体、合同、授权范围、额度和安全策略配置。企业业务人员通常使用预配置 Agent，不应接触企业凭证原文；企业技术接入人员通过约定的安全渠道获取独立凭证。',
+        ],
+        steps: [
+          '登录 NewSpdex，进入会员中心的“AI 与 MCP 连接”。',
+          '新建连接，填写可识别的客户端名称和用途。',
+          '只选择当前任务需要的授权范围和有效期。',
+          '立即复制一次性显示的 token，并写入客户端凭证配置。',
+          '完成一次真实工具调用，再检查最近使用时间是否更新。',
         ],
       },
       {
@@ -204,9 +241,10 @@ export const helpArticles: HelpArticle[] = [
         heading: '鉴权方式',
         body: [
           '个人用户优先使用账号中心创建的一次性展示 MCP token；支持 remote OAuth 的客户端可走授权码和 PKCE；企业系统使用合同、scope、IP 限制和额度约束下的企业凭证。',
+          '凭证的 scope 决定有权调用哪些工具；客户端配置的工具子集只决定本次发现和加载哪些工具，不能扩大凭证权限。Help 门禁账号、NewSpdex 登录密码、模型 API key 和 SPdex MCP token 也不能互相替代。',
         ],
         bullets: [
-          '个人 token 通常以 spdx_mcp_ 开头，只显示一次。',
+          '个人接入凭证只显示一次；关闭窗口后无法再次查看原文。',
           'OAuth 授权可以在账号中心或客户端撤销。',
           '企业凭证不依赖某个员工个人会员，但会严格受合同控制。',
           '不要把 Authorization header、token、cookie 或本地配置文件发给聊天模型。',
@@ -215,7 +253,15 @@ export const helpArticles: HelpArticle[] = [
       {
         heading: '推荐 Agent 指令',
         body: [
-          '项目指令应要求 Agent 优先使用 SPdex MCP 查询赛事、盘口、指数、成交、异常、外部预测市场、赛中信号或字段解释，不要用网页搜索替代 SPdex 数据，也不要凭记忆编造 match_id、赔率、成交或结论。',
+          '项目指令应要求 Agent 优先使用 SPdex MCP 查询赛事、盘口、指数、成交、异常、外部预测市场、赛中信号或字段解释，不要用网页搜索替代 SPdex 数据，也不要凭记忆编造赛事编号、赔率、成交或结论。',
+        ],
+      },
+      {
+        heading: '接入失败怎么办',
+        body: [
+          '先确认客户端支持 HTTPS Remote MCP，再检查接入地址、授权状态、凭证有效期和已选工具范围。能够发现工具但无法调用，通常与权限、额度、参数或比赛数据可用性有关。',
+          '轮换 token 后应重启客户端连接并执行一次真实调用，同时确认旧 token 已失效。不要通过共享账号、复用个人 token 或扩大工具子集来绕过权限错误。',
+          '反馈时提供客户端名称和版本、发生时间、你输入的问题、页面错误提示和回答追踪号。不要发送凭证原文、授权请求头、Cookie 或完整配置文件。',
         ],
       },
     ],
@@ -283,7 +329,7 @@ export const helpArticles: HelpArticle[] = [
         table: {
           headers: ['要素', '示例'],
           rows: [
-            ['对象', '今天、英超、赫根 vs 卡尔马、match_id=35869272'],
+            ['对象', '今天、英超、赫根 vs 卡尔马、赛事编号 35869272'],
             ['市场', '成交量、亚洲让球、大小球、标盘、Poly/Kalshi'],
             ['窗口', '最近 15 分钟、过去 6 小时、赛前、赛中'],
             ['输出', '先给结论、列 3 条依据、说明数据限制'],
@@ -304,16 +350,72 @@ export const helpArticles: HelpArticle[] = [
     ],
   },
   {
+    slug: 'ai-workflows-automation',
+    title: '保存流程与自动化任务',
+    summary: '把一次有效的分析对话保存为可复用流程，并在预算和通知边界内创建自动任务。',
+    audience: '需要重复复盘的进阶用户',
+    status: '指南',
+    level: '进阶',
+    readMinutes: 7,
+    category: 'ai',
+    updated: '2026-08-05',
+    tags: ['工作流', '自动化', '预算', '通知'],
+    sections: [
+      {
+        heading: '什么时候保存流程',
+        body: [
+          '当一组追问能够稳定回答同类任务时，可以保存为流程。例如先看单场概览，再检查成交、走势、异常和跨市场差异。保存前可修改名称、说明、步骤文字和顺序。',
+        ],
+        examples: [
+          '单场快速复盘：数据概览 → 成交 → 走势 → 异常 → 后续观察。',
+          '大额交易复核：重大成交 → 时间分布 → 盘口同步 → 是否形成连续信号。',
+          '预测市场背离：内部标盘 → 外部市场 → 流动性 → 差异说明。',
+        ],
+      },
+      {
+        heading: '创建自动化任务',
+        body: [
+          '自动化任务保存后默认处于暂停状态。启用前需要确认运行频率、适用比赛、月度工具预算和站内通知。系统不会因为保存任务就立即持续运行。',
+        ],
+        steps: [
+          '选择一个已经保存并验证过的流程。',
+          '选择定时、比赛阶段或信号触发方式。',
+          '设置每日运行上限和月度工具预算。',
+          '确认当前只使用站内通知，然后保存任务。',
+          '先手动运行一次并查看完整结果，再显式启用。',
+        ],
+      },
+      {
+        heading: '预算、失败与暂停',
+        body: [
+          '任务会显示本月已用工具单位、剩余预算和最近运行状态。达到预算、缺少比赛、流程步骤不完整或数据暂不可用时，任务可能跳过、部分完成或失败。',
+        ],
+        bullets: [
+          '预算耗尽时先暂停任务，核对频率和流程步骤，不要直接反复重试。',
+          '失败详情会说明是否可以重试；只有可重试状态才会显示重新提交入口。',
+          '邮件和 Webhook 尚未开放给用户配置，自动化任务当前只支持站内通知。',
+          '自动化结果仍是数据观察，不构成投注建议或赛果预测。',
+        ],
+      },
+      {
+        heading: '安全与反馈',
+        body: [
+          '流程名称、步骤和任务备注中不要填写凭证、账号密码、授权请求头或企业敏感信息。反馈任务问题时，提供任务名称、运行时间、比赛和页面显示的运行记录编号即可。',
+        ],
+      },
+    ],
+  },
+  {
     slug: 'data-methods',
     title: '数据与分析口径',
     summary: '理解 NewSpdex、FJCX、外部预测市场、赛中信号和报告字段。',
     audience: '希望看懂结果的用户',
     status: '参考',
     level: '入门',
-    readMinutes: 9,
+    readMinutes: 12,
     category: 'ai',
-    updated: '2026-08-01',
-    tags: ['数据口径', '字段', 'NewSpdex', 'FJCX'],
+    updated: '2026-08-10',
+    tags: ['数据口径', '字段', '关注分', 'NewSpdex', 'FJCX'],
     sections: [
       {
         heading: '总原则',
@@ -330,13 +432,73 @@ export const helpArticles: HelpArticle[] = [
       {
         heading: '常见字段',
         body: [
-          'match_id 是 SPdex 内部赛事 ID，适合多轮追问使用。market 表示市场或盘口类型；selection 表示选项；price 表示价格、赔率或盘口价位；volume/turnover 表示成交量，但不同市场和平台不能直接混用。',
+          '赛事编号用于在多轮追问中锁定同一场比赛。市场表示盘口类型，选项表示主、平、客或大小球方向，价格表示赔率或盘口价位，成交量表示该市场的交易活跃度；不同平台的成交量不能直接混用。',
         ],
         bullets: [
-          'missing_fields 表示数据缺失，不等于 0。',
-          'permission_locked 表示字段存在但当前账号或 token 无权查看。',
-          'rank_score/watch_score 是观察排序分，不是胜率。',
-          'implied_probability 是价格推导的归一概率，不是预测模型承诺。',
+          '“数据暂缺”表示当前没有返回该项数据，不等于数值为 0。',
+          '“当前权限不可见”表示该项数据不在当前账号或接入凭证的权限范围内。',
+          '关注分或观察分只用于排序，不代表胜率。',
+          '隐含概率是由价格换算的参考概率，不是模型承诺。',
+        ],
+      },
+      {
+        heading: '关注分是什么',
+        body: [
+          '重点赛事中的关注分是系统按固定规则计算的观察排序分，用于从候选比赛中优先找出成交活跃、指数偏斜、带有观察标签或处于重点阶段的比赛。它由 MCP 数据工具计算，不是 AI 模型对赛果的判断。',
+          '关注分没有 100 分上限。分数更高只表示在同一种排行方式下更值得先查看，不能解释为胜率、预测置信度、推荐强度或投注价值。',
+        ],
+        callout: {
+          title: '不要把关注分当成概率',
+          body: '关注分 180 不表示 180 分满分，也不表示 80% 或任何其他胜率。不同排行方式产生的分数也不适合直接横向比较。',
+          tone: 'warning',
+        },
+      },
+      {
+        heading: '关注分如何计算',
+        body: [
+          '默认“重点关注”排行使用四部分相加：交易活跃分 + 市场偏斜分 + 标签分 + 比赛状态分。最终结果保留两位小数。',
+          '交易活跃分使用必发成交量和 POLY 成交量的十进制对数：10 × log10(max(1, 必发成交量)) + 8 × log10(max(1, POLY 成交量))。使用对数可以降低超大成交量对排序的绝对支配；某一端成交量为 0 时，该端贡献 0 分。',
+          '市场偏斜分分别取必发和 POLY 三个方向中的最大指数，再计算 max(0, 最大指数 - 40)。例如两个最大指数分别是 66 和 89，该项得分为 26 + 49 = 75。',
+        ],
+        bullets: [
+          '每个包含“异常”的标签加 40 分。',
+          '每个包含“双红”的标签加 35 分。',
+          '每个包含“P指”或“P 指”的标签加 25 分。',
+          '每个包含“成交”的标签加 15 分；其他标签加 8 分。',
+          '同一个标签只按最先命中的类别计一次；一场比赛的全部标签都会参与总分。',
+          '进行中的比赛加 100 分，未开赛比赛加 60 分，其他状态不加分。',
+          '页面上的排序理由最多展示前四条标签，但总分仍会计算全部标签。',
+        ],
+        examples: [
+          '示例：交易活跃分 93.56 + 市场偏斜分 75 + P 指标签分 25 + 进行中状态分 100 = 关注分 293.56。',
+        ],
+      },
+      {
+        heading: '不同排行方式使用哪些分项',
+        body: [
+          '系统先按选定方式计算，再按分数从高到低排列；分数相同时按比赛时间从早到晚排列。',
+        ],
+        table: {
+          headers: ['排行方式', '计算内容'],
+          rows: [
+            ['重点关注', '交易活跃分 + 市场偏斜分 + 标签分 + 状态分'],
+            ['交易活跃', '只计算交易活跃分'],
+            ['异常关注', '市场偏斜分 + 标签分'],
+            ['进行中', '进行中状态分 + 交易活跃分 + 市场偏斜分 + 标签分'],
+            ['即将开赛', '未开赛状态分 + 交易活跃分 + 市场偏斜分 + 标签分'],
+          ],
+        },
+      },
+      {
+        heading: '观察列表分与关注分的区别',
+        body: [
+          '观察列表还会在基础关注分上加入当前可用的观察能力，因此列表中的观察分可能高于重点赛事里的关注分。',
+        ],
+        bullets: [
+          '存在实时监控数据时加 15 分。',
+          '每条活跃信号加 25 分。',
+          '每个已关联的外部预测市场提供方加 5 分。',
+          '观察列表分同样只用于排序，不代表信号正确、赛果概率或投注价值。',
         ],
       },
       {
@@ -411,7 +573,7 @@ export const helpArticles: HelpArticle[] = [
       {
         heading: '常见错误',
         body: [
-          'permission_denied 表示没有授权、会员不足或合同不允许；quota_exceeded 表示当前主体达到每日额度；validation_error 表示日期、match_id、market、limit 等参数不合规；结果为空可能来自没有比赛、无市场数据、权限不足或上游缺失。',
+          '“没有权限”表示尚未授权、会员权益不足或企业合同未包含该能力；“额度已用完”表示当前账号或企业达到额度限制；“输入不正确”通常表示日期、赛事、市场或返回数量不合规。结果为空也可能是当天没有比赛、该市场暂无数据或当前权限不可见。',
         ],
       },
       {
@@ -432,8 +594,8 @@ export const helpArticles: HelpArticle[] = [
           '反馈时请尽量说明你问了什么、在哪个入口看到回答、回答哪里不对或看不懂。清楚的反馈能帮助我们回查数据、改进口径和优化界面。',
         ],
         bullets: [
-          '提供使用入口、客户端名称和版本、问题原文、发生时间、比赛名称或 match_id。',
-          '如果页面显示客服追踪号或 trace_id，请一并提供。',
+          '提供使用入口、客户端名称和版本、问题原文、发生时间、比赛名称或赛事编号。',
+          '如果页面显示客服追踪号或回答追踪号，请一并提供。',
           '指出问题类型：数据不准确、缺少关键背景、排序不合理、阈值需校准、字段不清楚、背离解释不足或表达看不懂。',
           '截图或导出内容必须先删除 token、Authorization header、cookie、账号、邮箱、手机号和企业敏感信息。',
         ],
@@ -443,7 +605,7 @@ export const helpArticles: HelpArticle[] = [
   {
     slug: 'ai-mcp-usage-quota',
     title: 'AI 与 MCP 用量、额度和安全边界',
-    summary: '了解 AI 观察助手和 SPdex MCP 的用量统计、额度口径、账单预演和凭证安全。',
+    summary: '了解 AI 观察助手和 SPdex MCP 的用量统计、额度口径、费用核对和凭证安全。',
     audience: 'NewSpdex 用户、MCP 用户和企业管理员',
     status: '安全',
     level: '进阶',
@@ -460,10 +622,11 @@ export const helpArticles: HelpArticle[] = [
         ],
       },
       {
-        heading: '当前阶段',
+        heading: '当前收费状态',
+        profiles: ['test'],
         body: [
-          'AI 观察助手和 SPdex MCP 当前处于测试与受控灰度准备阶段。后台可以查看调用用量、审计记录和账单预演，但正式价格、正式扣费和真实额度扣减尚未开启。',
-          '如果页面或后台显示 billable=false、billingMode=test_metering_only，表示这些记录只用于排查、容量评估和未来账单口径校准。',
+          '当前可以查看调用用量、审计记录和费用预演，但尚未开启正式价格、真实额度扣减或正式账单。',
+          '页面标记为“费用预演”或“仅供核对”的记录，只用于排查、容量评估和核对未来计费口径，不代表已经产生应付费用。',
         ],
         callout: {
           title: '不要把预演当作正式账单',
@@ -472,9 +635,23 @@ export const helpArticles: HelpArticle[] = [
         },
       },
       {
-        heading: '额度如何统计',
+        heading: '费用与额度从哪里确认',
+        profiles: ['public'],
         body: [
-          'SPdex 以 UTC 日期聚合工具调用用量，并按主体维度统计。主体可以是个人账号、企业组织、内部服务或接入客户端。',
+          '可用额度、套餐范围和费用状态以账号页面、企业管理页或已确认的服务协议为准。页面未显示价格或扣费状态时，不应根据历史截图、演示记录或口头说明推断费用。',
+          '如发现用量与实际调用不一致，请提供调用时间、客户端名称和回答追踪号，由客服核对审计计量和计费记录。请勿在工单中提交完整凭证。',
+        ],
+        callout: {
+          title: '以当前账号信息为准',
+          body: '套餐、额度和适用范围可能因个人账号与企业合同而不同，最终以当前账号页面和已确认协议为准。',
+          tone: 'info',
+        },
+      },
+      {
+        heading: '额度如何统计',
+        profiles: ['test'],
+        body: [
+          'SPdex 以 UTC 日期聚合工具调用用量，并按个人账号、企业组织和接入客户端分别统计。',
           '默认口径下，只有成功完成的工具调用计入预演可扣额度；失败调用仍进入审计记录，但不会计入预演账单。',
         ],
         bullets: [
@@ -486,6 +663,7 @@ export const helpArticles: HelpArticle[] = [
       },
       {
         heading: '怎样看账单预演',
+        profiles: ['test'],
         body: [
           '管理后台会把审计计量、预演可扣单位和排除单位分开展示。这样既能复盘真实调用，也能提前检查未来账单口径是否合理。',
           '如果看到“预演可扣单位”和“审计计量”不同，通常说明其中包含失败调用、校验错误或其他不计费事件。',
@@ -496,7 +674,24 @@ export const helpArticles: HelpArticle[] = [
             ['审计计量', '所有已记录工具调用的 usage units，用于排查和复盘。'],
             ['预演可扣单位', '按当前默认计费口径，可计入额度或账单预演的 usage units。'],
             ['排除单位', '失败或非计费调用产生的计量，只用于审计，不进入预演账单。'],
-            ['billable', '是否进入正式计费。未开启正式售卖前应为 false。'],
+            ['正式计费状态', '明确区分费用预演与正式账单；正式收费开启前，预演记录不会产生应付费用。'],
+          ],
+        },
+      },
+      {
+        heading: '如何核对用量与费用',
+        profiles: ['public'],
+        body: [
+          'SPdex 按账号或企业组织记录工具调用用量。管理页面会区分成功调用、失败调用和不计费事件，便于核对额度变化。',
+          '工具发现、鉴权失败、权限拒绝和参数校验错误不扣额度；成功工具调用按页面公布的 usage units 计量，Workflow 按实际执行的工具用量汇总，不重复收取包装调用费用。',
+        ],
+        table: {
+          headers: ['记录', '核对方式'],
+          rows: [
+            ['调用用量', '按账号、组织和 UTC 日期查看成功调用与 usage units。'],
+            ['不计费事件', '工具发现、鉴权失败、权限拒绝和参数校验错误只保留必要审计记录。'],
+            ['Workflow 用量', '按实际执行的子工具用量汇总，不额外叠加包装调用。'],
+            ['争议处理', '提供调用时间和回答追踪号，由客服核对记录并按适用规则处理。'],
           ],
         },
       },
@@ -990,7 +1185,7 @@ export const learningPaths: LearningPath[] = [
   {
     title: '新用户先看',
     summary: '先理解 AI 入口、数据口径和必发基础概念。',
-    articleSlugs: ['ai-watch-assistant', 'ai-mcp-use-cases', 'ai-mcp-usage-quota', 'data-methods', 'betfair-basics'],
+    articleSlugs: ['ai-watch-assistant', 'ai-mcp-use-cases', 'ai-workflows-automation', 'ai-mcp-usage-quota', 'data-methods', 'betfair-basics'],
   },
   {
     title: '指数进阶',
@@ -1000,11 +1195,13 @@ export const learningPaths: LearningPath[] = [
   {
     title: '工具专题',
     summary: '适合已经会看主站数据，想快速查某个工具入口的用户。',
-    articleSlugs: ['mcp-quickstart', 'ai-mcp-usage-quota', 'correct-score', 'flashq-price', 'watch-condition'],
+    articleSlugs: ['mcp-quickstart', 'ai-workflows-automation', 'ai-mcp-usage-quota', 'correct-score', 'flashq-price', 'watch-condition'],
   },
 ]
 
 export const glossaryTerms: GlossaryTerm[] = [
+  { term: '关注分', category: 'AI', definition: '由成交活跃、市场偏斜、赛事标签和比赛状态组成的观察排序分。没有 100 分上限，不代表胜率、预测置信度或投注价值。' },
+  { term: '观察列表分', category: 'AI', definition: '在基础关注分上叠加实时监控、活跃信号和外部预测市场关联可用性的排序分，只用于选择优先观察对象。' },
   { term: '有效成交', category: '必发', definition: '结合成交量、成交深度、价位和时间后，被认为更能表达市场倾向的成交。' },
   { term: '有效击穿', category: '现场', definition: '成交穿透了足够价差或盘口层级，说明当时主动性较强。不同价位段阈值不同。' },
   { term: '成交深度', category: '必发', definition: '一笔交易在时间片内跨越的价位数量。深度越大，越需要关注背后的盘口承接。' },
@@ -1022,14 +1219,25 @@ export const glossaryTerms: GlossaryTerm[] = [
 ]
 
 export const supportChecklist = [
-  '请优先提供问题原文、发生时间和可见 trace_id。',
-  '涉及比赛时提供 match_id、联赛、主客队和开赛时间。',
+  '请优先提供问题原文、发生时间和页面显示的回答追踪号。',
+  '涉及比赛时提供赛事编号、联赛、主客队和开赛时间。',
   '截图或导出内容应先删除 token、Authorization、cookie 和账号敏感信息。',
   '模型、指数和共振仅作市场观察，不构成投注建议或收益承诺。',
   'AI 站内收件箱、AI 观察助手入口和观察条件写入可能需要分别开启。',
 ]
 
 export const aiArticles = helpArticles.filter(article => article.category === 'ai')
+
+export function normalizeHelpContentProfile(value: unknown): HelpContentProfile {
+  return value === 'public' ? 'public' : 'test'
+}
+
+export function getVisibleHelpSections(
+  article: Pick<HelpArticle, 'sections'>,
+  profile: HelpContentProfile,
+): HelpSection[] {
+  return article.sections.filter(section => !section.profiles?.length || section.profiles.includes(profile))
+}
 
 export function findArticle(slug: string): HelpArticle | undefined {
   return helpArticles.find(article => article.slug === slug)

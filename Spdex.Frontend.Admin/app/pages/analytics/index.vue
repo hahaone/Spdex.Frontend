@@ -68,7 +68,6 @@ async function loadOverview() {
 }
 
 // ── SVG 迷你趋势图（PV / UV 两条线 + hover tooltip，无图表库依赖）──
-const hoverIdx = ref<number | null>(null)
 const chart = computed(() => {
   const pts = overview.value?.trend ?? []
   if (pts.length < 1) return null

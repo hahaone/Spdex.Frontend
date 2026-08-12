@@ -46,7 +46,7 @@ interface BackendLiveStats {
   penalties?: BackendStatPair | null
 }
 
-export interface LiveOddsCell {
+interface LiveOddsCell {
   label: string
   odd: string
 }
@@ -59,14 +59,14 @@ export interface LiveOddsTick {
   b?: number | null
 }
 
-export interface LiveOddsMarket {
+interface LiveOddsMarket {
   market: string
   line: string | null
   cells: LiveOddsCell[]
   series?: LiveOddsTick[]
 }
 
-export interface LiveOdds {
+interface LiveOdds {
   bookmaker: string
   score: string | null
   minute: string | null

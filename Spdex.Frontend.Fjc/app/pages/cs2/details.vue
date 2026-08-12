@@ -103,9 +103,12 @@ function getGroupClass(code: number): string {
 }
 
 /** SSD 高亮快捷方法 */
-function ssdClassFor(val: number, w: CsTimeWindowData, field: 'MaxBet' | 'TotalBet' | 'MaxHold' | 'TotalHold'): string {
-  const t3 = (w as any)[`threshold3Sigma${field}`] as number
-  const t2 = (w as any)[`threshold2Sigma${field}`] as number
+type SigmaField = 'MaxBet' | 'TotalBet' | 'MaxHold' | 'TotalHold'
+type CsSigmaKey = `threshold${2 | 3}Sigma${SigmaField}`
+
+function ssdClassFor(val: number, w: CsTimeWindowData, field: SigmaField): string {
+  const t3 = w[`threshold3Sigma${field}` as CsSigmaKey]
+  const t2 = w[`threshold2Sigma${field}` as CsSigmaKey]
   return ssdClass(val, t2, t3)
 }
 

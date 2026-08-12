@@ -124,9 +124,13 @@ export interface LiveXgResponse {
   items: LiveXgItem[]
 }
 
-/** 预期总进球走势序列点（只用到 minute + projectedTotalGoals，其余字段忽略）。 */
+/** 现场 xG 走势序列点。 */
 export interface LiveXgReplayPoint {
+  capturedAt?: string | null
   minute: number
+  score?: number[] | null
+  bswXgHome?: number | null
+  bswXgAway?: number | null
   projectedTotalGoals?: number | null
 }
 

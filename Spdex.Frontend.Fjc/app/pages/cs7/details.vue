@@ -83,9 +83,12 @@ watch(bigList, (list) => {
 }, { immediate: true })
 
 // ── 高亮/样式（页面特有逻辑） ──
-function ssdClassFor(val: number, w: CornerWindowData, field: 'MaxBet' | 'TotalBet' | 'MaxHold' | 'TotalHold'): string {
-  const t3 = (w as any)[`threshold3Sigma${field}`] as number
-  const t2 = (w as any)[`threshold2Sigma${field}`] as number
+type SigmaField = 'MaxBet' | 'TotalBet' | 'MaxHold' | 'TotalHold'
+type CornerSigmaKey = `threshold${2 | 3}Sigma${SigmaField}`
+
+function ssdClassFor(val: number, w: CornerWindowData, field: SigmaField): string {
+  const t3 = w[`threshold3Sigma${field}` as CornerSigmaKey]
+  const t2 = w[`threshold2Sigma${field}` as CornerSigmaKey]
   return ssdClass(val, t2, t3)
 }
 
@@ -114,12 +117,6 @@ function isBigHighlighted(big: CornerBigItem): boolean {
   return isBigHighlightedHelper(big.rawData, prev.rawData)
 }
 
-/** 渲染一组行 */
-function renderGroupLabel(orderIndex: number): string {
-  if (orderIndex === 1) return '9 or less'
-  if (orderIndex === 2) return '10 - 12'
-  return '13 or more'
-}
 </script>
 
 <template>

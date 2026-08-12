@@ -8,7 +8,10 @@ import {
   Check,
   CircleHelp,
   Clock3,
+  Copy,
+  Download,
   ListChecks,
+  Pencil,
   Play,
   Plus,
   Search,
@@ -338,6 +341,10 @@ const historyHasMore = ref(false)
 const expandedHistoryGroups = ref<Set<string>>(new Set())
 const historyPending = ref(false)
 const historySavedOnly = ref(false)
+const historySearch = ref('')
+const historyDeleteTargets = ref<HistoryConversationGroup[]>([])
+const selectedHistoryGroupIds = ref<Set<string>>(new Set())
+const historyDeleting = ref(false)
 const historyMessage = ref('')
 const activeConversationId = ref<string | null>(null)
 const usageSummary = ref<AiAgentHistoryUsageSummary | null>(null)
@@ -350,6 +357,7 @@ const workflowDraftOpen = ref(false)
 const workflowDraftName = ref('')
 const workflowDraftDescription = ref('')
 const workflowDraftSteps = ref<AiAgentWorkflowStep[]>([])
+const workflowDraftWorkflowId = ref('')
 const workflowSaving = ref(false)
 const workflowTemplateSavingId = ref('')
 const workflowRunningId = ref('')
@@ -392,6 +400,7 @@ const selectorOpen = ref(false)
 const selectorQuery = ref('')
 const saveState = ref('')
 const shareState = ref('')
+const exportState = ref('')
 const chatStream = ref<HTMLElement | null>(null)
 const chatEnd = ref<HTMLElement | null>(null)
 const activeRequestController = shallowRef<AbortController | null>(null)
@@ -404,7 +413,26 @@ const historyGroups = computed(() => {
   }
   return buildHistoryGroups(historyItems.value, expandedHistoryGroups.value)
 })
-const visibleHistoryGroups = computed(() => historyGroups.value)
+const visibleHistoryGroups = computed(() => {
+  const query = historySearch.value.trim().toLocaleLowerCase()
+  if (!query) return historyGroups.value
+  return historyGroups.value.filter((group) => {
+    const haystack = [
+      group.title,
+      group.subtitle,
+      group.preview,
+      ...group.items.flatMap(item => [item.question, item.title, item.matchTitle, item.leagueName]),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase()
+    return haystack.includes(query)
+  })
+})
+const selectedHistoryGroups = computed(() => historyGroups.value.filter(group => selectedHistoryGroupIds.value.has(group.groupId)))
+const historyDeleteRecordCount = computed(() => historyDeleteTargets.value.reduce((sum, group) => sum + group.items.length, 0))
+const allVisibleHistorySelected = computed(() => visibleHistoryGroups.value.length > 0
+  && visibleHistoryGroups.value.every(group => selectedHistoryGroupIds.value.has(group.groupId)))
 const hiddenHistoryGroupCount = computed(() => historyHasMore.value ? 1 : 0)
 const historyMoreLabel = computed(() => historyHasMore.value
   ? '加载更多记录'
@@ -464,6 +492,9 @@ const workflowSaveHint = computed(() => {
   if (!count) return '完成一次分析后，可以把连续提问保存为可复用流程。'
   return `将保存最近 ${count} 个已完成问题，之后可对其他比赛一键复用。`
 })
+const workflowDraftTitle = computed(() => workflowDraftWorkflowId.value ? '编辑流程' : '保存为流程')
+const workflowDraftEyebrow = computed(() => workflowDraftWorkflowId.value ? '保存后生成新版本' : '保存当前分析流程')
+const workflowDraftSubmitLabel = computed(() => workflowDraftWorkflowId.value ? '保存新版本' : '确认保存')
 const automationCadenceChoices = computed(() => automationCadenceOptions[automationDraft.triggerType] ?? automationCadenceOptions.scheduled)
 const selectedAutomationWorkflow = computed(() => workflowItems.value.find(item => item.workflowId === automationDraft.workflowId) ?? null)
 const savedWorkflowTemplateNames = computed(() => new Set(
@@ -930,11 +961,26 @@ async function saveLatest() {
   }
 }
 
-function openWorkflowDraft() {
+function openWorkflowDraft(workflow?: AiAgentWorkflowRecord, copy = false) {
+  if (workflow) {
+    workflowDraftWorkflowId.value = copy ? '' : workflow.workflowId
+    workflowDraftName.value = copy ? `${workflow.name} 副本` : workflow.name
+    workflowDraftDescription.value = workflow.description || ''
+    workflowDraftSteps.value = workflow.steps.map((step, index) => ({
+      ...step,
+      stepId: `step_${index + 1}`,
+    }))
+    workflowDraftOpen.value = true
+    workflowMessage.value = copy
+      ? `正在复制「${workflow.name}」`
+      : `正在编辑「${workflow.name}」v${workflow.version || 1}`
+    return
+  }
   if (!completedTurns.value.length) {
     workflowMessage.value = '先完成至少一次分析，再保存为流程'
     return
   }
+  workflowDraftWorkflowId.value = ''
   workflowDraftSteps.value = buildWorkflowSteps()
   workflowDraftOpen.value = true
   workflowMessage.value = ''
@@ -952,13 +998,17 @@ function closeWorkflowDraft() {
 }
 
 async function persistWorkflow(payload: {
+  workflowId?: string
   name: string
   description?: string | null
   matchRequired: boolean
   steps: AiAgentWorkflowStep[]
 }) {
-  const response = await $apiFetch<AiAgentWorkflowMutationResponse>('/api/newspdex/ai/agent/workflows', {
-    method: 'POST',
+  const path = payload.workflowId
+    ? `/api/newspdex/ai/agent/workflows/${encodeURIComponent(payload.workflowId)}`
+    : '/api/newspdex/ai/agent/workflows'
+  const response = await $apiFetch<AiAgentWorkflowMutationResponse>(path, {
+    method: payload.workflowId ? 'PUT' : 'POST',
     body: payload,
   })
   upsertWorkflow(response.item)
@@ -969,17 +1019,19 @@ async function persistWorkflow(payload: {
 }
 
 async function saveCurrentWorkflow() {
-  if (!canSaveWorkflow.value) return
+  if (workflowSaving.value) return
   const steps = workflowDraftValidSteps.value
   if (!steps.length) {
     workflowMessage.value = '当前对话没有可保存的分析步骤'
     return
   }
 
+  const isEditing = Boolean(workflowDraftWorkflowId.value)
   workflowSaving.value = true
   workflowMessage.value = '保存流程中'
   try {
     await persistWorkflow({
+      workflowId: workflowDraftWorkflowId.value || undefined,
       name: workflowDraftName.value.trim() || suggestedWorkflowName(),
       description: workflowDraftDescription.value.trim() || null,
       matchRequired: steps.some(step => step.requiresMatch),
@@ -989,7 +1041,8 @@ async function saveCurrentWorkflow() {
     workflowDraftName.value = ''
     workflowDraftDescription.value = ''
     workflowDraftSteps.value = []
-    workflowMessage.value = '流程已保存'
+    workflowDraftWorkflowId.value = ''
+    workflowMessage.value = isEditing ? '流程已更新，新版本已生效' : '流程已保存'
   }
   catch {
     workflowMessage.value = '流程保存失败，请稍后重试'
@@ -1635,6 +1688,64 @@ async function shareLatest() {
   }
 }
 
+function exportConversationReport() {
+  const completed = completedTurns.value
+  if (!completed.length) return
+  const match = completed.at(-1)?.match ?? selectedMatch.value
+  const heading = match
+    ? `${match.homeTeam} vs ${match.awayTeam}`
+    : 'SPdex AI 观察助手分析报告'
+  const lines = [
+    `# ${redactReportText(heading)}`,
+    '',
+    `生成时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+    match?.leagueName ? `赛事：${redactReportText(match.leagueName)}` : '',
+    match?.matchTime ? `比赛时间：${formatTime(match.matchTime)}` : '',
+    '',
+    '> 本报告为数据观察记录，不构成投注建议，也不代表赛果预测。',
+    '',
+  ].filter(Boolean)
+
+  completed.forEach((turn, index) => {
+    const answer = turn.agentResponse?.answer
+    lines.push(`## ${index + 1}. ${redactReportText(turn.question)}`, '')
+    if (!answer) {
+      lines.push('本次未生成可导出的观察结论。', '')
+      return
+    }
+    lines.push(redactReportText(answer.directAnswer), '')
+    if (answer.summary.length) {
+      lines.push('### 判断要点', ...answer.summary.map(item => `- ${redactReportText(item)}`), '')
+    }
+    if (answer.keyEvidence.length) {
+      lines.push(
+        '### 关键依据',
+        ...answer.keyEvidence.slice(0, 8).map(item => `- **${redactReportText(item.label)}：${redactReportText(item.value)}**  ${redactReportText(item.explanation)}`),
+        '',
+      )
+    }
+    if (answer.dataLimits.length) {
+      lines.push('### 数据边界', ...answer.dataLimits.map(item => `- ${redactReportText(item)}`), '')
+    }
+    if (answer.followups.length) {
+      lines.push('### 建议继续查看', ...answer.followups.slice(0, 5).map(item => `- ${redactReportText(item)}`), '')
+    }
+  })
+
+  const blob = new Blob([lines.join('\n').trimEnd() + '\n'], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const date = new Date().toISOString().slice(0, 10)
+  link.href = url
+  link.download = `${safeFileName(heading)}-${date}.md`
+  link.click()
+  URL.revokeObjectURL(url)
+  exportState.value = '已导出'
+  window.setTimeout(() => {
+    exportState.value = ''
+  }, 2500)
+}
+
 function historyConversationToGroup(
   conversation: AiAgentHistoryConversation,
   expandedKeys: Set<string>,
@@ -1761,6 +1872,25 @@ function resetHistoryGrouping() {
   historyNextCursor.value = null
   historyHasMore.value = false
   expandedHistoryGroups.value = new Set()
+  selectedHistoryGroupIds.value = new Set()
+}
+
+function toggleHistorySelection(groupId: string) {
+  const next = new Set(selectedHistoryGroupIds.value)
+  if (next.has(groupId)) next.delete(groupId)
+  else next.add(groupId)
+  selectedHistoryGroupIds.value = next
+}
+
+function toggleAllVisibleHistory() {
+  const next = new Set(selectedHistoryGroupIds.value)
+  if (allVisibleHistorySelected.value) {
+    visibleHistoryGroups.value.forEach(group => next.delete(group.groupId))
+  }
+  else {
+    visibleHistoryGroups.value.forEach(group => next.add(group.groupId))
+  }
+  selectedHistoryGroupIds.value = next
 }
 
 function restoreHistory(item: AiAgentHistoryRecord) {
@@ -1816,6 +1946,41 @@ async function deleteHistory(recordId: string) {
   catch {
     historyMessage.value = '删除失败，请稍后重试'
   }
+}
+
+function openHistoryDelete(group: HistoryConversationGroup) {
+  historyDeleteTargets.value = [group]
+}
+
+function openSelectedHistoryDelete() {
+  if (!selectedHistoryGroups.value.length) return
+  historyDeleteTargets.value = selectedHistoryGroups.value
+}
+
+function closeHistoryDelete() {
+  if (historyDeleting.value) return
+  historyDeleteTargets.value = []
+}
+
+async function confirmHistoryDelete() {
+  const targets = historyDeleteTargets.value
+  if (!targets.length || historyDeleting.value) return
+  const records = [...new Map(
+    targets.flatMap(group => group.items).map(item => [item.recordId, item]),
+  ).values()]
+  historyDeleting.value = true
+  const results = await Promise.allSettled(records.map(item => $apiFetch<AiAgentHistoryMutationResponse>(
+    `/api/newspdex/ai/agent/history/${encodeURIComponent(item.recordId)}`,
+    { method: 'DELETE' },
+  )))
+  const failed = results.filter(result => result.status === 'rejected').length
+  historyDeleting.value = false
+  historyDeleteTargets.value = []
+  selectedHistoryGroupIds.value = new Set()
+  await Promise.allSettled([loadAgentHistory(), loadAgentUsage()])
+  historyMessage.value = failed
+    ? `已删除 ${results.length - failed} 条，另有 ${failed} 条未能删除，请稍后重试。`
+    : '整段对话已删除。'
 }
 
 function clearTurns() {
@@ -2050,7 +2215,7 @@ function applyWorkflowStepConfig(step: AiAgentWorkflowStep, options: WorkflowRun
 }
 
 function workflowMetaText(workflow: AiAgentWorkflowRecord) {
-  const parts = [`${workflow.steps.length} 步`]
+  const parts = [`v${workflow.version || 1}`, `${workflow.steps.length} 步`]
   if (workflow.matchRequired) parts.push('需要比赛')
   if (workflow.runCount > 0) parts.push(`已运行 ${workflow.runCount} 次`)
   return parts.join(' · ')
@@ -2590,6 +2755,19 @@ function buildShareText(heading: string, turn: AnalysisTurn): string {
   return `${heading}\n${turn.question}\n\n${fallbackText}`.slice(0, 4500)
 }
 
+function redactReportText(value: unknown) {
+  return String(value ?? '')
+    .replace(/authorization\s*:\s*bearer\s+\S+/gi, '[授权信息已省略]')
+    .replace(/\b(?:sk|spdx_mcp)_[A-Za-z0-9._-]{8,}\b/g, '[凭据已省略]')
+    .replace(/\/?api\/[A-Za-z0-9_?&=./{}:-]+/gi, '[内部路径已省略]')
+    .trim()
+}
+
+function safeFileName(value: string) {
+  const normalized = value.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '-').slice(0, 80)
+  return normalized || 'spdex-ai-analysis'
+}
+
 function formatTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime())
@@ -2681,7 +2859,7 @@ onBeforeUnmount(() => {
               type="button"
               class="mini-action focus-ring"
               :disabled="!canSaveWorkflow"
-              @click="openWorkflowDraft"
+              @click="openWorkflowDraft()"
             >
               <Plus :size="13" />
               <span>保存流程</span>
@@ -2769,9 +2947,17 @@ onBeforeUnmount(() => {
                 <Play v-if="workflowRunningId !== workflow.workflowId" :size="14" />
                 <span>{{ workflowRunText(workflow) }}</span>
               </button>
-              <button type="button" class="saved-delete focus-ring" aria-label="删除分析流程" @click="deleteWorkflow(workflow.workflowId)">
-                <Trash2 :size="14" />
-              </button>
+              <div class="workflow-item-actions" aria-label="流程管理">
+                <button type="button" class="workflow-icon-action focus-ring" aria-label="编辑分析流程" @click="openWorkflowDraft(workflow)">
+                  <Pencil :size="14" />
+                </button>
+                <button type="button" class="workflow-icon-action focus-ring" aria-label="复制分析流程" @click="openWorkflowDraft(workflow, true)">
+                  <Copy :size="14" />
+                </button>
+                <button type="button" class="saved-delete focus-ring" aria-label="删除分析流程" @click="deleteWorkflow(workflow.workflowId)">
+                  <Trash2 :size="14" />
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -2962,20 +3148,48 @@ onBeforeUnmount(() => {
             </label>
           </header>
           <p class="usage-summary">{{ usageText(usageSummary) }}</p>
+          <label class="history-search-box">
+            <Search :size="14" />
+            <input v-model="historySearch" type="search" placeholder="搜索已加载的对话">
+          </label>
+          <div v-if="visibleHistoryGroups.length" class="history-bulk-actions">
+            <label>
+              <input :checked="allVisibleHistorySelected" type="checkbox" @change="toggleAllVisibleHistory">
+              <span>全选已加载</span>
+            </label>
+            <button type="button" class="mini-action quiet focus-ring" :disabled="!selectedHistoryGroups.length" @click="openSelectedHistoryDelete">
+              <Trash2 :size="13" />
+              <span>删除已选 {{ selectedHistoryGroups.length || '' }}</span>
+            </button>
+          </div>
           <p v-if="historyMessage" class="history-message">{{ historyMessage }}</p>
           <p v-else-if="historyPending" class="history-message">正在读取记录</p>
-          <p v-else-if="!historyGroups.length" class="history-message">暂无分析记录</p>
+          <p v-else-if="!visibleHistoryGroups.length" class="history-message">
+            {{ historySearch.trim() ? '没有匹配的对话' : '暂无分析记录' }}
+          </p>
           <div v-else class="saved-list history-group-list">
             <article v-for="group in visibleHistoryGroups" :key="group.groupId" class="history-group">
               <div class="history-group-head">
+                <label class="history-group-select" :aria-label="`选择对话：${group.title}`">
+                  <input
+                    type="checkbox"
+                    :checked="selectedHistoryGroupIds.has(group.groupId)"
+                    @change="toggleHistorySelection(group.groupId)"
+                  >
+                </label>
                 <button type="button" class="history-group-toggle focus-ring" @click="toggleHistoryGroup(group.groupId)">
                   <b>{{ group.title }}</b>
                   <span>{{ group.subtitle }}</span>
                   <small>{{ group.preview }}</small>
                 </button>
-                <button type="button" class="history-open-latest focus-ring" @click="restoreHistory(group.latest)">
-                  打开最新
-                </button>
+                <div class="history-group-actions">
+                  <button type="button" class="history-open-latest focus-ring" @click="restoreHistory(group.latest)">
+                    打开最新
+                  </button>
+                  <button type="button" class="saved-delete focus-ring" aria-label="删除整段对话" @click="openHistoryDelete(group)">
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
               </div>
               <div v-if="group.expanded" class="history-group-items">
                 <div v-for="item in group.items" :key="item.recordId" class="saved-row">
@@ -3308,7 +3522,12 @@ onBeforeUnmount(() => {
                 <Share2 v-else :size="15" />
                 <span>{{ shareState || '分享最新结果' }}</span>
               </button>
-              <button type="button" class="secondary-action focus-ring" :disabled="!canSaveWorkflow" @click="openWorkflowDraft">
+              <button type="button" class="secondary-action focus-ring" @click="exportConversationReport">
+                <Check v-if="exportState" :size="15" />
+                <Download v-else :size="15" />
+                <span>{{ exportState || '导出对话报告' }}</span>
+              </button>
+              <button type="button" class="secondary-action focus-ring" :disabled="!canSaveWorkflow" @click="openWorkflowDraft()">
                 <ListChecks :size="15" />
                 <span>保存为流程</span>
               </button>
@@ -3327,8 +3546,8 @@ onBeforeUnmount(() => {
       <section class="workflow-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-modal-title">
         <header class="modal-header">
           <div>
-            <span>保存当前分析流程</span>
-            <h2 id="workflow-modal-title">保存为流程</h2>
+            <span>{{ workflowDraftEyebrow }}</span>
+            <h2 id="workflow-modal-title">{{ workflowDraftTitle }}</h2>
           </div>
           <button type="button" class="icon-button focus-ring" aria-label="关闭保存流程窗口" :disabled="workflowSaving" @click="closeWorkflowDraft">
             <X :size="16" />
@@ -3374,7 +3593,39 @@ onBeforeUnmount(() => {
           </button>
           <button type="button" class="primary-action focus-ring" :disabled="workflowSaving || !workflowDraftValidSteps.length" @click="saveCurrentWorkflow">
             <Bookmark :size="15" />
-            <span>{{ workflowSaving ? '保存中' : '确认保存' }}</span>
+            <span>{{ workflowSaving ? '保存中' : workflowDraftSubmitLabel }}</span>
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      v-if="historyDeleteTargets.length"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="closeHistoryDelete"
+    >
+      <section class="workflow-modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="history-delete-title">
+        <header class="modal-header">
+          <div>
+            <span>删除后不可恢复</span>
+            <h2 id="history-delete-title">删除整段对话</h2>
+          </div>
+          <button type="button" class="icon-button focus-ring" aria-label="关闭删除确认窗口" :disabled="historyDeleting" @click="closeHistoryDelete">
+            <X :size="16" />
+          </button>
+        </header>
+        <div class="modal-form">
+          <p>
+            将删除 {{ historyDeleteTargets.length }} 段对话中的
+            {{ historyDeleteRecordCount }} 条问答记录。最小审计信息仍会按安全与用量规则保留。
+          </p>
+        </div>
+        <footer class="modal-actions">
+          <button type="button" class="secondary-action focus-ring" :disabled="historyDeleting" @click="closeHistoryDelete">取消</button>
+          <button type="button" class="primary-action danger-action focus-ring" :disabled="historyDeleting" @click="confirmHistoryDelete">
+            <Trash2 :size="15" />
+            <span>{{ historyDeleting ? '删除中' : '确认删除' }}</span>
           </button>
         </footer>
       </section>
@@ -3776,6 +4027,47 @@ onBeforeUnmount(() => {
 .history-filter input {
   width: 13px;
   height: 13px;
+  accent-color: var(--brand);
+}
+.history-search-box {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+.history-search-box input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: .78rem;
+}
+.history-bulk-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.history-bulk-actions > label,
+.history-group-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: .72rem;
+}
+.history-bulk-actions input,
+.history-group-select input {
+  width: 14px;
+  height: 14px;
   accent-color: var(--brand);
 }
 .usage-summary,
@@ -4343,9 +4635,27 @@ onBeforeUnmount(() => {
 }
 .workflow-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   background: var(--panel);
+}
+.workflow-item-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding-right: 5px;
+}
+.workflow-icon-action {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.workflow-icon-action:hover {
+  color: #5b4ce8;
 }
 .workflow-open {
   display: grid;
@@ -4621,7 +4931,7 @@ onBeforeUnmount(() => {
 }
 .history-group-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -4663,6 +4973,11 @@ onBeforeUnmount(() => {
   font-size: .72rem;
   font-weight: 780;
   white-space: nowrap;
+}
+.history-group-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
 }
 .history-group-items {
   display: grid;
@@ -4747,6 +5062,9 @@ onBeforeUnmount(() => {
   background: var(--panel);
   box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
 }
+.workflow-modal.compact-modal {
+  width: min(460px, 100%);
+}
 .modal-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -4795,6 +5113,9 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: .9rem;
   font-weight: 800;
+}
+.primary-action.danger-action {
+  background: #b42318;
 }
 .query-panel {
   align-content: start;

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ArrowRight, BookOpen, Filter, Search, X } from '@lucide/vue'
 import type { HelpCategoryId, HelpLevel } from '~/data/helpContent'
-import { getArticlePath, helpArticles, helpCategories } from '~/data/helpContent'
+import { getArticlePath, getVisibleHelpSections, helpArticles, helpCategories, normalizeHelpContentProfile } from '~/data/helpContent'
 
 const query = ref('')
+const runtimeConfig = useRuntimeConfig()
+const contentProfile = computed(() => normalizeHelpContentProfile(runtimeConfig.public.helpContentProfile))
 const selectedCategory = ref<'all' | HelpCategoryId>('all')
 const selectedLevel = ref<'all' | HelpLevel>('all')
 const levels: Array<'all' | HelpLevel> = ['all', '入门', '进阶', '专家']
@@ -28,7 +30,7 @@ const filteredArticles = computed(() => {
       article.audience,
       article.level,
       ...article.tags,
-      ...article.sections.flatMap(section => [
+      ...getVisibleHelpSections(article, contentProfile.value).flatMap(section => [
         section.heading,
         ...section.body,
         ...(section.bullets ?? []),
