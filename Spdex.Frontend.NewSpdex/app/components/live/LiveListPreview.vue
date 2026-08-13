@@ -1,30 +1,26 @@
 <script setup lang="ts">
 /**
  * 实时列表「主从视图」右侧预览面板(仅桌面)。
- * 点击左侧赛事即在此展示比分/统计/赔率/模型，无需跳转;底部可进完整赛况页。
+ * 点击左侧赛事即在此展示列表摘要，不额外请求完整快照；底部按会籍进入完整赛况页。
  */
-import { ArrowUpRight } from '@lucide/vue'
+import { ArrowUpRight, Lock } from '@lucide/vue'
+import type { LiveListItem, LiveStatPair } from '~/composables/useLiveList'
 import { formatHandicapLine } from '~/utils/handicap'
 
-const props = defineProps<{ eventId: number }>()
-
-const { snapshot, pending } = useLiveSnapshot(toRef(props, 'eventId'))
+const props = defineProps<{
+  match: LiveListItem
+  canOpenFullDetail: boolean
+}>()
 
 const statusLabel = computed(() => {
-  const s = snapshot.value?.status
+  const s = props.match.status
   return s === 'upcoming' ? '未开赛' : s === 'finished' ? '已完场' : '进行中'
 })
 
-function toNum(v: string): number {
-  const n = Number.parseFloat(v)
-  return Number.isFinite(n) ? n : 0
-}
 /** 统计条:主队占比(主/(主+客))。 */
-function homePct(home: string, away: string): number {
-  const h = toNum(home)
-  const a = toNum(away)
-  const t = h + a
-  return t > 0 ? Math.round((h / t) * 100) : 50
+function homePct(home: number, away: number): number {
+  const total = home + away
+  return total > 0 ? Math.round((home / total) * 100) : 50
 }
 function formatFixedNumber(value: string | number | null | undefined, fixed = 2): string {
   if (value == null) return ''
@@ -36,13 +32,23 @@ function formatFixedNumber(value: string | number | null | undefined, fixed = 2)
   })
 }
 
-const homeCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'home') ?? [])
-const awayCards = computed(() => snapshot.value?.cardBadges.filter(b => b.side === 'away') ?? [])
+const homeCards = computed(() => props.match.cardBadges.filter(b => b.side === 'home'))
+const awayCards = computed(() => props.match.cardBadges.filter(b => b.side === 'away'))
 
-const model = computed(() => snapshot.value?.model ?? null)
+const model = computed(() => props.canOpenFullDetail ? props.match.model : null)
+
+const statRows = computed<LiveStatPair[]>(() => {
+  const stats = props.match.stats
+  if (!stats) return []
+  const basic = [stats.shots, stats.shotsOnTarget]
+  const full = props.canOpenFullDetail
+    ? [stats.attacks, stats.dangerousAttacks, stats.xg, stats.penalties, stats.substitutions]
+    : []
+  return [...basic, ...full].filter((row): row is LiveStatPair => Boolean(row?.label))
+})
 
 // 取首个有数据的滚球赔率市场展示
-const oddsMarket = computed(() => snapshot.value?.liveOdds?.markets?.find(m => m.cells.length) ?? null)
+const oddsMarket = computed(() => props.match.liveOdds?.markets?.find(m => m.cells.length) ?? null)
 const oddsMarketLine = computed(() => {
   const market = oddsMarket.value
   if (!market?.line) return ''
@@ -52,30 +58,28 @@ const oddsMarketLine = computed(() => {
 
 <template>
   <div class="preview">
-    <div v-if="pending && !snapshot" class="pv-empty" role="status">加载赛况…</div>
-    <template v-else-if="snapshot">
-      <div class="pv-head">
-        <span class="pv-league ellip">{{ snapshot.leagueName || '—' }}</span>
-        <span :class="['pv-status', snapshot.status]">{{ statusLabel }}</span>
-        <span v-if="snapshot.status === 'running'" class="pv-min num">{{ snapshot.minute }}</span>
+    <div class="pv-head">
+        <span class="pv-league ellip">{{ match.leagueName || '—' }}</span>
+        <span :class="['pv-status', match.status]">{{ statusLabel }}</span>
+        <span v-if="match.status === 'running'" class="pv-min num">{{ match.minute }}</span>
       </div>
 
       <div class="pv-score">
-        <span class="pv-team ellip">{{ snapshot.homeTeam }}</span>
+        <span class="pv-team ellip">{{ match.homeTeam }}</span>
         <b class="pv-sc num">
-          <span>{{ snapshot.score[0] }}</span><i>:</i><span>{{ snapshot.score[1] }}</span>
+          <span>{{ match.score[0] }}</span><i>:</i><span>{{ match.score[1] }}</span>
         </b>
-        <span class="pv-team away ellip">{{ snapshot.awayTeam }}</span>
+        <span class="pv-team away ellip">{{ match.awayTeam }}</span>
       </div>
 
       <div class="pv-micro">
         <span class="pv-cl">
           <span v-for="c in homeCards" :key="`h-${c.color}`" :class="['pv-card', c.color]" role="img" :aria-label="`主队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
-          <span class="num">角 {{ snapshot.corners[0] }}</span>
+          <span class="num">角 {{ match.corners[0] }}</span>
         </span>
-        <span class="pv-half num">半 {{ snapshot.halfScore }}</span>
+        <span class="pv-half num">半 {{ match.halfScore }}</span>
         <span class="pv-cl">
-          <span class="num">{{ snapshot.corners[1] }} 角</span>
+          <span class="num">{{ match.corners[1] }} 角</span>
           <span v-for="c in awayCards" :key="`a-${c.color}`" :class="['pv-card', c.color]" role="img" :aria-label="`客队${c.color === 'red' ? '红牌' : '黄牌'}${c.count}`">{{ c.count }}</span>
         </span>
       </div>
@@ -94,8 +98,8 @@ const oddsMarketLine = computed(() => {
       </div>
 
       <!-- 统计条 -->
-      <div v-if="snapshot.stats.length" class="pv-stats">
-        <div v-for="s in snapshot.stats" :key="s.label" class="pv-stat">
+      <div v-if="statRows.length" class="pv-stats">
+        <div v-for="s in statRows" :key="s.label" class="pv-stat">
           <span class="num sh">{{ s.home }}</span>
           <span class="sl">
             <i class="sl-label">{{ s.label }}</i>
@@ -113,11 +117,13 @@ const oddsMarketLine = computed(() => {
         </span>
       </div>
 
-      <NuxtLink :to="`/live/${eventId}`" class="pv-full focus-ring">
-        查看完整赛况<ArrowUpRight :size="14" />
+      <NuxtLink
+        :to="canOpenFullDetail ? `/live/${match.eventId}` : '/account/upgrade'"
+        :class="['pv-full', 'focus-ring', { locked: !canOpenFullDetail }]"
+      >
+        <template v-if="canOpenFullDetail">查看完整赛况<ArrowUpRight :size="14" /></template>
+        <template v-else><Lock :size="14" />完整赛况 · 黄金及以上</template>
       </NuxtLink>
-    </template>
-    <div v-else class="pv-empty" role="status">暂无赛况数据</div>
   </div>
 </template>
 
@@ -129,14 +135,6 @@ const oddsMarketLine = computed(() => {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
-}
-
-.pv-empty {
-  padding: 48px 16px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 720;
 }
 
 .pv-head {
@@ -228,4 +226,6 @@ const oddsMarketLine = computed(() => {
   font-weight: 800;
 }
 .pv-full:hover { background: var(--brand-deep); }
+.pv-full.locked { background: var(--surface); color: var(--brand-deep); border: 1px solid var(--line); }
+.pv-full.locked:hover { background: var(--brand-tint); }
 </style>

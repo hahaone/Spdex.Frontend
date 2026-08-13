@@ -34,6 +34,7 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   jcOnly: false,
   timeMachine: false,
   liveAccess: false,
+  liveFullDetail: false,
 }
 
 export function useEntitlements(): Readonly<Entitlements> {

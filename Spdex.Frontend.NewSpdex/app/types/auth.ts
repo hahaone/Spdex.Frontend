@@ -29,6 +29,7 @@ export interface Entitlements {
   jcOnly: boolean
   timeMachine: boolean
   liveAccess: boolean
+  liveFullDetail: boolean
 }
 
 export type MembershipTier =

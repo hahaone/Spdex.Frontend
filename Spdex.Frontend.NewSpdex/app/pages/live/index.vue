@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, RefreshCw } from '@lucide/vue'
+import { ChevronRight, Lock, RefreshCw } from '@lucide/vue'
 import type { LiveListItem, LiveOdds, LiveTabKey } from '~/composables/useLiveList'
 import { formatHandicapLine } from '~/utils/handicap'
 
@@ -13,7 +13,7 @@ const tabOptions = [
 ]
 
 // 实时赛事为付费会员专享：免费版/游客显示升级卡，并不发起列表请求。
-const { canOpenLive, liveLockMessage } = useLiveAccess()
+const { canOpenLive, canOpenLiveFullDetail, liveLockMessage } = useLiveAccess()
 const { grouped, matches, count, pending, refresh } = useLiveList(tab, canOpenLive)
 
 function badge(m: LiveListItem, side: 'home' | 'away', color: 'yellow' | 'red'): number {
@@ -53,6 +53,7 @@ function hasOdds(lo: LiveOdds | null): boolean {
 // ── 桌面主从视图:选中赛事在右侧预览，不跳转(移动端仍跳转) ──
 const isDesktop = useIsDesktop()
 const selectedId = ref<number | null>(null)
+const selectedMatch = computed(() => matches.value.find(m => m.eventId === selectedId.value) ?? null)
 
 watch([matches, isDesktop], () => {
   if (!isDesktop.value)
@@ -106,7 +107,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
         <NuxtLink
           v-for="m in g.items"
           :key="m.eventId"
-          :to="`/live/${m.eventId}`"
+          :to="canOpenLiveFullDetail ? `/live/${m.eventId}` : '/account/upgrade'"
           :class="['live-card focus-ring', { selected: m.eventId === selectedId }]"
           @click="onCardClick(m, $event)"
         >
@@ -167,6 +168,7 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
             <span>半 <b class="num">{{ m.halfScore }}</b></span>
             <span>角 <b class="num">{{ m.corners[0] }}-{{ m.corners[1] }}</b></span>
             <span class="hsp" />
+            <span v-if="!canOpenLiveFullDetail" class="full-lock"><Lock :size="12" />黄金版完整赛况</span>
             <ChevronRight :size="14" class="chev" />
           </div>
 
@@ -181,7 +183,12 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
       </div>
 
       <aside class="live-detail-pane">
-        <LiveListPreview v-if="selectedId" :key="selectedId" :event-id="selectedId" />
+        <LiveListPreview
+          v-if="selectedMatch"
+          :key="selectedMatch.eventId"
+          :match="selectedMatch"
+          :can-open-full-detail="canOpenLiveFullDetail"
+        />
         <div v-else class="pane-empty">选择左侧赛事查看赛况</div>
       </aside>
     </section>
@@ -368,6 +375,14 @@ function onCardClick(m: LiveListItem, e: MouseEvent) {
   font-weight: 720;
 }
 .c-micro b { color: var(--ink); }
+.full-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--brand-deep);
+  font-size: 0.68rem;
+  font-weight: 780;
+}
 
 .c-model {
   display: flex;

@@ -34,8 +34,11 @@ export interface LiveStatPair { label: string, home: number, away: number }
 export interface LiveStats {
   shots: LiveStatPair
   shotsOnTarget: LiveStatPair
-  dangerousAttacks: LiveStatPair
-  xg: LiveStatPair
+  attacks?: LiveStatPair
+  dangerousAttacks?: LiveStatPair
+  xg?: LiveStatPair
+  substitutions?: LiveStatPair
+  penalties?: LiveStatPair | null
 }
 
 export interface LiveListItem {

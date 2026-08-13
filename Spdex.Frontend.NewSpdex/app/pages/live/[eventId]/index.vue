@@ -5,10 +5,10 @@ import type { AnalysisReplayPoint, LiveCardBadge, LiveEvent } from '~/composable
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 
-// 实时赛事为付费会员专享：免费版/游客显示升级卡，不发起 snapshot 请求。
-const { canOpenLive, liveLockMessage } = useLiveAccess()
+// 完整赛况为黄金版及以上专享；未达到权限时不发起 snapshot 请求。
+const { canOpenLiveFullDetail, liveFullDetailLockMessage } = useLiveAccess()
 const { detail, euroOdds } = useMatchDetail(eventId)
-const { snapshot } = useLiveSnapshot(eventId, canOpenLive)
+const { snapshot } = useLiveSnapshot(eventId, canOpenLiveFullDetail)
 
 const match = computed(() => detail.value?.match)
 
@@ -827,13 +827,13 @@ function injStatus(s: string): { text: string, cls: string } {
         <ArrowLeft :size="15" />
         <span>返回实时</span>
       </NuxtLink>
-      <div v-if="canOpenLive" class="league-line">
+      <div v-if="canOpenLiveFullDetail" class="league-line">
         <span v-if="match?.leagueCode" class="code">{{ match.leagueCode }}</span>
         <span>{{ match?.leagueName || snapshot?.leagueName || '—' }}</span>
         <span class="status-pill">{{ statusLabel }}</span>
         <span class="minute num">{{ snapshot?.minute ?? '—' }}</span>
       </div>
-      <div v-if="canOpenLive" class="score-line" aria-live="polite" aria-atomic="true">
+      <div v-if="canOpenLiveFullDetail" class="score-line" aria-live="polite" aria-atomic="true">
         <span class="team home">{{ match?.homeTeam || snapshot?.homeTeam || '主队' }}</span>
         <b class="score-block">
           <span class="num">{{ snapshot?.score[0] ?? 0 }}</span>
@@ -842,7 +842,7 @@ function injStatus(s: string): { text: string, cls: string } {
         </b>
         <span class="team away">{{ match?.awayTeam || snapshot?.awayTeam || '客队' }}</span>
       </div>
-      <div v-if="canOpenLive && hasEventProgress" class="event-progress" aria-label="进球和红黄牌进度">
+      <div v-if="canOpenLiveFullDetail && hasEventProgress" class="event-progress" aria-label="进球和红黄牌进度">
         <div class="ep-half" aria-label="上半场事件">
           <span class="ep-track" aria-hidden="true" />
           <span class="ep-label num">45'</span>
@@ -876,7 +876,7 @@ function injStatus(s: string): { text: string, cls: string } {
           </span>
         </div>
       </div>
-      <div v-if="canOpenLive && hasEventProgressDetails" class="event-detail-row" aria-label="进球和红黄牌明细">
+      <div v-if="canOpenLiveFullDetail && hasEventProgressDetails" class="event-detail-row" aria-label="进球和红黄牌明细">
         <span class="event-detail-cluster home">
           <span
             v-for="marker in homeEventProgressDetails"
@@ -904,7 +904,7 @@ function injStatus(s: string): { text: string, cls: string } {
           </span>
         </span>
       </div>
-      <div v-if="canOpenLive" class="micro-row">
+      <div v-if="canOpenLiveFullDetail" class="micro-row">
         <span class="cluster home">
           <template v-if="!hasHomeCardProgress">
             <span
@@ -950,11 +950,11 @@ function injStatus(s: string): { text: string, cls: string } {
     </section>
 
     <UpgradeUnlockCard
-      v-if="!canOpenLive"
+      v-if="!canOpenLiveFullDetail"
       variant="hero"
-      headline="实时赛事 · 付费会员专享"
-      :subline="liveLockMessage"
-      :features="['滚球比分赛况', '现场盘口赔率', '赛中价值模型']"
+      headline="完整赛况 · 黄金版及以上专享"
+      :subline="liveFullDetailLockMessage"
+      :features="['完整事件过程', '完整技术统计', '现场盘口与赛中模型']"
     />
     <div v-else class="content-grid">
     <!-- 赛中统计模型（xG 外推 + 大小球 edge） -->
