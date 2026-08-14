@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ArrowLeft, Lock, RefreshCw } from '@lucide/vue'
-import { useEuroOdds, type EuroBookRow, type EuroExtremes } from '~/composables/useEuroOdds'
+import { ArrowLeft, Lock, RefreshCw, X } from '@lucide/vue'
+import { useEuroOdds, type EuroBookRow, type EuroExtremes, type EuroOddsHistoryData } from '~/composables/useEuroOdds'
+import type { ApiResponse } from '~/types/auth'
+import type { ChartPoint } from '~/types/market'
 import { withMatchListContext } from '~/utils/matchNavigation'
 
 // 经典版「欧洲指数」（还原旧站 Match/View/EuroOdds）：各博彩公司 即时/初盘 1X2 赔率 + 凯利 + 返还率 + 凯利加权。
 const route = useRoute()
 const eventId = computed(() => Number(route.params.eventId))
 const listRoute = computed(() => withMatchListContext('/football', route.query, { view: 'classic' }))
+const hydrated = ref(false)
 
 const { data, pending, refresh } = useEuroOdds(eventId)
 
@@ -16,6 +19,92 @@ const rows = computed<EuroBookRow[]>(() => data.value?.rows ?? [])
 const max = computed<EuroExtremes | null>(() => data.value?.max ?? null)
 const min = computed<EuroExtremes | null>(() => data.value?.min ?? null)
 const avg = computed(() => data.value?.avg ?? null)
+
+type TrendMetric = 'odds' | 'kelly' | 'return' | 'weight'
+interface TrendSelection { row: EuroBookRow, metric: TrendMetric }
+
+const trendSelection = ref<TrendSelection | null>(null)
+const trendHours = ref(6)
+const trendData = ref<EuroOddsHistoryData | null>(null)
+const trendPending = ref(false)
+const trendError = ref('')
+let trendRequestId = 0
+
+const trendMeta: Record<TrendMetric, { title: string, labels: { home: string, draw: string | null, away: string | null } }> = {
+  odds: { title: '欧赔变化', labels: { home: '主', draw: '平', away: '客' } },
+  kelly: { title: '凯利指数变化', labels: { home: '凯利主', draw: '凯利平', away: '凯利客' } },
+  return: { title: '返还率变化', labels: { home: '返还率', draw: null, away: null } },
+  weight: { title: '加权凯利变化', labels: { home: '加权主', draw: '加权平', away: '加权客' } },
+}
+
+const trendTitle = computed(() => trendSelection.value ? trendMeta[trendSelection.value.metric].title : '')
+const trendLabels = computed(() => trendSelection.value ? trendMeta[trendSelection.value.metric].labels : trendMeta.odds.labels)
+const trendPoints = computed<ChartPoint[]>(() => {
+  const metric = trendSelection.value?.metric
+  if (!metric) return []
+  return (trendData.value?.points ?? []).map((p) => {
+    let home = p.home, draw = p.draw, away = p.away
+    if (metric === 'kelly') ({ kHome: home, kDraw: draw, kAway: away } = p)
+    else if (metric === 'return') { home = p.ret; draw = 0; away = 0 }
+    else if (metric === 'weight') ({ wHome: home, wDraw: draw, wAway: away } = p)
+    return { time: p.time, ts: p.time, home, draw, away, volume: 0 }
+  })
+})
+
+async function loadTrend() {
+  const selected = trendSelection.value
+  if (!selected) return
+  const requestId = ++trendRequestId
+  trendPending.value = true
+  trendError.value = ''
+  try {
+    const response = await $apiFetch<ApiResponse<EuroOddsHistoryData>>(
+      `/api/newspdex/euro-odds/${eventId.value}/history?bid=${selected.row.bid}&hours=${trendHours.value}`,
+    )
+    if (requestId !== trendRequestId) return
+    trendData.value = response.data ?? null
+    if (!trendData.value || trendData.value.status !== 'ok')
+      trendError.value = trendData.value?.lockMessage || '该时段暂无走势图数据'
+  }
+  catch {
+    if (requestId === trendRequestId) trendError.value = '走势图加载失败，请稍后重试'
+  }
+  finally {
+    if (requestId === trendRequestId) trendPending.value = false
+  }
+}
+
+function openTrend(row: EuroBookRow, metric: TrendMetric) {
+  if (!(row.bid > 0)) return
+  trendSelection.value = { row, metric }
+  trendData.value = null
+  loadTrend()
+}
+
+function closeTrend() {
+  trendRequestId++
+  trendSelection.value = null
+  trendData.value = null
+  trendPending.value = false
+  trendError.value = ''
+}
+
+function setTrendHours(hours: number) {
+  if (trendHours.value === hours) return
+  trendHours.value = hours
+  trendData.value = null
+  loadTrend()
+}
+
+function onTrendKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && trendSelection.value) closeTrend()
+}
+
+onMounted(() => {
+  hydrated.value = true
+  window.addEventListener('keydown', onTrendKeydown)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onTrendKeydown))
 
 function od(n: number): string { return n > 0 ? n.toFixed(2) : '-' }
 function kv(n: number): string { return n > 0 ? n.toFixed(2) : '-' }
@@ -37,8 +126,8 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
         <div class="eo-head-right">
           <span v-if="data?.matchTime" class="eo-time num">比赛时间: {{ data.matchTime }}</span>
           <span v-if="data?.refreshTime" class="eo-time num">刷新时间: {{ data.refreshTime }}</span>
-          <button type="button" class="eo-refresh" :disabled="pending" aria-label="刷新" @click="refresh()">
-            <RefreshCw :size="13" :class="{ spinning: pending }" />
+          <button type="button" class="eo-refresh" :disabled="hydrated && pending" aria-label="刷新" @click="refresh()">
+            <RefreshCw :size="13" :class="{ spinning: hydrated && pending }" />
           </button>
         </div>
       </div>
@@ -73,16 +162,16 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
                   <span class="co-name">{{ maskCo(r.company) }}</span>
                   <span v-if="r.isOutlier" class="outlier-badge">异常</span>
                 </td>
-                <td class="c-odds o-home num">{{ od(r.home) }}</td>
-                <td class="c-odds o-draw num">{{ od(r.draw) }}</td>
-                <td class="c-odds o-away num">{{ od(r.away) }}</td>
-                <td class="c-kelly num">{{ kv(r.kHome) }}</td>
-                <td class="c-kelly num">{{ kv(r.kDraw) }}</td>
-                <td class="c-kelly num">{{ kv(r.kAway) }}</td>
-                <td class="c-ret num">{{ kv(r.ret) }}</td>
-                <td class="c-wt num">{{ kv(r.wHome) }}</td>
-                <td class="c-wt num">{{ kv(r.wDraw) }}</td>
-                <td class="c-wt num">{{ kv(r.wAway) }}</td>
+                <td class="c-odds o-home num"><button type="button" class="trend-value" :disabled="r.home <= 0" :aria-label="`${maskCo(r.company)} 欧赔走势`" @click="openTrend(r, 'odds')">{{ od(r.home) }}</button></td>
+                <td class="c-odds o-draw num"><button type="button" class="trend-value" :disabled="r.draw <= 0" :aria-label="`${maskCo(r.company)} 欧赔走势`" @click="openTrend(r, 'odds')">{{ od(r.draw) }}</button></td>
+                <td class="c-odds o-away num"><button type="button" class="trend-value" :disabled="r.away <= 0" :aria-label="`${maskCo(r.company)} 欧赔走势`" @click="openTrend(r, 'odds')">{{ od(r.away) }}</button></td>
+                <td class="c-kelly num"><button type="button" class="trend-value" :disabled="r.kHome <= 0" :aria-label="`${maskCo(r.company)} 凯利走势`" @click="openTrend(r, 'kelly')">{{ kv(r.kHome) }}</button></td>
+                <td class="c-kelly num"><button type="button" class="trend-value" :disabled="r.kDraw <= 0" :aria-label="`${maskCo(r.company)} 凯利走势`" @click="openTrend(r, 'kelly')">{{ kv(r.kDraw) }}</button></td>
+                <td class="c-kelly num"><button type="button" class="trend-value" :disabled="r.kAway <= 0" :aria-label="`${maskCo(r.company)} 凯利走势`" @click="openTrend(r, 'kelly')">{{ kv(r.kAway) }}</button></td>
+                <td class="c-ret num"><button type="button" class="trend-value" :disabled="r.ret <= 0" :aria-label="`${maskCo(r.company)} 返还率走势`" @click="openTrend(r, 'return')">{{ kv(r.ret) }}</button></td>
+                <td class="c-wt num"><button type="button" class="trend-value" :disabled="r.wHome <= 0" :aria-label="`${maskCo(r.company)} 加权凯利走势`" @click="openTrend(r, 'weight')">{{ kv(r.wHome) }}</button></td>
+                <td class="c-wt num"><button type="button" class="trend-value" :disabled="r.wDraw <= 0" :aria-label="`${maskCo(r.company)} 加权凯利走势`" @click="openTrend(r, 'weight')">{{ kv(r.wDraw) }}</button></td>
+                <td class="c-wt num"><button type="button" class="trend-value" :disabled="r.wAway <= 0" :aria-label="`${maskCo(r.company)} 加权凯利走势`" @click="openTrend(r, 'weight')">{{ kv(r.wAway) }}</button></td>
                 <td class="c-odds o-home num">{{ r.hasInit ? od(r.iHome) : '' }}</td>
                 <td class="c-odds o-draw num">{{ r.hasInit ? od(r.iDraw) : '' }}</td>
                 <td class="c-odds o-away num">{{ r.hasInit ? od(r.iAway) : '' }}</td>
@@ -131,6 +220,32 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
         </div>
       </template>
     </section>
+
+    <Teleport to="body">
+      <div v-if="trendSelection" class="trend-modal" role="presentation" @click.self="closeTrend">
+        <section class="trend-dialog" role="dialog" aria-modal="true" :aria-label="trendTitle">
+          <header class="trend-head">
+            <div>
+              <h2>{{ maskCo(trendSelection.row.company) }} · {{ trendTitle }}</h2>
+              <p>{{ data?.homeTeam }} VS {{ data?.awayTeam }}</p>
+            </div>
+            <button type="button" class="trend-close" aria-label="关闭走势图" @click="closeTrend"><X :size="18" /></button>
+          </header>
+          <div class="trend-tools" aria-label="走势图时间范围">
+            <button v-for="hours in [6, 24, 72, 168]" :key="hours" type="button" :class="{ active: trendHours === hours }" @click="setTrendHours(hours)">
+              {{ hours < 24 ? `${hours}小时` : `${hours / 24}天` }}
+            </button>
+            <button type="button" class="trend-reload" :disabled="trendPending" aria-label="刷新走势图" @click="loadTrend"><RefreshCw :size="14" :class="{ spinning: trendPending }" /></button>
+          </div>
+          <div class="trend-body">
+            <div v-if="trendPending && !trendPoints.length" class="trend-state">加载走势数据…</div>
+            <div v-else-if="trendError || !trendPoints.length" class="trend-state">{{ trendError || '该时段暂无走势图数据' }}</div>
+            <LazyStaticTrendChart v-else :points="trendPoints" :height="280" :series-labels="trendLabels" unit="odds" />
+          </div>
+          <footer v-if="trendPoints.length" class="trend-foot">共 {{ trendPoints.length }} 个原始变化点，时间精确到秒</footer>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -187,6 +302,13 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
 .eo-table td.o-draw { color: #2456a6; font-weight: 720; }
 .eo-table td.o-away { color: #2456a6; font-weight: 720; }
 .eo-table td.c-ret { font-weight: 820; color: var(--classic-title); }
+.trend-value {
+  display: inline; padding: 0; border: 0; background: transparent; color: inherit;
+  font: inherit; font-weight: inherit; cursor: pointer;
+}
+.trend-value:hover, .trend-value:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+.trend-value:focus-visible { outline: 2px solid var(--classic-link); outline-offset: 2px; }
+.trend-value:disabled { cursor: default; text-decoration: none; }
 .eo-table .r-ext td { background: var(--classic-blue-soft); font-weight: 800; color: var(--classic-title); }
 .eo-table .r-outlier td { opacity: 0.62; }
 .eo-table .r-outlier .co-name {
@@ -238,4 +360,42 @@ function maskCo(name: string): string { return (name || '').replace(/bet/gi, m =
 .dark .eo-table .g-init,
 .dark .eo-table .r-ext td { background: #1d3556; color: #9cc2f0; }
 .dark .f-cell.warn { background: #3a2916; }
+
+.trend-modal {
+  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+  padding: 20px; background: rgba(15, 23, 42, 0.48);
+}
+.trend-dialog {
+  width: min(900px, 100%); max-height: calc(100vh - 40px); overflow: auto;
+  border: 1px solid var(--classic-border, #d8dee8); border-radius: 6px;
+  background: var(--classic-panel, #fff); box-shadow: 0 18px 50px rgba(15, 23, 42, 0.25);
+}
+.trend-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 16px 12px; border-bottom: 1px solid var(--classic-border, #d8dee8);
+}
+.trend-head h2 { margin: 0; color: var(--classic-title, #172033); font-size: 1rem; font-weight: 850; }
+.trend-head p { margin: 3px 0 0; color: var(--classic-title-muted, #758195); font-size: 0.74rem; font-weight: 680; }
+.trend-close, .trend-reload {
+  display: inline-grid; place-items: center; width: 30px; height: 28px;
+  border: 1px solid var(--classic-border, #d8dee8); border-radius: 4px;
+  background: var(--classic-panel, #fff); color: var(--classic-text, #46536a); cursor: pointer;
+}
+.trend-tools { display: flex; align-items: center; gap: 6px; padding: 10px 16px 0; }
+.trend-tools > button:not(.trend-reload) {
+  min-width: 58px; height: 28px; padding: 0 10px; border: 1px solid var(--classic-border, #d8dee8);
+  border-radius: 4px; background: var(--classic-panel, #fff); color: var(--classic-text, #46536a);
+  font-size: 0.72rem; font-weight: 740; cursor: pointer;
+}
+.trend-tools > button.active { border-color: var(--classic-link, #276ee8); background: var(--classic-link, #276ee8); color: #fff; }
+.trend-body { min-height: 320px; padding: 10px 14px 4px; }
+.trend-state { display: grid; place-items: center; min-height: 280px; color: var(--classic-title-muted, #758195); font-size: 0.82rem; font-weight: 700; }
+.trend-foot { padding: 0 16px 12px; color: var(--classic-title-muted, #758195); font-size: 0.7rem; text-align: right; }
+.dark .trend-dialog, .dark .trend-close, .dark .trend-reload, .dark .trend-tools > button:not(.active) { background: #172235; }
+@media (max-width: 640px) {
+  .trend-modal { padding: 8px; }
+  .trend-dialog { max-height: calc(100vh - 16px); }
+  .trend-tools { overflow-x: auto; }
+  .trend-body { min-height: 260px; padding-inline: 6px; }
+}
 </style>

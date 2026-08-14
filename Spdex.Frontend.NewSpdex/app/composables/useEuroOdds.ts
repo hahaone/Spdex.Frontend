@@ -7,6 +7,7 @@
 import type { ApiResponse } from '~/types/auth'
 
 export interface EuroBookRow {
+  bid: number
   company: string
   home: number
   draw: number
@@ -28,6 +29,30 @@ export interface EuroBookRow {
   iRet: number
   isOutlier: boolean
   outlierReason: string | null
+}
+
+export interface EuroOddsHistoryPoint {
+  time: string
+  home: number
+  draw: number
+  away: number
+  kHome: number
+  kDraw: number
+  kAway: number
+  ret: number
+  wHome: number
+  wDraw: number
+  wAway: number
+}
+
+export interface EuroOddsHistoryData {
+  eventId: number
+  bid: number
+  company: string
+  hours: number
+  status: 'ok' | 'no-access' | 'pending'
+  lockMessage: string | null
+  points: EuroOddsHistoryPoint[]
 }
 
 export interface EuroExtremes {
