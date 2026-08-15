@@ -56,6 +56,7 @@ const selectedLeagues = ref<string[]>([])
 
 const selectedCount = computed(() => selectedIds.value.size)
 const activeLotterySort = computed<LotterySort | null>(() => lotterySortOf(props.lottery))
+const exactLotterySort = computed<LotterySort | null>(() => exactLotterySortOf(props.lottery))
 const isListLoading = computed(() => Boolean(props.initialLoading || (props.pending && !props.matches.length)))
 const toolbarPending = computed(() => Boolean(props.pending || props.initialLoading))
 
@@ -122,8 +123,10 @@ const pagedMatches = computed(() => visibleMatches.value.slice((page.value - 1) 
 const pageList = computed(() => Array.from({ length: pageCount.value }, (_, i) => i + 1))
 watch(pageCount, (n) => { if (page.value > n) page.value = n })
 watch(sortMode, () => { page.value = 1 })
-watch(() => props.lottery, () => {
-  if (!activeLotterySort.value && sortMode.value === 'lottery') sortMode.value = 'time'
+watch(() => props.lottery, (_next, previous) => {
+  if (exactLotterySort.value) sortMode.value = 'lottery'
+  else if (exactLotterySortOf(previous) && sortMode.value === 'lottery') sortMode.value = 'time'
+  else if (!activeLotterySort.value && sortMode.value === 'lottery') sortMode.value = 'time'
   page.value = 1
 }, { immediate: true })
 watch(selectedLeagues, () => { page.value = 1 })
@@ -150,6 +153,11 @@ function isSortMode(value: unknown): value is SortMode {
 function lotterySortOf(value: string): LotterySort | null {
   const kind = value.split(':')[0]
   return kind === 'jc' || kind === 'lottery' ? kind : null
+}
+
+function exactLotterySortOf(value: string | undefined): LotterySort | null {
+  const [kind, issueText] = (value ?? '').split(':')
+  return (kind === 'jc' || kind === 'lottery') && Number(issueText) > 0 ? kind : null
 }
 
 function sortableLotteryNumber(value: number | undefined): number {
@@ -239,7 +247,10 @@ const workbenchStorageKey = `spdex:classic-wb:${props.sport ?? 'football'}`
 onMounted(() => {
   try {
     const raw = localStorage.getItem(workbenchStorageKey)
-    if (!raw) return
+    if (!raw) {
+      if (exactLotterySort.value) sortMode.value = 'lottery'
+      return
+    }
     const s = JSON.parse(raw) as Record<string, unknown>
     const toIdSet = (v: unknown) =>
       new Set((Array.isArray(v) ? v : []).filter((x): x is number => typeof x === 'number'))
@@ -253,6 +264,7 @@ onMounted(() => {
     // v1 曾把竞彩/足彩自动切成赛事排序；首次升级到 v2 时统一迁移到新的时间默认值。
     if (s.sortVersion === 2 && isSortMode(s.sort)) sortMode.value = s.sort
   } catch { /* 损坏的存储忽略 */ }
+  if (exactLotterySort.value) sortMode.value = 'lottery'
 })
 
 watch([selectedIds, retainedIds, deletedIds, pinnedIds, collapsedIds, selectedLeagues, sortMode], () => {

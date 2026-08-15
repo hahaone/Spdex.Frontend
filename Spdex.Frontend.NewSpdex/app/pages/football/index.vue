@@ -188,11 +188,26 @@ const lotteryOptions = computed(() => [
     : [{ label: '足彩', value: 'lottery' }]),
 ])
 
-/** 异动筛选生效时只显示命中的比赛；统一按开赛时间升序（最早在前） */
+function sortableLotteryOrder(value: number | undefined): number {
+  return typeof value === 'number' && value > 0 ? value : Number.MAX_SAFE_INTEGER
+}
+
+/** 异动筛选只显示命中比赛；精确期号按官方场次序号排列，其余仍按开赛时间升序。 */
 const displayMatches = computed(() => {
   const list = isMetricFiltered.value
     ? matches.value.filter(m => eventIdSet.value.has(m.eventId))
     : matches.value
+
+  const [kind, issueText] = lottery.value.split(':')
+  const issue = Number(issueText) || 0
+  if (issue > 0 && (kind === 'jc' || kind === 'lottery')) {
+    return [...list].sort((a, b) => {
+      const orderA = sortableLotteryOrder(kind === 'jc' ? a.jcOrder : a.sfcOrder)
+      const orderB = sortableLotteryOrder(kind === 'jc' ? b.jcOrder : b.sfcOrder)
+      return orderA - orderB || a.matchTime.localeCompare(b.matchTime) || a.eventId - b.eventId
+    })
+  }
+
   return [...list].sort((a, b) => a.matchTime.localeCompare(b.matchTime))
 })
 
