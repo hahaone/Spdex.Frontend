@@ -65,6 +65,9 @@ interface MemberItem {
   mobile?: string | null
   lastActivityDate?: string | null
   registerDate?: string | null
+  isTestAccount: boolean
+  hasAiTestAccess: boolean
+  aiTestAccessSource: 'admin' | 'environment' | 'none'
 }
 
 const api = useAdminApi()
@@ -174,6 +177,26 @@ const columns = [
     title: '状态',
     key: 'enabled',
     render: (r: MemberItem) => h(NTag, { type: r.enabled ? 'success' : 'error', size: 'small' }, { default: () => (r.enabled ? '启用' : '禁用') }),
+  },
+  {
+    title: '测试资格',
+    key: 'testAccess',
+    width: 180,
+    render: (r: MemberItem) => h(NSpace, { size: 4 }, {
+      default: () => [
+        r.isTestAccount
+          ? h(NTag, { type: 'warning', size: 'small', bordered: false }, { default: () => '支付测试' })
+          : null,
+        r.hasAiTestAccess
+          ? h(NTag, {
+              type: r.aiTestAccessSource === 'environment' ? 'info' : 'success',
+              size: 'small',
+              bordered: false,
+            }, { default: () => r.aiTestAccessSource === 'environment' ? 'AI 测试 · 应急' : 'AI 测试' })
+          : null,
+        !r.isTestAccount && !r.hasAiTestAccess ? '—' : null,
+      ].filter(Boolean),
+    }),
   },
   { title: '手机', key: 'mobile', render: (r: MemberItem) => r.mobile || '—' },
   {
