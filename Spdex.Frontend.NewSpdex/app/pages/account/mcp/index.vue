@@ -31,18 +31,79 @@ interface OAuthGrant {
   lastUsedAt?: string | null
 }
 
-const scopeOptions = [
-  { value: 'matches.search', label: '赛事搜索' },
-  { value: 'matches.snapshot', label: '单场快照' },
-  { value: 'markets.series', label: '盘口走势' },
-  { value: 'markets.anomalies', label: '异常检测' },
-  { value: 'metrics.explain', label: '指标解释' },
+interface ScopeOption {
+  value: string
+  label: string
+  description: string
+}
+
+interface ScopeGroup {
+  key: string
+  label: string
+  description: string
+  scopes: ScopeOption[]
+}
+
+const scopeGroups: ScopeGroup[] = [
+  {
+    key: 'match',
+    label: '赛事与基础市场',
+    description: '定位比赛、读取快照、盘口走势、异常与指标口径。',
+    scopes: [
+      { value: 'matches.search', label: '赛事发现', description: '搜索比赛和读取重点赛事排行。' },
+      { value: 'matches.snapshot', label: '比赛快照', description: '读取单场快照和市场能力。' },
+      { value: 'markets.series', label: '盘口走势', description: '读取价格、成交量和指标时间序列。' },
+      { value: 'markets.anomalies', label: '异常检测', description: '检测盘口、成交与市场结构异常。' },
+      { value: 'metrics.explain', label: '指标解释', description: '解释必发、Poly 与分析指标。' },
+    ],
+  },
+  {
+    key: 'advanced',
+    label: '交易与 FJCX 高级分析',
+    description: '覆盖 Hold、大额交易、提炼、共振与窗口比较。',
+    scopes: [
+      { value: 'markets.trades', label: '交易与 Hold', description: '读取成交流、大额交易、深度和 Hold 窗口。' },
+      { value: 'analytics.window_compare', label: '窗口比较', description: '比较不同时间窗口的市场变化。' },
+      { value: 'analytics.extraction', label: 'FJCX 提炼', description: '读取挂牌与指数提炼信号。' },
+      { value: 'analytics.resonance', label: '跨市场共振', description: '识别标盘、亚盘与进球市场共振。' },
+      { value: 'external.prediction', label: '预测市场', description: '读取外部预测市场并与 SPdex 对照。' },
+      { value: 'live.monitor', label: '赛中监测', description: '读取赛中市场监测结果。' },
+      { value: 'signals.read', label: '交易信号', description: '读取并解释系统信号。' },
+    ],
+  },
+  {
+    key: 'workflow',
+    label: '工作流与报告',
+    description: '让 Agent 规划和运行多步骤分析，并生成结构化简报。',
+    scopes: [
+      { value: 'agent.plan', label: '分析规划', description: '生成适合当前问题的工具执行计划。' },
+      { value: 'workflows.match_analysis', label: '单场工作流', description: '运行完整单场分析工作流。' },
+      { value: 'workflows.watchlist_analysis', label: '赛事清单工作流', description: '批量分析关注赛事。' },
+      { value: 'workflows.monitoring_prepare', label: '监测准备工作流', description: '为持续监测准备规则和上下文。' },
+      { value: 'reports.match_brief', label: '单场简报', description: '生成单场结构化简报。' },
+      { value: 'reports.watchlist', label: '清单报告', description: '生成多场关注清单报告。' },
+    ],
+  },
+  {
+    key: 'automation',
+    label: '观察条件与自动化',
+    description: '读取、创建和管理持续观察条件。',
+    scopes: [
+      { value: 'watch_conditions.read', label: '读取观察条件', description: '读取观察条件和站内通知。' },
+      { value: 'watch_conditions.write', label: '管理观察条件', description: '创建、评估、修改或取消观察条件。' },
+    ],
+  },
 ]
+
+const scopeOptions = scopeGroups.flatMap(group => group.scopes)
+const fullScopes = scopeOptions.map(item => item.value)
+const basicScopes = scopeGroups[0]!.scopes.map(item => item.value)
 
 const connections = ref<AiCredential[]>([])
 const grants = ref<OAuthGrant[]>([])
 const config = useRuntimeConfig()
 const helpCenterUrl = computed(() => String(config.public.helpCenterUrl || 'https://help-test.spdex.com').replace(/\/$/, ''))
+const mcpEndpoint = computed(() => String(config.public.mcpEndpoint || 'https://mcp-test.spdex.com/mcp?tool_subset=spdex-full'))
 const mcpHelpUrl = computed(() => `${helpCenterUrl.value}/ai/mcp-quickstart`)
 const usageHelpUrl = computed(() => `${helpCenterUrl.value}/ai/ai-mcp-usage-quota`)
 const loading = ref(true)
@@ -55,8 +116,21 @@ const showCreate = ref(false)
 const form = reactive({
   name: 'WorkBuddy',
   ttlDays: 30,
-  scopes: scopeOptions.map(item => item.value),
+  scopes: [...fullScopes],
 })
+
+function applyScopePreset(preset: 'full' | 'basic') {
+  form.scopes = [...(preset === 'full' ? fullScopes : basicScopes)]
+}
+
+function hasAllScopes(scopes: string[]) {
+  const available = new Set(scopes)
+  return fullScopes.every(scope => available.has(scope))
+}
+
+function visibleScopes(scopes: string[]) {
+  return scopes.slice(0, 4)
+}
 
 async function load() {
   loading.value = true
@@ -117,6 +191,22 @@ async function rotateConnection(connection: AiCredential) {
   catch (error: unknown) {
     const fetchError = error as { data?: { message?: string } }
     errorMessage.value = fetchError.data?.message || '轮换连接失败'
+  }
+}
+
+async function reauthorizeConnection(connection: AiCredential) {
+  if (!confirm(`“${connection.name}”将升级为完整 34 工具权限，旧 token 会立即失效。继续吗？`)) return
+  try {
+    const issue = await $apiFetch<AiCredentialIssue>(`/api/newspdex/ai/mcp/connections/${connection.id}/rotate`, {
+      method: 'POST',
+      body: { ttlDays: 90, scopes: fullScopes },
+    })
+    showIssued(issue)
+    await load()
+  }
+  catch (error: unknown) {
+    const fetchError = error as { data?: { message?: string } }
+    errorMessage.value = fetchError.data?.message || '重新授权失败'
   }
 }
 
@@ -181,8 +271,8 @@ onMounted(load)
     <section class="notice-band" aria-label="MCP 使用边界">
       <ShieldAlert :size="16" />
       <div>
-        <b>MCP token 只用于授权 SPdex 数据工具。</b>
-        <span>不要把 token、Authorization header 或本地配置文件发给聊天模型；外部 Agent 的模型费用由对应平台或你的模型 Key 承担。</span>
+        <b>完整连接可使用 SPdex 当前开放的 34 个工具。</b>
+        <span>数据权限由 MCP token 的访问范围决定；客户端还需使用“完整工具”地址。外部 Agent 的模型费用由对应平台或你的模型 Key 承担。</span>
       </div>
       <a :href="usageHelpUrl" target="_blank" rel="noopener noreferrer">查看用量与安全边界</a>
     </section>
@@ -228,12 +318,27 @@ onMounted(load)
           </div>
         </fieldset>
         <fieldset>
-          <legend>访问范围</legend>
-          <div class="scope-grid">
-            <label v-for="scope in scopeOptions" :key="scope.value" class="scope-option">
-              <input v-model="form.scopes" type="checkbox" :value="scope.value">
-              <span>{{ scope.label }}</span>
-            </label>
+          <div class="scope-heading">
+            <legend>访问范围</legend>
+            <div class="scope-presets" aria-label="权限预设">
+              <button type="button" :class="{ active: hasAllScopes(form.scopes) }" @click="applyScopePreset('full')">完整 34 工具</button>
+              <button type="button" :class="{ active: form.scopes.length === basicScopes.length && basicScopes.every(scope => form.scopes.includes(scope)) }" @click="applyScopePreset('basic')">基础 8 工具</button>
+            </div>
+          </div>
+          <p class="scope-intro">推荐选择完整能力。基础模式只适合赛事搜索和基础盘口查询，不包含 FJCX、交易信号、工作流与自动化。</p>
+          <div class="scope-groups">
+            <section v-for="group in scopeGroups" :key="group.key" class="scope-group">
+              <div class="scope-group-head">
+                <b>{{ group.label }}</b>
+                <span>{{ group.description }}</span>
+              </div>
+              <div class="scope-grid">
+                <label v-for="scope in group.scopes" :key="scope.value" class="scope-option" :title="scope.description">
+                  <input v-model="form.scopes" type="checkbox" :value="scope.value">
+                  <span>{{ scope.label }}</span>
+                </label>
+              </div>
+            </section>
           </div>
         </fieldset>
         <button class="submit-button focus-ring" type="submit" :disabled="saving || !form.scopes.length">
@@ -250,10 +355,13 @@ onMounted(load)
             <div class="connection-title">
               <b>{{ connection.name }}</b>
               <span :class="['status', connection.status]">{{ connection.status === 'active' ? '有效' : '已停用' }}</span>
+              <span v-if="hasAllScopes(connection.scopes)" class="status full">完整 34 工具</span>
+              <span v-else class="status limited">权限不完整</span>
             </div>
             <code>{{ connection.tokenPrefix }}</code>
             <div class="scope-list">
-              <span v-for="scope in connection.scopes" :key="scope">{{ scopeLabel(scope) }}</span>
+              <span v-for="scope in visibleScopes(connection.scopes)" :key="scope">{{ scopeLabel(scope) }}</span>
+              <span v-if="connection.scopes.length > 4">另有 {{ connection.scopes.length - 4 }} 项</span>
             </div>
             <p>
               最近使用：{{ formatTime(connection.lastUsedAt) }}
@@ -262,6 +370,15 @@ onMounted(load)
             </p>
           </div>
           <div v-if="connection.status === 'active'" class="row-actions">
+            <button
+              v-if="!hasAllScopes(connection.scopes)"
+              type="button"
+              class="reauthorize-button focus-ring"
+              @click="reauthorizeConnection(connection)"
+            >
+              <ShieldCheck :size="15" />
+              <span>升级权限</span>
+            </button>
             <button type="button" class="icon-button focus-ring" aria-label="轮换 token" @click="rotateConnection(connection)">
               <RefreshCw :size="15" />
             </button>
@@ -320,6 +437,11 @@ onMounted(load)
           <span>复制后只放入受信任客户端的 Header 或 OAuth 配置，不要粘贴到公开对话、截图、工单或文档中。若已暴露，请立即关闭窗口并撤销该连接。</span>
         </div>
         <code class="issued-token">{{ issuedToken }}</code>
+        <div class="endpoint-block">
+          <b>完整工具地址</b>
+          <code>{{ mcpEndpoint }}</code>
+          <span>在客户端中替换新 token，并重新连接或新建对话；工具列表应显示 34/34。</span>
+        </div>
         <button class="submit-button focus-ring" type="button" @click="copyToken">
           <Check v-if="copied" :size="16" />
           <Clipboard v-else :size="16" />
@@ -357,6 +479,18 @@ onMounted(load)
 .create-form input[type="text"], .create-form input:not([type]) { min-height: 36px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); }
 fieldset { display: grid; gap: 7px; margin: 0; padding: 0; border: 0; }
 legend { margin-bottom: 6px; color: var(--muted); font-size: .74rem; font-weight: 700; }
+.scope-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.scope-heading legend { margin: 0; }
+.scope-presets { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.scope-presets button { min-height: 30px; padding: 5px 8px; border: 0; border-right: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: .7rem; }
+.scope-presets button:last-child { border-right: 0; }
+.scope-presets button.active { background: var(--brand); color: #fff; font-weight: 760; }
+.scope-intro { margin: 0; color: var(--muted); font-size: .7rem; line-height: 1.55; }
+.scope-groups { display: grid; gap: 8px; }
+.scope-group { display: grid; gap: 8px; padding: 9px; border: 1px solid var(--divider); border-radius: 5px; background: var(--panel); }
+.scope-group-head { display: grid; gap: 2px; }
+.scope-group-head b { color: var(--ink); font-size: .76rem; }
+.scope-group-head span { color: var(--muted); font-size: .68rem; line-height: 1.45; }
 .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(240px, 100%); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
 .segmented button { min-height: 34px; border: 0; border-right: 1px solid var(--line); background: var(--panel); color: var(--muted); }
 .segmented button:last-child { border-right: 0; }
@@ -372,17 +506,24 @@ legend { margin-bottom: 6px; color: var(--muted); font-size: .74rem; font-weight
 .connection-title b { color: var(--ink); font-size: .86rem; }
 .status { padding: 2px 5px; border-radius: 3px; background: #eef0f4; color: var(--muted); font-size: .62rem; font-weight: 760; }
 .status.active { background: #e8f7ed; color: #18763b; }
+.status.full { background: #e9f6f4; color: #0f766e; }
+.status.limited { background: #fff3e8; color: #a34100; }
 .connection-main code, .issued-token { overflow-wrap: anywhere; color: var(--muted); font-size: .7rem; }
 .scope-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .scope-list span { padding: 2px 5px; border: 1px solid var(--divider); border-radius: 3px; color: var(--muted); font-size: .64rem; }
 .connection-main p { margin: 0; color: var(--muted); font-size: .68rem; }
 .row-actions { display: flex; gap: 6px; align-items: start; }
+.reauthorize-button { display: inline-flex; min-height: 34px; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid var(--brand); border-radius: 5px; background: var(--panel); color: var(--brand); font-size: .7rem; font-weight: 760; white-space: nowrap; }
 .empty-state { padding: 22px 12px; color: var(--muted); font-size: .78rem; text-align: center; }
 .token-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(15, 22, 35, .58); }
 .token-dialog { display: grid; gap: 14px; width: min(100%, 560px); padding: 16px; border-radius: 7px; background: var(--panel); box-shadow: 0 18px 50px rgba(0, 0, 0, .25); }
 .token-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
 .token-warning { background: #fff7ed; }
 .issued-token { display: block; max-height: 150px; overflow: auto; padding: 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); color: var(--ink); }
+.endpoint-block { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--canvas); }
+.endpoint-block b { color: var(--ink); font-size: .76rem; }
+.endpoint-block code { overflow-wrap: anywhere; color: var(--brand); font-size: .72rem; }
+.endpoint-block span { color: var(--muted); font-size: .7rem; line-height: 1.5; }
 @media (min-width: 760px) {
   .mcp-page { width: min(920px, 100%); margin: 0 auto; padding: 18px 20px 28px; }
   .safety-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }

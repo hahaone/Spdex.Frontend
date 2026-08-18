@@ -39,6 +39,7 @@ services:
       - NUXT_PUBLIC_CAPTCHA_REGION=${CAPTCHA_REGION:-cn}
       - NUXT_PUBLIC_AUTH_COOKIE_DOMAIN=${NEWSPDEX_AUTH_COOKIE_DOMAIN:-}
       - NUXT_PUBLIC_HELP_CENTER_URL=${HELP_CENTER_URL:-https://help-test.spdex.com}
+      - NUXT_PUBLIC_MCP_ENDPOINT=${MCP_ENDPOINT:-https://mcp-test.spdex.com/mcp?tool_subset=spdex-full}
       - NUXT_PUBLIC_AI_NOTIFICATIONS_VISIBLE=${NEWSPDEX_AI_NOTIFICATIONS_VISIBLE:-auto}
     restart: unless-stopped
 

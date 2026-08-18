@@ -193,7 +193,7 @@ export const helpArticles: HelpArticle[] = [
     level: '进阶',
     readMinutes: 10,
     category: 'ai',
-    updated: '2026-08-08',
+    updated: '2026-08-18',
     tags: ['MCP', 'Agent', 'OAuth', 'Token'],
     sections: [
       {
@@ -207,19 +207,22 @@ export const helpArticles: HelpArticle[] = [
         heading: '接入地址',
         body: [
           'Remote MCP 接入地址以账号中心或企业配置页展示为准。配置时请确认客户端支持 HTTPS Remote MCP、授权回调和所需的鉴权方式。',
+          '测试环境完整工具地址为 https://mcp-test.spdex.com/mcp?tool_subset=spdex-full。使用该地址并重新连接后，客户端应发现 34 个工具；spdex-basic 只会显示 8 个基础工具。',
         ],
       },
       {
         heading: '获取访问凭证',
         body: [
-          '个人用户登录 NewSpdex 后，进入会员中心的“AI 与 MCP 连接”，点击“新建”。请用客户端和用途命名，选择有效期与所需授权范围，并在创建后立即把只完整显示一次的 token 保存到客户端安全配置中。',
+          '个人用户登录 NewSpdex 后，进入会员中心的“AI 与 MCP 连接”，点击“新建”。完整使用 SPdex MCP 时选择“完整 34 工具”；页面会授权当前开放工具所需的 20 项 scope。创建后立即把只完整显示一次的 token 保存到客户端安全配置中。',
           '如果关闭页面前没有保存 token，原文无法恢复。请在连接列表中轮换该连接或重新创建，并用新 token 完成一次真实工具调用。访问页面被跳回首页或看不到新建入口时，说明当前账号尚未开通对应权限，请联系服务人员确认账号权益，不要借用他人账号或 token。',
+          '旧连接如果显示“权限不完整”，点击“升级权限”重新授权。系统会签发新 token 并立即废弃旧 token；请替换客户端配置、重连并新建对话。普通轮换只更换密钥并保留原 scope。',
+          'FJCX 工作室令牌用于 FJCX 产品登录范围，不会修改已经签发的 MCP token；会员升级或绑定工作室令牌后，旧 MCP token 仍需通过“升级权限”重新授权。',
           '企业凭证由 SPdex 按企业主体、合同、授权范围、额度和安全策略配置。企业业务人员通常使用预配置 Agent，不应接触企业凭证原文；企业技术接入人员通过约定的安全渠道获取独立凭证。',
         ],
         steps: [
           '登录 NewSpdex，进入会员中心的“AI 与 MCP 连接”。',
           '新建连接，填写可识别的客户端名称和用途。',
-          '只选择当前任务需要的授权范围和有效期。',
+          '完整使用时选择“完整 34 工具”；轻量查询才选择“基础 8 工具”。',
           '立即复制一次性显示的 token，并写入客户端凭证配置。',
           '完成一次真实工具调用，再检查最近使用时间是否更新。',
         ],
@@ -232,7 +235,7 @@ export const helpArticles: HelpArticle[] = [
         steps: [
           '在 SPdex 账号中心创建专用 MCP token，名称写清客户端和用途。',
           '只在客户端的 Header、OAuth 或 MCP server 配置里填写 token，不要粘贴到普通聊天输入框。',
-          '先选择较小的工具子集，例如 spdex-basic 或 spdex-match-analysis。',
+          '完整验收选择 spdex-full；只做入门查询时可选择 spdex-basic 或 spdex-match-analysis。',
           '用“解释 SPdex 指标”或“搜索今日重点比赛”做第一轮轻量测试。',
           '确认工具发现、权限、长结果展示和导出都正常后，再开启 workflow 或观察条件能力。',
         ],
@@ -260,7 +263,8 @@ export const helpArticles: HelpArticle[] = [
         heading: '接入失败怎么办',
         body: [
           '先确认客户端支持 HTTPS Remote MCP，再检查接入地址、授权状态、凭证有效期和已选工具范围。能够发现工具但无法调用，通常与权限、额度、参数或比赛数据可用性有关。',
-          '轮换 token 后应重启客户端连接并执行一次真实调用，同时确认旧 token 已失效。不要通过共享账号、复用个人 token 或扩大工具子集来绕过权限错误。',
+          '如果模型提示工具 not found，并且连接状态列表中没有 SPdex，说明当前项目或对话没有加载 SPdex 连接器。请先在连接器管理中启用 SPdex，再在当前对话的工具选择器中勾选它；重连后新建对话，避免旧工具快照继续生效。',
+          '轮换或升级权限后应重启客户端连接并新建对话，同时确认旧 token 已失效。工具已经显示但 FJCX、交易或信号调用返回 permission_denied 时，先检查账号中心是否标记“权限不完整”，不要通过共享账号或复用他人 token 绕过权限。',
           '反馈时提供客户端名称和版本、发生时间、你输入的问题、页面错误提示和回答追踪号。不要发送凭证原文、授权请求头、Cookie 或完整配置文件。',
         ],
       },
