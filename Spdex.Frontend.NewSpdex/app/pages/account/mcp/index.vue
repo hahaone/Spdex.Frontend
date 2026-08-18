@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ChevronLeft, CircleHelp, Clipboard, KeyRound, Link2, Plus, RefreshCw, ShieldAlert, ShieldCheck, Trash2, X } from '@lucide/vue'
+import { Check, ChevronDown, ChevronLeft, ChevronUp, CircleHelp, Clipboard, KeyRound, Link2, Plus, RefreshCw, ShieldAlert, ShieldCheck, Trash2, X } from '@lucide/vue'
 
 interface AiCredential {
   id: string
@@ -101,6 +101,7 @@ const basicScopes = scopeGroups[0]!.scopes.map(item => item.value)
 
 const connections = ref<AiCredential[]>([])
 const grants = ref<OAuthGrant[]>([])
+const showConnectionHistory = ref(false)
 const config = useRuntimeConfig()
 const helpCenterUrl = computed(() => String(config.public.helpCenterUrl || 'https://help-test.spdex.com').replace(/\/$/, ''))
 const mcpEndpoint = computed(() => String(config.public.mcpEndpoint || 'https://mcp-test.spdex.com/mcp?tool_subset=spdex-full'))
@@ -131,6 +132,15 @@ function hasAllScopes(scopes: string[]) {
 function visibleScopes(scopes: string[]) {
   return scopes.slice(0, 4)
 }
+
+function connectionStatusLabel(status: string) {
+  if (status === 'active') return '有效'
+  if (status === 'expired') return '已过期'
+  return '已停用'
+}
+
+const activeConnections = computed(() => connections.value.filter(connection => connection.status === 'active'))
+const inactiveConnections = computed(() => connections.value.filter(connection => connection.status !== 'active'))
 
 async function load() {
   loading.value = true
@@ -349,12 +359,12 @@ onMounted(load)
       </form>
 
       <div v-if="loading" class="empty-state">正在读取连接</div>
-      <div v-else-if="connections.length" class="connection-list">
-        <article v-for="connection in connections" :key="connection.id" class="connection-row">
+      <div v-else-if="activeConnections.length" class="connection-list">
+        <article v-for="connection in activeConnections" :key="connection.id" class="connection-row">
           <div class="connection-main">
             <div class="connection-title">
               <b>{{ connection.name }}</b>
-              <span :class="['status', connection.status]">{{ connection.status === 'active' ? '有效' : '已停用' }}</span>
+              <span :class="['status', connection.status]">{{ connectionStatusLabel(connection.status) }}</span>
               <span v-if="hasAllScopes(connection.scopes)" class="status full">完整 34 工具</span>
               <span v-else class="status limited">权限不完整</span>
             </div>
@@ -388,7 +398,39 @@ onMounted(load)
           </div>
         </article>
       </div>
-      <div v-else class="empty-state">暂无 MCP 连接</div>
+      <div v-else class="empty-state">暂无有效 MCP 连接</div>
+
+      <section v-if="inactiveConnections.length" class="connection-history" aria-label="已停用 MCP 连接历史">
+        <button
+          type="button"
+          class="history-toggle focus-ring"
+          :aria-expanded="showConnectionHistory"
+          @click="showConnectionHistory = !showConnectionHistory"
+        >
+          <span>
+            <ChevronUp v-if="showConnectionHistory" :size="15" />
+            <ChevronDown v-else :size="15" />
+            <b>已停用连接</b>
+            <small>{{ inactiveConnections.length }} 条</small>
+          </span>
+          <em>{{ showConnectionHistory ? '收起历史' : '查看历史' }}</em>
+        </button>
+        <p v-if="showConnectionHistory" class="history-copy">历史记录仅用于审计；已停用 token 不能继续调用，也不会占用当前连接列表。</p>
+        <div v-if="showConnectionHistory" class="connection-list history-list">
+          <article v-for="connection in inactiveConnections" :key="connection.id" class="connection-row inactive-row">
+            <div class="connection-main">
+              <div class="connection-title">
+                <b>{{ connection.name }}</b>
+                <span :class="['status', connection.status]">{{ connectionStatusLabel(connection.status) }}</span>
+                <span v-if="hasAllScopes(connection.scopes)" class="status full">原完整 34 工具</span>
+                <span v-else class="status limited">原权限不完整</span>
+              </div>
+              <code>{{ connection.tokenPrefix }}</code>
+              <p>停用前最近使用：{{ formatTime(connection.lastUsedAt) }} · {{ connection.callCount }} 次</p>
+            </div>
+          </article>
+        </div>
+      </section>
     </section>
 
     <section class="content-band">
@@ -501,11 +543,21 @@ legend { margin-bottom: 6px; color: var(--muted); font-size: .74rem; font-weight
 .connection-list { display: grid; }
 .connection-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 11px; border-bottom: 1px solid var(--divider); }
 .connection-row:last-child { border-bottom: 0; }
+.connection-history { border-top: 1px solid var(--divider); background: var(--canvas); }
+.history-toggle { display: flex; width: 100%; min-height: 42px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.history-toggle > span { display: inline-flex; align-items: center; gap: 6px; }
+.history-toggle b { font-size: .75rem; }
+.history-toggle small { color: var(--muted); font-size: .66rem; }
+.history-toggle em { color: var(--brand); font-size: .7rem; font-style: normal; font-weight: 760; }
+.history-copy { margin: 0; padding: 0 11px 9px; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+.history-list { border-top: 1px solid var(--divider); background: var(--panel); }
+.inactive-row { opacity: .78; }
 .connection-main { display: grid; gap: 6px; min-width: 0; }
 .connection-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .connection-title b { color: var(--ink); font-size: .86rem; }
 .status { padding: 2px 5px; border-radius: 3px; background: #eef0f4; color: var(--muted); font-size: .62rem; font-weight: 760; }
 .status.active { background: #e8f7ed; color: #18763b; }
+.status.revoked, .status.expired { background: #f1f2f4; color: #697386; }
 .status.full { background: #e9f6f4; color: #0f766e; }
 .status.limited { background: #fff3e8; color: #a34100; }
 .connection-main code, .issued-token { overflow-wrap: anywhere; color: var(--muted); font-size: .7rem; }
