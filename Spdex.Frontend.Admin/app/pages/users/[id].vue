@@ -49,6 +49,35 @@
             </div>
           </div>
         </div>
+        <div v-if="can(P.aiOpsManage) && user.hasAiTestAccess" class="py-4">
+          <div class="mb-3 flex items-center justify-between gap-4">
+            <div>
+              <div class="text-sm font-medium">个人 AI / MCP 测试额度</div>
+              <div class="text-xs text-gray-400">默认继承系统个人策略；独立额度同时作用于个人 MCP 连接和站内观察助手。</div>
+            </div>
+            <NCheckbox v-model:checked="independentAiQuota">使用独立额度</NCheckbox>
+          </div>
+          <div v-if="independentAiQuota" class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <div class="mb-1 text-xs text-gray-500">每日用量单位</div>
+              <NInputNumber v-model:value="aiQuota.dailyUsageUnits" :min="1" :max="10000000" style="width: 100%" />
+            </div>
+            <div>
+              <div class="mb-1 text-xs text-gray-500">每分钟请求数</div>
+              <NInputNumber v-model:value="aiQuota.requestsPerMinute" :min="1" :max="100000" style="width: 100%" />
+            </div>
+            <div>
+              <div class="mb-1 text-xs text-gray-500">最大并发数</div>
+              <NInputNumber v-model:value="aiQuota.maxConcurrency" :min="1" :max="1000" style="width: 100%" />
+            </div>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-4">
+            <div class="text-xs text-gray-400">日额度按 UTC 自然日统计，北京时间每日 08:00 进入新周期。</div>
+            <NButton type="primary" size="small" :loading="aiPolicySaving" @click="confirmAiPolicy">
+              保存额度
+            </NButton>
+          </div>
+        </div>
       </div>
     </NCard>
 
@@ -93,6 +122,13 @@ async function toggleTest(val: boolean) {
   else message.error(res.message || '操作失败')
 }
 const aiTestSaving = ref(false)
+const aiPolicySaving = ref(false)
+const independentAiQuota = ref(false)
+const aiQuota = reactive({
+  dailyUsageUnits: 2000 as number | null,
+  requestsPerMinute: 60 as number | null,
+  maxConcurrency: 3 as number | null,
+})
 function confirmAiTestAccess(enabled: boolean) {
   dialog.warning({
     title: enabled ? '开放 AI 测试资格' : '关闭 AI 测试资格',
@@ -114,6 +150,41 @@ async function setAiTestAccess(enabled: boolean) {
   }
   else message.error(res.message || '操作失败')
 }
+function confirmAiPolicy() {
+  if (independentAiQuota.value && (
+    !aiQuota.dailyUsageUnits || !aiQuota.requestsPerMinute || !aiQuota.maxConcurrency
+  )) {
+    message.error('请完整填写日额度、每分钟请求数和最大并发数')
+    return
+  }
+
+  const description = independentAiQuota.value
+    ? `每日 ${aiQuota.dailyUsageUnits} 单位、每分钟 ${aiQuota.requestsPerMinute} 次、并发 ${aiQuota.maxConcurrency}`
+    : '继承系统个人默认策略'
+  dialog.warning({
+    title: '确认调整 AI / MCP 测试额度',
+    content: `确认将 ${user.value.userName} 调整为：${description}？新策略会影响后续工具调用。`,
+    positiveText: '确认保存',
+    negativeText: '取消',
+    onPositiveClick: saveAiPolicy,
+  })
+}
+async function saveAiPolicy() {
+  aiPolicySaving.value = true
+  const res = await api.put(`users/${id}/ai-test-policy`, {
+    enabled: !!user.value.hasAiTestAccess,
+    dailyUsageUnits: independentAiQuota.value ? aiQuota.dailyUsageUnits : null,
+    requestsPerMinute: independentAiQuota.value ? aiQuota.requestsPerMinute : null,
+    maxConcurrency: independentAiQuota.value ? aiQuota.maxConcurrency : null,
+    remark: 'Admin2026 会员管理调整个人 AI/MCP 测试额度',
+  })
+  aiPolicySaving.value = false
+  if (res.code === 0) {
+    message.success('AI / MCP 测试额度已更新')
+    await loadUser()
+  }
+  else message.error(res.message || '保存失败')
+}
 const orders = ref<any[]>([])
 const balance = ref<any>(null)
 const silkLogs = ref<any[]>([])
@@ -121,7 +192,13 @@ const loading = ref(false)
 
 async function loadUser() {
   const res = await api.get<any>(`users/${id}`)
-  if (res.code === 0) user.value = res.data
+  if (res.code === 0) {
+    user.value = res.data
+    independentAiQuota.value = !!res.data?.aiDailyUsageUnits
+    aiQuota.dailyUsageUnits = res.data?.aiDailyUsageUnits ?? 2000
+    aiQuota.requestsPerMinute = res.data?.aiRequestsPerMinute ?? 60
+    aiQuota.maxConcurrency = res.data?.aiMaxConcurrency ?? 3
+  }
 }
 async function loadOrders() {
   loading.value = true
