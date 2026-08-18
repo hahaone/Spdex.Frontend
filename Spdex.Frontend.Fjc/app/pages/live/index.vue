@@ -1722,17 +1722,28 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                   {{ formatTradeClock(getLiveItem(item)?.maxTopTrade) }}
                 </span>
               </td>
-              <td class="xg-cell" :title="formatXg(item)">
-                <span v-if="getXg(item)" class="xg-pair">
-                  <span><b>主</b>{{ formatXgHome(item) }}</span>
-                  <span><b>客</b>{{ formatXgAway(item) }}</span>
-                </span>
-                <span v-else>-</span>
+              <td class="xg-cell">
+                <button
+                  class="xg-toggle"
+                  :class="{ open: isXgExpanded(item.match.eventId) }"
+                  :title="`${formatXg(item)}，点击${isXgExpanded(item.match.eventId) ? '收起' : '展开'} xG 走势图`"
+                  :aria-expanded="isXgExpanded(item.match.eventId)"
+                  :aria-controls="`xg-detail-${item.match.eventId}`"
+                  @click.stop="toggleXgExpand(item.match.eventId)"
+                >
+                  <span v-if="getXg(item)" class="xg-pair">
+                    <span><b>主</b>{{ formatXgHome(item) }}</span>
+                    <span><b>客</b>{{ formatXgAway(item) }}</span>
+                  </span>
+                  <span v-else>-</span>
+                </button>
               </td>
               <td class="tg-cell">
                 <button
                   class="tg-toggle"
                   :class="{ open: isXgExpanded(item.match.eventId) }"
+                  :aria-expanded="isXgExpanded(item.match.eventId)"
+                  :aria-controls="`xg-detail-${item.match.eventId}`"
                   @click.stop="toggleXgExpand(item.match.eventId)"
                 >
                   <span class="num">{{ formatProjGoals(item) }}</span>
@@ -1811,7 +1822,11 @@ function topTradeValueGapTitle(trade: LiveMatchOddsTopTradeSummary): string {
                 </table>
               </td>
             </tr>
-            <tr v-if="isXgExpanded(item.match.eventId)" class="xg-detail-row">
+            <tr
+              v-if="isXgExpanded(item.match.eventId)"
+              :id="`xg-detail-${item.match.eventId}`"
+              class="xg-detail-row"
+            >
               <td colspan="13">
                 <template
                   v-for="(charts, chartIdx) in [{
@@ -2304,6 +2319,28 @@ th.col-tg {
 }
 
 /* 预期总进球折叠按钮（同现场最大单的展开交互） */
+.xg-toggle {
+  display: inline-flex;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xg-toggle:focus-visible,
+.tg-toggle:focus-visible {
+  outline: 2px solid #4a9968;
+  outline-offset: 2px;
+}
+
+.xg-toggle.open .xg-pair {
+  color: #15683a;
+}
+
 .tg-toggle {
   display: inline-flex;
   align-items: center;
