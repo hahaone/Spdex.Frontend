@@ -4,6 +4,8 @@
  * 数据来源为 GetListByMatchHandicap（CustomCs 聚合），按盘口区间分组。
  */
 
+import type { TradedPriceDeltaSummary } from './glbighold'
+
 /** 亚盘赛事基础信息 */
 export interface AsianMatchInfo {
   eventId: number
@@ -52,6 +54,7 @@ export interface AsianHcRow {
   pcId: number
   effectiveRouteHighlight: boolean  // "有效后路高亮"
   latestPriceHighlight: boolean     // 仅1个成交价位且>1000 → Latest Price 列黄色高亮
+  tradedDeltaSummary: TradedPriceDeltaSummary | null
 }
 
 /** 盘口区间小计 */
@@ -105,11 +108,13 @@ export interface Fj2Net {
 
 /** 亚盘 LastPrice 挂牌数据 */
 export interface AsianLastPriceData {
+  pcId: number
   selectionId: number
   handicap: number
   key: string
   rawData: string | null
   hasLargeOrderAt500Or1000: boolean
+  tradedDeltaSummary: TradedPriceDeltaSummary | null
 }
 
 /** 亚盘单个时间窗口的数据 */

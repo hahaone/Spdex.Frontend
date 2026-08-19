@@ -167,18 +167,24 @@ function ssdClassFor(val: number, w: GlTimeWindowData, field: SigmaField): strin
   return ssdClass(val, t2, t3)
 }
 
-/**
- * Handicap 列高亮逻辑（HighlightCode）：
- * 旧站 csc6_2.aspx.cs ItemDataBoundHandler 第 821-826 行：
- * 当 LastPrice 挂牌数据中 traded>1 的价位恰好只有 1 个，且存在 traded>1000 的价位 → 黄色高亮。
- */
 function isHandicapHighlighted(item: GlItemView): boolean {
-  if (activeWindowIdx.value !== 0) return false
-  const rows = getLastPriceRows(item)
-  if (rows.length === 0) return false
-  const tradedGt1 = rows.filter(r => r.traded > 1).length
-  const anyGt1000 = rows.some(r => r.traded > 1000)
-  return tradedGt1 === 1 && anyGt1000
+  return activeWindowIdx.value === 0 && item.tradedDeltaSummary?.singlePriceConcentration === true
+}
+
+function tradedDeltaAt(item: GlItemView, price: number): number | null {
+  const summary = item.tradedDeltaSummary
+  if (!summary?.singlePriceConcentration) return null
+  const level = summary.positiveLevels.find(p => p.significant && Math.abs(p.price - price) < 0.001)
+  return level?.tradedDelta ?? null
+}
+
+function tradedDeltaTitle(item: GlItemView): string {
+  const summary = item.tradedDeltaSummary
+  if (!summary || summary.calculationStatus !== 'available') return '缺少前一盘口快照，暂不判断成交增量'
+  if (!summary.singlePriceConcentration) return `${summary.positiveLevelCount} 个价位出现正成交增量`
+  const level = summary.positiveLevels[0]
+  if (!level) return '已识别单一价位成交集中，但缺少价位明细'
+  return `仅价位 ${level.price.toFixed(2)} 出现显著正成交增量 +${formatMoney(level.tradedDelta)}；仅作盘口结构观察`
 }
 
 /**
@@ -315,7 +321,10 @@ function toggleSection(key: string) {
               <!-- Under 组 -->
               <template v-for="item in currentWindow.underItems" :key="'u-' + item.key">
                 <tr :style="activeWindowIdx === 0 ? 'cursor:pointer' : ''" @click="toggleRow(item)">
-                  <td :class="{ tdhighlight: isHandicapHighlighted(item) }"><strong>{{ item.displayName }}</strong></td>
+                  <td :class="{ tdhighlight: isHandicapHighlighted(item) }" :title="tradedDeltaTitle(item)">
+                    <strong>{{ item.displayName }}</strong>
+                    <span v-if="isHandicapHighlighted(item)" class="delta-badge">单价位增量</span>
+                  </td>
                   <td :class="{ tdhighlight: isOddsHighlighted(item) }">{{ item.odds.toFixed(2) }}</td>
                   <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
                   <td :class="ssdClassFor(item.maxBet, currentWindow, 'MaxBet')">{{ formatMoney(item.maxBet) }}</td>
@@ -338,7 +347,10 @@ function toggleSection(key: string) {
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : (r.toLay > 0 ? 'background:#FAC9D1' : '')">{{ r.price.toFixed(2) }}</td>
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : ''">{{ r.toBack > 0 ? `HK$ ${formatMoney(r.toBack)}` : '' }}</td>
                           <td :style="r.toLay > 0 ? 'background:#FAC9D1' : ''">{{ r.toLay > 0 ? `HK$ ${formatMoney(r.toLay)}` : '' }}</td>
-                          <td :class="tradedClass(r)">{{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}</td>
+                          <td :class="[tradedClass(r), { 'delta-cell': tradedDeltaAt(item, r.price) != null }]">
+                            {{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}
+                            <small v-if="tradedDeltaAt(item, r.price) != null" class="delta-value">+{{ formatMoney(tradedDeltaAt(item, r.price)!) }}</small>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -359,7 +371,10 @@ function toggleSection(key: string) {
               <!-- Over 组 -->
               <template v-for="item in currentWindow.overItems" :key="'o-' + item.key">
                 <tr :style="activeWindowIdx === 0 ? 'cursor:pointer' : ''" @click="toggleRow(item)">
-                  <td :class="{ tdhighlight: isHandicapHighlighted(item) }"><strong>{{ item.displayName }}</strong></td>
+                  <td :class="{ tdhighlight: isHandicapHighlighted(item) }" :title="tradedDeltaTitle(item)">
+                    <strong>{{ item.displayName }}</strong>
+                    <span v-if="isHandicapHighlighted(item)" class="delta-badge">单价位增量</span>
+                  </td>
                   <td :class="{ tdhighlight: isOddsHighlighted(item) }">{{ item.odds.toFixed(2) }}</td>
                   <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
                   <td :class="ssdClassFor(item.maxBet, currentWindow, 'MaxBet')">{{ formatMoney(item.maxBet) }}</td>
@@ -381,7 +396,10 @@ function toggleSection(key: string) {
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : (r.toLay > 0 ? 'background:#FAC9D1' : '')">{{ r.price.toFixed(2) }}</td>
                           <td :style="r.toBack > 0 ? 'background:#A6D8FF' : ''">{{ r.toBack > 0 ? `HK$ ${formatMoney(r.toBack)}` : '' }}</td>
                           <td :style="r.toLay > 0 ? 'background:#FAC9D1' : ''">{{ r.toLay > 0 ? `HK$ ${formatMoney(r.toLay)}` : '' }}</td>
-                          <td :class="tradedClass(r)">{{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}</td>
+                          <td :class="[tradedClass(r), { 'delta-cell': tradedDeltaAt(item, r.price) != null }]">
+                            {{ r.traded > 0 ? `HK$ ${formatMoney(r.traded)}` : '' }}
+                            <small v-if="tradedDeltaAt(item, r.price) != null" class="delta-value">+{{ formatMoney(tradedDeltaAt(item, r.price)!) }}</small>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -623,6 +641,9 @@ function toggleSection(key: string) {
 /* cs (Goal Line) 页面特有样式 */
 .odds-info { color: #337ab7; font-weight: normal; font-size: 13px; }
 .view-subtitle { color: #666; font-size: 13px; margin-bottom: 6px; }
+.delta-badge { display: inline-block; margin-left: 5px; padding: 1px 5px; border: 1px solid #d97706; border-radius: 3px; color: #92400e; background: #fffbeb; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.delta-cell { background: #fff7cc !important; }
+.delta-value { display: block; margin-top: 2px; color: #b45309; font-weight: 700; }
 
 /* ── 分时统计摘要面板 ── */
 .summary-panel {

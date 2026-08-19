@@ -5,6 +5,21 @@
 
 import type { OddsSummary } from './bighold'
 
+export interface TradedPriceDeltaLevel {
+  price: number
+  tradedDelta: number
+  significant: boolean
+}
+
+export interface TradedPriceDeltaSummary {
+  calculationStatus: 'available' | 'previous_snapshot_unavailable' | 'invalid_snapshot'
+  positiveLevelCount: number
+  significantPositiveLevelCount: number
+  singlePriceConcentration: boolean
+  minimumSignificantDelta: number
+  positiveLevels: TradedPriceDeltaLevel[]
+}
+
 /** GL 赛事基础信息 */
 export interface GlMatchInfo {
   eventId: number
@@ -38,6 +53,7 @@ export interface GlItemView {
   pcId: number
   selectionId: number
   key: string
+  tradedDeltaSummary: TradedPriceDeltaSummary | null
 }
 
 /** GL 时间窗口数据 */
@@ -121,11 +137,13 @@ export interface GlPayoutItem {
 
 /** GL LastPrice 挂牌数据 */
 export interface GlLastPriceData {
+  pcId: number
   selectionId: number
   handicap: number
   key: string
   rawData: string | null
   hasLargeOrderAt500Or1000: boolean
+  tradedDeltaSummary: TradedPriceDeltaSummary | null
 }
 
 /** Fj3Net 净赔付模型 */
