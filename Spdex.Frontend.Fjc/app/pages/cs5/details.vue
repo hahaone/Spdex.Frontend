@@ -356,6 +356,10 @@ function handicapHighlightClass(row: AsianHcRow): string {
 
 function singleTradedPriceLevel(row: AsianHcRow): PriceSizeRow | null {
   if (!isCurrentWindow.value) return null
+  const summary = row.singleTradedPriceLevelSummary
+  if (summary?.highlighted && summary.price != null && summary.traded != null) {
+    return { price: summary.price, traded: summary.traded, toBack: 0, toLay: 0, tradedHighlight: 0 }
+  }
   return getSingleTradedPriceLevel(getLastPriceRows(row))
 }
 
@@ -527,7 +531,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                     <tr :class="['data-row', effectiveRouteClass(row), largeOrderClass(row), { 'row-expanded': expandedKey === rowKey(row) }]">
                       <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" :title="singleTradedPriceTitle(row)" @click="toggleExpand(row)">
                         {{ row.displayName }}
-                        <span v-if="singleTradedPriceLevel(row)" class="delta-badge">单价位增量</span>
+                        <span v-if="singleTradedPriceLevel(row)" class="delta-badge">单一成交价位</span>
                       </td>
                       <td :class="latestPriceClass(row)">{{ formatOdds(row.odds) }}</td>
                       <td>{{ formatDense(row.dense) }}</td>
@@ -606,7 +610,7 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                     <tr :class="['data-row', effectiveRouteClass(row), largeOrderClass(row), { 'row-expanded': expandedKey === rowKey(row) }]">
                       <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" :title="singleTradedPriceTitle(row)" @click="toggleExpand(row)">
                         {{ row.displayName }}
-                        <span v-if="singleTradedPriceLevel(row)" class="delta-badge">单价位增量</span>
+                        <span v-if="singleTradedPriceLevel(row)" class="delta-badge">单一成交价位</span>
                       </td>
                       <td :class="latestPriceClass(row)">{{ formatOdds(row.odds) }}</td>
                       <td>{{ formatDense(row.dense) }}</td>

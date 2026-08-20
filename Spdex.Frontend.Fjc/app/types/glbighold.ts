@@ -20,6 +20,15 @@ export interface TradedPriceDeltaSummary {
   positiveLevels: TradedPriceDeltaLevel[]
 }
 
+export interface SingleTradedPriceLevelSummary {
+  calculationStatus: 'available' | 'invalid_snapshot'
+  tradedLevelCount: number
+  highlighted: boolean
+  minimumTraded: number
+  price: number | null
+  traded: number | null
+}
+
 /** GL 赛事基础信息 */
 export interface GlMatchInfo {
   eventId: number
@@ -54,6 +63,7 @@ export interface GlItemView {
   selectionId: number
   key: string
   tradedDeltaSummary: TradedPriceDeltaSummary | null
+  singleTradedPriceLevelSummary: SingleTradedPriceLevelSummary | null
 }
 
 /** GL 时间窗口数据 */
@@ -144,6 +154,7 @@ export interface GlLastPriceData {
   rawData: string | null
   hasLargeOrderAt500Or1000: boolean
   tradedDeltaSummary: TradedPriceDeltaSummary | null
+  singleTradedPriceLevelSummary: SingleTradedPriceLevelSummary | null
 }
 
 /** Fj3Net 净赔付模型 */

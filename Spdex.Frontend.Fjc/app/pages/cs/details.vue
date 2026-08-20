@@ -173,6 +173,10 @@ function isHandicapHighlighted(item: GlItemView): boolean {
 }
 
 function singleTradedPriceLevel(item: GlItemView): PriceSizeRow | null {
+  const summary = item.singleTradedPriceLevelSummary
+  if (summary?.highlighted && summary.price != null && summary.traded != null) {
+    return { price: summary.price, traded: summary.traded, toBack: 0, toLay: 0, tradedHighlight: 0 }
+  }
   return getSingleTradedPriceLevel(getLastPriceRows(item))
 }
 
@@ -323,7 +327,7 @@ function toggleSection(key: string) {
                 <tr :style="activeWindowIdx === 0 ? 'cursor:pointer' : ''" @click="toggleRow(item)">
                   <td :class="{ 'single-price-highlight': isHandicapHighlighted(item) }" :title="singleTradedPriceTitle(item)">
                     <strong>{{ item.displayName }}</strong>
-                    <span v-if="isHandicapHighlighted(item)" class="delta-badge">单价位增量</span>
+                    <span v-if="isHandicapHighlighted(item)" class="delta-badge">单一成交价位</span>
                   </td>
                   <td :class="{ tdhighlight: isOddsHighlighted(item) }">{{ item.odds.toFixed(2) }}</td>
                   <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
@@ -372,7 +376,7 @@ function toggleSection(key: string) {
                 <tr :style="activeWindowIdx === 0 ? 'cursor:pointer' : ''" @click="toggleRow(item)">
                   <td :class="{ 'single-price-highlight': isHandicapHighlighted(item) }" :title="singleTradedPriceTitle(item)">
                     <strong>{{ item.displayName }}</strong>
-                    <span v-if="isHandicapHighlighted(item)" class="delta-badge">单价位增量</span>
+                    <span v-if="isHandicapHighlighted(item)" class="delta-badge">单一成交价位</span>
                   </td>
                   <td :class="{ tdhighlight: isOddsHighlighted(item) }">{{ item.odds.toFixed(2) }}</td>
                   <td>{{ item.dense > 0 ? item.dense.toFixed(2) : '' }}</td>
