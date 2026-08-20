@@ -4,6 +4,7 @@ import type { PriceSizeRow } from '~/types/bighold'
 import { parseRawData, calcTradedDiff } from '~/utils/parseRawData'
 import { formatMoney, formatMatchTimeFull, formatPercent, formatOdds, formatDense, formatBestPrice, formatNetPayout, formatTimeWithSeconds } from '~/utils/formatters'
 import { highlightClass } from '~/utils/styleHelpers'
+import { getSingleTradedPriceLevel } from '~/utils/singlePriceTrade'
 
 // ── 路由参数 ──
 const route = useRoute()
@@ -348,25 +349,25 @@ function effectiveRouteClass(_row: AsianHcRow): string {
   return ''
 }
 
-/** Handicap 列高亮：相邻快照仅一个价位出现至少 1000 的正成交增量。 */
+/** Handicap 列高亮：当前 LastPrice 仅 1 个成交价位且累计成交 > 1000。 */
 function handicapHighlightClass(row: AsianHcRow): string {
-  return row.tradedDeltaSummary?.singlePriceConcentration ? 'td-highlight' : ''
+  return singleTradedPriceLevel(row) ? 'single-price-highlight' : ''
 }
 
-function tradedDeltaAt(row: AsianHcRow, price: number): number | null {
-  const summary = row.tradedDeltaSummary
-  if (!summary?.singlePriceConcentration) return null
-  const level = summary.positiveLevels.find(p => p.significant && Math.abs(p.price - price) < 0.001)
-  return level?.tradedDelta ?? null
+function singleTradedPriceLevel(row: AsianHcRow): PriceSizeRow | null {
+  if (!isCurrentWindow.value) return null
+  return getSingleTradedPriceLevel(getLastPriceRows(row))
 }
 
-function tradedDeltaTitle(row: AsianHcRow): string {
-  const summary = row.tradedDeltaSummary
-  if (!summary || summary.calculationStatus !== 'available') return '缺少前一盘口快照，暂不判断成交增量'
-  if (!summary.singlePriceConcentration) return `${summary.positiveLevelCount} 个价位出现正成交增量`
-  const level = summary.positiveLevels[0]
-  if (!level) return '已识别单一价位成交集中，但缺少价位明细'
-  return `仅价位 ${level.price.toFixed(2)} 出现显著正成交增量 +${formatMoney(level.tradedDelta)}；仅作盘口结构观察`
+function isSingleTradedPrice(row: AsianHcRow, price: number): boolean {
+  const level = singleTradedPriceLevel(row)
+  return level != null && Math.abs(level.price - price) < 0.001
+}
+
+function singleTradedPriceTitle(row: AsianHcRow): string {
+  const level = singleTradedPriceLevel(row)
+  if (!level) return ''
+  return `当前盘口仅价位 ${level.price.toFixed(2)} 有成交，累计 HK$ ${formatMoney(level.traded)}`
 }
 
 /** Latest Price 列高亮：有效后路（旧系统 HighlightCode2 / tr_focusPrice） */
@@ -524,9 +525,9 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                   </tr>
                   <template v-for="row in group.rows" :key="'hr-' + rowKey(row)">
                     <tr :class="['data-row', effectiveRouteClass(row), largeOrderClass(row), { 'row-expanded': expandedKey === rowKey(row) }]">
-                      <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" :title="tradedDeltaTitle(row)" @click="toggleExpand(row)">
+                      <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" :title="singleTradedPriceTitle(row)" @click="toggleExpand(row)">
                         {{ row.displayName }}
-                        <span v-if="row.tradedDeltaSummary?.singlePriceConcentration" class="delta-badge">单价位增量</span>
+                        <span v-if="singleTradedPriceLevel(row)" class="delta-badge">单价位增量</span>
                       </td>
                       <td :class="latestPriceClass(row)">{{ formatOdds(row.odds) }}</td>
                       <td>{{ formatDense(row.dense) }}</td>
@@ -554,9 +555,8 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                                     <td :class="priceBgClass(pr)">{{ pr.price }}</td>
                                     <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
                                     <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
-                                    <td :class="[tradedClass(pr), { 'delta-cell': tradedDeltaAt(row, pr.price) != null }]">
+                                    <td :class="[tradedClass(pr), { 'single-traded-cell': isSingleTradedPrice(row, pr.price) }]">
                                       {{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}
-                                      <small v-if="tradedDeltaAt(row, pr.price) != null" class="delta-value">+{{ formatMoney(tradedDeltaAt(row, pr.price)!) }}</small>
                                     </td>
                                   </tr>
                                 </tbody>
@@ -604,9 +604,9 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                   <tr v-if="group.rows.length > 0" class="band-header"><td colspan="13">&nbsp;</td></tr>
                   <template v-for="row in group.rows" :key="'ar-' + rowKey(row)">
                     <tr :class="['data-row', effectiveRouteClass(row), largeOrderClass(row), { 'row-expanded': expandedKey === rowKey(row) }]">
-                      <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" :title="tradedDeltaTitle(row)" @click="toggleExpand(row)">
+                      <td :class="['col-hc-val', handicapClass(row), handicapHighlightClass(row)]" :title="singleTradedPriceTitle(row)" @click="toggleExpand(row)">
                         {{ row.displayName }}
-                        <span v-if="row.tradedDeltaSummary?.singlePriceConcentration" class="delta-badge">单价位增量</span>
+                        <span v-if="singleTradedPriceLevel(row)" class="delta-badge">单价位增量</span>
                       </td>
                       <td :class="latestPriceClass(row)">{{ formatOdds(row.odds) }}</td>
                       <td>{{ formatDense(row.dense) }}</td>
@@ -634,9 +634,8 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
                                     <td :class="priceBgClass(pr)">{{ pr.price }}</td>
                                     <td :class="{ 'bg-back': pr.toBack > 0 }">{{ pr.toBack > 0 ? formatMoney(pr.toBack) : '' }}</td>
                                     <td :class="{ 'bg-lay': pr.toLay > 0 }">{{ pr.toLay > 0 ? formatMoney(pr.toLay) : '' }}</td>
-                                    <td :class="[tradedClass(pr), { 'delta-cell': tradedDeltaAt(row, pr.price) != null }]">
+                                    <td :class="[tradedClass(pr), { 'single-traded-cell': isSingleTradedPrice(row, pr.price) }]">
                                       {{ pr.traded > 0 ? formatMoney(pr.traded) : '' }}
-                                      <small v-if="tradedDeltaAt(row, pr.price) != null" class="delta-value">+{{ formatMoney(tradedDeltaAt(row, pr.price)!) }}</small>
                                     </td>
                                   </tr>
                                 </tbody>
@@ -1074,9 +1073,9 @@ function colorGroupStyle(item: AsianBigItem): Record<string, string> {
 
 /* ── 高亮 ── */
 .td-highlight { background: #ffff00 !important; font-weight: 700; }
-.delta-badge { display: inline-block; margin-left: 5px; padding: 1px 5px; border: 1px solid #d97706; border-radius: 3px; color: #92400e; background: #fffbeb; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
-.delta-cell { background: #fff7cc !important; }
-.delta-value { display: block; margin-top: 2px; color: #b45309; font-weight: 700; }
+.single-price-highlight { background: #ede9fe !important; box-shadow: inset 0 0 0 2px #8b5cf6; font-weight: 700; }
+.delta-badge { display: inline-block; margin-left: 5px; padding: 1px 5px; border: 1px solid #8b5cf6; border-radius: 3px; color: #5b21b6; background: #f5f3ff; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.single-traded-cell { background: #ede9fe !important; box-shadow: inset 0 0 0 1px #a78bfa; }
 .td-lowlight { background: #FFFFA8 !important; }
 .text-red-bold { color: #c00; font-weight: 700; }
 .text-neg { color: #c00; }
