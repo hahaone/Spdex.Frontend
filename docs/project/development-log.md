@@ -6,6 +6,15 @@
 
 ---
 
+## 2026-08-20
+
+### MCP 工具目录升级与客户端刷新说明
+
+- NewSpdex 账号中心将完整工具口径更新为 35 个、基础工具更新为 9 个，连接升级、权限预设、历史连接和一次性 token 提示保持一致。
+- Help Center 新增 `query_spdex` 稳定自然语言入口说明，并明确服务端日常规则更新通常不要求修改地址、token 或清理客户端缓存。
+- 客户端仅在目录版本不一致、新增公开工具、更换 token/scope/tool subset，或旧对话持续报告工具不存在时才需要重连或新建对话。
+- 已使用 Node 24 完成 NewSpdex 与 Help 的 typecheck、定向 ESLint 和生产构建验证。
+
 ## 2026-08-05
 
 ### Admin2026 Billing Ledger 回放预检

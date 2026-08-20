@@ -205,7 +205,7 @@ async function rotateConnection(connection: AiCredential) {
 }
 
 async function reauthorizeConnection(connection: AiCredential) {
-  if (!confirm(`“${connection.name}”将升级为完整 34 工具权限，旧 token 会立即失效。继续吗？`)) return
+  if (!confirm(`“${connection.name}”将升级为完整 35 工具权限，旧 token 会立即失效。继续吗？`)) return
   try {
     const issue = await $apiFetch<AiCredentialIssue>(`/api/newspdex/ai/mcp/connections/${connection.id}/rotate`, {
       method: 'POST',
@@ -281,7 +281,7 @@ onMounted(load)
     <section class="notice-band" aria-label="MCP 使用边界">
       <ShieldAlert :size="16" />
       <div>
-        <b>完整连接可使用 SPdex 当前开放的 34 个工具。</b>
+        <b>完整连接可使用 SPdex 当前开放的 35 个工具。</b>
         <span>数据权限由 MCP token 的访问范围决定；客户端还需使用“完整工具”地址。外部 Agent 的模型费用由对应平台或你的模型 Key 承担。</span>
       </div>
       <a :href="usageHelpUrl" target="_blank" rel="noopener noreferrer">查看用量与安全边界</a>
@@ -331,8 +331,8 @@ onMounted(load)
           <div class="scope-heading">
             <legend>访问范围</legend>
             <div class="scope-presets" aria-label="权限预设">
-              <button type="button" :class="{ active: hasAllScopes(form.scopes) }" @click="applyScopePreset('full')">完整 34 工具</button>
-              <button type="button" :class="{ active: form.scopes.length === basicScopes.length && basicScopes.every(scope => form.scopes.includes(scope)) }" @click="applyScopePreset('basic')">基础 8 工具</button>
+              <button type="button" :class="{ active: hasAllScopes(form.scopes) }" @click="applyScopePreset('full')">完整 35 工具</button>
+              <button type="button" :class="{ active: form.scopes.length === basicScopes.length && basicScopes.every(scope => form.scopes.includes(scope)) }" @click="applyScopePreset('basic')">基础 9 工具</button>
             </div>
           </div>
           <p class="scope-intro">推荐选择完整能力。基础模式只适合赛事搜索和基础盘口查询，不包含 FJCX、交易信号、工作流与自动化。</p>
@@ -365,7 +365,7 @@ onMounted(load)
             <div class="connection-title">
               <b>{{ connection.name }}</b>
               <span :class="['status', connection.status]">{{ connectionStatusLabel(connection.status) }}</span>
-              <span v-if="hasAllScopes(connection.scopes)" class="status full">完整 34 工具</span>
+              <span v-if="hasAllScopes(connection.scopes)" class="status full">完整 35 工具</span>
               <span v-else class="status limited">权限不完整</span>
             </div>
             <code>{{ connection.tokenPrefix }}</code>
@@ -422,7 +422,7 @@ onMounted(load)
               <div class="connection-title">
                 <b>{{ connection.name }}</b>
                 <span :class="['status', connection.status]">{{ connectionStatusLabel(connection.status) }}</span>
-                <span v-if="hasAllScopes(connection.scopes)" class="status full">原完整 34 工具</span>
+                <span v-if="hasAllScopes(connection.scopes)" class="status full">原完整 35 工具</span>
                 <span v-else class="status limited">原权限不完整</span>
               </div>
               <code>{{ connection.tokenPrefix }}</code>
@@ -482,7 +482,7 @@ onMounted(load)
         <div class="endpoint-block">
           <b>完整工具地址</b>
           <code>{{ mcpEndpoint }}</code>
-          <span>在客户端中替换新 token，并重新连接或新建对话；工具列表应显示 34/34。</span>
+          <span>在客户端中替换新 token，并重新连接或新建对话；工具列表应显示 35/35。</span>
         </div>
         <button class="submit-button focus-ring" type="button" @click="copyToken">
           <Check v-if="copied" :size="16" />
