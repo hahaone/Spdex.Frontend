@@ -911,3 +911,86 @@ export const aiScopeOptions = [
   { label: '异常检测', value: 'markets.anomalies' },
   { label: '指标解释', value: 'metrics.explain' },
 ]
+
+export interface AiIntentDefinition {
+  intentId: string
+  label: string
+  toolName: string
+  canonicalPhrase: string
+  description: string
+  requiresMatchContext: boolean
+}
+
+export type AiIntentCandidateStatus = 'draft' | 'approved' | 'rejected' | 'retired'
+
+export interface AiIntentAliasCandidate {
+  candidateId: string
+  phrase: string
+  intentId: string
+  status: AiIntentCandidateStatus
+  source: string
+  notes: string
+  sampleQuestion: string
+  sampleMatchId: number | null
+  createdBy: string
+  reviewedBy: string | null
+  reviewNotes: string | null
+  hitCount: number
+  lastHitAtUtc: string | null
+  createdAtUtc: string
+  updatedAtUtc: string
+}
+
+export interface AiPublishedIntentAlias {
+  candidateId: string
+  phrase: string
+  normalizedPhrase: string
+  intentId: string
+}
+
+export interface AiIntentCatalogVersion {
+  versionId: string
+  versionLabel: string
+  notes: string
+  createdBy: string
+  aliasCount: number
+  createdAtUtc: string
+  active: boolean
+}
+
+export interface AiIntentCatalogSnapshot {
+  activeVersionId: string
+  activeVersionLabel: string
+  intents: AiIntentDefinition[]
+  activeAliases: AiPublishedIntentAlias[]
+  candidates: AiIntentAliasCandidate[]
+  versions: AiIntentCatalogVersion[]
+}
+
+export interface AiIntentCatalogResult {
+  generatedAtUtc: string
+  boundary: string
+  snapshot: AiIntentCatalogSnapshot
+}
+
+export interface AiIntentResolutionView {
+  intent: string
+  toolName: string
+  arguments: Record<string, unknown>
+  confidence: number
+  matchedTerms: string[]
+  explanation: string
+}
+
+export interface AiIntentPreview {
+  current: AiIntentResolutionView
+  proposed: AiIntentResolutionView | null
+  canPublish: boolean
+  decision: string
+  activeVersionLabel: string
+}
+
+export interface AiIntentPreviewResult {
+  generatedAtUtc: string
+  preview: AiIntentPreview
+}
