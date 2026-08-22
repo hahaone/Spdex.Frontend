@@ -26,6 +26,11 @@
           </NTag>
           <span v-else>{{ user.aiTestAccessSource === 'admin' ? '已由后台关闭' : '未开放' }}</span>
         </NDescriptionsItem>
+        <NDescriptionsItem label="FJCX MCP">
+          <NTag :type="user.fjcxMcpAuthorized ? 'success' : 'default'" size="small" :bordered="false">
+            {{ user.fjcxMcpAuthorized ? '可用' : '不可用' }}
+          </NTag>
+        </NDescriptionsItem>
       </NDescriptions>
       <div class="mt-4 divide-y divide-gray-100 border-t border-gray-100">
         <div v-if="can(P.userMembershipEdit)" class="flex items-center gap-3 py-3">
@@ -76,6 +81,34 @@
             <NButton type="primary" size="small" :loading="aiPolicySaving" @click="confirmAiPolicy">
               保存额度
             </NButton>
+          </div>
+        </div>
+        <div v-if="can(P.aiOpsView) || can(P.aiOpsManage)" class="py-4">
+          <div class="mb-3 flex items-center justify-between gap-4">
+            <div>
+              <div class="text-sm font-medium">FJCX MCP 权限诊断</div>
+              <div class="text-xs text-gray-400">权限由有效白金会籍与 FJCX 独立令牌绑定共同决定，此处仅展示实时状态。</div>
+            </div>
+            <NTag :type="user.fjcxMcpAuthorized ? 'success' : 'warning'" size="small" :bordered="false">
+              {{ user.fjcxMcpAuthorized ? '已授权' : '未授权' }}
+            </NTag>
+          </div>
+          <div class="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+            <div>
+              <div class="text-xs text-gray-400">白金会籍</div>
+              <div>{{ user.fjcxMembershipEligible ? '有效' : '不满足' }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-400">独立令牌</div>
+              <div>{{ user.fjcxTokenBound ? (user.fjcxTokenValid ? '已绑定且有效' : '已绑定但失效') : '未绑定' }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-400">令牌类型</div>
+              <div>{{ fjcxTokenTypeText(user.fjcxTokenType) }}</div>
+            </div>
+          </div>
+          <div v-if="!user.fjcxMcpAuthorized" class="mt-3 text-xs text-amber-600">
+            {{ fjcxDenialText(user.fjcxDenialReason) }}
           </div>
         </div>
       </div>
@@ -220,6 +253,22 @@ function onTab(name: string) { if (name === 'silk' && !balance.value) loadSilk()
 
 function fmtDateTime(d?: string) { return d ? d.replace('T', ' ').substring(0, 16) : '—' }
 function fmt(d?: string) { return d ? d.replace('T', ' ').substring(0, 19) : '—' }
+function fjcxTokenTypeText(type?: string) {
+  if (type === 'full') return '完整 FJCX'
+  if (type === 'jc') return '竞彩 FJCX'
+  return '—'
+}
+function fjcxDenialText(reason?: string) {
+  const messages: Record<string, string> = {
+    account_disabled: '账号已停用。',
+    fjcx_membership_expired: '白金会籍已到期。',
+    fjcx_platinum_required: '需要有效白金会籍；AI 测试资格不会提升 FJCX 权限。',
+    fjcx_token_required: '尚未绑定 FJCX 独立令牌。',
+    fjcx_token_invalid: '已绑定的 FJCX 独立令牌已不在有效令牌清单中。',
+    fjcx_binding_unavailable: '当前无法读取 FJCX 令牌绑定状态。',
+  }
+  return messages[reason || ''] || '当前条件不满足 FJCX MCP 授权要求。'
+}
 
 const orderCols = [
   { title: '订单号', key: 'orderId', ellipsis: { tooltip: true } },
